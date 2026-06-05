@@ -2,8 +2,6 @@ module github.com/kj187/jarvis/backend
 
 go 1.24
 
-toolchain go1.25.11
-
 require (
 	github.com/gorilla/websocket v1.5.3
 	github.com/joho/godotenv v1.5.1
