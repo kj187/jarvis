@@ -179,7 +179,8 @@ function AlertEntry({
   commonLabelKeys: Set<string>
 }) {
   const { type: silenceType, silence, remaining } = getSilenceState(alert, silences)
-  const maintainer = alert.activeClaim?.claimedBy ?? alert.labels['maintainer'] ?? null
+  const claim = alert.activeClaim ?? null
+  const maintainer = claim ? null : (alert.labels['maintainer'] ?? null)
   const allLabels = getFilterableLabels(alert)
   const labels = Object.entries(allLabels)
     .filter(([k]) => !HIDDEN_LABEL_KEYS.has(k) && !commonLabelKeys.has(k))
@@ -198,19 +199,34 @@ function AlertEntry({
       onClick={() => onClick(alert.fingerprint)}
       onKeyDown={(e) => e.key === 'Enter' && onClick(alert.fingerprint)}
       className={cn(
-        'cursor-pointer rounded-md border border-border/40 bg-background/20 p-2 transition-colors hover:bg-accent/20',
-        isSelected && 'border-blue-500/50 bg-blue-500/10',
+        'cursor-pointer rounded-md border bg-background/20 p-2 transition-colors',
+        claim
+          ? 'border-blue-500/50 bg-blue-950/30 hover:bg-blue-950/40'
+          : 'border-border/40 hover:bg-accent/20',
+        isSelected && !claim && 'border-blue-500/50 bg-blue-500/10',
+        isSelected && claim && 'border-blue-400/80 bg-blue-900/30',
       )}
     >
-      {/* Timestamp + maintainer */}
-      <div className="mb-1 flex items-center justify-between gap-2 text-xs text-muted-foreground">
-        <div className="flex items-center gap-2">
-          <span>
-            {formatDistanceToNow(new Date(alert.startsAt), { addSuffix: true, locale: de })}
-          </span>
-          {maintainer && <span>{maintainer}</span>}
+      {/* Claim banner */}
+      {claim && (
+        <div className="mb-2 flex items-start gap-2 rounded bg-blue-900/50 px-2 py-1.5 text-xs">
+          <User className="mt-0.5 h-3 w-3 shrink-0 text-blue-300" />
+          <div className="min-w-0 flex-1">
+            <div className="font-semibold text-blue-200">In Bearbeitung: {claim.claimedBy}</div>
+            <div className="text-blue-400">
+              {formatDistanceToNow(new Date(claim.claimedAt), { addSuffix: true, locale: de })}
+            </div>
+            {claim.note && <div className="mt-0.5 text-blue-300/80">{claim.note}</div>}
+          </div>
         </div>
-        {alert.activeClaim && <User className="h-3 w-3 shrink-0 text-blue-400" />}
+      )}
+
+      {/* Timestamp + maintainer */}
+      <div className="mb-1 flex items-center gap-2 text-xs text-muted-foreground">
+        <span>
+          {formatDistanceToNow(new Date(alert.startsAt), { addSuffix: true, locale: de })}
+        </span>
+        {maintainer && <span>{maintainer}</span>}
       </div>
 
       {/* Silence banner */}
