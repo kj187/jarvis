@@ -1,9 +1,91 @@
+import { useRef, useState } from 'react'
 import { formatDistanceToNow } from 'date-fns'
 import { de } from 'date-fns/locale'
-import { BellOff, Clock, ExternalLink, User } from 'lucide-react'
+import { BellOff, User } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { getFilterableLabels } from '@/lib/alertUtils'
+import { useUIStore } from '@/store/uiStore'
 import { AlertBadge } from './AlertBadge'
-import type { EnrichedAlert, Silence } from '@/types'
+import type { EnrichedAlert, LabelMatcherOperator, Silence } from '@/types'
+
+const PAGE_SIZE = 3
+
+const HIDDEN_LABEL_KEYS = new Set(['alertname', 'severity', 'receiver', '@receiver'])
+
+const LABEL_PALETTE = [
+  'bg-emerald-900/50 text-emerald-300 border border-emerald-800/60',
+  'bg-teal-900/50 text-teal-300 border border-teal-800/60',
+  'bg-cyan-900/50 text-cyan-300 border border-cyan-800/60',
+  'bg-violet-900/50 text-violet-300 border border-violet-800/60',
+  'bg-blue-900/50 text-blue-300 border border-blue-800/60',
+  'bg-amber-900/50 text-amber-300 border border-amber-800/60',
+  'bg-orange-900/50 text-orange-300 border border-orange-800/60',
+  'bg-slate-700/80 text-slate-300 border border-slate-600/60',
+]
+
+function labelColor(key: string): string {
+  let h = 5381
+  for (let i = 0; i < key.length; i++) h = ((h << 5) + h + key.charCodeAt(i)) >>> 0
+  return LABEL_PALETTE[h % LABEL_PALETTE.length]
+}
+
+const OPERATORS: LabelMatcherOperator[] = ['=', '!=', '=~', '!~']
+
+function LabelChip({ labelKey, value }: { labelKey: string; value: string }) {
+  const [open, setOpen] = useState(false)
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const addLabelMatcher = useUIStore((s) => s.addLabelMatcher)
+
+  const show = () => {
+    if (hideTimer.current) clearTimeout(hideTimer.current)
+    setOpen(true)
+  }
+  const hide = () => {
+    hideTimer.current = setTimeout(() => setOpen(false), 120)
+  }
+
+  const apply = (op: LabelMatcherOperator, e: React.MouseEvent) => {
+    e.stopPropagation()
+    addLabelMatcher({ name: labelKey, operator: op, value })
+    setOpen(false)
+  }
+
+  return (
+    <div
+      className="relative inline-flex"
+      onMouseEnter={show}
+      onMouseLeave={hide}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <span
+        className={cn(
+          'max-w-[200px] truncate rounded px-1.5 py-0.5 text-[10px] font-medium',
+          labelColor(labelKey),
+        )}
+      >
+        {labelKey}: {value}
+      </span>
+
+      {open && (
+        <div
+          className="absolute left-0 top-full z-50 mt-0.5 flex items-center gap-px rounded border border-border bg-popover p-0.5 shadow-md"
+          onMouseEnter={show}
+          onMouseLeave={hide}
+        >
+          {OPERATORS.map((op) => (
+            <button
+              key={op}
+              onClick={(e) => apply(op, e)}
+              className="rounded px-2 py-0.5 font-mono text-[11px] font-bold text-foreground hover:bg-accent"
+            >
+              {op}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
 interface AlertCardProps {
   alerts: EnrichedAlert[]
@@ -13,56 +95,171 @@ interface AlertCardProps {
 }
 
 function getSilenceState(alert: EnrichedAlert, silences: Silence[]): {
-  type: 'pending' | 'expiring' | 'expired' | null
+  type: 'pending' | 'active' | 'expiring' | null
   silence: Silence | null
   remaining?: number
 } {
   const now = Date.now()
   const FIFTEEN_MIN = 15 * 60 * 1000
-  const TWO_HOURS = 2 * 60 * 60 * 1000
 
   for (const silenceId of alert.status.silencedBy) {
     const silence = silences.find((s) => s.id === silenceId)
     if (!silence) continue
     const endsAt = new Date(silence.endsAt).getTime()
-    const startsAt = new Date(silence.startsAt).getTime()
-    if (silence.status.state === 'pending') {
-      return { type: 'pending', silence }
-    }
+    const remaining = endsAt - now
+    if (silence.status.state === 'pending') return { type: 'pending', silence }
     if (silence.status.state === 'active') {
-      const remaining = endsAt - now
       if (remaining <= FIFTEEN_MIN) return { type: 'expiring', silence, remaining }
-    }
-    if (silence.status.state === 'expired') {
-      const expiredAgo = now - endsAt
-      if (expiredAgo <= TWO_HOURS) return { type: 'expired', silence }
-      return { type: 'expired', silence }
+      return { type: 'active', silence, remaining }
     }
   }
   return { type: null, silence: null }
 }
 
-function ClaimAvatar({ name }: { name: string }) {
-  const initials = name
-    .split(' ')
-    .slice(0, 2)
-    .map((p) => p[0]?.toUpperCase() ?? '')
-    .join('')
+function formatDuration(ms: number): string {
+  const totalSeconds = Math.floor(ms / 1000)
+  const minutes = Math.floor(totalSeconds / 60)
+  const hours = Math.floor(minutes / 60)
+  const days = Math.floor(hours / 24)
+  const months = Math.floor(days / 30)
+  const years = Math.floor(days / 365)
+
+  if (years >= 1) {
+    const remMonths = Math.floor((days - years * 365) / 30)
+    return remMonths > 0
+      ? `${years} Jahr${years > 1 ? 'e' : ''} ${remMonths} Monat${remMonths > 1 ? 'e' : ''}`
+      : `${years} Jahr${years > 1 ? 'e' : ''}`
+  }
+  if (months >= 1) {
+    const remDays = days - months * 30
+    return remDays > 0
+      ? `${months} Monat${months > 1 ? 'e' : ''} ${remDays} Tag${remDays > 1 ? 'e' : ''}`
+      : `${months} Monat${months > 1 ? 'e' : ''}`
+  }
+  if (days >= 1) {
+    const remHours = hours - days * 24
+    return remHours > 0
+      ? `${days} Tag${days > 1 ? 'e' : ''} ${remHours} Std.`
+      : `${days} Tag${days > 1 ? 'e' : ''}`
+  }
+  if (hours >= 1) {
+    const remMinutes = minutes - hours * 60
+    return remMinutes > 0
+      ? `${hours} Std. ${remMinutes} Min.`
+      : `${hours} Std.`
+  }
+  if (minutes >= 1) return `${minutes} Min.`
+  return 'wenige Sekunden'
+}
+
+function AlertEntry({
+  alert,
+  silences,
+  onClick,
+  isSelected,
+}: {
+  alert: EnrichedAlert
+  silences: Silence[]
+  onClick: (fp: string) => void
+  isSelected: boolean
+}) {
+  const { type: silenceType, silence, remaining } = getSilenceState(alert, silences)
+  const maintainer = alert.activeClaim?.claimedBy ?? alert.labels['maintainer'] ?? null
+  const allLabels = getFilterableLabels(alert)
+  const labels = Object.entries(allLabels)
+    .filter(([k]) => !HIDDEN_LABEL_KEYS.has(k))
+    .sort(([a], [b]) => {
+      if (a === '@cluster') return -1
+      if (b === '@cluster') return 1
+      return 0
+    })
+  const summary = alert.annotations['summary']
+  const description = alert.annotations['description']
+
   return (
-    <div className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-blue-600 text-[10px] font-bold text-white shadow ring-2 ring-card">
-      {initials || <User className="h-3 w-3" />}
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={() => onClick(alert.fingerprint)}
+      onKeyDown={(e) => e.key === 'Enter' && onClick(alert.fingerprint)}
+      className={cn(
+        'cursor-pointer rounded-md border border-border/40 bg-background/20 p-2.5 transition-colors hover:bg-accent/20',
+        isSelected && 'border-blue-500/50 bg-blue-500/10',
+      )}
+    >
+      {/* Timestamp + maintainer */}
+      <div className="mb-1.5 flex items-center justify-between gap-2 text-xs text-muted-foreground">
+        <div className="flex items-center gap-2">
+          <span>
+            {formatDistanceToNow(new Date(alert.startsAt), { addSuffix: true, locale: de })}
+          </span>
+          {maintainer && <span>{maintainer}</span>}
+        </div>
+        {alert.activeClaim && <User className="h-3 w-3 shrink-0 text-blue-400" />}
+      </div>
+
+      {/* Silence banner */}
+      {silenceType === 'active' && silence && remaining !== undefined && (
+        <div className="mb-2 flex items-center gap-1.5 rounded bg-slate-800 px-2 py-1.5 text-xs">
+          <BellOff className="h-3 w-3 shrink-0 text-slate-400" />
+          <div>
+            <div className="font-semibold text-slate-200">SILENCE AKTIV</div>
+            <div className="text-slate-400">Endet in {formatDuration(remaining)}</div>
+          </div>
+        </div>
+      )}
+      {silenceType === 'expiring' && remaining !== undefined && (
+        <div className="mb-2 flex items-center gap-1.5 rounded bg-yellow-900/40 px-2 py-1.5 text-xs text-yellow-300">
+          <BellOff className="h-3 w-3 shrink-0" />
+          <span>Silence läuft ab in {formatDuration(remaining)}</span>
+        </div>
+      )}
+      {silenceType === 'pending' && silence && (
+        <div className="mb-2 rounded bg-slate-800 px-2 py-1.5 text-xs text-slate-300">
+          ⏳ Silence ab{' '}
+          {new Date(silence.startsAt).toLocaleTimeString('de-DE', {
+            hour: '2-digit',
+            minute: '2-digit',
+          })}
+        </div>
+      )}
+
+      {/* Labels */}
+      {labels.length > 0 && (
+        <div className="mb-1.5 flex flex-wrap gap-1">
+          {labels.map(([key, value]) => (
+            <LabelChip key={key} labelKey={key} value={value} />
+          ))}
+        </div>
+      )}
+
+      {/* Summary / Description */}
+      {summary && (
+        <p className="text-xs text-muted-foreground">
+          <span className="text-muted-foreground/50">summary:</span> {summary}
+        </p>
+      )}
+      {description && (
+        <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground/60">
+          <span className="text-muted-foreground/40">description:</span> {description}
+        </p>
+      )}
     </div>
   )
 }
 
 export function AlertCard({ alerts, silences, onClick, selectedFingerprint }: AlertCardProps) {
+  const [page, setPage] = useState(0)
+
   const primary = alerts[0]
   const count = alerts.length
   const severity = primary.labels['severity'] ?? 'none'
   const alertname = primary.labels['alertname'] ?? 'Unknown'
-  const isResolved = primary.status.state === 'resolved'
-  const { type: silenceType, silence, remaining } = getSilenceState(primary, silences)
-  const isSelected = selectedFingerprint === primary.fingerprint
+
+  const totalPages = Math.ceil(count / PAGE_SIZE)
+  const start = page * PAGE_SIZE
+  const end = Math.min(start + PAGE_SIZE, count)
+  const visible = alerts.slice(start, end)
 
   const severityBorderColor: Record<string, string> = {
     critical: 'border-l-red-500',
@@ -73,84 +270,65 @@ export function AlertCard({ alerts, silences, onClick, selectedFingerprint }: Al
 
   return (
     <div
-      role="button"
-      tabIndex={0}
-      onClick={() => onClick(primary.fingerprint)}
-      onKeyDown={(e) => e.key === 'Enter' && onClick(primary.fingerprint)}
       className={cn(
-        'relative cursor-pointer rounded-lg border border-border bg-card p-4 shadow-sm transition-all hover:border-accent',
+        'rounded-lg border border-border bg-card shadow-sm',
         'border-l-4',
         severityBorderColor[severity] ?? 'border-l-slate-500',
-        isResolved && 'opacity-50',
-        isSelected && 'ring-2 ring-blue-500',
       )}
     >
-      {/* Claim avatar */}
-      {primary.activeClaim && (
-        <ClaimAvatar name={primary.activeClaim.claimedBy} />
-      )}
-
-      {/* Count badge */}
-      {count > 1 && (
-        <div className="absolute right-3 top-3 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-accent px-1.5 text-xs font-bold">
-          ×{count}
-        </div>
-      )}
-
-      <div className="flex flex-col gap-2">
-        <div className="flex items-start justify-between gap-2 pr-6">
-          <span className="font-semibold text-foreground leading-tight break-all">{alertname}</span>
+      {/* Card header */}
+      <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
+        <span className="break-all font-semibold leading-tight text-foreground">{alertname}</span>
+        <div className="flex shrink-0 items-center gap-2">
           <AlertBadge severity={severity} />
-        </div>
-
-        <div className="flex flex-wrap gap-1.5 text-xs text-muted-foreground">
-          {primary.clusterName && (
-            <span className="rounded bg-accent px-1.5 py-0.5">{primary.clusterName}</span>
+          {count > 1 && (
+            <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-accent px-1.5 text-xs font-bold">
+              ×{count}
+            </span>
           )}
-          <span className="flex items-center gap-1">
-            <Clock className="h-3 w-3" />
-            {formatDistanceToNow(new Date(primary.startsAt), { addSuffix: true, locale: de })}
-          </span>
         </div>
-
-        {/* Silence indicators */}
-        {silenceType === 'pending' && silence && (
-          <div className="flex items-center gap-1 rounded bg-slate-800 px-2 py-1 text-xs text-slate-300">
-            ⏳ Silence ab{' '}
-            {new Date(silence.startsAt).toLocaleTimeString('de-DE', {
-              hour: '2-digit',
-              minute: '2-digit',
-            })}
-          </div>
-        )}
-        {silenceType === 'expiring' && (
-          <div className="flex items-center gap-1 rounded bg-yellow-900/40 px-2 py-1 text-xs text-yellow-300">
-            ⚠️ Silence läuft ab in{' '}
-            {remaining !== undefined ? Math.ceil(remaining / 60_000) : '?'} Min.
-          </div>
-        )}
-        {silenceType === 'expired' && silence && (
-          <div className="flex items-center gap-1 rounded bg-slate-800 px-2 py-1 text-xs text-slate-400">
-            <BellOff className="h-3 w-3" />
-            Silence expired vor{' '}
-            {formatDistanceToNow(new Date(silence.endsAt), { locale: de })}
-          </div>
-        )}
-
-        {/* Alertmanager link */}
-        {primary.alertmanagerUrl && (
-          <a
-            href={primary.alertmanagerUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={(e) => e.stopPropagation()}
-            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-          >
-            <ExternalLink className="h-3 w-3" />
-            Alertmanager
-          </a>
-        )}
       </div>
+
+      {/* Alert entries */}
+      <div className="flex flex-col gap-2 p-2">
+        {visible.map((alert) => (
+          <AlertEntry
+            key={alert.fingerprint}
+            alert={alert}
+            silences={silences}
+            onClick={onClick}
+            isSelected={selectedFingerprint === alert.fingerprint}
+          />
+        ))}
+      </div>
+
+      {/* Pagination */}
+      {count > PAGE_SIZE && (
+        <div className="border-t border-border px-4 py-2">
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <button
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+              disabled={page === 0}
+              className="flex h-6 w-6 items-center justify-center rounded border border-border font-bold hover:bg-accent disabled:opacity-30"
+            >
+              −
+            </button>
+            <span>
+              {start + 1}–{end} von {count}
+            </span>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+              disabled={page === totalPages - 1}
+              className="flex h-6 w-6 items-center justify-center rounded border border-border font-bold hover:bg-accent disabled:opacity-30"
+            >
+              +
+            </button>
+          </div>
+          <p className="mt-1 text-center text-[10px] text-muted-foreground/50">
+            Jeder Eintrag ist einzeln anklickbar.
+          </p>
+        </div>
+      )}
     </div>
   )
 }
