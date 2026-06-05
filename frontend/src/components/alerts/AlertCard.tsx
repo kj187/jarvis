@@ -191,12 +191,12 @@ function AlertEntry({
       onClick={() => onClick(alert.fingerprint)}
       onKeyDown={(e) => e.key === 'Enter' && onClick(alert.fingerprint)}
       className={cn(
-        'cursor-pointer rounded-md border bg-background/20 p-2 transition-colors',
+        'cursor-pointer px-3 py-2.5 transition-colors',
         claim
-          ? 'border-blue-500/50 bg-blue-950/30 hover:bg-blue-950/40'
-          : 'border-border/40 hover:bg-accent/20',
-        isSelected && !claim && 'border-blue-500/50 bg-blue-500/10',
-        isSelected && claim && 'border-blue-400/80 bg-blue-900/30',
+          ? 'bg-blue-950/30 hover:bg-blue-950/50'
+          : 'hover:bg-accent/20',
+        isSelected && !claim && 'bg-blue-500/10 hover:bg-blue-500/15',
+        isSelected && claim && 'bg-blue-900/40 hover:bg-blue-900/50',
       )}
     >
       {/* Claim banner */}
@@ -302,7 +302,7 @@ export function AlertCard({ alerts, silences, onClick, selectedFingerprint }: Al
   return (
     <div
       className={cn(
-        'rounded-lg border border-border bg-card shadow-sm',
+        'overflow-hidden rounded-lg border border-border bg-card shadow-sm',
         'border-l-4',
         severityBorderColor[severity] ?? 'border-l-slate-500',
       )}
@@ -330,7 +330,7 @@ export function AlertCard({ alerts, silences, onClick, selectedFingerprint }: Al
       )}
 
       {/* Alert entries */}
-      <div className="flex flex-col gap-1.5 p-1.5">
+      <div className="divide-y divide-border">
         {visible.map((alert) => (
           <AlertEntry
             key={alert.fingerprint}
