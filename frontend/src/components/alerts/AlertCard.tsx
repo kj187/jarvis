@@ -329,23 +329,9 @@ export function AlertCard({ alerts, silences, onClick, selectedFingerprint }: Al
         </div>
       )}
 
-      {/* Alert entries */}
-      <div className="divide-y divide-border">
-        {visible.map((alert) => (
-          <AlertEntry
-            key={alert.fingerprint}
-            alert={alert}
-            silences={silences}
-            onClick={onClick}
-            isSelected={selectedFingerprint === alert.fingerprint}
-            commonLabelKeys={commonLabelKeys}
-          />
-        ))}
-      </div>
-
       {/* Pagination */}
       {count > PAGE_SIZE && (
-        <div className="border-t border-border px-4 py-2">
+        <div className="border-b border-border px-4 py-2">
           <div className="flex items-center justify-between text-xs text-muted-foreground">
             <button
               onClick={() => setPage((p) => Math.max(0, p - 1))}
@@ -365,11 +351,22 @@ export function AlertCard({ alerts, silences, onClick, selectedFingerprint }: Al
               +
             </button>
           </div>
-          <p className="mt-1 text-center text-[10px] text-muted-foreground/50">
-            Jeder Eintrag ist einzeln anklickbar.
-          </p>
         </div>
       )}
+
+      {/* Alert entries */}
+      <div className="divide-y divide-border">
+        {visible.map((alert) => (
+          <AlertEntry
+            key={alert.fingerprint}
+            alert={alert}
+            silences={silences}
+            onClick={onClick}
+            isSelected={selectedFingerprint === alert.fingerprint}
+            commonLabelKeys={commonLabelKeys}
+          />
+        ))}
+      </div>
     </div>
   )
 }
