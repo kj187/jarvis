@@ -183,12 +183,12 @@ function AlertEntry({
       onClick={() => onClick(alert.fingerprint)}
       onKeyDown={(e) => e.key === 'Enter' && onClick(alert.fingerprint)}
       className={cn(
-        'cursor-pointer rounded-md border border-border/40 bg-background/20 p-2.5 transition-colors hover:bg-accent/20',
+        'cursor-pointer rounded-md border border-border/40 bg-background/20 p-2 transition-colors hover:bg-accent/20',
         isSelected && 'border-blue-500/50 bg-blue-500/10',
       )}
     >
       {/* Timestamp + maintainer */}
-      <div className="mb-1.5 flex items-center justify-between gap-2 text-xs text-muted-foreground">
+      <div className="mb-1 flex items-center justify-between gap-2 text-xs text-muted-foreground">
         <div className="flex items-center gap-2">
           <span>
             {formatDistanceToNow(new Date(alert.startsAt), { addSuffix: true, locale: de })}
@@ -277,7 +277,7 @@ export function AlertCard({ alerts, silences, onClick, selectedFingerprint }: Al
       )}
     >
       {/* Card header */}
-      <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
+      <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
         <span className="break-all font-semibold leading-tight text-foreground">{alertname}</span>
         <div className="flex shrink-0 items-center gap-2">
           <AlertBadge severity={severity} />
@@ -290,7 +290,7 @@ export function AlertCard({ alerts, silences, onClick, selectedFingerprint }: Al
       </div>
 
       {/* Alert entries */}
-      <div className="flex flex-col gap-2 p-2">
+      <div className="flex flex-col gap-1.5 p-1.5">
         {visible.map((alert) => (
           <AlertEntry
             key={alert.fingerprint}

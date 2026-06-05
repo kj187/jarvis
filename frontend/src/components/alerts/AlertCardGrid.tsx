@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { AlertCard } from './AlertCard'
 import type { EnrichedAlert, Silence } from '@/types'
 import { severityOrder } from '@/lib/alertUtils'
@@ -22,12 +23,77 @@ const SEVERITY_LABEL: Record<string, string> = {
   none: '⚫ None',
 }
 
+const PAGE_SIZE = 3
+
+function useColumns(): number {
+  const [cols, setCols] = useState(() => {
+    const w = window.innerWidth
+    if (w >= 1536) return 4
+    if (w >= 1280) return 3
+    if (w >= 640) return 2
+    return 1
+  })
+  useEffect(() => {
+    const update = () => {
+      const w = window.innerWidth
+      if (w >= 1536) setCols(4)
+      else if (w >= 1280) setCols(3)
+      else if (w >= 640) setCols(2)
+      else setCols(1)
+    }
+    window.addEventListener('resize', update)
+    return () => window.removeEventListener('resize', update)
+  }, [])
+  return cols
+}
+
+// Rough height estimate in pixels for bin-packing.
+// Avoids DOM measurement; good enough for balanced distribution.
+function estimateHeight(group: CardGroup, silences: Silence[]): number {
+  const visibleEntries = Math.min(group.alerts.length, PAGE_SIZE)
+  let h = 40 // card header
+  for (let i = 0; i < visibleEntries; i++) {
+    const alert = group.alerts[i]
+    h += 20 // timestamp row
+    // silence banner
+    const silenced = alert.status.silencedBy.some((id) =>
+      silences.find((s) => s.id === id && s.status.state !== 'expired'),
+    )
+    if (silenced) h += 48
+    const labelCount = Object.keys(alert.labels).length
+    h += Math.ceil(labelCount / 4) * 22 // label chips (wrap estimate)
+    if (alert.annotations['summary']) h += 18
+    if (alert.annotations['description']) h += 18
+    h += 8 // entry padding + gap
+  }
+  if (group.alerts.length > PAGE_SIZE) h += 44 // pagination bar
+  return h
+}
+
+// Greedy bin-packing: place each group into the shortest column.
+// Ties broken by lowest index → left columns fill first.
+function distributeColumns(groups: CardGroup[], silences: Silence[], numCols: number): CardGroup[][] {
+  const cols: CardGroup[][] = Array.from({ length: numCols }, () => [])
+  const heights = Array(numCols).fill(0)
+  for (const group of groups) {
+    let minIdx = 0
+    for (let i = 1; i < numCols; i++) {
+      if (heights[i] < heights[minIdx]) minIdx = i
+    }
+    cols[minIdx].push(group)
+    heights[minIdx] += estimateHeight(group, silences)
+  }
+  return cols
+}
+
 export function AlertCardGrid({
   alerts,
   silences,
   onSelectAlert,
   selectedFingerprint,
 }: AlertCardGridProps) {
+  const numCols = useColumns()
+
   // Group by alertname + severity
   const groupMap = new Map<string, CardGroup>()
   for (const alert of alerts) {
@@ -70,28 +136,36 @@ export function AlertCardGrid({
   }
 
   return (
-    <div className="space-y-8">
-      {severities.map((severity) => (
-        <section key={severity}>
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-            {SEVERITY_LABEL[severity] ?? severity}{' '}
-            <span className="ml-1 text-muted-foreground">
-              ({bySeverity.get(severity)?.reduce((sum, g) => sum + g.alerts.length, 0)})
-            </span>
-          </h2>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-            {bySeverity.get(severity)?.map((group) => (
-              <AlertCard
-                key={`${group.severity}:${group.alertname}`}
-                alerts={group.alerts}
-                silences={silences}
-                onClick={onSelectAlert}
-                selectedFingerprint={selectedFingerprint}
-              />
-            ))}
-          </div>
-        </section>
-      ))}
+    <div className="space-y-4">
+      {severities.map((severity) => {
+        const sectionGroups = bySeverity.get(severity) ?? []
+        const distributed = distributeColumns(sectionGroups, silences, numCols)
+        return (
+          <section key={severity}>
+            <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              {SEVERITY_LABEL[severity] ?? severity}{' '}
+              <span className="ml-1 text-muted-foreground">
+                ({sectionGroups.reduce((sum, g) => sum + g.alerts.length, 0)})
+              </span>
+            </h2>
+            <div className="flex gap-3">
+              {distributed.map((colGroups, colIdx) => (
+                <div key={colIdx} className="flex min-w-0 flex-1 flex-col gap-3">
+                  {colGroups.map((group) => (
+                    <AlertCard
+                      key={`${group.severity}:${group.alertname}`}
+                      alerts={group.alerts}
+                      silences={silences}
+                      onClick={onSelectAlert}
+                      selectedFingerprint={selectedFingerprint}
+                    />
+                  ))}
+                </div>
+              ))}
+            </div>
+          </section>
+        )
+      })}
     </div>
   )
 }
