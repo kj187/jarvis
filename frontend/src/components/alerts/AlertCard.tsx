@@ -322,7 +322,7 @@ export function AlertCard({ alerts, silences, onClick, selectedFingerprint }: Al
 
       {/* Common labels (shared by all alerts in group) */}
       {sortedCommonLabels.length > 0 && (
-        <div className="flex flex-wrap gap-1 border-b border-border px-3 py-1.5">
+        <div className="flex flex-wrap gap-1 px-3 py-1.5">
           {sortedCommonLabels.map(([key, value]) => (
             <LabelChip key={key} labelKey={key} value={value} />
           ))}
