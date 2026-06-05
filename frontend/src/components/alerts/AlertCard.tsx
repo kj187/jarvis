@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import React, { useRef, useState } from 'react'
 import { formatDistanceToNow } from 'date-fns'
 import { de } from 'date-fns/locale'
 import { BellOff, User } from 'lucide-react'
@@ -12,21 +12,15 @@ const PAGE_SIZE = 3
 
 const HIDDEN_LABEL_KEYS = new Set(['alertname', 'severity', 'receiver', '@receiver'])
 
-const LABEL_PALETTE = [
-  'bg-emerald-900/50 text-emerald-300 border border-emerald-800/60',
-  'bg-teal-900/50 text-teal-300 border border-teal-800/60',
-  'bg-cyan-900/50 text-cyan-300 border border-cyan-800/60',
-  'bg-violet-900/50 text-violet-300 border border-violet-800/60',
-  'bg-blue-900/50 text-blue-300 border border-blue-800/60',
-  'bg-amber-900/50 text-amber-300 border border-amber-800/60',
-  'bg-orange-900/50 text-orange-300 border border-orange-800/60',
-  'bg-slate-700/80 text-slate-300 border border-slate-600/60',
-]
-
-function labelColor(key: string): string {
+function labelColorStyle(key: string): React.CSSProperties {
   let h = 5381
   for (let i = 0; i < key.length; i++) h = ((h << 5) + h + key.charCodeAt(i)) >>> 0
-  return LABEL_PALETTE[h % LABEL_PALETTE.length]
+  const hue = h % 360
+  return {
+    backgroundColor: `hsl(${hue} 40% 16%)`,
+    color: `hsl(${hue} 70% 72%)`,
+    borderColor: `hsl(${hue} 35% 30%)`,
+  }
 }
 
 const OPERATORS: LabelMatcherOperator[] = ['=', '!=', '=~', '!~']
@@ -58,10 +52,8 @@ function LabelChip({ labelKey, value }: { labelKey: string; value: string }) {
       onClick={(e) => e.stopPropagation()}
     >
       <span
-        className={cn(
-          'max-w-[200px] truncate rounded px-1.5 py-0.5 text-[10px] font-medium',
-          labelColor(labelKey),
-        )}
+        className="max-w-[200px] truncate rounded border px-1.5 py-0.5 text-[10px] font-medium"
+        style={labelColorStyle(labelKey)}
       >
         {labelKey}: {value}
       </span>
