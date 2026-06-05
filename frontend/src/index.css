@@ -41,6 +41,25 @@ label[for] {
   cursor: pointer;
 }
 
+.combo-dropdown::-webkit-scrollbar {
+  width: 4px;
+}
+.combo-dropdown::-webkit-scrollbar-track {
+  background: transparent;
+}
+.combo-dropdown::-webkit-scrollbar-thumb {
+  background: hsl(216 34% 25%);
+  border-radius: 2px;
+}
+.combo-dropdown::-webkit-scrollbar-thumb:hover {
+  background: hsl(216 34% 35%);
+}
+
+input::-webkit-calendar-picker-indicator {
+  display: none !important;
+  opacity: 0 !important;
+}
+
 body {
   background-color: var(--color-background);
   color: var(--color-foreground);

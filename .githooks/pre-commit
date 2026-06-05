@@ -20,8 +20,16 @@ fi
 
 # ── Frontend checks (only if frontend files changed) ──────────────────────────
 if git diff --cached --name-only | grep -q "^frontend/"; then
-  echo "  [Frontend] Running pnpm audit..."
-  (cd frontend && pnpm audit --audit-level=high)
+  FRONTEND_CONTAINER="jarvis_frontend_1"
+  if podman exec "$FRONTEND_CONTAINER" true 2>/dev/null; then
+    echo "  [Frontend] Running pnpm audit..."
+    podman exec "$FRONTEND_CONTAINER" sh -c "cd /app && pnpm audit --audit-level=high"
+    echo "  [Frontend] Running pnpm test..."
+    podman exec "$FRONTEND_CONTAINER" sh -c "cd /app && pnpm test"
+  else
+    echo "  [Frontend] Container '$FRONTEND_CONTAINER' not running — start with: podman compose -f compose.dev.yml up"
+    exit 1
+  fi
 fi
 
 echo "✅ All pre-commit checks passed."
