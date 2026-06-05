@@ -140,7 +140,6 @@ export function AlertsPage() {
       {/* Detail panel */}
       <AlertDetailPanel
         alert={selectedAlert}
-        silences={silences}
         onClose={() => setSelectedFingerprint(null)}
         onAddLabelMatcher={addLabelMatcher}
       />

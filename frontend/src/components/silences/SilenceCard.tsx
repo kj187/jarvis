@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Edit, Trash2 } from 'lucide-react'
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import { Card, CardHeader, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { SilenceExpiry } from './SilenceExpiry'
 import type { Silence, EnrichedAlert } from '@/types'

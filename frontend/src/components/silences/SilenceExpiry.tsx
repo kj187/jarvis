@@ -13,7 +13,6 @@ export function SilenceExpiry({ silence, className }: SilenceExpiryProps) {
   const endsAt = new Date(silence.endsAt).getTime()
   const remaining = endsAt - now
   const FIFTEEN_MIN = 15 * 60 * 1000
-  const TWO_HOURS = 2 * 60 * 60 * 1000
 
   const { state } = silence.status
 

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { formatDistanceToNow, format } from 'date-fns'
+import { formatDistanceToNow } from 'date-fns'
 import { de } from 'date-fns/locale'
 import { Trash2, Send } from 'lucide-react'
 import { useAlertComments, useAddComment, useDeleteComment } from '@/hooks/useAlertComments'

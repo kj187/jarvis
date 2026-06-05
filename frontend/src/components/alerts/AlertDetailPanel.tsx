@@ -9,11 +9,10 @@ import { AlertClaimSection } from './AlertClaimSection'
 import { AlertHistoryTable } from './AlertHistoryTable'
 import { AlertComments } from './AlertComments'
 import { useAlertHistory, useAlertStats } from '@/hooks/useAlerts'
-import type { EnrichedAlert, Silence, LabelMatcher } from '@/types'
+import type { EnrichedAlert, LabelMatcher } from '@/types'
 
 interface AlertDetailPanelProps {
   alert: EnrichedAlert | null
-  silences: Silence[]
   onClose: () => void
   onAddLabelMatcher: (matcher: Omit<LabelMatcher, 'id'>) => void
   runbookBaseUrl?: string
@@ -45,7 +44,6 @@ function Section({
 
 export function AlertDetailPanel({
   alert,
-  silences,
   onClose,
   onAddLabelMatcher,
   runbookBaseUrl,
