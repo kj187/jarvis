@@ -20,9 +20,6 @@ Instead, please report it via one of the following channels:
   - Potential impact
   - (Optional) A suggested fix
 
-You can expect an acknowledgment within **48 hours** and a resolution timeline
-within **7 days** for critical issues.
-
 ## Security Measures
 
 See [docs/SECURITY.md](docs/SECURITY.md) for a full description of:

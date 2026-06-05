@@ -1,6 +1,6 @@
 module github.com/kj187/jarvis/backend
 
-go 1.25
+go 1.24
 
 toolchain go1.25.11
 
