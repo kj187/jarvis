@@ -1,0 +1,40 @@
+# Go
+backend/bin/
+backend/tmp/
+*.exe
+*.test
+*.out
+coverage.out
+coverage.html
+
+# SQLite
+*.db
+*.db-shm
+*.db-wal
+data/
+
+# Node / pnpm
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+node_modules/
+dist/
+.pnpm-store/
+
+# Environment
+.env
+!.env.example
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Air (Go hot-reload)
+backend/.air.toml
+backend/tmp/
+
+# golangci-lint cache
+.cache/

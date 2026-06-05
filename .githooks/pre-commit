@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "▶ Running pre-commit checks..."
+
+# ── Go checks (only if backend files changed) ─────────────────────────────────
+if git diff --cached --name-only | grep -q "^backend/"; then
+  echo "  [Go] Running unit tests..."
+  (cd backend && go test ./... -count=1 -timeout 60s)
+
+  echo "  [Go] Running gosec..."
+  (cd backend && gosec ./... 2>&1)
+
+  echo "  [Go] Running govulncheck..."
+  (cd backend && govulncheck ./...)
+
+  echo "  [Go] Running golangci-lint..."
+  (cd backend && golangci-lint run ./...)
+fi
+
+# ── Frontend checks (only if frontend files changed) ──────────────────────────
+if git diff --cached --name-only | grep -q "^frontend/"; then
+  echo "  [Frontend] Running pnpm audit..."
+  (cd frontend && pnpm audit --audit-level=high)
+fi
+
+echo "✅ All pre-commit checks passed."

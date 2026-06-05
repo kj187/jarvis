@@ -1,0 +1,48 @@
+@import "tailwindcss";
+
+@theme {
+  --color-background: hsl(224 71% 4%);
+  --color-foreground: hsl(213 31% 91%);
+  --color-card: hsl(224 71% 6%);
+  --color-card-foreground: hsl(213 31% 91%);
+  --color-border: hsl(216 34% 17%);
+  --color-input: hsl(216 34% 17%);
+  --color-primary: hsl(210 40% 98%);
+  --color-primary-foreground: hsl(222.2 47.4% 11.2%);
+  --color-secondary: hsl(222.2 47.4% 11.2%);
+  --color-secondary-foreground: hsl(210 40% 98%);
+  --color-muted: hsl(223 47% 11%);
+  --color-muted-foreground: hsl(215.4 16.3% 56.9%);
+  --color-accent: hsl(216 34% 17%);
+  --color-accent-foreground: hsl(210 40% 98%);
+  --color-destructive: hsl(0 63% 31%);
+  --color-destructive-foreground: hsl(210 40% 98%);
+  --color-popover: hsl(224 71% 4%);
+  --color-popover-foreground: hsl(215 20.2% 65.1%);
+  --color-ring: hsl(216 34% 17%);
+
+  --color-severity-critical: hsl(0 84% 60%);
+  --color-severity-warning: hsl(38 92% 50%);
+  --color-severity-info: hsl(221 83% 53%);
+  --color-severity-none: hsl(215 16% 47%);
+
+  --radius: 0.5rem;
+}
+
+/* Global: all interactive elements show pointer cursor */
+a,
+button,
+[role="button"],
+[role="option"],
+[role="tab"],
+[role="checkbox"],
+select,
+label[for] {
+  cursor: pointer;
+}
+
+body {
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+}

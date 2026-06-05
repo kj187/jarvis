@@ -1,0 +1,162 @@
+import type {
+  EnrichedAlert,
+  AlertGroup,
+  AlertEvent,
+  AlertStats,
+  Comment,
+  Claim,
+  Silence,
+  ClusterInfo,
+} from '@/types'
+
+const BASE = '/api/v1'
+
+async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const res = await fetch(BASE + path, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      ...(options?.headers ?? {}),
+    },
+  })
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText)
+    throw new Error(`${res.status}: ${text}`)
+  }
+  if (res.status === 204) return undefined as T
+  return res.json() as Promise<T>
+}
+
+// ── Alerts ───────────────────────────────────────────────────────────────────
+
+export function fetchAlerts(params?: {
+  cluster?: string
+  severity?: string
+  state?: string
+}): Promise<EnrichedAlert[]> {
+  const q = new URLSearchParams()
+  if (params?.cluster) q.set('cluster', params.cluster)
+  if (params?.severity) q.set('severity', params.severity)
+  if (params?.state) q.set('state', params.state)
+  const qs = q.toString()
+  return request<EnrichedAlert[]>(`/alerts${qs ? `?${qs}` : ''}`)
+}
+
+export function fetchAlertGroups(): Promise<AlertGroup[]> {
+  return request<AlertGroup[]>('/alerts/groups')
+}
+
+export function fetchAlertHistory(
+  fingerprint: string,
+  params?: { limit?: number; offset?: number },
+): Promise<{ events: AlertEvent[]; total: number }> {
+  const q = new URLSearchParams()
+  if (params?.limit) q.set('limit', String(params.limit))
+  if (params?.offset) q.set('offset', String(params.offset))
+  const qs = q.toString()
+  return request(`/alerts/${fingerprint}/history${qs ? `?${qs}` : ''}`)
+}
+
+export function fetchAlertStats(fingerprint: string): Promise<AlertStats> {
+  return request<AlertStats>(`/alerts/${fingerprint}/stats`)
+}
+
+// ── Comments ─────────────────────────────────────────────────────────────────
+
+export function fetchComments(fingerprint: string): Promise<Comment[]> {
+  return request<Comment[]>(`/alerts/${fingerprint}/comments`)
+}
+
+export function addComment(
+  fingerprint: string,
+  body: { authorName: string; body: string; eventId?: number },
+): Promise<Comment> {
+  return request<Comment>(`/alerts/${fingerprint}/comments`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export function deleteComment(fingerprint: string, id: number): Promise<void> {
+  return request<void>(`/alerts/${fingerprint}/comments/${id}`, {
+    method: 'DELETE',
+  })
+}
+
+// ── Claims ────────────────────────────────────────────────────────────────────
+
+export function fetchActiveClaim(fingerprint: string): Promise<Claim | null> {
+  return request<Claim>(`/alerts/${fingerprint}/claim`).catch((e: Error) => {
+    if (e.message.startsWith('404')) return null
+    throw e
+  })
+}
+
+export function setClaim(
+  fingerprint: string,
+  body: { claimedBy: string; note?: string; eventId?: number },
+): Promise<Claim> {
+  return request<Claim>(`/alerts/${fingerprint}/claim`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export function releaseClaim(fingerprint: string, by: string): Promise<void> {
+  return request<void>(`/alerts/${fingerprint}/claim?by=${encodeURIComponent(by)}`, {
+    method: 'DELETE',
+  })
+}
+
+export function fetchClaimHistory(fingerprint: string): Promise<Claim[]> {
+  return request<Claim[]>(`/alerts/${fingerprint}/claims/history`)
+}
+
+// ── Silences ──────────────────────────────────────────────────────────────────
+
+export function fetchSilences(cluster?: string): Promise<Silence[]> {
+  const q = cluster ? `?cluster=${encodeURIComponent(cluster)}` : ''
+  return request<Silence[]>(`/silences${q}`)
+}
+
+export interface UpsertSilenceBody {
+  cluster: string
+  matchers: Array<{ isEqual: boolean; isRegex: boolean; name: string; value: string }>
+  startsAt: string
+  endsAt: string
+  createdBy: string
+  comment: string
+  id?: string
+  fingerprint?: string
+  performedBy?: string
+}
+
+export function upsertSilence(body: UpsertSilenceBody): Promise<{ id: string }> {
+  return request<{ id: string }>('/silences', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export function deleteSilence(id: string, cluster: string, params?: { fingerprint?: string; by?: string }): Promise<void> {
+  const q = new URLSearchParams({ cluster })
+  if (params?.fingerprint) q.set('fingerprint', params.fingerprint)
+  if (params?.by) q.set('by', params.by)
+  return request<void>(`/silences/${id}?${q.toString()}`, { method: 'DELETE' })
+}
+
+// ── Clusters ──────────────────────────────────────────────────────────────────
+
+export function fetchClusters(): Promise<ClusterInfo[]> {
+  return request<ClusterInfo[]>('/clusters')
+}
+
+export function fetchStatus(): Promise<{
+  status: string
+  clusters: number
+  alerts: number
+  ws_clients: number
+}> {
+  return request('/status')
+}
