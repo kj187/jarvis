@@ -6,7 +6,6 @@ import { useUIStore } from '@/store/uiStore'
 import { AlertCardGrid } from './AlertCardGrid'
 import { AlertListView } from './AlertListView'
 import { AlertDetailPanel } from './AlertDetailPanel'
-import { AlertFilters } from './AlertFilters'
 import { matchesLabelMatchers, getEffectiveAlertState } from '@/lib/alertUtils'
 import type { EnrichedAlert } from '@/types'
 
@@ -78,10 +77,8 @@ export function AlertsPage() {
     filters,
     selectedFingerprint,
     setSelectedFingerprint,
-    setFilter,
     addLabelMatcher,
-    removeLabelMatcher,
-    clearLabelMatchers,
+    setAlertCounts,
   } = useUIStore()
 
   // Filter alerts
@@ -111,25 +108,13 @@ export function AlertsPage() {
       null
     : null
 
+  // Keep header alert counts in sync
+  useEffect(() => {
+    setAlertCounts({ filtered: filtered.length, total: alerts.length })
+  }, [filtered.length, alerts.length, setAlertCounts])
+
   return (
     <div className="flex flex-col gap-4">
-      {/* Filters bar */}
-      <div className="px-4">
-        <AlertFilters
-          stateFilter={filters.state}
-          onStateFilterChange={(v) => setFilter('state', v)}
-          matchers={filters.labelMatchers}
-          onAddMatcher={addLabelMatcher}
-          onRemoveMatcher={removeLabelMatcher}
-          onClearMatchers={clearLabelMatchers}
-        />
-      </div>
-
-      {/* Alert count */}
-      <div className="px-4 text-xs text-muted-foreground">
-        Alerts {filtered.length} / {alerts.length}
-      </div>
-
       {/* Content */}
       {isLoading ? (
         <div className="px-4 text-sm text-muted-foreground">Laden…</div>

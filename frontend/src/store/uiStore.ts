@@ -10,12 +10,18 @@ interface Filters {
   labelMatchers: LabelMatcher[]
 }
 
+interface AlertCounts {
+  filtered: number
+  total: number
+}
+
 interface UIStore {
   viewMode: ViewMode
   selectedFingerprint: string | null
   filters: Filters
   wsConnected: boolean
   pollingPaused: boolean
+  alertCounts: AlertCounts
 
   // Actions
   setViewMode: (mode: ViewMode) => void
@@ -28,6 +34,7 @@ interface UIStore {
   resetFilters: () => void
   setWsConnected: (connected: boolean) => void
   setPollingPaused: (paused: boolean) => void
+  setAlertCounts: (counts: AlertCounts) => void
 }
 
 const defaultFilters: Filters = {
@@ -49,6 +56,7 @@ export const useUIStore = create<UIStore>()(
       filters: defaultFilters,
       wsConnected: false,
       pollingPaused: false,
+      alertCounts: { filtered: 0, total: 0 },
 
       setViewMode: (mode) => set({ viewMode: mode }),
       setSelectedFingerprint: (fp) => set({ selectedFingerprint: fp }),
@@ -91,6 +99,7 @@ export const useUIStore = create<UIStore>()(
 
       setWsConnected: (connected) => set({ wsConnected: connected }),
       setPollingPaused: (paused) => set({ pollingPaused: paused }),
+      setAlertCounts: (counts) => set({ alertCounts: counts }),
     }),
     {
       name: 'jarvis-ui',

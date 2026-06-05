@@ -4,7 +4,7 @@ import {
   matchesLabelMatchers,
   getEffectiveAlertState,
   safeRegex,
-} from '../alertUtils'
+} from './alertUtils'
 import type { EnrichedAlert, LabelMatcher, Silence } from '@/types'
 
 function makeAlert(labels: Record<string, string> = {}): EnrichedAlert {
