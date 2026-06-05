@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/labstack/echo/v4"
+	"github.com/kj187/jarvis/backend/internal/models"
 )
 
 // GET /api/v1/alerts/:fingerprint/comments
@@ -19,7 +20,7 @@ func (s *Server) getComments(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get comments")
 	}
 	if comments == nil {
-		comments = []interface{}{}
+		comments = []models.Comment{}
 	}
 	return c.JSON(http.StatusOK, comments)
 }

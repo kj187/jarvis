@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	amclient "github.com/kj187/jarvis/backend/internal/alertmanager"
 	"github.com/kj187/jarvis/backend/internal/cluster"
 	"github.com/kj187/jarvis/backend/internal/models"
 )
