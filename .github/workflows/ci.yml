@@ -63,7 +63,7 @@ jobs:
         run: npm install -g pnpm
 
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm install --ignore-scripts
 
       - name: Audit dependencies
         run: pnpm audit --audit-level=high
