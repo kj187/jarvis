@@ -152,22 +152,37 @@ function formatDuration(ms: number): string {
   return 'wenige Sekunden'
 }
 
+function getCommonLabels(alerts: EnrichedAlert[]): Record<string, string> {
+  if (alerts.length === 0) return {}
+  const firstLabels = getFilterableLabels(alerts[0])
+  const common: Record<string, string> = {}
+  for (const [key, value] of Object.entries(firstLabels)) {
+    if (HIDDEN_LABEL_KEYS.has(key)) continue
+    if (alerts.every((a) => getFilterableLabels(a)[key] === value)) {
+      common[key] = value
+    }
+  }
+  return common
+}
+
 function AlertEntry({
   alert,
   silences,
   onClick,
   isSelected,
+  commonLabelKeys,
 }: {
   alert: EnrichedAlert
   silences: Silence[]
   onClick: (fp: string) => void
   isSelected: boolean
+  commonLabelKeys: Set<string>
 }) {
   const { type: silenceType, silence, remaining } = getSilenceState(alert, silences)
   const maintainer = alert.activeClaim?.claimedBy ?? alert.labels['maintainer'] ?? null
   const allLabels = getFilterableLabels(alert)
   const labels = Object.entries(allLabels)
-    .filter(([k]) => !HIDDEN_LABEL_KEYS.has(k))
+    .filter(([k]) => !HIDDEN_LABEL_KEYS.has(k) && !commonLabelKeys.has(k))
     .sort(([a], [b]) => {
       if (a === '@cluster') return -1
       if (b === '@cluster') return 1
@@ -261,6 +276,14 @@ export function AlertCard({ alerts, silences, onClick, selectedFingerprint }: Al
   const end = Math.min(start + PAGE_SIZE, count)
   const visible = alerts.slice(start, end)
 
+  const commonLabels = getCommonLabels(alerts)
+  const commonLabelKeys = new Set(Object.keys(commonLabels))
+  const sortedCommonLabels = Object.entries(commonLabels).sort(([a], [b]) => {
+    if (a === '@cluster') return -1
+    if (b === '@cluster') return 1
+    return 0
+  })
+
   const severityBorderColor: Record<string, string> = {
     critical: 'border-l-red-500',
     warning: 'border-l-yellow-500',
@@ -289,6 +312,15 @@ export function AlertCard({ alerts, silences, onClick, selectedFingerprint }: Al
         </div>
       </div>
 
+      {/* Common labels (shared by all alerts in group) */}
+      {sortedCommonLabels.length > 0 && (
+        <div className="flex flex-wrap gap-1 border-b border-border px-3 py-1.5">
+          {sortedCommonLabels.map(([key, value]) => (
+            <LabelChip key={key} labelKey={key} value={value} />
+          ))}
+        </div>
+      )}
+
       {/* Alert entries */}
       <div className="flex flex-col gap-1.5 p-1.5">
         {visible.map((alert) => (
@@ -298,6 +330,7 @@ export function AlertCard({ alerts, silences, onClick, selectedFingerprint }: Al
             silences={silences}
             onClick={onClick}
             isSelected={selectedFingerprint === alert.fingerprint}
+            commonLabelKeys={commonLabelKeys}
           />
         ))}
       </div>
