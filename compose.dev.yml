@@ -6,18 +6,23 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - ./backend:/app
-      - ./data:/data
+      - ./backend:/app:z
+      - ./data:/data:z
+      - ./.env:/app/.env:ro,z
+      - jarvis_gomodcache:/go/pkg/mod
     env_file: .env
     restart: unless-stopped
 
   frontend:
     image: node:22-alpine
     working_dir: /app
-    command: sh -c "npm install -g pnpm && pnpm install && pnpm dev --host"
+    command: sh -c "npm install -g pnpm --prefix /usr/local && pnpm install --ignore-scripts && pnpm dev --host"
     ports:
       - "5173:5173"
     volumes:
-      - ./frontend:/app
+      - ./frontend:/app:z
     environment:
       - VITE_API_BASE=http://localhost:8080
+
+volumes:
+  jarvis_gomodcache:

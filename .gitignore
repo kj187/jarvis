@@ -17,9 +17,13 @@ data/
 frontend/node_modules/
 frontend/dist/
 frontend/.vite/
+frontend/.npm/
 node_modules/
 dist/
 .pnpm-store/
+
+# Go tooling cache
+backend/.config/
 
 # Environment
 .env
