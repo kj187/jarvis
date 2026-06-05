@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git:*)",
+      "Bash(go test:*)",
+      "Bash(go build:*)",
+      "Bash(go mod:*)",
+      "Bash(gosec:*)",
+      "Bash(govulncheck:*)",
+      "Bash(golangci-lint:*)",
+      "Bash(git-chglog:*)",
+      "Bash(pnpm:*)",
+      "Bash(podman:*)",
+      "Bash(podman-compose:*)"
+    ],
+    "deny": [
+      "Bash(git push --force:*)",
+      "Bash(git reset --hard:*)",
+      "Bash(git commit --no-verify:*)",
+      "Bash(rm -rf:*)"
+    ]
+  }
+}

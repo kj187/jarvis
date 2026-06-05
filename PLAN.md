@@ -996,62 +996,62 @@ podman compose up --build -d
 
 ### Phase 0 — Projekt-Setup (Git, Tests, Security-Tooling)
 
-- [ ] `git init` mit Konfiguration: `user.name = Julian Kleinhans`, `user.email = mail@kj187.de`
-- [ ] `.gitignore` anlegen (Go, Node, `.env`, `dist/`, `data/`, IDE-Dateien)
-- [ ] `LICENSE` anlegen (MIT)
-- [ ] `SECURITY.md` anlegen (Responsible Disclosure)
-- [ ] Pre-Commit-Hooks einrichten (`.githooks/pre-commit`): Go-Unit-Tests, `gosec`, `govulncheck`, `golangci-lint`, `pnpm audit`
-- [ ] `golangci-lint`-Config anlegen (`.golangci.yml`)
-- [ ] Backend Test-Scaffolding: leere `*_test.go`-Dateien pro Package
-- [ ] Frontend Test-Scaffolding: Playwright oder Vitest + Testing Library Setup
-- [ ] `docs/TESTING.md` anlegen
-- [ ] `docs/SECURITY.md` anlegen
+- [x] `git init` mit Konfiguration: `user.name = Julian Kleinhans`, `user.email = mail@kj187.de`
+- [x] `.gitignore` anlegen (Go, Node, `.env`, `dist/`, `data/`, IDE-Dateien)
+- [x] `LICENSE` anlegen (MIT)
+- [x] `SECURITY.md` anlegen (Responsible Disclosure)
+- [x] Pre-Commit-Hooks einrichten (`.githooks/pre-commit`): Go-Unit-Tests, `gosec`, `govulncheck`, `golangci-lint`, `pnpm audit`
+- [x] `golangci-lint`-Config anlegen (`.golangci.yml`)
+- [x] Backend Test-Scaffolding: leere `*_test.go`-Dateien pro Package
+- [x] Frontend Test-Scaffolding: Playwright oder Vitest + Testing Library Setup
+- [x] `docs/TESTING.md` anlegen
+- [x] `docs/SECURITY.md` anlegen
 
 ### Phase 1 — Foundation
 
-- [ ] Projektstruktur anlegen (backend + frontend Verzeichnisse)
-- [ ] Go Backend: `config`, `db`, `models`, `cluster/registry`, `alertmanager/client`
-- [ ] SQLite-Setup mit `db.Migrate()` (inline SQL)
-- [ ] `history/store.go` — alle SQLite-Methoden
-- [ ] `history/alert_store.go` — in-memory Store
-- [ ] `history/recorder.go` — Polling-Loop mit Diff-Logik
-- [ ] `ws/hub.go` — WebSocket Hub
-- [ ] `api/router.go` — Echo-Setup + alle Routes
-- [ ] Alle API-Handler (`alerts`, `silences`, `clusters`, `comments`, `claims`)
-- [ ] `compose.dev.yml` + `Containerfile.dev` (air)
-- [ ] React + Vite + Tailwind v4 + shadcn/ui Setup
-- [ ] Basis-Types (`types/index.ts`)
-- [ ] API-Client (`api/client.ts`)
-- [ ] Zustand Store (`store/uiStore.ts`)
-- [ ] WebSocket Hook (`hooks/useWebSocket.ts`)
-- [ ] Alert-Hooks (`hooks/useAlerts.ts`, etc.)
+- [x] Projektstruktur anlegen (backend + frontend Verzeichnisse)
+- [x] Go Backend: `config`, `db`, `models`, `cluster/registry`, `alertmanager/client`
+- [x] SQLite-Setup mit `db.Migrate()` (inline SQL)
+- [x] `history/store.go` — alle SQLite-Methoden
+- [x] `history/alert_store.go` — in-memory Store
+- [x] `history/recorder.go` — Polling-Loop mit Diff-Logik
+- [x] `ws/hub.go` — WebSocket Hub
+- [x] `api/router.go` — Echo-Setup + alle Routes
+- [x] Alle API-Handler (`alerts`, `silences`, `clusters`, `comments`, `claims`)
+- [x] `compose.dev.yml` + `Containerfile.dev` (air)
+- [x] React + Vite + Tailwind v4 + shadcn/ui Setup
+- [x] Basis-Types (`types/index.ts`)
+- [x] API-Client (`api/client.ts`)
+- [x] Zustand Store (`store/uiStore.ts`)
+- [x] WebSocket Hook (`hooks/useWebSocket.ts`)
+- [x] Alert-Hooks (`hooks/useAlerts.ts`, etc.)
 
 ### Phase 2 — Alert-Ansicht
 
-- [ ] `lib/alertUtils.ts` (getFilterableLabels, matchesLabelMatchers, getEffectiveAlertState)
-- [ ] Card View (AlertCardGrid + AlertCard)
-- [ ] List View (AlertListView + AlertListRow)
-- [ ] View Toggle
-- [ ] State-Filter, Label-Matcher-Filter, Suche
-- [ ] URL-State-Serialisierung
-- [ ] Header-Layout (Nav, WS-Indicator, Polling-Controls, Cluster-Status)
+- [x] `lib/alertUtils.ts` (getFilterableLabels, matchesLabelMatchers, getEffectiveAlertState)
+- [x] Card View (AlertCardGrid + AlertCard)
+- [x] List View (AlertListView + AlertListRow)
+- [x] View Toggle
+- [x] State-Filter, Label-Matcher-Filter, Suche
+- [x] URL-State-Serialisierung
+- [x] Header-Layout (Nav, WS-Indicator, Polling-Controls, Cluster-Status)
 
 ### Phase 3 — Detail-Panel + Silences
 
-- [ ] Alert-Detailpanel (Sheet: Labels, Annotations, Claim-Sektion, Historie, Kommentare)
-- [ ] Alert Claiming (setzen, freigeben, Historie)
-- [ ] Kommentare (Liste + Formular + Löschen)
-- [ ] Paginierte Firing-Historie
-- [ ] Silences-Page (Liste mit Expiry-Anzeige)
-- [ ] Silence erstellen/bearbeiten/löschen
-- [ ] Silence aus Alert-Detailpanel
+- [x] Alert-Detailpanel (Sheet: Labels, Annotations, Claim-Sektion, Historie, Kommentare)
+- [x] Alert Claiming (setzen, freigeben, Historie)
+- [x] Kommentare (Liste + Formular + Löschen)
+- [x] Paginierte Firing-Historie
+- [x] Silences-Page (Liste mit Expiry-Anzeige)
+- [x] Silence erstellen/bearbeiten/löschen
+- [x] Silence aus Alert-Detailpanel
 
 ### Phase 4 — Production
 
-- [ ] `Containerfile` (multi-stage Production Build)
-- [ ] `compose.yml` (Production)
-- [ ] `static/static_prod.go` + `static_dev.go` (Build-Tags `prod` / `!prod`, `embed.FS`)
-- [ ] `.env.example` dokumentieren
+- [x] `Containerfile` (multi-stage Production Build)
+- [x] `compose.yml` (Production)
+- [x] `static/static_prod.go` + `static_dev.go` (Build-Tags `prod` / `!prod`, `embed.FS`)
+- [x] `.env.example` dokumentieren
 
 ---
 
@@ -1504,12 +1504,12 @@ pnpm audit
 ```
 
 **Checkliste neuer Code:**
-- [ ] Keine hardcoded Strings die wie Secrets aussehen
-- [ ] HTTP-Client-Calls haben Context + Timeout
-- [ ] Pfadparameter validiert (Fingerprint-Format, IDs)
-- [ ] Fehler-Responses lecken keine internen Details (`c.JSON(500, "internal error")`)
-- [ ] Kein `dangerouslySetInnerHTML` im Frontend
-- [ ] `.env` nicht in git (`git status` prüfen)
+- [x] Keine hardcoded Strings die wie Secrets aussehen
+- [x] HTTP-Client-Calls haben Context + Timeout
+- [x] Pfadparameter validiert (Fingerprint-Format, IDs)
+- [x] Fehler-Responses lecken keine internen Details (`c.JSON(500, "internal error")`)
+- [x] Kein `dangerouslySetInnerHTML` im Frontend
+- [x] `.env` nicht in git (`git status` prüfen)
 
 ---
 
@@ -1517,18 +1517,18 @@ pnpm audit
 
 Zu den Phase-0-Tasks (Section 15) gehört:
 
-- [ ] `CLAUDE.md` im Projekt-Root anlegen (mit Inhalt aus 23.3)
-- [ ] `.claude/commands/architecture.md` anlegen (mit Inhalt aus 23.4)
-- [ ] `.claude/commands/add-feature.md` anlegen (mit Inhalt aus 23.5)
-- [ ] `.claude/commands/security-check.md` anlegen (mit Inhalt aus 23.6)
-- [ ] `.claude/settings.json` anlegen (Permissions für pre-commit, container-befehle)
+- [x] `CLAUDE.md` im Projekt-Root anlegen (mit Inhalt aus 23.3)
+- [x] `.claude/commands/architecture.md` anlegen (mit Inhalt aus 23.4)
+- [x] `.claude/commands/add-feature.md` anlegen (mit Inhalt aus 23.5)
+- [x] `.claude/commands/security-check.md` anlegen (mit Inhalt aus 23.6)
+- [x] `.claude/settings.json` anlegen (Permissions für pre-commit, container-befehle)
 
 ### 23.8 Phase 4 — Ergänzung: PLAN2.md löschen
 
 Letzter Task in Phase 4:
-- [ ] Sicherstellen dass `CLAUDE.md` + `.claude/commands/` vollständig und aktuell sind
-- [ ] `git rm PLAN2.md`
-- [ ] Commit: `chore: remove initial development plan`
+- [x] Sicherstellen dass `CLAUDE.md` + `.claude/commands/` vollständig und aktuell sind
+- [x] `git rm PLAN2.md`
+- [x] Commit: `chore: remove initial development plan`
 
 ---
 
@@ -1834,14 +1834,14 @@ Commit-Convention Reminder: feat → MINOR, fix/security → PATCH, BREAKING CHA
 ### 25.8 Phase 0 / Phase 4 — Ergänzung
 
 **Phase 0:**
-- [ ] `.chglog/config.yml` + `CHANGELOG.tpl.md` anlegen
-- [ ] `.github/workflows/ci.yml` anlegen
-- [ ] `.github/workflows/release.yml` anlegen (Placeholder `<owner>` noch ersetzen)
+- [x] `.chglog/config.yml` + `CHANGELOG.tpl.md` anlegen
+- [x] `.github/workflows/ci.yml` anlegen
+- [x] `.github/workflows/release.yml` anlegen (Placeholder `<owner>` noch ersetzen)
 
 **Phase 4 (Production):**
-- [ ] `docs/RELEASE.md` anlegen
-- [ ] `.claude/commands/release.md` anlegen (mit Inhalt aus 25.7)
-- [ ] Erstes Release `v0.1.0` nach Production-Build
+- [x] `docs/RELEASE.md` anlegen
+- [x] `.claude/commands/release.md` anlegen (mit Inhalt aus 25.7)
+- [x] Erstes Release `v0.1.0` nach Production-Build
 
 ---
 
