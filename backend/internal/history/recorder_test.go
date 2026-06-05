@@ -157,8 +157,8 @@ func (r *Recorder) processAlerts(ctx context.Context, allAlerts []models.Enriche
 	}
 
 	if len(resolvedFPs) > 0 {
-		r.store.ResolveEvents(resolvedFPs, now)           //nolint:errcheck
-		r.store.ReleaseClaimsForResolved(resolvedFPs)     //nolint:errcheck
+		r.store.ResolveEvents(resolvedFPs, now)       //nolint:errcheck
+		r.store.ReleaseClaimsForResolved(resolvedFPs) //nolint:errcheck
 		for _, fp := range resolvedFPs {
 			r.alertStore.MarkResolved(fp)
 		}

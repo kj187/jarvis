@@ -7,12 +7,12 @@ import (
 
 	"github.com/labstack/echo/v4"
 
+	"github.com/kj187/jarvis/backend/internal/cluster"
 	"github.com/kj187/jarvis/backend/internal/config"
+	idb "github.com/kj187/jarvis/backend/internal/db"
 	"github.com/kj187/jarvis/backend/internal/history"
 	"github.com/kj187/jarvis/backend/internal/models"
 	"github.com/kj187/jarvis/backend/internal/ws"
-	idb "github.com/kj187/jarvis/backend/internal/db"
-	"github.com/kj187/jarvis/backend/internal/cluster"
 )
 
 func newTestServer(t *testing.T) (*Server, *history.AlertStore) {

@@ -3,8 +3,8 @@ package api
 import (
 	"net/http"
 
-	"github.com/labstack/echo/v4"
 	"github.com/kj187/jarvis/backend/internal/models"
+	"github.com/labstack/echo/v4"
 )
 
 // GET /api/v1/alerts/:fingerprint/claim

@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/labstack/echo/v4"
 	"github.com/kj187/jarvis/backend/internal/models"
+	"github.com/labstack/echo/v4"
 )
 
 // GET /health

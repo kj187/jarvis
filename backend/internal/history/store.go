@@ -68,7 +68,7 @@ func (s *Store) GetOrCreateActiveEvent(
 		} else {
 			// Keep the event's status in sync with the current poll state.
 			if existing.Status != status {
-				s.db.Exec(`UPDATE alert_events SET status = ? WHERE id = ?`, status, existing.ID) //nolint:errcheck
+				_, _ = s.db.Exec(`UPDATE alert_events SET status = ? WHERE id = ?`, status, existing.ID)
 			}
 			return existing, nil
 		}
@@ -152,7 +152,7 @@ func (s *Store) ResolveEvents(fingerprints []string, endsAt time.Time) error {
 		placeholders += "?"
 		args = append(args, fp)
 	}
-	_, err := s.db.Exec(
+	_, err := s.db.Exec( // #nosec G202 -- placeholders are ? params, not user input
 		`UPDATE alert_events SET ends_at = ?, status = 'resolved' WHERE ends_at IS NULL AND fingerprint IN (`+placeholders+`)`,
 		args...,
 	)
@@ -416,7 +416,7 @@ func (s *Store) ReleaseClaimsForResolved(fingerprints []string) error {
 		placeholders += "?"
 		args = append(args, fp)
 	}
-	_, err := s.db.Exec(
+	_, err := s.db.Exec( // #nosec G202 -- placeholders are ? params, not user input
 		`UPDATE alert_claims SET released_at = ?, release_reason = ?
 		 WHERE released_at IS NULL AND fingerprint IN (`+placeholders+`)`,
 		args...,

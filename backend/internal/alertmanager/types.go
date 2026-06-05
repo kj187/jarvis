@@ -6,15 +6,15 @@ import "time"
 
 // GettableAlert is the response type from GET /api/v2/alerts.
 type GettableAlert struct {
-	Fingerprint  string            `json:"fingerprint"`
+	Fingerprint  string              `json:"fingerprint"`
 	Status       GettableAlertStatus `json:"status"`
-	Labels       map[string]string `json:"labels"`
-	Annotations  map[string]string `json:"annotations"`
-	StartsAt     time.Time         `json:"startsAt"`
-	EndsAt       time.Time         `json:"endsAt"`
-	UpdatedAt    time.Time         `json:"updatedAt"`
-	GeneratorURL string            `json:"generatorURL"`
-	Receivers    []AMReceiver      `json:"receivers"`
+	Labels       map[string]string   `json:"labels"`
+	Annotations  map[string]string   `json:"annotations"`
+	StartsAt     time.Time           `json:"startsAt"`
+	EndsAt       time.Time           `json:"endsAt"`
+	UpdatedAt    time.Time           `json:"updatedAt"`
+	GeneratorURL string              `json:"generatorURL"`
+	Receivers    []AMReceiver        `json:"receivers"`
 }
 
 type GettableAlertStatus struct {
@@ -29,14 +29,14 @@ type AMReceiver struct {
 
 // GettableSilence is the response type from GET /api/v2/silences.
 type GettableSilence struct {
-	ID        string         `json:"id"`
+	ID        string             `json:"id"`
 	Matchers  []AMSilenceMatcher `json:"matchers"`
-	StartsAt  time.Time      `json:"startsAt"`
-	EndsAt    time.Time      `json:"endsAt"`
-	CreatedBy string         `json:"createdBy"`
-	Comment   string         `json:"comment"`
-	Status    AMSilenceStatus `json:"status"`
-	UpdatedAt time.Time      `json:"updatedAt"`
+	StartsAt  time.Time          `json:"startsAt"`
+	EndsAt    time.Time          `json:"endsAt"`
+	CreatedBy string             `json:"createdBy"`
+	Comment   string             `json:"comment"`
+	Status    AMSilenceStatus    `json:"status"`
+	UpdatedAt time.Time          `json:"updatedAt"`
 }
 
 type AMSilenceMatcher struct {
@@ -52,12 +52,12 @@ type AMSilenceStatus struct {
 
 // PostableSilence is the request body for POST /api/v2/silences.
 type PostableSilence struct {
-	ID        string         `json:"id,omitempty"` // set for update/extend
+	ID        string             `json:"id,omitempty"` // set for update/extend
 	Matchers  []AMSilenceMatcher `json:"matchers"`
-	StartsAt  time.Time      `json:"startsAt"`
-	EndsAt    time.Time      `json:"endsAt"`
-	CreatedBy string         `json:"createdBy"`
-	Comment   string         `json:"comment"`
+	StartsAt  time.Time          `json:"startsAt"`
+	EndsAt    time.Time          `json:"endsAt"`
+	CreatedBy string             `json:"createdBy"`
+	Comment   string             `json:"comment"`
 }
 
 // PostSilenceResponse is the response from POST /api/v2/silences.

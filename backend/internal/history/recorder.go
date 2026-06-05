@@ -18,12 +18,12 @@ type broadcaster interface {
 
 // Recorder polls all Alertmanager clusters and persists alert lifecycle events.
 type Recorder struct {
-	registry    *cluster.Registry
-	alertStore  *AlertStore
-	store       *Store
-	hub         broadcaster
-	interval    time.Duration
-	logger      *slog.Logger
+	registry   *cluster.Registry
+	alertStore *AlertStore
+	store      *Store
+	hub        broadcaster
+	interval   time.Duration
+	logger     *slog.Logger
 
 	// prevSnapshot holds the fingerprints from the last poll for diff computation.
 	prevMu       sync.Mutex

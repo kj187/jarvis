@@ -81,7 +81,7 @@ type AlertEvent struct {
 	AlertmanagerURL string     `json:"alertmanagerUrl"`
 	Status          string     `json:"status"`
 	StartsAt        time.Time  `json:"startsAt"`
-	EndsAt          *time.Time `json:"endsAt"` // nil while still firing
+	EndsAt          *time.Time `json:"endsAt"`      // nil while still firing
 	Annotations     string     `json:"annotations"` // JSON string with metadata
 	RecordedAt      time.Time  `json:"recordedAt"`
 }
@@ -136,9 +136,9 @@ type WSEvent struct {
 
 const (
 	WSTypeAlertsUpdate  = "alerts_update"  // payload: { alerts: EnrichedAlert[] }
-	WSTypeClaimSet      = "claim_set"       // payload: { fingerprint, claim }
-	WSTypeClaimReleased = "claim_released"  // payload: { fingerprint, releasedBy }
-	WSTypeCommentAdded  = "comment_added"   // payload: { fingerprint, comment }
+	WSTypeClaimSet      = "claim_set"      // payload: { fingerprint, claim }
+	WSTypeClaimReleased = "claim_released" // payload: { fingerprint, releasedBy }
+	WSTypeCommentAdded  = "comment_added"  // payload: { fingerprint, comment }
 )
 
 // ── Cluster ──────────────────────────────────────────────────────────────────

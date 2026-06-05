@@ -24,3 +24,7 @@ issues:
       linters:
         - gosec
         - errcheck
+    - path: "internal/history/store.go"
+      linters:
+        - gosec
+      text: "G202"

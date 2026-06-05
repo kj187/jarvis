@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/labstack/echo/v4"
 	amclient "github.com/kj187/jarvis/backend/internal/alertmanager"
 	"github.com/kj187/jarvis/backend/internal/models"
+	"github.com/labstack/echo/v4"
 )
 
 // GET /api/v1/silences
@@ -38,15 +38,15 @@ func (s *Server) getSilences(c echo.Context) error {
 // POST /api/v1/silences
 func (s *Server) createSilence(c echo.Context) error {
 	var body struct {
-		Cluster     string                   `json:"cluster"`
+		Cluster     string                      `json:"cluster"`
 		Matchers    []amclient.AMSilenceMatcher `json:"matchers"`
-		StartsAt    time.Time                `json:"startsAt"`
-		EndsAt      time.Time                `json:"endsAt"`
-		CreatedBy   string                   `json:"createdBy"`
-		Comment     string                   `json:"comment"`
-		ID          string                   `json:"id,omitempty"`
-		Fingerprint string                   `json:"fingerprint,omitempty"`
-		PerformedBy string                   `json:"performedBy,omitempty"`
+		StartsAt    time.Time                   `json:"startsAt"`
+		EndsAt      time.Time                   `json:"endsAt"`
+		CreatedBy   string                      `json:"createdBy"`
+		Comment     string                      `json:"comment"`
+		ID          string                      `json:"id,omitempty"`
+		Fingerprint string                      `json:"fingerprint,omitempty"`
+		PerformedBy string                      `json:"performedBy,omitempty"`
 	}
 	if err := c.Bind(&body); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
