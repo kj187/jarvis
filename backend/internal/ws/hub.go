@@ -48,15 +48,15 @@ func NewHub(allowedOrigins []string, logger *slog.Logger) *Hub {
 		ReadBufferSize:  1024,
 		WriteBufferSize: 1024,
 		CheckOrigin: func(r *http.Request) bool {
+			origin := r.Header.Get("Origin")
+			if origin == "" {
+				// No Origin header — non-browser clients cannot trigger CSRF.
+				return true
+			}
 			if len(allowedOrigins) == 0 {
-				// Same-origin only: compare request host to Origin header.
-				origin := r.Header.Get("Origin")
-				if origin == "" {
-					return true
-				}
+				// Same-origin only.
 				return origin == "http://"+r.Host || origin == "https://"+r.Host
 			}
-			origin := r.Header.Get("Origin")
 			_, ok := originSet[origin]
 			return ok
 		},

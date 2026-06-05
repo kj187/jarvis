@@ -55,7 +55,23 @@ func (s *Store) GetOrCreateActiveEvent(
 		return nil, err
 	}
 	if existing != nil {
-		return existing, nil
+		// Expired transition: close the current open event so a new expired event is created.
+		// Set ends_at beyond the grace window so the re-open query won't pick it up.
+		if status == models.EventStatusExpired && existing.Status != models.EventStatusExpired {
+			pastEndsAt := time.Now().UTC().Add(-2 * time.Minute)
+			_, err = s.db.Exec(`UPDATE alert_events SET ends_at = ?, status = 'resolved' WHERE id = ?`,
+				pastEndsAt, existing.ID)
+			if err != nil {
+				return nil, fmt.Errorf("close event for expired transition: %w", err)
+			}
+			// Fall through: grace period won't re-open the closed event; create new expired event.
+		} else {
+			// Keep the event's status in sync with the current poll state.
+			if existing.Status != status {
+				s.db.Exec(`UPDATE alert_events SET status = ? WHERE id = ?`, status, existing.ID) //nolint:errcheck
+			}
+			return existing, nil
+		}
 	}
 
 	// 2. Grace Period: re-open if last resolved event is < 60s old.
@@ -137,7 +153,7 @@ func (s *Store) ResolveEvents(fingerprints []string, endsAt time.Time) error {
 		args = append(args, fp)
 	}
 	_, err := s.db.Exec(
-		`UPDATE alert_events SET ends_at = ? WHERE ends_at IS NULL AND fingerprint IN (`+placeholders+`)`,
+		`UPDATE alert_events SET ends_at = ?, status = 'resolved' WHERE ends_at IS NULL AND fingerprint IN (`+placeholders+`)`,
 		args...,
 	)
 	return err
