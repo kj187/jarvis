@@ -9,24 +9,32 @@ import (
 // AlertStore is an in-memory store for the current poll snapshot.
 // All methods are safe for concurrent use.
 type AlertStore struct {
-	mu     sync.RWMutex
-	alerts []models.EnrichedAlert
+	mu             sync.RWMutex
+	alerts         []models.EnrichedAlert
+	resolvedBuffer map[string]models.EnrichedAlert // kept for 20 min after resolve
 }
 
-// Set replaces the entire alert snapshot.
+// Set replaces the active alert snapshot. Alerts that reappear as active are
+// removed from the resolved buffer (they came back before the 20-min window).
 func (s *AlertStore) Set(alerts []models.EnrichedAlert) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.alerts = make([]models.EnrichedAlert, len(alerts))
 	copy(s.alerts, alerts)
+	for _, a := range alerts {
+		delete(s.resolvedBuffer, a.Fingerprint)
+	}
 }
 
-// Get returns a copy of the current alert snapshot.
+// Get returns a copy of all alerts: currently active + resolved buffer.
 func (s *AlertStore) Get() []models.EnrichedAlert {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	result := make([]models.EnrichedAlert, len(s.alerts))
 	copy(result, s.alerts)
+	for _, a := range s.resolvedBuffer { // nil-map range is safe in Go
+		result = append(result, a)
+	}
 	return result
 }
 
@@ -54,22 +62,28 @@ func (s *AlertStore) ClearActiveClaim(fingerprint string) {
 	}
 }
 
-// MarkResolved sets the status of the given fingerprint to "resolved" in-memory
-// and clears its active claim.
+// MarkResolved moves the alert to the resolved buffer so it stays visible for
+// 20 minutes after disappearing from Alertmanager. Clears its active claim.
+// The resolved buffer is NOT overwritten by Set, so the entry survives the next poll.
 func (s *AlertStore) MarkResolved(fingerprint string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	for i := range s.alerts {
-		if s.alerts[i].Fingerprint == fingerprint {
-			s.alerts[i].Status.State = "resolved"
-			s.alerts[i].ActiveClaim = nil
+	for i, a := range s.alerts {
+		if a.Fingerprint == fingerprint {
+			resolved := a
+			resolved.Status.State = "resolved"
+			resolved.ActiveClaim = nil
+			if s.resolvedBuffer == nil {
+				s.resolvedBuffer = make(map[string]models.EnrichedAlert)
+			}
+			s.resolvedBuffer[fingerprint] = resolved
+			s.alerts = append(s.alerts[:i], s.alerts[i+1:]...)
 			return
 		}
 	}
 }
 
-// RemoveByFingerprint removes the alert with the given fingerprint from the
-// in-memory store.
+// RemoveByFingerprint removes the alert from both active list and resolved buffer.
 func (s *AlertStore) RemoveByFingerprint(fingerprint string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -80,4 +94,5 @@ func (s *AlertStore) RemoveByFingerprint(fingerprint string) {
 		}
 	}
 	s.alerts = append([]models.EnrichedAlert(nil), filtered...)
+	delete(s.resolvedBuffer, fingerprint)
 }
