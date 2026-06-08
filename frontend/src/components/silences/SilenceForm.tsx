@@ -316,7 +316,7 @@ export function SilenceForm({
 
   const labelSuggestions = useMemo(() => {
     const map = new Map<string, string[]>()
-    for (const alert of prefillAlerts ?? []) {
+    for (const alert of prefillAlerts ?? allAlerts) {
       for (const [k, v] of Object.entries(alert.labels)) {
         const existing = map.get(k) ?? []
         if (!existing.includes(v)) existing.push(v)
@@ -324,7 +324,7 @@ export function SilenceForm({
       }
     }
     return map
-  }, [prefillAlerts])
+  }, [prefillAlerts, allAlerts])
 
   const labelKeys = useMemo(
     () => [...labelSuggestions.keys()].sort(),
@@ -652,20 +652,22 @@ export function SilenceForm({
 
         {/* Matchers */}
         <div>
-          <div className="mb-2 flex items-center gap-2">
+          <div className="mb-2 grid items-center gap-1.5" style={{ gridTemplateColumns: '160px 72px 1fr 32px' }}>
             <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Matcher
             </span>
+            <span />
             <span
               className={cn(
-                'rounded-full px-1.5 py-0.5 text-[10px] font-medium tabular-nums transition-colors',
+                'justify-self-end rounded px-2 py-0.5 text-sm font-bold tabular-nums transition-colors',
                 liveMatchCount > 0
-                  ? 'bg-primary/20 text-primary'
+                  ? 'bg-primary text-primary-foreground'
                   : 'bg-accent text-muted-foreground',
               )}
             >
               {liveMatchCount} affected
             </span>
+            <span />
           </div>
           <div className="space-y-2">
             {matchers.map((m) => (
