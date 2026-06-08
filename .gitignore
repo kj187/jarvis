@@ -18,6 +18,7 @@ frontend/node_modules/
 frontend/dist/
 frontend/.vite/
 frontend/.npm/
+*.tsbuildinfo
 node_modules/
 dist/
 .pnpm-store/
