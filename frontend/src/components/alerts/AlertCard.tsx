@@ -1,87 +1,20 @@
-import React, { useRef, useState } from 'react'
+import React, { useState } from 'react'
 import { formatDistanceToNow } from 'date-fns'
 import { de } from 'date-fns/locale'
 import { Bell, BellOff, User } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { getFilterableLabels } from '@/lib/alertUtils'
-import { useUIStore } from '@/store/uiStore'
+import { getFilterableLabels, getSilenceState, formatSilenceDuration } from '@/lib/alertUtils'
 import { AlertBadge } from './AlertBadge'
+import { HIDDEN_LABEL_KEYS, LabelChip } from './LabelChip'
 import { Sheet } from '@/components/ui/sheet'
 import { SilenceForm } from '@/components/silences/SilenceForm'
 import { useQuery } from '@tanstack/react-query'
 import { fetchClusters } from '@/api/client'
-import type { EnrichedAlert, LabelMatcherOperator, Silence } from '@/types'
+import { useAlertStats } from '@/hooks/useAlerts'
+import type { EnrichedAlert, Silence } from '@/types'
 
 const PAGE_SIZE = 3
 
-const HIDDEN_LABEL_KEYS = new Set(['alertname', 'severity', 'receiver', '@receiver'])
-
-function labelColorStyle(key: string): React.CSSProperties {
-  let h = 5381
-  for (let i = 0; i < key.length; i++) h = ((h << 5) + h + key.charCodeAt(i)) >>> 0
-  const hue = h % 360
-  return {
-    backgroundColor: `hsl(${hue} 40% 16%)`,
-    color: `hsl(${hue} 70% 72%)`,
-    borderColor: `hsl(${hue} 35% 30%)`,
-  }
-}
-
-const OPERATORS: LabelMatcherOperator[] = ['=', '!=', '=~', '!~']
-
-function LabelChip({ labelKey, value }: { labelKey: string; value: string }) {
-  const [open, setOpen] = useState(false)
-  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const addLabelMatcher = useUIStore((s) => s.addLabelMatcher)
-
-  const show = () => {
-    if (hideTimer.current) clearTimeout(hideTimer.current)
-    setOpen(true)
-  }
-  const hide = () => {
-    hideTimer.current = setTimeout(() => setOpen(false), 120)
-  }
-
-  const apply = (op: LabelMatcherOperator, e: React.MouseEvent) => {
-    e.stopPropagation()
-    addLabelMatcher({ name: labelKey, operator: op, value })
-    setOpen(false)
-  }
-
-  return (
-    <div
-      className="relative inline-flex"
-      onMouseEnter={show}
-      onMouseLeave={hide}
-      onClick={(e) => e.stopPropagation()}
-    >
-      <span
-        className="max-w-[200px] truncate rounded border px-1.5 py-0.5 text-[10px] font-medium"
-        style={labelColorStyle(labelKey)}
-      >
-        {labelKey}: {value}
-      </span>
-
-      {open && (
-        <div
-          className="absolute left-0 top-full z-50 mt-0.5 flex items-center gap-px rounded border border-border bg-popover p-0.5 shadow-md"
-          onMouseEnter={show}
-          onMouseLeave={hide}
-        >
-          {OPERATORS.map((op) => (
-            <button
-              key={op}
-              onClick={(e) => apply(op, e)}
-              className="rounded px-2 py-0.5 font-mono text-[11px] font-bold text-foreground hover:bg-accent"
-            >
-              {op}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
 
 interface AlertCardProps {
   alerts: EnrichedAlert[]
@@ -90,63 +23,6 @@ interface AlertCardProps {
   selectedFingerprint?: string | null
 }
 
-function getSilenceState(alert: EnrichedAlert, silences: Silence[]): {
-  type: 'pending' | 'active' | 'expiring' | null
-  silence: Silence | null
-  remaining?: number
-} {
-  const now = Date.now()
-  const FIFTEEN_MIN = 15 * 60 * 1000
-
-  for (const silenceId of alert.status.silencedBy) {
-    const silence = silences.find((s) => s.id === silenceId)
-    if (!silence) continue
-    const endsAt = new Date(silence.endsAt).getTime()
-    const remaining = endsAt - now
-    if (silence.status.state === 'pending') return { type: 'pending', silence }
-    if (silence.status.state === 'active') {
-      if (remaining <= FIFTEEN_MIN) return { type: 'expiring', silence, remaining }
-      return { type: 'active', silence, remaining }
-    }
-  }
-  return { type: null, silence: null }
-}
-
-function formatDuration(ms: number): string {
-  const totalSeconds = Math.floor(ms / 1000)
-  const minutes = Math.floor(totalSeconds / 60)
-  const hours = Math.floor(minutes / 60)
-  const days = Math.floor(hours / 24)
-  const months = Math.floor(days / 30)
-  const years = Math.floor(days / 365)
-
-  if (years >= 1) {
-    const remMonths = Math.floor((days - years * 365) / 30)
-    return remMonths > 0
-      ? `${years} Jahr${years > 1 ? 'e' : ''} ${remMonths} Monat${remMonths > 1 ? 'e' : ''}`
-      : `${years} Jahr${years > 1 ? 'e' : ''}`
-  }
-  if (months >= 1) {
-    const remDays = days - months * 30
-    return remDays > 0
-      ? `${months} Monat${months > 1 ? 'e' : ''} ${remDays} Tag${remDays > 1 ? 'e' : ''}`
-      : `${months} Monat${months > 1 ? 'e' : ''}`
-  }
-  if (days >= 1) {
-    const remHours = hours - days * 24
-    return remHours > 0
-      ? `${days} Tag${days > 1 ? 'e' : ''} ${remHours} Std.`
-      : `${days} Tag${days > 1 ? 'e' : ''}`
-  }
-  if (hours >= 1) {
-    const remMinutes = minutes - hours * 60
-    return remMinutes > 0
-      ? `${hours} Std. ${remMinutes} Min.`
-      : `${hours} Std.`
-  }
-  if (minutes >= 1) return `${minutes} Min.`
-  return 'wenige Sekunden'
-}
 
 function getCommonLabels(alerts: EnrichedAlert[]): Record<string, string> {
   if (alerts.length === 0) return {}
@@ -175,6 +51,8 @@ function AlertEntry({
   commonLabelKeys: Set<string>
 }) {
   const { type: silenceType, silence, remaining } = getSilenceState(alert, silences)
+  const isResolved = alert.status.state === 'resolved'
+  const { data: stats } = useAlertStats(alert.fingerprint)
   const claim = alert.activeClaim ?? null
   const maintainer = claim ? null : (alert.labels['maintainer'] ?? null)
   const allLabels = getFilterableLabels(alert)
@@ -218,15 +96,20 @@ function AlertEntry({
       )}
 
       {/* Timestamp + maintainer */}
-      <div className="mb-1 flex items-center gap-2 text-xs text-muted-foreground">
-        <span>
-          {alert.status.state === 'resolved'
-            ? 'Aufgelöst'
-            : new Date(alert.startsAt) > new Date()
+      <div className="mb-1 flex flex-col gap-0.5 text-xs text-muted-foreground">
+        <div className="flex items-center gap-2">
+          <span title={new Date(alert.startsAt).toLocaleString('de-DE')}>
+            {new Date(alert.startsAt) > new Date()
               ? `Läuft ab ${formatDistanceToNow(new Date(alert.endsAt), { addSuffix: true, locale: de })}`
               : formatDistanceToNow(new Date(alert.startsAt), { addSuffix: true, locale: de })}
-        </span>
-        {maintainer && <span>{maintainer}</span>}
+          </span>
+          {maintainer && <span>{maintainer}</span>}
+        </div>
+        {isResolved && stats?.lastResolvedAt && (
+          <span className="text-green-600/70" title={new Date(stats.lastResolvedAt).toLocaleString('de-DE')}>
+            ✓ {formatDistanceToNow(new Date(stats.lastResolvedAt), { addSuffix: true, locale: de })}
+          </span>
+        )}
       </div>
 
       {/* Silence banner */}
@@ -235,14 +118,14 @@ function AlertEntry({
           <BellOff className="h-3 w-3 shrink-0 text-slate-400" />
           <div>
             <div className="font-semibold text-slate-200">SILENCE AKTIV</div>
-            <div className="text-slate-400">Endet in {formatDuration(remaining)}</div>
+            <div className="text-slate-400">Endet in {formatSilenceDuration(remaining)}</div>
           </div>
         </div>
       )}
       {silenceType === 'expiring' && remaining !== undefined && (
         <div className="mb-2 flex items-center gap-1.5 rounded bg-yellow-900/40 px-2 py-1.5 text-xs text-yellow-300">
           <BellOff className="h-3 w-3 shrink-0" />
-          <span>Silence läuft ab in {formatDuration(remaining)}</span>
+          <span>Silence läuft ab in {formatSilenceDuration(remaining)}</span>
         </div>
       )}
       {silenceType === 'pending' && silence && (

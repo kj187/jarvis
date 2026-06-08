@@ -86,6 +86,57 @@ export function getEffectiveAlertState(
   return 'suppressed'
 }
 
+// ── Silence state ─────────────────────────────────────────────────────────
+
+export interface SilenceStateResult {
+  type: 'active' | 'expiring' | 'pending' | null
+  silence: Silence | null
+  remaining?: number
+}
+
+export function getSilenceState(alert: EnrichedAlert, silences: Silence[]): SilenceStateResult {
+  const FIFTEEN_MIN = 15 * 60 * 1000
+  const now = Date.now()
+  for (const silenceId of alert.status.silencedBy) {
+    const silence = silences.find((s) => s.id === silenceId)
+    if (!silence) continue
+    const remaining = new Date(silence.endsAt).getTime() - now
+    if (silence.status.state === 'pending') return { type: 'pending', silence }
+    if (silence.status.state === 'active') {
+      if (remaining <= FIFTEEN_MIN) return { type: 'expiring', silence, remaining }
+      return { type: 'active', silence, remaining }
+    }
+  }
+  return { type: null, silence: null }
+}
+
+export function formatSilenceDuration(ms: number): string {
+  const totalSeconds = Math.floor(ms / 1000)
+  const minutes = Math.floor(totalSeconds / 60)
+  const hours = Math.floor(minutes / 60)
+  const days = Math.floor(hours / 24)
+  const months = Math.floor(days / 30)
+  const years = Math.floor(days / 365)
+  if (years >= 1) {
+    const remMonths = Math.floor((days - years * 365) / 30)
+    return remMonths > 0 ? `${years}J ${remMonths}M` : `${years}J`
+  }
+  if (months >= 1) {
+    const remDays = days - months * 30
+    return remDays > 0 ? `${months}M ${remDays}T` : `${months}M`
+  }
+  if (days >= 1) {
+    const remHours = hours - days * 24
+    return remHours > 0 ? `${days}T ${remHours}Std` : `${days}T`
+  }
+  if (hours >= 1) {
+    const remMinutes = minutes - hours * 60
+    return remMinutes > 0 ? `${hours}Std ${remMinutes}Min` : `${hours}Std`
+  }
+  if (minutes >= 1) return `${minutes}Min`
+  return '<1Min'
+}
+
 // ── Severity ordering ─────────────────────────────────────────────────────
 
 const SEVERITY_ORDER: Record<string, number> = {
