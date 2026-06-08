@@ -352,7 +352,7 @@ export function Header({ currentPage, onNavigate }: { currentPage: string; onNav
             <span className="text-xs text-muted-foreground shrink-0 select-none px-1.5">STATE</span>
               {STATE_OPTIONS.map(({ value, label, dot, activeBg, activeDot }) => {
                 const isActive = filters.state === value
-                const count = alertCounts.byState[value as StateValue]
+                const count = alertCounts.byState?.[value as StateValue] ?? 0
                 return (
                   <button
                     key={value}
