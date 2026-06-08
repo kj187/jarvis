@@ -10,7 +10,6 @@ interface SheetProps {
 }
 
 export function Sheet({ open, onClose, children, className }: SheetProps) {
-  // Close on Escape key
   React.useEffect(() => {
     if (!open) return
     const handleKey = (e: KeyboardEvent) => {
@@ -19,6 +18,12 @@ export function Sheet({ open, onClose, children, className }: SheetProps) {
     window.addEventListener('keydown', handleKey)
     return () => window.removeEventListener('keydown', handleKey)
   }, [open, onClose])
+
+  React.useEffect(() => {
+    if (!open) return
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = '' }
+  }, [open])
 
   if (!open) return null
 
@@ -47,7 +52,7 @@ export function Sheet({ open, onClose, children, className }: SheetProps) {
         >
           <X className="h-4 w-4" />
         </button>
-        <div className="flex-1 overflow-y-auto">{children}</div>
+        <div className="sheet-scroll flex-1 overflow-y-auto">{children}</div>
       </div>
     </>
   )

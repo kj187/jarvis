@@ -41,17 +41,21 @@ label[for] {
   cursor: pointer;
 }
 
-.combo-dropdown::-webkit-scrollbar {
+.combo-dropdown::-webkit-scrollbar,
+.sheet-scroll::-webkit-scrollbar {
   width: 4px;
 }
-.combo-dropdown::-webkit-scrollbar-track {
+.combo-dropdown::-webkit-scrollbar-track,
+.sheet-scroll::-webkit-scrollbar-track {
   background: transparent;
 }
-.combo-dropdown::-webkit-scrollbar-thumb {
+.combo-dropdown::-webkit-scrollbar-thumb,
+.sheet-scroll::-webkit-scrollbar-thumb {
   background: hsl(216 34% 25%);
   border-radius: 2px;
 }
-.combo-dropdown::-webkit-scrollbar-thumb:hover {
+.combo-dropdown::-webkit-scrollbar-thumb:hover,
+.sheet-scroll::-webkit-scrollbar-thumb:hover {
   background: hsl(216 34% 35%);
 }
 
