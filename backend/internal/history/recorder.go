@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kj187/jarvis/backend/internal/alertmanager"
 	"github.com/kj187/jarvis/backend/internal/cluster"
 	"github.com/kj187/jarvis/backend/internal/models"
 )
@@ -24,10 +25,19 @@ type Recorder struct {
 	hub        broadcaster
 	interval   time.Duration
 	logger     *slog.Logger
+	triggerCh  chan struct{}
 
 	// prevSnapshot holds the fingerprints from the last poll for diff computation.
-	prevMu       sync.Mutex
-	prevSnapshot map[string]string // fingerprint → status
+	prevMu            sync.Mutex
+	prevSnapshot      map[string]string           // fingerprint → status
+	prevSilenceInfo   map[string]silenceInfoEntry // silenceID → {state, cluster, comment}
+	prevAlertSilences map[string][]string         // fingerprint → []silenceID
+}
+
+type silenceInfoEntry struct {
+	state       string
+	clusterName string
+	comment     string
 }
 
 // NewRecorder creates a new Recorder.
@@ -40,13 +50,25 @@ func NewRecorder(
 	logger *slog.Logger,
 ) *Recorder {
 	return &Recorder{
-		registry:     registry,
-		alertStore:   alertStore,
-		store:        store,
-		hub:          hub,
-		interval:     interval,
-		logger:       logger,
-		prevSnapshot: make(map[string]string),
+		registry:          registry,
+		alertStore:        alertStore,
+		store:             store,
+		hub:               hub,
+		interval:          interval,
+		logger:            logger,
+		triggerCh:         make(chan struct{}, 1),
+		prevSnapshot:      make(map[string]string),
+		prevSilenceInfo:   make(map[string]silenceInfoEntry),
+		prevAlertSilences: make(map[string][]string),
+	}
+}
+
+// Trigger signals the recorder to run an immediate poll.
+// Non-blocking: if a trigger is already queued, this is a no-op.
+func (r *Recorder) Trigger() {
+	select {
+	case r.triggerCh <- struct{}{}:
+	default:
 	}
 }
 
@@ -62,6 +84,8 @@ func (r *Recorder) Start(ctx context.Context) {
 			return
 		case <-ticker.C:
 			r.poll(ctx)
+		case <-r.triggerCh:
+			r.poll(ctx)
 		}
 	}
 }
@@ -72,8 +96,10 @@ func (r *Recorder) poll(ctx context.Context) {
 	clusters := r.registry.All()
 
 	type clusterResult struct {
-		alerts []models.EnrichedAlert
-		err    error
+		alerts   []models.EnrichedAlert
+		silences []alertmanager.GettableSilence
+		name     string
+		err      error
 	}
 	results := make([]clusterResult, len(clusters))
 	var wg sync.WaitGroup
@@ -82,18 +108,34 @@ func (r *Recorder) poll(ctx context.Context) {
 		go func(idx int, cl *cluster.Cluster) {
 			defer wg.Done()
 			alerts, err := r.fetchCluster(ctx, cl)
-			results[idx] = clusterResult{alerts: alerts, err: err}
+			if err != nil {
+				results[idx] = clusterResult{name: cl.Name, err: err}
+				return
+			}
+			silences, serr := cl.Client.GetSilences(ctx)
+			if serr != nil {
+				r.logger.Warn("fetch silences failed", "cluster", cl.Name, "err", serr)
+			}
+			results[idx] = clusterResult{alerts: alerts, silences: silences, name: cl.Name}
 		}(i, cl)
 	}
 	wg.Wait()
 
 	var allAlerts []models.EnrichedAlert
-	for i, res := range results {
+	currSilenceInfo := make(map[string]silenceInfoEntry)
+	for _, res := range results {
 		if res.err != nil {
-			r.logger.Error("poll cluster failed", "cluster", clusters[i].Name, "err", res.err)
+			r.logger.Error("poll cluster failed", "cluster", res.name, "err", res.err)
 			continue
 		}
 		allAlerts = append(allAlerts, res.alerts...)
+		for _, s := range res.silences {
+			currSilenceInfo[s.ID] = silenceInfoEntry{
+				state:       s.Status.State,
+				clusterName: res.name,
+				comment:     s.Comment,
+			}
+		}
 	}
 
 	// Compute diff against previous snapshot.
@@ -111,8 +153,29 @@ func (r *Recorder) poll(ctx context.Context) {
 			resolvedFPs = append(resolvedFPs, fp)
 		}
 	}
+
+	// Build current alert→silences mapping for next poll's expiry detection.
+	currAlertSilences := make(map[string][]string, len(allAlerts))
+	for _, a := range allAlerts {
+		if len(a.Status.SilencedBy) > 0 {
+			currAlertSilences[a.Fingerprint] = a.Status.SilencedBy
+		}
+	}
+
+	// Detect silence expiry: collect (fingerprint, silenceID, info) tuples to record.
+	expiredEntries := r.collectExpiredSilences(currSilenceInfo, currAlertSilences)
+
 	r.prevSnapshot = curr
+	r.prevSilenceInfo = currSilenceInfo
+	r.prevAlertSilences = currAlertSilences
 	r.prevMu.Unlock()
+
+	// Record silence expiry events outside the lock.
+	for _, e := range expiredEntries {
+		if _, err := r.store.RecordSilenceEvent(e.fingerprint, e.silenceID, e.info.clusterName, "expired", "system", e.info.comment); err != nil {
+			r.logger.Error("record silence expired event", "fp", e.fingerprint, "silence", e.silenceID, "err", err)
+		}
+	}
 
 	// Persist events.
 	now := time.Now().UTC()
@@ -177,8 +240,8 @@ func (r *Recorder) poll(ctx context.Context) {
 
 	r.alertStore.Set(allAlerts)
 
-	// Broadcast via WebSocket.
-	payload := map[string]interface{}{"alerts": allAlerts}
+	// Broadcast via WebSocket — use Get() to include resolved buffer.
+	payload := map[string]interface{}{"alerts": r.alertStore.Get()}
 	r.hub.BroadcastJSON(models.WSTypeAlertsUpdate, payload)
 }
 
@@ -226,3 +289,43 @@ func buildWSPayload(eventType string, payload interface{}) ([]byte, error) {
 }
 
 var _ = buildWSPayload // suppress unused warning in non-test builds
+
+type expiredEntry struct {
+	fingerprint string
+	silenceID   string
+	info        silenceInfoEntry
+}
+
+// collectExpiredSilences returns entries for silences that truly expired — i.e.
+// the old silence is gone/expired AND the alert is no longer silenced at all.
+// If AM replaced the silence with a new ID (edit), the alert stays silenced and
+// we skip it to avoid spurious "Silence expired" history entries.
+func (r *Recorder) collectExpiredSilences(
+	currSilenceInfo map[string]silenceInfoEntry,
+	currAlertSilences map[string][]string,
+) []expiredEntry {
+	var entries []expiredEntry
+	for silenceID, prev := range r.prevSilenceInfo {
+		if prev.state == "expired" {
+			continue
+		}
+		curr, exists := currSilenceInfo[silenceID]
+		if !exists || curr.state == "expired" {
+			info := prev
+			if exists {
+				info = curr
+			}
+			for fp, sids := range r.prevAlertSilences {
+				for _, sid := range sids {
+					if sid == silenceID {
+						if _, stillSilenced := currAlertSilences[fp]; !stillSilenced {
+							entries = append(entries, expiredEntry{fp, silenceID, info})
+						}
+						break
+					}
+				}
+			}
+		}
+	}
+	return entries
+}

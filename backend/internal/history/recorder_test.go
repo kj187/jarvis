@@ -119,6 +119,58 @@ func TestRecorder_SuppressedExpiredTransition(t *testing.T) {
 	}
 }
 
+// TestRecorder_SilenceEdit_NoSpuriousExpiredEvent verifies that editing a silence
+// (AM replaces old ID with a new one) does not produce a spurious "Silence expired"
+// history entry when the alert is still silenced by the new silence.
+func TestRecorder_SilenceEdit_NoSpuriousExpiredEvent(t *testing.T) {
+	rec, _ := newTestRecorder(t)
+
+	rec.prevSilenceInfo = map[string]silenceInfoEntry{
+		"silence-old": {state: "active", clusterName: "homelab", comment: "test"},
+	}
+	rec.prevAlertSilences = map[string][]string{
+		"fp1": {"silence-old"},
+	}
+
+	// AM replaced silence-old with silence-new; alert is still silenced.
+	currSilenceInfo := map[string]silenceInfoEntry{
+		"silence-old": {state: "expired", clusterName: "homelab", comment: "test"},
+		"silence-new": {state: "active", clusterName: "homelab", comment: "test"},
+	}
+	currAlertSilences := map[string][]string{
+		"fp1": {"silence-new"},
+	}
+
+	entries := rec.collectExpiredSilences(currSilenceInfo, currAlertSilences)
+	if len(entries) != 0 {
+		t.Errorf("expected 0 expired entries (alert still silenced), got %d", len(entries))
+	}
+}
+
+// TestRecorder_SilenceTrueExpiry verifies that a genuine silence expiry (alert
+// no longer silenced) is recorded.
+func TestRecorder_SilenceTrueExpiry(t *testing.T) {
+	rec, _ := newTestRecorder(t)
+
+	rec.prevSilenceInfo = map[string]silenceInfoEntry{
+		"silence-old": {state: "active", clusterName: "homelab", comment: "test"},
+	}
+	rec.prevAlertSilences = map[string][]string{
+		"fp1": {"silence-old"},
+	}
+
+	currSilenceInfo := map[string]silenceInfoEntry{
+		"silence-old": {state: "expired", clusterName: "homelab", comment: "test"},
+	}
+	// Alert no longer silenced.
+	currAlertSilences := map[string][]string{}
+
+	entries := rec.collectExpiredSilences(currSilenceInfo, currAlertSilences)
+	if len(entries) != 1 {
+		t.Errorf("expected 1 expired entry, got %d", len(entries))
+	}
+}
+
 // processAlerts is a helper that runs the core recorder logic without needing
 // a real cluster registry.
 func (r *Recorder) processAlerts(ctx context.Context, allAlerts []models.EnrichedAlert) {

@@ -33,7 +33,7 @@ func newTestServer(t *testing.T) (*Server, *history.AlertStore) {
 	registry := cluster.NewRegistry(nil)
 	cfg := &config.Config{}
 
-	return NewServer(alertStore, store, hub, registry, cfg), alertStore
+	return NewServer(alertStore, store, hub, registry, cfg, nil), alertStore
 }
 
 func TestGetAlerts_Empty(t *testing.T) {

@@ -407,7 +407,7 @@ func (s *Store) ReleaseClaimsForResolved(fingerprints []string) error {
 		return nil
 	}
 	now := time.Now().UTC()
-	args := []interface{}{now, models.ReleaseReasonResolved}
+	args := []interface{}{now, "system", models.ReleaseReasonResolved}
 	placeholders := ""
 	for i, fp := range fingerprints {
 		if i > 0 {
@@ -417,11 +417,62 @@ func (s *Store) ReleaseClaimsForResolved(fingerprints []string) error {
 		args = append(args, fp)
 	}
 	_, err := s.db.Exec( // #nosec G202 -- placeholders are ? params, not user input
-		`UPDATE alert_claims SET released_at = ?, release_reason = ?
+		`UPDATE alert_claims SET released_at = ?, released_by = ?, release_reason = ?
 		 WHERE released_at IS NULL AND fingerprint IN (`+placeholders+`)`,
 		args...,
 	)
 	return err
+}
+
+// ── Silence Events ────────────────────────────────────────────────────────────
+
+// RecordSilenceEvent persists a user-triggered silence action.
+func (s *Store) RecordSilenceEvent(fingerprint, silenceID, clusterName, action, performedBy, comment string) (*models.SilenceEvent, error) {
+	now := time.Now().UTC()
+	res, err := s.db.Exec(`
+		INSERT INTO silence_events (fingerprint, silence_id, cluster_name, action, performed_by, comment, recorded_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+	`, fingerprint, silenceID, clusterName, action, performedBy, comment, now)
+	if err != nil {
+		return nil, fmt.Errorf("insert silence event: %w", err)
+	}
+	id, _ := res.LastInsertId()
+	return &models.SilenceEvent{
+		ID:          id,
+		Fingerprint: fingerprint,
+		SilenceID:   silenceID,
+		ClusterName: clusterName,
+		Action:      action,
+		PerformedBy: performedBy,
+		Comment:     comment,
+		RecordedAt:  now,
+	}, nil
+}
+
+// GetSilenceEvents returns all silence events for a fingerprint (newest first).
+func (s *Store) GetSilenceEvents(fingerprint string) ([]models.SilenceEvent, error) {
+	rows, err := s.db.Query(`
+		SELECT id, fingerprint, silence_id, cluster_name, action, performed_by, comment, recorded_at
+		FROM silence_events WHERE fingerprint = ?
+		ORDER BY recorded_at DESC
+	`, fingerprint)
+	if err != nil {
+		return nil, fmt.Errorf("query silence events: %w", err)
+	}
+	defer rows.Close()
+
+	var events []models.SilenceEvent
+	for rows.Next() {
+		var e models.SilenceEvent
+		var recordedAt time.Time
+		if err := rows.Scan(&e.ID, &e.Fingerprint, &e.SilenceID, &e.ClusterName,
+			&e.Action, &e.PerformedBy, &e.Comment, &recordedAt); err != nil {
+			return nil, fmt.Errorf("scan silence event: %w", err)
+		}
+		e.RecordedAt = recordedAt.UTC()
+		events = append(events, e)
+	}
+	return events, rows.Err()
 }
 
 // ── Internal helpers ──────────────────────────────────────────────────────────

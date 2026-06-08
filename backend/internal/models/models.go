@@ -127,6 +127,21 @@ type Claim struct {
 	ReleaseReason string     `json:"releaseReason,omitempty"` // manual | resolved | reclaimed
 }
 
+// ── Silence Events ────────────────────────────────────────────────────────────
+
+// SilenceEvent records a user-triggered action on a silence.
+// Action: "created" | "updated" | "deleted"
+type SilenceEvent struct {
+	ID          int64     `json:"id"`
+	Fingerprint string    `json:"fingerprint"`
+	SilenceID   string    `json:"silenceId"`
+	ClusterName string    `json:"clusterName"`
+	Action      string    `json:"action"`
+	PerformedBy string    `json:"performedBy"`
+	Comment     string    `json:"comment"`
+	RecordedAt  time.Time `json:"recordedAt"`
+}
+
 // ── WebSocket Events ─────────────────────────────────────────────────────────
 
 type WSEvent struct {

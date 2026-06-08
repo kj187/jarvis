@@ -65,7 +65,7 @@ func main() {
 	recorder := history.NewRecorder(registry, alertStore, store, hub, cfg.PollInterval, logger)
 
 	// ── HTTP Router ───────────────────────────────────────────────────────────
-	router := api.NewRouter(alertStore, store, hub, registry, cfg, static.StaticFiles)
+	router := api.NewRouter(alertStore, store, hub, registry, cfg, static.StaticFiles, recorder)
 
 	server := &http.Server{
 		Addr:         ":" + cfg.Port,

@@ -82,11 +82,22 @@ func Migrate(db *sql.DB) error {
 			released_by    TEXT,
 			release_reason TEXT
 		)`,
+		`CREATE TABLE IF NOT EXISTS silence_events (
+			id           INTEGER PRIMARY KEY AUTOINCREMENT,
+			fingerprint  TEXT NOT NULL,
+			silence_id   TEXT NOT NULL,
+			cluster_name TEXT NOT NULL,
+			action       TEXT NOT NULL,
+			performed_by TEXT NOT NULL,
+			comment      TEXT NOT NULL DEFAULT '',
+			recorded_at  DATETIME NOT NULL DEFAULT (datetime('now'))
+		)`,
 		`CREATE INDEX IF NOT EXISTS idx_alert_events_fingerprint ON alert_events(fingerprint)`,
 		`CREATE INDEX IF NOT EXISTS idx_alert_events_starts_at   ON alert_events(starts_at DESC)`,
 		`CREATE INDEX IF NOT EXISTS idx_alert_comments_fingerprint ON alert_comments(fingerprint)`,
 		`CREATE INDEX IF NOT EXISTS idx_alert_claims_fingerprint ON alert_claims(fingerprint)`,
 		`CREATE INDEX IF NOT EXISTS idx_alert_claims_active      ON alert_claims(fingerprint) WHERE released_at IS NULL`,
+		`CREATE INDEX IF NOT EXISTS idx_silence_events_fingerprint ON silence_events(fingerprint, recorded_at DESC)`,
 	}
 
 	for _, stmt := range stmts {

@@ -78,6 +78,21 @@ func (s *Server) createSilence(c echo.Context) error {
 	if err != nil {
 		return echo.NewHTTPError(http.StatusBadGateway, "alertmanager error: "+err.Error())
 	}
+
+	if body.Fingerprint != "" {
+		action := "created"
+		if body.ID != "" {
+			action = "updated"
+		} else if body.StartsAt.After(time.Now()) {
+			action = "pending"
+		}
+		performer := body.PerformedBy
+		if performer == "" {
+			performer = body.CreatedBy
+		}
+		_, _ = s.store.RecordSilenceEvent(body.Fingerprint, id, body.Cluster, action, performer, body.Comment)
+	}
+
 	return c.JSON(http.StatusCreated, map[string]string{"id": id})
 }
 
@@ -103,6 +118,16 @@ func (s *Server) deleteSilence(c echo.Context) error {
 	if err := cl.Client.DeleteSilence(ctx, silenceID); err != nil {
 		return echo.NewHTTPError(http.StatusBadGateway, "alertmanager error: "+err.Error())
 	}
+
+	fingerprint := c.QueryParam("fingerprint")
+	by := c.QueryParam("by")
+	if fingerprint != "" {
+		if by == "" {
+			by = "unknown"
+		}
+		_, _ = s.store.RecordSilenceEvent(fingerprint, silenceID, clusterName, "deleted", by, "")
+	}
+
 	return c.NoContent(http.StatusNoContent)
 }
 

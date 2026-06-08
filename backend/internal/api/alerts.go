@@ -113,6 +113,23 @@ func (s *Server) getAlertHistory(c echo.Context) error {
 	})
 }
 
+// GET /api/v1/alerts/:fingerprint/silence-events
+func (s *Server) getSilenceEvents(c echo.Context) error {
+	fp := c.Param("fingerprint")
+	if !validateFingerprint(fp) {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid fingerprint")
+	}
+
+	events, err := s.store.GetSilenceEvents(fp)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get silence events")
+	}
+	if events == nil {
+		events = []models.SilenceEvent{}
+	}
+	return c.JSON(http.StatusOK, events)
+}
+
 // GET /api/v1/alerts/:fingerprint/stats
 func (s *Server) getAlertStats(c echo.Context) error {
 	fp := c.Param("fingerprint")

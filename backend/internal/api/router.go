@@ -23,6 +23,7 @@ func NewRouter(
 	registry *cluster.Registry,
 	cfg *config.Config,
 	staticFiles embed.FS,
+	recorder pollTriggerer,
 ) *echo.Echo {
 	e := echo.New()
 	e.HideBanner = true
@@ -47,7 +48,7 @@ func NewRouter(
 		}))
 	}
 
-	srv := NewServer(alertStore, store, hub, registry, cfg)
+	srv := NewServer(alertStore, store, hub, registry, cfg, recorder)
 
 	// ── WebSocket ─────────────────────────────────────────────────────────────
 	e.GET("/ws", func(c echo.Context) error {
@@ -68,6 +69,7 @@ func NewRouter(
 	api.GET("/alerts", srv.getAlerts)
 	api.GET("/alerts/:fingerprint/history", srv.getAlertHistory)
 	api.GET("/alerts/:fingerprint/stats", srv.getAlertStats)
+	api.GET("/alerts/:fingerprint/silence-events", srv.getSilenceEvents)
 
 	api.GET("/alerts/:fingerprint/comments", srv.getComments)
 	api.POST("/alerts/:fingerprint/comments", srv.addComment)
@@ -81,6 +83,7 @@ func NewRouter(
 	api.GET("/silences", srv.getSilences)
 	api.POST("/silences", srv.createSilence)
 	api.DELETE("/silences/:id", srv.deleteSilence)
+	api.POST("/poll", srv.triggerPoll)
 
 	api.GET("/clusters", srv.getClusters)
 

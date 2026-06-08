@@ -1,19 +1,29 @@
 package api
 
 import (
+	"net/http"
+
+	"github.com/labstack/echo/v4"
+
 	"github.com/kj187/jarvis/backend/internal/cluster"
 	"github.com/kj187/jarvis/backend/internal/config"
 	"github.com/kj187/jarvis/backend/internal/history"
 	"github.com/kj187/jarvis/backend/internal/ws"
 )
 
+// pollTriggerer allows the HTTP layer to request an immediate poll.
+type pollTriggerer interface {
+	Trigger()
+}
+
 // Server holds shared dependencies for all API handlers.
 type Server struct {
-	alertStore *history.AlertStore
-	store      *history.Store
-	hub        *ws.Hub
-	registry   *cluster.Registry
-	cfg        *config.Config
+	alertStore  *history.AlertStore
+	store       *history.Store
+	hub         *ws.Hub
+	registry    *cluster.Registry
+	cfg         *config.Config
+	pollTrigger pollTriggerer
 }
 
 // NewServer creates a new Server with the given dependencies.
@@ -23,12 +33,22 @@ func NewServer(
 	hub *ws.Hub,
 	registry *cluster.Registry,
 	cfg *config.Config,
+	pollTrigger pollTriggerer,
 ) *Server {
 	return &Server{
-		alertStore: alertStore,
-		store:      store,
-		hub:        hub,
-		registry:   registry,
-		cfg:        cfg,
+		alertStore:  alertStore,
+		store:       store,
+		hub:         hub,
+		registry:    registry,
+		cfg:         cfg,
+		pollTrigger: pollTrigger,
 	}
+}
+
+// POST /api/v1/poll — triggers an immediate Alertmanager poll.
+func (s *Server) triggerPoll(c echo.Context) error {
+	if s.pollTrigger != nil {
+		s.pollTrigger.Trigger()
+	}
+	return c.NoContent(http.StatusNoContent)
 }
