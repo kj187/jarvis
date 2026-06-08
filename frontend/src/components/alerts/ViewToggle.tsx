@@ -17,7 +17,7 @@ export function ViewToggle({ value, onChange }: ViewToggleProps) {
         onClick={() => onChange('card')}
         title="Card View"
         className={cn(
-          'rounded-none h-8 w-8',
+          'rounded-none h-7 w-7',
           value === 'card' && 'bg-accent',
         )}
         aria-pressed={value === 'card'}
@@ -30,7 +30,7 @@ export function ViewToggle({ value, onChange }: ViewToggleProps) {
         onClick={() => onChange('list')}
         title="List View"
         className={cn(
-          'rounded-none h-8 w-8',
+          'rounded-none h-7 w-7',
           value === 'list' && 'bg-accent',
         )}
         aria-pressed={value === 'list'}

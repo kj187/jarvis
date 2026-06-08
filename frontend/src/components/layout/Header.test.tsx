@@ -51,7 +51,7 @@ beforeEach(() => {
     filters: { state: '', search: '', labelMatchers: [] },
     wsConnected: false,
     pollingPaused: false,
-    alertCounts: { filtered: 0, total: 0 },
+    alertCounts: { filtered: 0, total: 0, byState: { active: 0, suppressed: 0, resolved: 0 } },
   })
 })
 
@@ -226,9 +226,11 @@ describe('Header – refresh button', () => {
 })
 
 describe('Header – alert count', () => {
-  it('shows alert count in nav button', () => {
-    useUIStore.setState({ alertCounts: { filtered: 3, total: 30 } })
+  it('shows per-state counts in state pills', () => {
+    useUIStore.setState({ alertCounts: { filtered: 3, total: 30, byState: { active: 5, suppressed: 2, resolved: 10 } } })
     renderHeader()
-    expect(screen.getByText('3/30')).toBeInTheDocument()
+    expect(screen.getByText('5')).toBeInTheDocument()
+    expect(screen.getByText('2')).toBeInTheDocument()
+    expect(screen.getByText('10')).toBeInTheDocument()
   })
 })

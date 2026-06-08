@@ -13,6 +13,7 @@ interface Filters {
 interface AlertCounts {
   filtered: number
   total: number
+  byState: { active: number; suppressed: number; resolved: number }
 }
 
 interface UIStore {
@@ -56,7 +57,7 @@ export const useUIStore = create<UIStore>()(
       filters: defaultFilters,
       wsConnected: false,
       pollingPaused: false,
-      alertCounts: { filtered: 0, total: 0 },
+      alertCounts: { filtered: 0, total: 0, byState: { active: 0, suppressed: 0, resolved: 0 } },
 
       setViewMode: (mode) => set({ viewMode: mode }),
       setSelectedFingerprint: (fp) => set({ selectedFingerprint: fp }),

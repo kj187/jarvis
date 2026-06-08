@@ -110,8 +110,13 @@ export function AlertsPage() {
 
   // Keep header alert counts in sync
   useEffect(() => {
-    setAlertCounts({ filtered: filtered.length, total: alerts.length })
-  }, [filtered.length, alerts.length, setAlertCounts])
+    const byState = { active: 0, suppressed: 0, resolved: 0 }
+    alerts.forEach((alert) => {
+      const s = getEffectiveAlertState(alert, silences)
+      if (s in byState) byState[s as keyof typeof byState]++
+    })
+    setAlertCounts({ filtered: filtered.length, total: alerts.length, byState })
+  }, [filtered.length, alerts.length, alerts, silences, setAlertCounts])
 
   return (
     <div className="flex flex-col gap-4">

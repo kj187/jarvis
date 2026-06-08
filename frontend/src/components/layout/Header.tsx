@@ -19,6 +19,8 @@ const STATE_OPTIONS = [
   { value: 'resolved',   label: 'Resolved',   dot: 'bg-green-500',  activeBg: 'bg-green-600',   activeDot: 'bg-white' },
 ] as const
 
+type StateValue = typeof STATE_OPTIONS[number]['value']
+
 const OPERATORS: LabelMatcherOperator[] = ['=', '!=', '=~', '!~']
 
 // ── Custom autocomplete input ─────────────────────────────────────────────────
@@ -350,6 +352,7 @@ export function Header({ currentPage, onNavigate }: { currentPage: string; onNav
             <span className="text-xs text-muted-foreground shrink-0 select-none px-1.5">STATE</span>
               {STATE_OPTIONS.map(({ value, label, dot, activeBg, activeDot }) => {
                 const isActive = filters.state === value
+                const count = alertCounts.byState[value as StateValue]
                 return (
                   <button
                     key={value}
@@ -362,6 +365,7 @@ export function Header({ currentPage, onNavigate }: { currentPage: string; onNav
                   >
                     <span className={`h-1.5 w-1.5 rounded-full ${isActive ? activeDot : dot}`} />
                     {label}
+                    <span className="tabular-nums opacity-75">{count}</span>
                   </button>
                 )
               })}
@@ -376,6 +380,7 @@ export function Header({ currentPage, onNavigate }: { currentPage: string; onNav
                 All
               </button>
             </div>
+            <ViewToggle value={viewMode} onChange={setViewMode} />
           </>
         )}
 
@@ -483,11 +488,6 @@ export function Header({ currentPage, onNavigate }: { currentPage: string; onNav
           {searchOpen ? <X className="h-4 w-4" /> : <Search className="h-4 w-4" />}
         </Button>
 
-        {/* View toggle */}
-        {currentPage === 'alerts' && filters.state === 'active' && (
-          <ViewToggle value={viewMode} onChange={setViewMode} />
-        )}
-
         {/* Nav — far right */}
         <div className="mx-1 h-5 w-px bg-border shrink-0" />
         <nav className="flex gap-1 shrink-0">
@@ -500,9 +500,6 @@ export function Header({ currentPage, onNavigate }: { currentPage: string; onNav
             }`}
           >
             Alerts
-            <span className="ml-1.5 tabular-nums text-xs opacity-70">
-              {alertCounts.filtered}/{alertCounts.total}
-            </span>
           </button>
           <Button
             size="sm"
