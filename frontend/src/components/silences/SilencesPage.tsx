@@ -69,19 +69,19 @@ export function SilencesPage() {
             onClick={() => setShowExpired((v) => !v)}
             className="text-xs"
           >
-            {showExpired ? 'Expired ausblenden' : 'Expired anzeigen'}
+            {showExpired ? 'Hide expired' : 'Show expired'}
           </Button>
           <Button size="sm" onClick={handleCreateNew}>
             <Plus className="mr-1.5 h-3.5 w-3.5" />
-            Silence erstellen
+            Create silence
           </Button>
         </div>
       </div>
 
-      {isLoading && <p className="text-sm text-muted-foreground">Laden…</p>}
+      {isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
 
       {!isLoading && sorted.length === 0 && (
-        <p className="text-sm text-muted-foreground">Keine aktiven Silences.</p>
+        <p className="text-sm text-muted-foreground">No active silences.</p>
       )}
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -101,7 +101,7 @@ export function SilencesPage() {
       <Sheet open={formOpen} onClose={() => setFormOpen(false)}>
         <div className="p-5 pt-10">
           <h2 className="mb-4 text-base font-semibold">
-            {!editSilence ? 'Silence erstellen' : editSilence.status.state === 'expired' ? 'Silence recreaten' : 'Silence bearbeiten'}
+            {!editSilence ? 'Create silence' : editSilence.status.state === 'expired' ? 'Recreate silence' : 'Edit silence'}
           </h2>
           <SilenceForm
             availableClusters={clusterNames.length > 0 ? clusterNames : ['default']}

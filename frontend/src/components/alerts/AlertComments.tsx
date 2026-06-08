@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { formatDistanceToNow } from 'date-fns'
-import { de } from 'date-fns/locale'
+import { enUS } from 'date-fns/locale'
 import { Trash2, Send } from 'lucide-react'
 import { useAlertComments, useAddComment, useDeleteComment } from '@/hooks/useAlertComments'
 import { Button } from '@/components/ui/button'
@@ -36,11 +36,11 @@ export function AlertComments({ fingerprint }: AlertCommentsProps) {
   return (
     <div className="space-y-3">
       {isLoading && (
-        <p className="text-xs text-muted-foreground">Laden…</p>
+        <p className="text-xs text-muted-foreground">Loading…</p>
       )}
 
       {comments.length === 0 && !isLoading && (
-        <p className="text-xs text-muted-foreground">Noch keine Kommentare.</p>
+        <p className="text-xs text-muted-foreground">No comments yet.</p>
       )}
 
       {comments.map((c) => (
@@ -49,12 +49,12 @@ export function AlertComments({ fingerprint }: AlertCommentsProps) {
             <span className="text-xs font-semibold">{c.authorName}</span>
             <div className="flex items-center gap-2">
               <span className="text-xs text-muted-foreground">
-                {formatDistanceToNow(new Date(c.createdAt), { addSuffix: true, locale: de })}
+                {formatDistanceToNow(new Date(c.createdAt), { addSuffix: true, locale: enUS })}
               </span>
               <button
                 onClick={() => deleteMutation.mutate(c.id)}
                 className="cursor-pointer text-muted-foreground hover:text-destructive"
-                aria-label="Kommentar löschen"
+                aria-label="Delete comment"
               >
                 <Trash2 className="h-3 w-3" />
               </button>
@@ -69,14 +69,14 @@ export function AlertComments({ fingerprint }: AlertCommentsProps) {
         <Input
           value={authorName}
           onChange={(e) => setAuthorName(e.target.value)}
-          placeholder="Dein Name"
+          placeholder="Your name"
           className="h-8 text-xs"
           required
         />
         <Textarea
           value={body}
           onChange={(e) => setBody(e.target.value)}
-          placeholder="Kommentar schreiben…"
+          placeholder="Write a comment…"
           className="text-sm"
           rows={3}
           required
@@ -88,7 +88,7 @@ export function AlertComments({ fingerprint }: AlertCommentsProps) {
           className="w-full"
         >
           <Send className="mr-1.5 h-3 w-3" />
-          Senden
+          Send
         </Button>
       </form>
     </div>

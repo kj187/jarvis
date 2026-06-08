@@ -1,5 +1,5 @@
 import { formatDistanceToNow, format } from 'date-fns'
-import { de } from 'date-fns/locale'
+import { enUS } from 'date-fns/locale'
 import { cn } from '@/lib/utils'
 import type { Silence } from '@/types'
 
@@ -19,7 +19,7 @@ export function SilenceExpiry({ silence, className }: SilenceExpiryProps) {
   if (state === 'pending') {
     return (
       <span className={cn('text-xs text-slate-400', className)}>
-        ⏳ Startet {formatDistanceToNow(new Date(silence.startsAt), { addSuffix: true, locale: de })}
+        ⏳ Starts {formatDistanceToNow(new Date(silence.startsAt), { addSuffix: true, locale: enUS })}
       </span>
     )
   }
@@ -29,8 +29,8 @@ export function SilenceExpiry({ silence, className }: SilenceExpiryProps) {
     return (
       <span className={cn('text-xs', isExpiring ? 'text-yellow-400' : 'text-green-400', className)}>
         {isExpiring
-          ? `⚠️ Läuft ab in ${Math.ceil(remaining / 60_000)} Min.`
-          : `Bis ${format(new Date(silence.endsAt), 'dd.MM. HH:mm', { locale: de })}`}
+          ? `⚠️ Expires in ${Math.ceil(remaining / 60_000)} min`
+          : `Until ${format(new Date(silence.endsAt), 'MMM d, HH:mm', { locale: enUS })}`}
       </span>
     )
   }
@@ -39,7 +39,7 @@ export function SilenceExpiry({ silence, className }: SilenceExpiryProps) {
     return (
       <span className={cn('text-xs text-muted-foreground', className)}>
         🔕 Expired{' '}
-        {formatDistanceToNow(new Date(silence.endsAt), { addSuffix: true, locale: de })}
+        {formatDistanceToNow(new Date(silence.endsAt), { addSuffix: true, locale: enUS })}
       </span>
     )
   }

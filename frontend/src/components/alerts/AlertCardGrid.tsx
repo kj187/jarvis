@@ -130,7 +130,7 @@ export function AlertCardGrid({
   if (groups.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-24 text-muted-foreground">
-        <p className="text-lg">Keine Alerts</p>
+        <p className="text-lg">No alerts</p>
       </div>
     )
   }

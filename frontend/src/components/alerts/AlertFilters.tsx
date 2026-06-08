@@ -44,7 +44,7 @@ export function AlertFilters({
         className="w-36"
         aria-label="State filter"
       >
-        <option value="">Alle States</option>
+        <option value="">All states</option>
         <option value="active">Active</option>
         <option value="suppressed">Suppressed</option>
         <option value="unprocessed">Unprocessed</option>
@@ -72,7 +72,7 @@ export function AlertFilters({
 
       {matchers.length > 1 && (
         <Button variant="ghost" size="sm" onClick={onClearMatchers} className="h-7 text-xs">
-          Alle entfernen
+          Remove all
         </Button>
       )}
 

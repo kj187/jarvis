@@ -195,7 +195,7 @@ function LabelNameInput({ value, onChange, suggestions, className }: LabelNameIn
                 value={filter}
                 onChange={(e) => setFilter(e.target.value)}
                 onKeyDown={handleFilterKeyDown}
-                placeholder="Suchen…"
+                placeholder="Search…"
                 className="w-full bg-transparent font-mono text-xs outline-none placeholder:text-muted-foreground"
               />
             </div>
@@ -219,11 +219,11 @@ function LabelNameInput({ value, onChange, suggestions, className }: LabelNameIn
                   onMouseDown={() => select(filter.trim())}
                   className="w-full px-2.5 py-1.5 text-left font-mono text-xs text-muted-foreground hover:bg-accent"
                 >
-                  "{filter.trim()}" verwenden
+                  Use "{filter.trim()}"
                 </button>
               )}
               {filtered.length === 0 && !filter.trim() && (
-                <div className="px-2.5 py-2 text-xs text-muted-foreground">Keine Labels</div>
+                <div className="px-2.5 py-2 text-xs text-muted-foreground">No labels</div>
               )}
             </div>
           </div>
@@ -272,7 +272,7 @@ function totalSeconds(days: number, hours: number, minutes: number): number {
 function endsAtLabel(days: number, hours: number, minutes: number, start: Date): string {
   const secs = totalSeconds(days, hours, minutes)
   if (secs <= 0) return '—'
-  return format(addSeconds(start, secs), 'dd.MM.yyyy HH:mm')
+  return format(addSeconds(start, secs), 'yyyy-MM-dd HH:mm')
 }
 
 function clamp(val: number, min: number, max: number): number {
@@ -556,7 +556,7 @@ export function SilenceForm({
 
   const timeError = endMode === 'calendar' && endsAt && startsAt
     ? new Date(endsAt) <= new Date(startsAt)
-      ? 'Ende muss nach dem Start liegen.'
+      ? 'End must be after start.'
       : null
     : null
 
@@ -580,8 +580,8 @@ export function SilenceForm({
             <div className="w-full space-y-2.5 text-xs">
               <p className="text-sm font-medium">
                 {silenceGroups.length === 1
-                  ? '1 aktive Silence betrifft bereits Alerts in dieser Gruppe.'
-                  : `${silenceGroups.length} aktive Silences betreffen bereits Alerts in dieser Gruppe.`}
+                  ? '1 active silence already covers alerts in this group.'
+                  : `${silenceGroups.length} active silences already cover alerts in this group.`}
               </p>
               {silenceGroups.map(({ silence: s, alerts }) => (
                 <div key={s.id} className="space-y-1 opacity-90">
@@ -596,7 +596,7 @@ export function SilenceForm({
                       {s.id}
                     </a>
                     <span className="opacity-75">
-                      bis {new Date(s.endsAt).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })}
+                      until {new Date(s.endsAt).toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'short' })}
                     </span>
                   </div>
                   {s.comment && <p className="italic opacity-75">{s.comment}</p>}
@@ -664,7 +664,7 @@ export function SilenceForm({
                   : 'bg-accent text-muted-foreground',
               )}
             >
-              {liveMatchCount} betroffen
+              {liveMatchCount} affected
             </span>
           </div>
           <div className="space-y-2">
@@ -712,7 +712,7 @@ export function SilenceForm({
             ))}
             <Button type="button" variant="ghost" size="sm" onClick={addMatcher} className="text-xs">
               <Plus className="mr-1 h-3 w-3" />
-              Matcher hinzufügen
+              Add matcher
             </Button>
           </div>
         </div>
@@ -730,7 +730,7 @@ export function SilenceForm({
                 onClick={() => setStartsAt(format(new Date(), "yyyy-MM-dd'T'HH:mm"))}
                 className="text-[10px] text-muted-foreground hover:text-foreground cursor-pointer"
               >
-                Jetzt
+                Now
               </button>
             </div>
             <DateTimePicker value={startsAt} onChange={handleStartsAtChange} />
@@ -760,7 +760,7 @@ export function SilenceForm({
                         : 'text-muted-foreground hover:bg-accent/50',
                     )}
                   >
-                    {mode === 'duration' ? 'Dauer' : 'Datum'}
+                    {mode === 'duration' ? 'Duration' : 'Date'}
                   </button>
                 ))}
               </div>
@@ -814,7 +814,7 @@ export function SilenceForm({
           <Input
             value={createdBy}
             onChange={(e) => setCreatedBy(e.target.value)}
-            placeholder="Dein Name"
+            placeholder="Your name"
             className="text-xs"
           />
         </div>
@@ -822,12 +822,12 @@ export function SilenceForm({
         {/* Comment */}
         <div>
           <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Kommentar <span className="text-destructive">*</span>
+            Comment <span className="text-destructive">*</span>
           </label>
           <Textarea
             value={comment}
             onChange={(e) => setComment(e.target.value)}
-            placeholder="Grund für die Silence…"
+            placeholder="Reason for the silence…"
             rows={3}
           />
         </div>
@@ -840,10 +840,10 @@ export function SilenceForm({
             disabled={!canSubmit}
             onClick={() => setStep('preview')}
           >
-            Vorschau
+            Preview
           </Button>
           <Button type="button" variant="outline" onClick={onCancel}>
-            Abbrechen
+            Cancel
           </Button>
         </div>
       </div>
@@ -856,7 +856,7 @@ export function SilenceForm({
     const matched = previewMatched()
 
     const previewEnd = endMode === 'calendar' && endsAt
-      ? format(new Date(endsAt), 'dd.MM.yyyy HH:mm')
+      ? format(new Date(endsAt), 'yyyy-MM-dd HH:mm')
       : startsAt
         ? endsAtLabel(dDays, dHours, dMinutes, new Date(startsAt))
         : '—'
@@ -885,12 +885,12 @@ export function SilenceForm({
         <div className="rounded border border-border p-3 text-xs space-y-1.5">
           <div className="grid grid-cols-[80px_1fr] gap-y-1.5">
             <span className="text-muted-foreground">Start</span>
-            <span className="font-mono">{startsAt ? format(new Date(startsAt), 'dd.MM.yyyy HH:mm') : '—'}</span>
+            <span className="font-mono">{startsAt ? format(new Date(startsAt), 'yyyy-MM-dd HH:mm') : '—'}</span>
             <span className="text-muted-foreground">Ende</span>
             <span className="font-mono">{previewEnd} <span className="text-muted-foreground ml-1">({previewDuration})</span></span>
             <span className="text-muted-foreground">Author</span>
             <span>{createdBy}</span>
-            <span className="text-muted-foreground">Kommentar</span>
+            <span className="text-muted-foreground">Comment</span>
             <span className="break-all">{comment}</span>
           </div>
         </div>
@@ -907,7 +907,7 @@ export function SilenceForm({
           </div>
         </div>
 
-        {/* Aktive Matcher */}
+        {/* Active Matchers */}
         <div>
           <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
             Matcher ({activeMatchers.length})
@@ -921,13 +921,13 @@ export function SilenceForm({
           </div>
         </div>
 
-        {/* Betroffene Alerts */}
+        {/* Affected Alerts */}
         <div>
           <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Betroffene Alerts ({matched.length})
+            Affected Alerts ({matched.length})
           </p>
           {matched.length === 0 ? (
-            <p className="text-xs text-muted-foreground">Keine Alerts treffen diese Matcher.</p>
+            <p className="text-xs text-muted-foreground">No alerts match these matchers.</p>
           ) : (
             <div className="combo-dropdown max-h-[35vh] space-y-2 overflow-y-auto">
               {matched.map((alert) => (
@@ -946,10 +946,10 @@ export function SilenceForm({
         <div className="flex gap-2 pt-1">
           <Button type="button" variant="outline" onClick={() => setStep('form')}>
             <ArrowLeft className="mr-1.5 h-3.5 w-3.5" />
-            Zurück
+            Back
           </Button>
           <Button type="button" className="flex-1" onClick={handleSubmit}>
-            {isEdit ? 'Aktualisieren' : 'Erstellen'}
+            {isEdit ? 'Update' : 'Create'}
           </Button>
         </div>
       </div>
@@ -963,7 +963,7 @@ export function SilenceForm({
 
   return (
     <div className="space-y-4">
-      <h3 className="text-sm font-semibold">Silence eingereicht</h3>
+      <h3 className="text-sm font-semibold">Silence submitted</h3>
 
       <div className="space-y-2">
         {[...results.entries()].map(([cluster, result]) => (
@@ -1012,11 +1012,11 @@ export function SilenceForm({
           {!anySuccess && (
             <Button type="button" variant="outline" onClick={() => setStep('preview')}>
               <ArrowLeft className="mr-1.5 h-3.5 w-3.5" />
-              Zurück
+              Back
             </Button>
           )}
           <Button type="button" className="flex-1" onClick={onSuccess}>
-            Schließen
+            Close
           </Button>
         </div>
       )}

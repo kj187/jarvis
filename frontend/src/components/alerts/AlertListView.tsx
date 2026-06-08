@@ -1,7 +1,7 @@
 import { Fragment, useState } from 'react'
 import { ArrowUpDown, Bell, BellOff, ChevronDown, ChevronRight, RefreshCw, X } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
-import { de } from 'date-fns/locale'
+import { enUS } from 'date-fns/locale'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { AlertListRow } from './AlertListRow'
 import { StatusBadge } from './AlertBadge'
@@ -212,7 +212,7 @@ export function AlertListView({ alerts, silences, onSelectAlert, selectedFingerp
   if (alerts.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-24 text-muted-foreground">
-        <p className="text-lg">Keine Alerts</p>
+        <p className="text-lg">No alerts</p>
       </div>
     )
   }
@@ -238,15 +238,15 @@ export function AlertListView({ alerts, silences, onSelectAlert, selectedFingerp
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-border">
-            <SortHeader label="Alertname" sortKeyVal="alertname" />
+            <SortHeader label="Alert Name" sortKeyVal="alertname" />
             {showStateColumn && (
               <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 State
               </th>
             )}
-            <SortHeader label="Zeit" sortKeyVal="time" />
+            <SortHeader label="Time" sortKeyVal="time" />
             <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Aktionen
+              Actions
             </th>
             <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Claim
@@ -331,7 +331,7 @@ export function AlertListView({ alerts, silences, onSelectAlert, selectedFingerp
                           </td>
                         )}
                         <td className="px-4 py-2.5 text-sm text-muted-foreground">
-                          {formatDistanceToNow(group.earliestStart, { addSuffix: true, locale: de })}
+                          {formatDistanceToNow(group.earliestStart, { addSuffix: true, locale: enUS })}
                         </td>
                         <td className="px-4 py-2.5">
                           {(() => {
@@ -346,7 +346,7 @@ export function AlertListView({ alerts, silences, onSelectAlert, selectedFingerp
                                     <button
                                       type="button"
                                       onClick={() => expireMutation.mutate({ id: silence.id, cluster: silence.clusterName })}
-                                      title="Silence beenden"
+                                      title="Expire silence"
                                       className="cursor-pointer rounded p-0.5 hover:bg-slate-700"
                                     >
                                       <X className="h-3 w-3" />
@@ -360,7 +360,7 @@ export function AlertListView({ alerts, silences, onSelectAlert, selectedFingerp
                                     <button
                                       type="button"
                                       onClick={() => openSilenceForm(group.alerts, silence, true)}
-                                      title="Silence verlängern"
+                                      title="Extend silence"
                                       className="cursor-pointer rounded p-0.5 hover:bg-yellow-900/40"
                                     >
                                       <RefreshCw className="h-3 w-3" />
@@ -370,11 +370,11 @@ export function AlertListView({ alerts, silences, onSelectAlert, selectedFingerp
                                 {!hasSilence && expired.length > 0 && (
                                   <div className="flex items-center gap-1 text-xs text-muted-foreground/50">
                                     <BellOff className="h-3 w-3 shrink-0" />
-                                    <span>abgelaufen</span>
+                                    <span>expired</span>
                                     <button
                                       type="button"
                                       onClick={() => openSilenceForm(group.alerts, expired[0], true)}
-                                      title="Silence neu erstellen"
+                                      title="Recreate silence"
                                       className="cursor-pointer rounded p-0.5 hover:text-foreground"
                                     >
                                       <RefreshCw className="h-3 w-3" />
@@ -385,7 +385,7 @@ export function AlertListView({ alerts, silences, onSelectAlert, selectedFingerp
                                   <button
                                     type="button"
                                     onClick={() => openSilenceForm(group.alerts)}
-                                    title="Silence erstellen"
+                                    title="Create silence"
                                     className="cursor-pointer w-fit text-muted-foreground/50 transition-colors hover:text-foreground"
                                   >
                                     <Bell className="h-3.5 w-3.5" />
@@ -427,7 +427,7 @@ export function AlertListView({ alerts, silences, onSelectAlert, selectedFingerp
       <Sheet open={silenceSheet.open} onClose={closeSilenceForm} className="sm:max-w-2xl lg:max-w-3xl">
         <div className="p-5 pt-10">
           <h2 className="mb-4 text-base font-semibold">
-            {silenceSheet.isRecreate ? 'Silence verlängern' : 'Silence erstellen'}
+            {silenceSheet.isRecreate ? 'Extend silence' : 'Create silence'}
           </h2>
           <SilenceForm
             availableClusters={

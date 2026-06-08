@@ -119,22 +119,22 @@ export function formatSilenceDuration(ms: number): string {
   const years = Math.floor(days / 365)
   if (years >= 1) {
     const remMonths = Math.floor((days - years * 365) / 30)
-    return remMonths > 0 ? `${years}J ${remMonths}M` : `${years}J`
+    return remMonths > 0 ? `${years}y ${remMonths}mo` : `${years}y`
   }
   if (months >= 1) {
     const remDays = days - months * 30
-    return remDays > 0 ? `${months}M ${remDays}T` : `${months}M`
+    return remDays > 0 ? `${months}mo ${remDays}d` : `${months}mo`
   }
   if (days >= 1) {
     const remHours = hours - days * 24
-    return remHours > 0 ? `${days}T ${remHours}Std` : `${days}T`
+    return remHours > 0 ? `${days}d ${remHours}h` : `${days}d`
   }
   if (hours >= 1) {
     const remMinutes = minutes - hours * 60
-    return remMinutes > 0 ? `${hours}Std ${remMinutes}Min` : `${hours}Std`
+    return remMinutes > 0 ? `${hours}h ${remMinutes}m` : `${hours}h`
   }
-  if (minutes >= 1) return `${minutes}Min`
-  return '<1Min'
+  if (minutes >= 1) return `${minutes}m`
+  return '<1m'
 }
 
 // ── Severity ordering ─────────────────────────────────────────────────────

@@ -56,10 +56,10 @@ export function SilenceCard({ silence, alerts, onEdit, onDelete, isDeleting = fa
             {confirmDelete ? (
               <div className="flex gap-1">
                 <Button variant="destructive" size="sm" className="h-7 text-xs" onClick={() => onDelete(silence)}>
-                  Löschen
+                  Delete
                 </Button>
                 <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setConfirmDelete(false)}>
-                  Nein
+                  No
                 </Button>
               </div>
             ) : (
@@ -88,7 +88,7 @@ export function SilenceCard({ silence, alerts, onEdit, onDelete, isDeleting = fa
 
         {/* Meta */}
         <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span>von {silence.createdBy}</span>
+          <span>by {silence.createdBy}</span>
           <span>Affected: {affectedCount}</span>
         </div>
       </CardContent>

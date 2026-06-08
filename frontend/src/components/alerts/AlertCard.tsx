@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { formatDistanceToNow } from 'date-fns'
-import { de } from 'date-fns/locale'
+import { enUS } from 'date-fns/locale'
 import { Bell, BellOff, User } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getFilterableLabels, getSilenceState, formatSilenceDuration } from '@/lib/alertUtils'
@@ -86,9 +86,9 @@ function AlertEntry({
         <div className="mb-2 flex items-start gap-2 rounded bg-blue-900/50 px-2 py-1.5 text-xs">
           <User className="mt-0.5 h-3 w-3 shrink-0 text-blue-300" />
           <div className="min-w-0 flex-1">
-            <div className="font-semibold text-blue-200">In Bearbeitung: {claim.claimedBy}</div>
+            <div className="font-semibold text-blue-200">In progress: {claim.claimedBy}</div>
             <div className="text-blue-400">
-              {formatDistanceToNow(new Date(claim.claimedAt), { addSuffix: true, locale: de })}
+              {formatDistanceToNow(new Date(claim.claimedAt), { addSuffix: true, locale: enUS })}
             </div>
             {claim.note && <div className="mt-0.5 text-blue-300/80">{claim.note}</div>}
           </div>
@@ -98,16 +98,16 @@ function AlertEntry({
       {/* Timestamp + maintainer */}
       <div className="mb-1 flex flex-col gap-0.5 text-xs text-muted-foreground">
         <div className="flex items-center gap-2">
-          <span title={new Date(alert.startsAt).toLocaleString('de-DE')}>
+          <span title={new Date(alert.startsAt).toLocaleString('en-US')}>
             {new Date(alert.startsAt) > new Date()
-              ? `Läuft ab ${formatDistanceToNow(new Date(alert.endsAt), { addSuffix: true, locale: de })}`
-              : formatDistanceToNow(new Date(alert.startsAt), { addSuffix: true, locale: de })}
+              ? `Expires ${formatDistanceToNow(new Date(alert.endsAt), { addSuffix: true, locale: enUS })}`
+              : formatDistanceToNow(new Date(alert.startsAt), { addSuffix: true, locale: enUS })}
           </span>
           {maintainer && <span>{maintainer}</span>}
         </div>
         {isResolved && stats?.lastResolvedAt && (
-          <span className="text-green-600/70" title={new Date(stats.lastResolvedAt).toLocaleString('de-DE')}>
-            ✓ {formatDistanceToNow(new Date(stats.lastResolvedAt), { addSuffix: true, locale: de })}
+          <span className="text-green-600/70" title={new Date(stats.lastResolvedAt).toLocaleString('en-US')}>
+            ✓ {formatDistanceToNow(new Date(stats.lastResolvedAt), { addSuffix: true, locale: enUS })}
           </span>
         )}
       </div>
@@ -117,21 +117,21 @@ function AlertEntry({
         <div className="mb-2 flex items-center gap-1.5 rounded bg-slate-800 px-2 py-1.5 text-xs">
           <BellOff className="h-3 w-3 shrink-0 text-slate-400" />
           <div>
-            <div className="font-semibold text-slate-200">SILENCE AKTIV</div>
-            <div className="text-slate-400">Endet in {formatSilenceDuration(remaining)}</div>
+            <div className="font-semibold text-slate-200">SILENCE ACTIVE</div>
+            <div className="text-slate-400">Ends in {formatSilenceDuration(remaining)}</div>
           </div>
         </div>
       )}
       {silenceType === 'expiring' && remaining !== undefined && (
         <div className="mb-2 flex items-center gap-1.5 rounded bg-yellow-900/40 px-2 py-1.5 text-xs text-yellow-300">
           <BellOff className="h-3 w-3 shrink-0" />
-          <span>Silence läuft ab in {formatSilenceDuration(remaining)}</span>
+          <span>Silence expires in {formatSilenceDuration(remaining)}</span>
         </div>
       )}
       {silenceType === 'pending' && silence && (
         <div className="mb-2 rounded bg-slate-800 px-2 py-1.5 text-xs text-slate-300">
-          ⏳ Silence ab{' '}
-          {new Date(silence.startsAt).toLocaleTimeString('de-DE', {
+          ⏳ Silence from{' '}
+          {new Date(silence.startsAt).toLocaleTimeString('en-US', {
             hour: '2-digit',
             minute: '2-digit',
           })}
@@ -222,7 +222,7 @@ export function AlertCard({ alerts, silences, onClick, selectedFingerprint }: Al
               setSilenceOpen(true)
             }}
             className="text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
-            title="Silence erstellen"
+            title="Create silence"
           >
             <Bell className="h-3.5 w-3.5" />
           </button>
@@ -232,7 +232,7 @@ export function AlertCard({ alerts, silences, onClick, selectedFingerprint }: Al
       {/* Silence sheet */}
       <Sheet open={silenceOpen} onClose={() => setSilenceOpen(false)} className="sm:max-w-2xl lg:max-w-3xl">
         <div className="p-5 pt-10">
-          <h2 className="mb-4 text-base font-semibold">Silence erstellen</h2>
+          <h2 className="mb-4 text-base font-semibold">Create silence</h2>
           <SilenceForm
             availableClusters={clusterNames.length > 0 ? clusterNames : [...new Set(alerts.map((a) => a.clusterName))]}
             prefillAlerts={alerts}
@@ -263,7 +263,7 @@ export function AlertCard({ alerts, silences, onClick, selectedFingerprint }: Al
               −
             </button>
             <span>
-              {start + 1}–{end} von {count}
+              {start + 1}–{end} of {count}
             </span>
             <button
               onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}

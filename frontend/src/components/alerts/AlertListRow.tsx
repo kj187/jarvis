@@ -1,5 +1,5 @@
 import { formatDistanceToNow } from 'date-fns'
-import { de } from 'date-fns/locale'
+import { enUS } from 'date-fns/locale'
 import { Bell, BellOff, RefreshCw, User, X } from 'lucide-react'
 import { useState, useRef, useEffect } from 'react'
 import { StatusBadge } from './AlertBadge'
@@ -124,12 +124,12 @@ export function AlertListRow({
       )}
       <td className="px-4 py-2 text-sm text-muted-foreground">
         <div className="flex flex-col gap-0.5">
-          <span title={new Date(alert.startsAt).toLocaleString('de-DE')}>
-            {formatDistanceToNow(new Date(alert.startsAt), { addSuffix: true, locale: de })}
+          <span title={new Date(alert.startsAt).toLocaleString('en-US')}>
+            {formatDistanceToNow(new Date(alert.startsAt), { addSuffix: true, locale: enUS })}
           </span>
           {isResolved && stats?.lastResolvedAt && (
-            <span className="text-xs text-green-600/70" title={new Date(stats.lastResolvedAt).toLocaleString('de-DE')}>
-              ✓ {formatDistanceToNow(new Date(stats.lastResolvedAt), { addSuffix: true, locale: de })}
+            <span className="text-xs text-green-600/70" title={new Date(stats.lastResolvedAt).toLocaleString('en-US')}>
+              ✓ {formatDistanceToNow(new Date(stats.lastResolvedAt), { addSuffix: true, locale: enUS })}
             </span>
           )}
         </div>
@@ -139,7 +139,7 @@ export function AlertListRow({
           {stats && stats.occurrenceCount > 1 && (
             <span
               className="text-xs text-muted-foreground"
-              title={`${stats.occurrenceCount}× aufgetreten`}
+              title={`${stats.occurrenceCount}× occurred`}
             >
               ↻{stats.occurrenceCount}×
             </span>
@@ -148,7 +148,7 @@ export function AlertListRow({
             <>
               <span
                 className="flex items-center gap-1 text-xs text-slate-400"
-                title={`Silence aktiv, endet in ${formatSilenceDuration(remaining)}`}
+                title={`Silence active, ends in ${formatSilenceDuration(remaining)}`}
               >
                 <BellOff className="h-3 w-3" />
                 {formatSilenceDuration(remaining)}
@@ -156,7 +156,7 @@ export function AlertListRow({
               <button
                 type="button"
                 onClick={() => onExpireSilence?.(silence.id, silence.clusterName)}
-                title="Silence beenden"
+                title="Expire silence"
                 className="cursor-pointer rounded p-0.5 text-slate-400 hover:bg-slate-700 hover:text-slate-200"
               >
                 <X className="h-3 w-3" />
@@ -167,7 +167,7 @@ export function AlertListRow({
             <>
               <span
                 className="flex items-center gap-1 text-xs text-yellow-400"
-                title={`Silence läuft ab in ${formatSilenceDuration(remaining)}`}
+                title={`Silence expires in ${formatSilenceDuration(remaining)}`}
               >
                 <BellOff className="h-3 w-3" />
                 {formatSilenceDuration(remaining)}
@@ -175,7 +175,7 @@ export function AlertListRow({
               <button
                 type="button"
                 onClick={() => onCreateSilence?.([alert], silence, true)}
-                title="Silence verlängern"
+                title="Extend silence"
                 className="cursor-pointer rounded p-0.5 text-yellow-400 hover:bg-yellow-900/40"
               >
                 <RefreshCw className="h-3 w-3" />
@@ -192,7 +192,7 @@ export function AlertListRow({
             <button
               type="button"
               onClick={() => onCreateSilence?.([alert])}
-              title="Silence erstellen"
+              title="Create silence"
               className="cursor-pointer text-muted-foreground/40 transition-colors hover:text-foreground"
             >
               <Bell className="h-3.5 w-3.5" />
@@ -210,7 +210,7 @@ export function AlertListRow({
             <button
               type="button"
               onClick={handleRelease}
-              title="Claim freigeben"
+              title="Release claim"
               className="cursor-pointer rounded p-0.5 text-muted-foreground/50 hover:text-foreground"
               disabled={releaseMutation.isPending}
             >
@@ -223,7 +223,7 @@ export function AlertListRow({
               ref={nameInputRef}
               value={nameInput}
               onChange={(e) => setNameInput(e.target.value)}
-              placeholder="Dein Name"
+              placeholder="Your name"
               className="h-6 w-24 rounded border border-border bg-background px-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
               onKeyDown={(e) => e.key === 'Escape' && setShowNameInput(false)}
             />
@@ -246,7 +246,7 @@ export function AlertListRow({
           <button
             type="button"
             onClick={handleClaimClick}
-            title="Ich kümmere mich"
+            title="I'll take this"
             className="cursor-pointer text-muted-foreground/40 transition-colors hover:text-blue-400"
             disabled={setClaimMutation.isPending}
           >

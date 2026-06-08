@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { format, formatDistanceToNow } from 'date-fns'
-import { de } from 'date-fns/locale'
+import { enUS } from 'date-fns/locale'
 import { ExternalLink, BookOpen, ChevronDown, ChevronUp, BellOff, Pencil, Trash2, User, Copy, Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Sheet } from '@/components/ui/sheet'
@@ -45,27 +45,27 @@ function formatDuration(ms: number): string {
   if (years >= 1) {
     const remMonths = Math.floor((days - years * 365) / 30)
     return remMonths > 0
-      ? `${years} Jahr${years > 1 ? 'e' : ''} ${remMonths} Monat${remMonths > 1 ? 'e' : ''}`
-      : `${years} Jahr${years > 1 ? 'e' : ''}`
+      ? `${years} year${years > 1 ? 's' : ''} ${remMonths} month${remMonths > 1 ? 's' : ''}`
+      : `${years} year${years > 1 ? 's' : ''}`
   }
   if (months >= 1) {
     const remDays = days - months * 30
     return remDays > 0
-      ? `${months} Monat${months > 1 ? 'e' : ''} ${remDays} Tag${remDays > 1 ? 'e' : ''}`
-      : `${months} Monat${months > 1 ? 'e' : ''}`
+      ? `${months} month${months > 1 ? 's' : ''} ${remDays} day${remDays > 1 ? 's' : ''}`
+      : `${months} month${months > 1 ? 's' : ''}`
   }
   if (days >= 1) {
     const remHours = hours - days * 24
     return remHours > 0
-      ? `${days} Tag${days > 1 ? 'e' : ''} ${remHours} Std.`
-      : `${days} Tag${days > 1 ? 'e' : ''}`
+      ? `${days} day${days > 1 ? 's' : ''} ${remHours}h`
+      : `${days} day${days > 1 ? 's' : ''}`
   }
   if (hours >= 1) {
     const remMinutes = minutes - hours * 60
-    return remMinutes > 0 ? `${hours} Std. ${remMinutes} Min.` : `${hours} Std.`
+    return remMinutes > 0 ? `${hours}h ${remMinutes}m` : `${hours}h`
   }
-  if (minutes >= 1) return `${minutes} Min.`
-  return 'wenige Sekunden'
+  if (minutes >= 1) return `${minutes}m`
+  return 'a few seconds'
 }
 
 function silenceMatchesAlert(silence: Silence, alert: EnrichedAlert): boolean {
@@ -250,9 +250,9 @@ export function AlertDetailPanel({
           </div>
           {stats && (
             <div className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground">
-              <span>Zuerst gesehen <span className="font-medium text-foreground">{formatDistanceToNow(new Date(stats.firstSeenAt), { addSuffix: true, locale: de })}</span></span>
+              <span>First seen <span className="font-medium text-foreground">{formatDistanceToNow(new Date(stats.firstSeenAt), { addSuffix: true, locale: enUS })}</span></span>
               <span>·</span>
-              <span>{stats.occurrenceCount}× gefeuert</span>
+              <span>{stats.occurrenceCount}× fired</span>
             </div>
           )}
 
@@ -347,23 +347,23 @@ export function AlertDetailPanel({
               <Input
                 value={claimName}
                 onChange={(e) => setClaimName(e.target.value)}
-                placeholder="Dein Name"
+                placeholder="Your name"
                 className="h-7 w-48 text-xs"
                 required
               />
               <textarea
                 value={claimNote}
                 onChange={(e) => setClaimNote(e.target.value)}
-                placeholder="Notiz (optional)"
+                placeholder="Note (optional)"
                 rows={5}
                 className="w-full resize-none rounded-md border border-input bg-transparent px-3 py-2 text-xs shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               />
               <div className="flex gap-2">
                 <Button type="submit" size="sm" className="h-7 text-xs" disabled={!claimName.trim() || setClaimMutation.isPending}>
-                  Bestätigen
+                  Confirm
                 </Button>
                 <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setShowClaimForm(false)}>
-                  Abbrechen
+                  Cancel
                 </Button>
               </div>
             </form>
@@ -393,7 +393,7 @@ export function AlertDetailPanel({
                   isPending ? 'text-slate-300' : isExpiring ? 'text-yellow-300' : 'text-slate-200',
                 )}>
                   <BellOff className="h-3 w-3 shrink-0" />
-                  {isPending ? 'Silence ausstehend' : 'Silence aktiv'}
+                  {isPending ? 'Silence pending' : 'Silence active'}
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
                   {isExpiring && (
@@ -429,7 +429,7 @@ export function AlertDetailPanel({
                     onClick={() => setSilenceFormTarget(s)}
                   >
                     <Pencil className="h-3 w-3" />
-                    Bearbeiten
+                    Edit
                   </button>
                   <button
                     disabled={isDeleting}
@@ -454,33 +454,33 @@ export function AlertDetailPanel({
                     {s.id}
                   </a>
 
-                  <span className="text-muted-foreground">Erstellt von</span>
+                  <span className="text-muted-foreground">Created by</span>
                   <span className={isExpiring ? 'text-yellow-200' : 'text-slate-200'}>{s.createdBy}</span>
 
-                  <span className="text-muted-foreground">Erstellt am</span>
+                  <span className="text-muted-foreground">Created at</span>
                   <span className={isExpiring ? 'text-yellow-400' : 'text-slate-400'}>
-                    {format(new Date(s.updatedAt), 'dd.MM.yyyy HH:mm', { locale: de })} Uhr
+                    {format(new Date(s.updatedAt), 'yyyy-MM-dd HH:mm', { locale: enUS })}
                   </span>
 
                   {isPending ? (
                     <>
-                      <span className="text-muted-foreground">Startet am</span>
+                      <span className="text-muted-foreground">Starts at</span>
                       <span className="text-slate-400">
-                        {format(new Date(s.startsAt), 'dd.MM.yyyy HH:mm', { locale: de })} Uhr
+                        {format(new Date(s.startsAt), 'yyyy-MM-dd HH:mm', { locale: enUS })}
                       </span>
                     </>
                   ) : (
                     <>
-                      <span className="text-muted-foreground">{isExpiring ? 'Läuft ab' : 'Endet'}</span>
+                      <span className="text-muted-foreground">{isExpiring ? 'Expires' : 'Ends'}</span>
                       <span className={isExpiring ? 'text-yellow-400' : 'text-slate-400'}>
-                        in {formatDuration(remaining)} ({format(new Date(s.endsAt), 'dd.MM.yyyy HH:mm', { locale: de })} Uhr)
+                        in {formatDuration(remaining)} ({format(new Date(s.endsAt), 'yyyy-MM-dd HH:mm', { locale: enUS })})
                       </span>
                     </>
                   )}
 
                   {s.comment && (
                     <>
-                      <span className="text-muted-foreground">Grund</span>
+                      <span className="text-muted-foreground">Reason</span>
                       <span className={isExpiring ? 'text-yellow-400' : 'text-slate-400'}>{s.comment}</span>
                     </>
                   )}
@@ -525,7 +525,7 @@ export function AlertDetailPanel({
             <div className="mb-3 flex items-center justify-between gap-2">
               <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
                 <BellOff className="h-3 w-3 shrink-0" />
-                Silence abgelaufen
+                Silence expired
               </div>
               <div className="flex shrink-0 items-center gap-1">
                 <button
@@ -548,22 +548,22 @@ export function AlertDetailPanel({
                 {s.id}
               </a>
 
-              <span className="text-muted-foreground">Erstellt von</span>
+              <span className="text-muted-foreground">Created by</span>
               <span className="text-slate-600">{s.createdBy}</span>
 
-              <span className="text-muted-foreground">Erstellt am</span>
+              <span className="text-muted-foreground">Created at</span>
               <span className="text-slate-700">
-                {format(new Date(s.updatedAt), 'dd.MM.yyyy HH:mm', { locale: de })} Uhr
+                {format(new Date(s.updatedAt), 'yyyy-MM-dd HH:mm', { locale: enUS })}
               </span>
 
-              <span className="text-muted-foreground">Abgelaufen am</span>
+              <span className="text-muted-foreground">Expired at</span>
               <span className="text-slate-700">
-                {format(new Date(s.endsAt), 'dd.MM.yyyy HH:mm', { locale: de })} Uhr
+                {format(new Date(s.endsAt), 'yyyy-MM-dd HH:mm', { locale: enUS })}
               </span>
 
               {s.comment && (
                 <>
-                  <span className="text-muted-foreground">Grund</span>
+                  <span className="text-muted-foreground">Reason</span>
                   <span className="text-slate-700">{s.comment}</span>
                 </>
               )}
@@ -594,7 +594,7 @@ export function AlertDetailPanel({
                 <div key={k} className="flex flex-col gap-0.5">
                   <span
                     className="cursor-pointer font-mono text-[10px] text-muted-foreground hover:text-foreground"
-                    title="Als Filter hinzufügen"
+                    title="Add as filter"
                     onClick={() => onAddLabelMatcher({ name: k, operator: '=', value: v })}
                   >
                     {k}
@@ -608,7 +608,7 @@ export function AlertDetailPanel({
                 <div key={k} className="flex flex-col gap-0.5">
                   <span
                     className="cursor-pointer font-mono text-[10px] text-muted-foreground hover:text-foreground"
-                    title="Als Filter hinzufügen"
+                    title="Add as filter"
                     onClick={() => onAddLabelMatcher({ name: k, operator: '=', value: v })}
                   >
                     {k}
@@ -734,14 +734,14 @@ export function AlertDetailPanel({
 
           const buildPrompt = (): string => {
             const lines: string[] = []
-            lines.push('Du bist ein erfahrener Site Reliability Engineer (SRE). Analysiere folgenden Prometheus Alert und hilf bei der Ursachenanalyse und Behebung.')
+            lines.push('You are an experienced Site Reliability Engineer (SRE). Analyze the following Prometheus alert and help with root cause analysis and remediation.')
             lines.push('')
             lines.push(`## Alert: ${alertname}`)
             lines.push(`- **Cluster**: ${alert.clusterName}`)
             lines.push(`- **Severity**: ${severity}`)
             lines.push(`- **Status**: ${alert.status.state}`)
             if (stats) {
-              lines.push(`- **Zuerst gesehen**: ${format(new Date(stats.firstSeenAt), 'dd.MM.yyyy HH:mm', { locale: de })} Uhr`)
+              lines.push(`- **First seen**: ${format(new Date(stats.firstSeenAt), 'yyyy-MM-dd HH:mm', { locale: enUS })}`)
               lines.push(`- **Occurrences**: ${stats.occurrenceCount}`)
             }
             lines.push('')
@@ -757,43 +757,43 @@ export function AlertDetailPanel({
               }
             }
             lines.push('')
-            lines.push(`## Historie (${allRows.length} Einträge)`)
-            lines.push('| Zeit | Wer | Aktion | Kommentar |')
-            lines.push('|------|-----|--------|-----------|')
+            lines.push(`## History (${allRows.length} entries)`)
+            lines.push('| Time | Who | Action | Comment |')
+            lines.push('|------|-----|--------|---------|')
             for (const r of allRows) {
-              const t = format(r.time, 'dd.MM.yyyy HH:mm', { locale: de })
+              const t = format(r.time, 'yyyy-MM-dd HH:mm', { locale: enUS })
               lines.push(`| ${t} | ${r.who} | ${r.action} | ${r.comment ?? '—'} |`)
             }
             lines.push('')
-            lines.push('## Aufgaben')
-            lines.push('1. Was ist die wahrscheinlichste Ursache dieses Alerts?')
-            lines.push('2. Welche weiteren Schritte empfiehlst du zur Diagnose?')
-            lines.push('3. Wie kann dieser Alert dauerhaft behoben werden?')
+            lines.push('## Tasks')
+            lines.push('1. What is the most likely cause of this alert?')
+            lines.push('2. What further steps do you recommend for diagnosis?')
+            lines.push('3. How can this alert be permanently resolved?')
             return lines.join('\n')
           }
 
           return (
             <>
-            <Section title="Historie" defaultOpen={true} headerRight={pageSizeButtons}>
+            <Section title="History" defaultOpen={true} headerRight={pageSizeButtons}>
               {!historyData ? (
-                <p className="text-xs text-muted-foreground">Laden…</p>
+                <p className="text-xs text-muted-foreground">Loading…</p>
               ) : (
                 <div>
                   <div className="overflow-x-auto">
                     <table className="w-full text-xs">
                       <thead>
                         <tr className="border-b border-border bg-accent/30">
-                          <th className="px-3 py-2 text-left text-muted-foreground">Zeit</th>
-                          <th className="px-3 py-2 text-left text-muted-foreground">Wer</th>
-                          <th className="px-3 py-2 text-left text-muted-foreground">Aktion</th>
-                          <th className="px-3 py-2 text-left text-muted-foreground">Kommentar</th>
+                          <th className="px-3 py-2 text-left text-muted-foreground">Time</th>
+                          <th className="px-3 py-2 text-left text-muted-foreground">Who</th>
+                          <th className="px-3 py-2 text-left text-muted-foreground">Action</th>
+                          <th className="px-3 py-2 text-left text-muted-foreground">Comment</th>
                         </tr>
                       </thead>
                       <tbody>
                         {pagedRows.map((r) => (
                           <tr key={r.key} className="border-b border-border last:border-0">
                             <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">
-                              {format(r.time, 'dd.MM.yyyy HH:mm', { locale: de })}
+                              {format(r.time, 'yyyy-MM-dd HH:mm', { locale: enUS })}
                             </td>
                             <td className="px-3 py-2 font-medium">{r.who}</td>
                             <td className={`px-3 py-2 font-medium ${actionColor[r.action] ?? 'text-foreground'}`}>
@@ -825,7 +825,7 @@ export function AlertDetailPanel({
                   {totalPages > 1 && (
                     <div className="mt-3 flex items-center justify-between gap-2">
                       <span className="text-[10px] text-muted-foreground">
-                        {(safePage - 1) * historyPageSize + 1}–{Math.min(safePage * historyPageSize, totalRows)} von {totalRows}
+                        {(safePage - 1) * historyPageSize + 1}–{Math.min(safePage * historyPageSize, totalRows)} of {totalRows}
                       </span>
                       <div className="flex items-center gap-1">
                         <button
@@ -866,10 +866,10 @@ export function AlertDetailPanel({
                 </div>
               )}
             </Section>
-            <Section title="KI-Prompt" defaultOpen={false}>
+            <Section title="AI Prompt" defaultOpen={false}>
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <p className="text-xs text-muted-foreground">Prompt mit Alert-Kontext für KI-Analyse</p>
+                  <p className="text-xs text-muted-foreground">Prompt with alert context for AI analysis</p>
                   <button
                     className="flex items-center gap-1 rounded border border-border px-2 py-1 text-xs hover:bg-accent cursor-pointer"
                     onClick={() => {
@@ -879,7 +879,7 @@ export function AlertDetailPanel({
                     }}
                   >
                     {promptCopied ? <Check className="h-3 w-3 text-green-400" /> : <Copy className="h-3 w-3" />}
-                    {promptCopied ? 'Kopiert!' : 'Kopieren'}
+                    {promptCopied ? 'Copied!' : 'Copy'}
                   </button>
                 </div>
                 <pre className="max-h-64 overflow-y-auto rounded bg-accent/30 p-3 text-[10px] leading-relaxed text-muted-foreground whitespace-pre-wrap break-words">
@@ -892,7 +892,7 @@ export function AlertDetailPanel({
         })()}
 
         {/* Comments */}
-        <Section title="Kommentare">
+        <Section title="Comments">
           <AlertComments fingerprint={alert.fingerprint} />
         </Section>
 
@@ -906,7 +906,7 @@ export function AlertDetailPanel({
           className="sm:max-w-2xl lg:max-w-3xl"
         >
           <div className="p-5 pt-10">
-            <h2 className="mb-4 text-base font-semibold">Neue Silence erstellen</h2>
+            <h2 className="mb-4 text-base font-semibold">Create new silence</h2>
             <SilenceForm
               availableClusters={[alert.clusterName]}
               prefillAlerts={[alert]}
@@ -927,7 +927,7 @@ export function AlertDetailPanel({
         >
           <div className="p-5 pt-10">
             <h2 className="mb-4 text-base font-semibold">
-              {silenceFormTarget.status.state === 'expired' ? 'Silence recreaten' : 'Silence bearbeiten'}
+              {silenceFormTarget.status.state === 'expired' ? 'Recreate silence' : 'Edit silence'}
             </h2>
             <SilenceForm
               availableClusters={[silenceFormTarget.clusterName]}

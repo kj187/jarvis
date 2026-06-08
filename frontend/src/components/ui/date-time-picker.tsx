@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { DayPicker } from 'react-day-picker'
-import { de } from 'date-fns/locale'
+import { enUS } from 'date-fns/locale'
 import { format, parse, isValid } from 'date-fns'
 import { CalendarDays, Clock, ChevronLeft, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -23,7 +23,7 @@ export function DateTimePicker({ value, onChange, className }: DateTimePickerPro
   const [open, setOpen] = useState(false)
 
   const selected = parseValue(value)
-  const displayValue = selected ? format(selected, 'dd.MM.yyyy HH:mm') : ''
+  const displayValue = selected ? format(selected, 'yyyy-MM-dd HH:mm') : ''
 
   const hh = selected ? String(selected.getHours()).padStart(2, '0') : '00'
   const mm = selected ? String(selected.getMinutes()).padStart(2, '0') : '00'
@@ -53,7 +53,7 @@ export function DateTimePicker({ value, onChange, className }: DateTimePickerPro
       >
         <CalendarDays className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
         <span className={cn('flex-1 text-left font-mono', !displayValue && 'text-muted-foreground')}>
-          {displayValue || 'Datum wählen…'}
+          {displayValue || 'Pick a date…'}
         </span>
       </button>
 
@@ -66,7 +66,7 @@ export function DateTimePicker({ value, onChange, className }: DateTimePickerPro
               selected={selected}
               defaultMonth={selected ?? new Date()}
               onSelect={handleDaySelect}
-              locale={de}
+              locale={enUS}
               components={{
                 Chevron: ({ orientation }) =>
                   orientation === 'left'

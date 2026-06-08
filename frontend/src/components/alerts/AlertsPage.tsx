@@ -128,7 +128,7 @@ export function AlertsPage() {
     <div className="flex flex-col gap-4">
       {/* Content */}
       {isLoading ? (
-        <div className="px-4 text-sm text-muted-foreground">Laden…</div>
+        <div className="px-4 text-sm text-muted-foreground">Loading…</div>
       ) : viewMode === 'card' ? (
         <div className="px-4">
           <AlertCardGrid
