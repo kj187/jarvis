@@ -83,6 +83,22 @@ func (s *AlertStore) MarkResolved(fingerprint string) {
 	}
 }
 
+// SeedResolved pre-populates the resolved buffer from persistent storage (e.g. on
+// startup). Entries already present are not overwritten. No removal timer is
+// scheduled — seeded alerts stay visible until they reappear as active (Set clears them).
+func (s *AlertStore) SeedResolved(alerts []models.EnrichedAlert) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.resolvedBuffer == nil {
+		s.resolvedBuffer = make(map[string]models.EnrichedAlert)
+	}
+	for _, a := range alerts {
+		if _, exists := s.resolvedBuffer[a.Fingerprint]; !exists {
+			s.resolvedBuffer[a.Fingerprint] = a
+		}
+	}
+}
+
 // RemoveByFingerprint removes the alert from both active list and resolved buffer.
 func (s *AlertStore) RemoveByFingerprint(fingerprint string) {
 	s.mu.Lock()

@@ -203,6 +203,18 @@ func (s *Store) GetStats(fingerprint string) (*models.AlertStats, error) {
 	}
 	st.FirstSeenAt = st.FirstSeenAt.UTC()
 	st.LastSeenAt = st.LastSeenAt.UTC()
+
+	var resolvedAt sql.NullTime
+	_ = s.db.QueryRow(`
+		SELECT recorded_at FROM alert_events
+		WHERE fingerprint = ? AND status = 'resolved'
+		ORDER BY recorded_at DESC LIMIT 1
+	`, fingerprint).Scan(&resolvedAt)
+	if resolvedAt.Valid {
+		t := resolvedAt.Time.UTC()
+		st.LastResolvedAt = &t
+	}
+
 	return &st, nil
 }
 
@@ -481,4 +493,61 @@ func (s *Store) getLastEvent(fingerprint string) (*models.AlertEvent, error) {
 		e.EndsAt = &t
 	}
 	return &e, nil
+}
+
+// GetRecentResolved returns one EnrichedAlert per fingerprint for all alerts
+// that were resolved within the given window (using recorded_at of the resolved event).
+// Used to seed the in-memory AlertStore on startup so resolved alerts survive restarts.
+func (s *Store) GetRecentResolved(window time.Duration) ([]models.EnrichedAlert, error) {
+	since := time.Now().UTC().Add(-window)
+	rows, err := s.db.Query(`
+		SELECT e.fingerprint, e.cluster_name, e.alertmanager_url, e.starts_at, e.recorded_at, e.annotations, f.labels
+		FROM alert_events e
+		JOIN alert_fingerprints f ON f.fingerprint = e.fingerprint
+		WHERE e.status = 'resolved'
+		  AND e.id IN (
+		    SELECT MAX(id) FROM alert_events
+		    WHERE status = 'resolved' AND recorded_at >= ?
+		    GROUP BY fingerprint
+		  )
+		ORDER BY e.recorded_at DESC
+	`, since)
+	if err != nil {
+		return nil, fmt.Errorf("get recent resolved: %w", err)
+	}
+	defer rows.Close()
+
+	var alerts []models.EnrichedAlert
+	for rows.Next() {
+		var fp, clusterName, amURL, annotationsJSON, labelsJSON string
+		var startsAt, resolvedAt time.Time
+		if err := rows.Scan(&fp, &clusterName, &amURL, &startsAt, &resolvedAt, &annotationsJSON, &labelsJSON); err != nil {
+			return nil, fmt.Errorf("scan resolved alert: %w", err)
+		}
+		var labels map[string]string
+		if err := json.Unmarshal([]byte(labelsJSON), &labels); err != nil {
+			labels = map[string]string{}
+		}
+		var annotations map[string]string
+		if err := json.Unmarshal([]byte(annotationsJSON), &annotations); err != nil {
+			annotations = map[string]string{}
+		}
+		alerts = append(alerts, models.EnrichedAlert{
+			Fingerprint: fp,
+			Status: models.AlertStatus{
+				State:       "resolved",
+				InhibitedBy: []string{},
+				SilencedBy:  []string{},
+			},
+			Labels:          labels,
+			Annotations:     annotations,
+			StartsAt:        startsAt.UTC(),
+			EndsAt:          resolvedAt.UTC(),
+			UpdatedAt:       resolvedAt.UTC(),
+			Receivers:       []models.Receiver{},
+			ClusterName:     clusterName,
+			AlertmanagerURL: amURL,
+		})
+	}
+	return alerts, rows.Err()
 }

@@ -18,7 +18,6 @@ vi.mock('@/api/client', () => ({
     },
   ]),
   fetchAlerts: vi.fn().mockResolvedValue([]),
-  fetchSilences: vi.fn().mockResolvedValue([]),
 }))
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -60,14 +59,13 @@ describe('Header – navigation', () => {
   it('renders nav buttons', () => {
     renderHeader()
     expect(screen.getByText('Alerts')).toBeInTheDocument()
-    expect(screen.getByText('Silences')).toBeInTheDocument()
+    expect(screen.getByText('Silence erstellen')).toBeInTheDocument()
   })
 
-  it('calls onNavigate when nav button clicked', async () => {
-    const onNavigate = vi.fn()
-    renderHeader({ onNavigate })
-    await userEvent.click(screen.getByText('Silences'))
-    expect(onNavigate).toHaveBeenCalledWith('silences')
+  it('opens silence form when "Silence erstellen" is clicked', async () => {
+    renderHeader()
+    await userEvent.click(screen.getByText('Silence erstellen'))
+    expect(screen.getByRole('heading', { name: 'Silence erstellen' })).toBeInTheDocument()
   })
 })
 

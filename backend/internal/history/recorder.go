@@ -75,6 +75,12 @@ func (r *Recorder) Trigger() {
 // Start begins the polling loop. It polls immediately and then at the
 // configured interval. The loop stops when ctx is cancelled.
 func (r *Recorder) Start(ctx context.Context) {
+	if resolved, err := r.store.GetRecentResolved(7 * 24 * time.Hour); err == nil {
+		r.logger.Info("seeding resolved alerts from db", "count", len(resolved))
+		r.alertStore.SeedResolved(resolved)
+	} else {
+		r.logger.Warn("seed resolved alerts from db failed", "err", err)
+	}
 	r.poll(ctx)
 	ticker := time.NewTicker(r.interval)
 	defer ticker.Stop()

@@ -87,12 +87,13 @@ type AlertEvent struct {
 }
 
 type AlertStats struct {
-	Fingerprint     string    `json:"fingerprint"`
-	Alertname       string    `json:"alertname"`
-	ClusterName     string    `json:"clusterName"`
-	FirstSeenAt     time.Time `json:"firstSeenAt"`
-	LastSeenAt      time.Time `json:"lastSeenAt"`
-	OccurrenceCount int       `json:"occurrenceCount"`
+	Fingerprint     string     `json:"fingerprint"`
+	Alertname       string     `json:"alertname"`
+	ClusterName     string     `json:"clusterName"`
+	FirstSeenAt     time.Time  `json:"firstSeenAt"`
+	LastSeenAt      time.Time  `json:"lastSeenAt"`
+	LastResolvedAt  *time.Time `json:"lastResolvedAt,omitempty"`
+	OccurrenceCount int        `json:"occurrenceCount"`
 }
 
 // ── Comment ──────────────────────────────────────────────────────────────────
