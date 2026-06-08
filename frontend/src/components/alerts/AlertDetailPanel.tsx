@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { format, formatDistanceToNow } from 'date-fns'
 import { de } from 'date-fns/locale'
-import { ExternalLink, BookOpen, ChevronDown, ChevronUp, BellOff, Pencil, Trash2, User } from 'lucide-react'
+import { ExternalLink, BookOpen, ChevronDown, ChevronUp, BellOff, Pencil, Trash2, User, Copy, Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Sheet } from '@/components/ui/sheet'
 import { AlertBadge, StatusBadge } from './AlertBadge'
@@ -101,10 +101,12 @@ function Section({
   title,
   children,
   defaultOpen = true,
+  headerRight,
 }: {
   title: string
   children: React.ReactNode
   defaultOpen?: boolean
+  headerRight?: React.ReactNode
 }) {
   const [open, setOpen] = useState(defaultOpen)
   return (
@@ -114,7 +116,12 @@ function Section({
         onClick={() => setOpen((v) => !v)}
       >
         {title}
-        {open ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+        <div className="flex items-center gap-2">
+          {headerRight && (
+            <span onClick={(e) => e.stopPropagation()}>{headerRight}</span>
+          )}
+          {open ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+        </div>
       </button>
       {open && <div className="mt-3">{children}</div>}
     </div>
@@ -139,17 +146,19 @@ export function AlertDetailPanel({
   silences,
 }: AlertDetailPanelProps) {
   const [now, setNow] = useState(Date.now())
-  const [historyLimit, setHistoryLimit] = useState(20)
+  const [historyPageSize, setHistoryPageSize] = useState<10 | 50 | 100>(10)
+  const [historyPage, setHistoryPage] = useState(1)
   const [silenceFormTarget, setSilenceFormTarget] = useState<Silence | null>(null)
   const [showNewSilenceForm, setShowNewSilenceForm] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [showClaimForm, setShowClaimForm] = useState(false)
   const [claimName, setClaimName] = useState(() => localStorage.getItem(USERNAME_KEY) ?? '')
   const [claimNote, setClaimNote] = useState('')
+  const [promptCopied, setPromptCopied] = useState(false)
 
-  const { data: historyData, isLoading: historyLoading } = useAlertHistory(
+  const { data: historyData } = useAlertHistory(
     alert?.fingerprint ?? '',
-    historyLimit,
+    1000,
   )
   const { data: stats } = useAlertStats(alert?.fingerprint ?? '')
   const { data: activeClaim } = useActiveClaim(alert?.fingerprint ?? '')
@@ -612,140 +621,275 @@ export function AlertDetailPanel({
         </Section>
 
         {/* History */}
-        <Section title="Historie" defaultOpen={true}>
-          {!historyData ? (
-            <p className="text-xs text-muted-foreground">Laden…</p>
-          ) : (() => {
-            type HistoryRow = { key: string; time: Date; who: string; action: string; comment?: string; silenceId?: string; alertmanagerUrl?: string }
-            const rows: HistoryRow[] = []
+        {(() => {
+          type HistoryRow = { key: string; time: Date; who: string; action: string; comment?: string; silenceId?: string; alertmanagerUrl?: string }
 
-            const alertEventLabel: Record<string, string> = {
-              firing: 'Alert fired',
-              suppressed: 'Alert suppressed',
-              expired: 'Silence expired',
-              resolved: 'Alert resolved',
-            }
+          const alertEventLabel: Record<string, string> = {
+            firing: 'Alert fired',
+            suppressed: 'Alert suppressed',
+            expired: 'Silence expired',
+            resolved: 'Alert resolved',
+          }
 
-            const silenceActionLabel: Record<string, string> = {
-              pending: 'Silence pending',
-              created: 'Silence created',
-              updated: 'Silence updated',
-              deleted: 'Silence deleted',
-              expired: 'Silence expired',
-            }
+          const silenceActionLabel: Record<string, string> = {
+            pending: 'Silence pending',
+            created: 'Silence created',
+            updated: 'Silence updated',
+            deleted: 'Silence deleted',
+            expired: 'Silence expired',
+          }
 
-            const actionColor: Record<string, string> = {
-              'Alert fired': 'text-red-400',
-              'Alert resolved': 'text-green-400',
-              'Alert suppressed': 'text-slate-400',
-              'Silence expired': 'text-yellow-400',
-              claimed: 'text-blue-400',
-              unclaimed: 'text-muted-foreground',
-              'Silence pending': 'text-slate-300',
-              'Silence created': 'text-slate-300',
-              'Silence updated': 'text-slate-300',
-              'Silence deleted': 'text-orange-400',
-            }
+          const actionColor: Record<string, string> = {
+            'Alert fired': 'text-red-400',
+            'Alert resolved': 'text-green-400',
+            'Alert suppressed': 'text-slate-400',
+            'Silence expired': 'text-yellow-400',
+            claimed: 'text-blue-400',
+            unclaimed: 'text-muted-foreground',
+            'Silence pending': 'text-slate-300',
+            'Silence created': 'text-slate-300',
+            'Silence updated': 'text-slate-300',
+            'Silence deleted': 'text-orange-400',
+          }
 
+          const allRows: HistoryRow[] = []
+
+          if (historyData) {
             for (const e of historyData.events) {
-              rows.push({
+              allRows.push({
                 key: `event-${e.id}`,
-                time: new Date(e.startsAt),
+                time: new Date(e.recordedAt),
                 who: 'system',
                 action: alertEventLabel[e.status] ?? e.status,
               })
             }
+          }
 
-            for (const c of claimHistory) {
-              rows.push({
-                key: `claim-${c.id}`,
-                time: new Date(c.claimedAt),
-                who: c.claimedBy,
-                action: 'claimed',
-                comment: c.note || undefined,
+          for (const c of claimHistory) {
+            allRows.push({
+              key: `claim-${c.id}`,
+              time: new Date(c.claimedAt),
+              who: c.claimedBy,
+              action: 'claimed',
+              comment: c.note || undefined,
+            })
+            if (c.releasedAt) {
+              allRows.push({
+                key: `release-${c.id}`,
+                time: new Date(c.releasedAt),
+                who: c.releasedBy ?? 'system',
+                action: 'unclaimed',
+                comment: c.releaseReason ?? undefined,
               })
-              if (c.releasedAt) {
-                rows.push({
-                  key: `release-${c.id}`,
-                  time: new Date(c.releasedAt),
-                  who: c.releasedBy ?? 'system',
-                  action: 'unclaimed',
-                  comment: c.releaseReason ?? undefined,
-                })
+            }
+          }
+
+          for (const se of silenceHistory) {
+            allRows.push({
+              key: `silence-${se.id}`,
+              time: new Date(se.recordedAt),
+              who: se.performedBy,
+              action: silenceActionLabel[se.action] ?? `Silence ${se.action}`,
+              comment: se.comment || undefined,
+              silenceId: se.silenceId,
+              alertmanagerUrl: alert.alertmanagerUrl,
+            })
+          }
+
+          allRows.sort((a, b) => b.time.getTime() - a.time.getTime())
+
+          const totalRows = allRows.length
+          const totalPages = Math.max(1, Math.ceil(totalRows / historyPageSize))
+          const safePage = Math.min(historyPage, totalPages)
+          const pagedRows = allRows.slice((safePage - 1) * historyPageSize, safePage * historyPageSize)
+
+          const pageSizeButtons = (
+            <div className="flex items-center gap-1">
+              {([10, 50, 100] as const).map((n) => (
+                <button
+                  key={n}
+                  onClick={() => { setHistoryPageSize(n); setHistoryPage(1) }}
+                  className={cn(
+                    'rounded px-1.5 py-0.5 text-[10px] font-medium cursor-pointer',
+                    historyPageSize === n
+                      ? 'bg-accent text-foreground'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-accent/50',
+                  )}
+                >
+                  {n}
+                </button>
+              ))}
+            </div>
+          )
+
+          const pageWindow: (number | '…')[] = (() => {
+            if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1)
+            const pages: (number | '…')[] = [1]
+            if (safePage > 3) pages.push('…')
+            for (let p = Math.max(2, safePage - 1); p <= Math.min(totalPages - 1, safePage + 1); p++) pages.push(p)
+            if (safePage < totalPages - 2) pages.push('…')
+            pages.push(totalPages)
+            return pages
+          })()
+
+          const buildPrompt = (): string => {
+            const lines: string[] = []
+            lines.push('Du bist ein erfahrener Site Reliability Engineer (SRE). Analysiere folgenden Prometheus Alert und hilf bei der Ursachenanalyse und Behebung.')
+            lines.push('')
+            lines.push(`## Alert: ${alertname}`)
+            lines.push(`- **Cluster**: ${alert.clusterName}`)
+            lines.push(`- **Severity**: ${severity}`)
+            lines.push(`- **Status**: ${alert.status.state}`)
+            if (stats) {
+              lines.push(`- **Zuerst gesehen**: ${format(new Date(stats.firstSeenAt), 'dd.MM.yyyy HH:mm', { locale: de })} Uhr`)
+              lines.push(`- **Occurrences**: ${stats.occurrenceCount}`)
+            }
+            lines.push('')
+            lines.push('## Labels')
+            for (const [k, v] of Object.entries(alert.labels)) {
+              lines.push(`- **${k}**: ${v}`)
+            }
+            if (annotationEntries.length > 0) {
+              lines.push('')
+              lines.push('## Annotations')
+              for (const [k, v] of annotationEntries) {
+                lines.push(`- **${k}**: ${v}`)
               }
             }
-
-            for (const se of silenceHistory) {
-              rows.push({
-                key: `silence-${se.id}`,
-                time: new Date(se.recordedAt),
-                who: se.performedBy,
-                action: silenceActionLabel[se.action] ?? `Silence ${se.action}`,
-                comment: se.comment || undefined,
-                silenceId: se.silenceId,
-                alertmanagerUrl: alert.alertmanagerUrl,
-              })
+            lines.push('')
+            lines.push(`## Historie (${allRows.length} Einträge)`)
+            lines.push('| Zeit | Wer | Aktion | Kommentar |')
+            lines.push('|------|-----|--------|-----------|')
+            for (const r of allRows) {
+              const t = format(r.time, 'dd.MM.yyyy HH:mm', { locale: de })
+              lines.push(`| ${t} | ${r.who} | ${r.action} | ${r.comment ?? '—'} |`)
             }
+            lines.push('')
+            lines.push('## Aufgaben')
+            lines.push('1. Was ist die wahrscheinlichste Ursache dieses Alerts?')
+            lines.push('2. Welche weiteren Schritte empfiehlst du zur Diagnose?')
+            lines.push('3. Wie kann dieser Alert dauerhaft behoben werden?')
+            return lines.join('\n')
+          }
 
-            rows.sort((a, b) => b.time.getTime() - a.time.getTime())
-
-            return (
-              <div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="border-b border-border bg-accent/30">
-                        <th className="px-3 py-2 text-left text-muted-foreground">Zeit</th>
-                        <th className="px-3 py-2 text-left text-muted-foreground">Wer</th>
-                        <th className="px-3 py-2 text-left text-muted-foreground">Aktion</th>
-                        <th className="px-3 py-2 text-left text-muted-foreground">Kommentar</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {rows.map((r) => (
-                        <tr key={r.key} className="border-b border-border last:border-0">
-                          <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">
-                            {format(r.time, 'dd.MM.yyyy HH:mm', { locale: de })}
-                          </td>
-                          <td className="px-3 py-2 font-medium">{r.who}</td>
-                          <td className={`px-3 py-2 font-medium ${actionColor[r.action] ?? 'text-foreground'}`}>
-                            {r.action}
-                            {r.silenceId && (
-                              <div className="mt-0.5 font-mono text-[10px] text-muted-foreground">
-                                {r.alertmanagerUrl ? (
-                                  <a
-                                    href={`${r.alertmanagerUrl}/#/silences/${r.silenceId}`}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="underline underline-offset-2 hover:text-foreground"
-                                  >
-                                    {r.silenceId}
-                                  </a>
-                                ) : (
-                                  r.silenceId
-                                )}
-                              </div>
-                            )}
-                          </td>
-                          <td className="px-3 py-2 text-muted-foreground">{r.comment ?? '—'}</td>
+          return (
+            <>
+            <Section title="Historie" defaultOpen={true} headerRight={pageSizeButtons}>
+              {!historyData ? (
+                <p className="text-xs text-muted-foreground">Laden…</p>
+              ) : (
+                <div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b border-border bg-accent/30">
+                          <th className="px-3 py-2 text-left text-muted-foreground">Zeit</th>
+                          <th className="px-3 py-2 text-left text-muted-foreground">Wer</th>
+                          <th className="px-3 py-2 text-left text-muted-foreground">Aktion</th>
+                          <th className="px-3 py-2 text-left text-muted-foreground">Kommentar</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {pagedRows.map((r) => (
+                          <tr key={r.key} className="border-b border-border last:border-0">
+                            <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">
+                              {format(r.time, 'dd.MM.yyyy HH:mm', { locale: de })}
+                            </td>
+                            <td className="px-3 py-2 font-medium">{r.who}</td>
+                            <td className={`px-3 py-2 font-medium ${actionColor[r.action] ?? 'text-foreground'}`}>
+                              {r.action}
+                              {r.silenceId && (
+                                <div className="mt-0.5 font-mono text-[10px] text-muted-foreground">
+                                  {r.alertmanagerUrl ? (
+                                    <a
+                                      href={`${r.alertmanagerUrl}/#/silences/${r.silenceId}`}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="underline underline-offset-2 hover:text-foreground"
+                                    >
+                                      {r.silenceId}
+                                    </a>
+                                  ) : (
+                                    r.silenceId
+                                  )}
+                                </div>
+                              )}
+                            </td>
+                            <td className="px-3 py-2 text-muted-foreground">{r.comment ?? '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {totalPages > 1 && (
+                    <div className="mt-3 flex items-center justify-between gap-2">
+                      <span className="text-[10px] text-muted-foreground">
+                        {(safePage - 1) * historyPageSize + 1}–{Math.min(safePage * historyPageSize, totalRows)} von {totalRows}
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <button
+                          disabled={safePage === 1}
+                          onClick={() => setHistoryPage((p) => p - 1)}
+                          className="rounded px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-30 disabled:cursor-default cursor-pointer"
+                        >
+                          ‹
+                        </button>
+                        {pageWindow.map((p, i) =>
+                          p === '…' ? (
+                            <span key={`ellipsis-${i}`} className="px-1 text-[10px] text-muted-foreground">…</span>
+                          ) : (
+                            <button
+                              key={p}
+                              onClick={() => setHistoryPage(p)}
+                              className={cn(
+                                'rounded px-1.5 py-0.5 text-[10px] cursor-pointer',
+                                safePage === p
+                                  ? 'bg-accent text-foreground font-medium'
+                                  : 'text-muted-foreground hover:text-foreground hover:bg-accent/50',
+                              )}
+                            >
+                              {p}
+                            </button>
+                          )
+                        )}
+                        <button
+                          disabled={safePage === totalPages}
+                          onClick={() => setHistoryPage((p) => p + 1)}
+                          className="rounded px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-30 disabled:cursor-default cursor-pointer"
+                        >
+                          ›
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
-                {historyData.events.length < historyData.total && (
+              )}
+            </Section>
+            <Section title="KI-Prompt" defaultOpen={false}>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-muted-foreground">Prompt mit Alert-Kontext für KI-Analyse</p>
                   <button
-                    className="mt-2 w-full text-xs text-muted-foreground hover:text-foreground cursor-pointer py-1"
-                    onClick={() => setHistoryLimit((l) => l + 20)}
-                    disabled={historyLoading}
+                    className="flex items-center gap-1 rounded border border-border px-2 py-1 text-xs hover:bg-accent cursor-pointer"
+                    onClick={() => {
+                      void navigator.clipboard.writeText(buildPrompt())
+                      setPromptCopied(true)
+                      setTimeout(() => setPromptCopied(false), 2000)
+                    }}
                   >
-                    Ältere laden ({historyData.total - historyData.events.length} mehr)
+                    {promptCopied ? <Check className="h-3 w-3 text-green-400" /> : <Copy className="h-3 w-3" />}
+                    {promptCopied ? 'Kopiert!' : 'Kopieren'}
                   </button>
-                )}
+                </div>
+                <pre className="max-h-64 overflow-y-auto rounded bg-accent/30 p-3 text-[10px] leading-relaxed text-muted-foreground whitespace-pre-wrap break-words">
+                  {buildPrompt()}
+                </pre>
               </div>
-            )
-          })()}
-        </Section>
+            </Section>
+            </>
+          )
+        })()}
 
         {/* Comments */}
         <Section title="Kommentare">
