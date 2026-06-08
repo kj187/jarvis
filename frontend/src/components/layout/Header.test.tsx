@@ -28,25 +28,18 @@ function makeClient() {
   })
 }
 
-function renderHeader(props: { currentPage?: string; onNavigate?: (p: string) => void } = {}) {
-  const onNavigate = props.onNavigate ?? vi.fn()
-  const currentPage = props.currentPage ?? 'alerts'
+function renderHeader() {
   const client = makeClient()
-
-  return {
-    onNavigate,
-    ...render(
-      <QueryClientProvider client={client}>
-        <Header currentPage={currentPage} onNavigate={onNavigate} />
-      </QueryClientProvider>,
-    ),
-  }
+  return render(
+    <QueryClientProvider client={client}>
+      <Header />
+    </QueryClientProvider>,
+  )
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 beforeEach(() => {
-  // Reset store to defaults before each test
   useUIStore.setState({
     filters: { state: '', search: '', labelMatchers: [] },
     wsConnected: false,
@@ -55,33 +48,25 @@ beforeEach(() => {
   })
 })
 
-describe('Header – navigation', () => {
-  it('renders nav buttons', () => {
+describe('Header – silence button', () => {
+  it('renders Create silence button', () => {
     renderHeader()
-    expect(screen.getByText('Alerts')).toBeInTheDocument()
-    expect(screen.getByText('Silence erstellen')).toBeInTheDocument()
+    expect(screen.getByText('Create silence')).toBeInTheDocument()
   })
 
-  it('opens silence form when "Silence erstellen" is clicked', async () => {
+  it('opens silence form when "Create silence" is clicked', async () => {
     renderHeader()
-    await userEvent.click(screen.getByText('Silence erstellen'))
-    expect(screen.getByRole('heading', { name: 'Silence erstellen' })).toBeInTheDocument()
+    await userEvent.click(screen.getByText('Create silence'))
+    expect(screen.getByRole('heading', { name: 'Create silence' })).toBeInTheDocument()
   })
 })
 
 describe('Header – state filter pills', () => {
-  it('renders state pills only on alerts page', () => {
-    renderHeader({ currentPage: 'alerts' })
+  it('renders state pills', () => {
+    renderHeader()
     expect(screen.getByText('Active')).toBeInTheDocument()
     expect(screen.getByText('Suppressed')).toBeInTheDocument()
     expect(screen.getByText('Resolved')).toBeInTheDocument()
-  })
-
-  it('does not render state pills on silences page', () => {
-    renderHeader({ currentPage: 'silences' })
-    expect(screen.queryByText('Active')).not.toBeInTheDocument()
-    expect(screen.queryByText('Suppressed')).not.toBeInTheDocument()
-    expect(screen.queryByText('Resolved')).not.toBeInTheDocument()
   })
 
   it('toggles state filter on pill click', async () => {
@@ -190,7 +175,6 @@ describe('Header – search', () => {
 
 describe('Header – cluster popover', () => {
   it('shows cluster status badge', async () => {
-    // fetchClusters is mocked – wait for query to settle
     renderHeader()
     await waitFor(() => {
       expect(screen.getByLabelText('Instance 1/1')).toBeInTheDocument()

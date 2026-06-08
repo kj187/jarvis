@@ -164,7 +164,7 @@ function MatcherChip({
 
 // ── Header ────────────────────────────────────────────────────────────────────
 
-export function Header({ currentPage, onNavigate }: { currentPage: string; onNavigate: (page: string) => void }) {
+export function Header() {
   const {
     viewMode,
     setViewMode,
@@ -293,96 +293,92 @@ export function Header({ currentPage, onNavigate }: { currentPage: string; onNav
       <div className="flex items-center gap-2 px-4 py-2">
 
         {/* Label filter add row */}
-        {currentPage === 'alerts' && (
-          <div className="flex items-center gap-1 shrink-0">
-            <ComboInput
-              value={newName}
-              onChangeValue={setNewName}
-              placeholder="label"
-              options={availableLabelNames}
-              className="h-7 w-32 text-xs"
-              style={{ backgroundColor: '#18181B' }}
-              onKeyDown={(e) => e.key === 'Enter' && handleAddMatcher()}
-              ariaLabel="Label name"
-            />
-            <Select
-              value={newOp}
-              onChange={(e) => setNewOp(e.target.value as LabelMatcherOperator)}
-              className="h-7 w-14 shrink-0"
-              selectClassName="text-xs font-mono"
-              aria-label="Operator"
-            >
-              {OPERATORS.map((op) => (
-                <option key={op} value={op}>{op}</option>
-              ))}
-            </Select>
-            <ComboInput
-              value={newValue}
-              onChangeValue={setNewValue}
-              placeholder="value"
-              options={newValueOptions}
-              className="h-7 w-44 text-xs"
-              style={{ backgroundColor: '#18181B' }}
-              onKeyDown={(e) => e.key === 'Enter' && handleAddMatcher()}
-              ariaLabel="Label value"
-            />
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-7 w-7 shrink-0"
-              onClick={handleAddMatcher}
-              disabled={!newName || !newValue}
-              aria-label="Add filter"
-            >
-              <Plus className="h-3 w-3" />
-            </Button>
-          </div>
-        )}
+        <div className="flex items-center gap-1 shrink-0">
+          <ComboInput
+            value={newName}
+            onChangeValue={setNewName}
+            placeholder="label"
+            options={availableLabelNames}
+            className="h-7 w-32 text-xs"
+            style={{ backgroundColor: '#18181B' }}
+            onKeyDown={(e) => e.key === 'Enter' && handleAddMatcher()}
+            ariaLabel="Label name"
+          />
+          <Select
+            value={newOp}
+            onChange={(e) => setNewOp(e.target.value as LabelMatcherOperator)}
+            className="h-7 w-14 shrink-0"
+            selectClassName="text-xs font-mono"
+            aria-label="Operator"
+          >
+            {OPERATORS.map((op) => (
+              <option key={op} value={op}>{op}</option>
+            ))}
+          </Select>
+          <ComboInput
+            value={newValue}
+            onChangeValue={setNewValue}
+            placeholder="value"
+            options={newValueOptions}
+            className="h-7 w-44 text-xs"
+            style={{ backgroundColor: '#18181B' }}
+            onKeyDown={(e) => e.key === 'Enter' && handleAddMatcher()}
+            ariaLabel="Label value"
+          />
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-7 w-7 shrink-0"
+            onClick={handleAddMatcher}
+            disabled={!newName || !newValue}
+            aria-label="Add filter"
+          >
+            <Plus className="h-3 w-3" />
+          </Button>
+        </div>
 
         {/* Divider + STATE label + state pills */}
-        {currentPage === 'alerts' && (
-          <>
-            <div className="mx-1 h-5 w-px bg-border shrink-0" />
-            <div
-              className="flex items-center gap-0.5 shrink-0 rounded-md px-1 py-0.5"
-              style={{ backgroundColor: '#18181B', border: '1px solid #3F3F46' }}
-              role="group"
-              aria-label="State filter"
+        <>
+          <div className="mx-1 h-5 w-px bg-border shrink-0" />
+          <div
+            className="flex items-center gap-0.5 shrink-0 rounded-md px-1 py-0.5"
+            style={{ backgroundColor: '#18181B', border: '1px solid #3F3F46' }}
+            role="group"
+            aria-label="State filter"
+          >
+          <span className="text-xs text-muted-foreground shrink-0 select-none px-1.5">STATE</span>
+            {STATE_OPTIONS.map(({ value, label, dot, activeBg, activeDot }) => {
+              const isActive = filters.state === value
+              const count = alertCounts.byState?.[value as StateValue] ?? 0
+              return (
+                <button
+                  key={value}
+                  onClick={() => toggleState(value)}
+                  className={`cursor-pointer flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium transition-colors ${
+                    isActive
+                      ? `${activeBg} text-white rounded-none`
+                      : 'text-muted-foreground hover:text-foreground rounded-full'
+                  }`}
+                >
+                  <span className={`h-1.5 w-1.5 rounded-full ${isActive ? activeDot : dot}`} />
+                  {label}
+                  <span className="tabular-nums opacity-75">{count}</span>
+                </button>
+              )
+            })}
+            <button
+              onClick={() => { setFilter('state', ''); setViewMode('list') }}
+              className={`cursor-pointer rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
+                !filters.state
+                  ? 'text-foreground'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
             >
-            <span className="text-xs text-muted-foreground shrink-0 select-none px-1.5">STATE</span>
-              {STATE_OPTIONS.map(({ value, label, dot, activeBg, activeDot }) => {
-                const isActive = filters.state === value
-                const count = alertCounts.byState?.[value as StateValue] ?? 0
-                return (
-                  <button
-                    key={value}
-                    onClick={() => toggleState(value)}
-                    className={`cursor-pointer flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium transition-colors ${
-                      isActive
-                        ? `${activeBg} text-white rounded-none`
-                        : 'text-muted-foreground hover:text-foreground rounded-full'
-                    }`}
-                  >
-                    <span className={`h-1.5 w-1.5 rounded-full ${isActive ? activeDot : dot}`} />
-                    {label}
-                    <span className="tabular-nums opacity-75">{count}</span>
-                  </button>
-                )
-              })}
-              <button
-                onClick={() => { setFilter('state', ''); setViewMode('list') }}
-                className={`cursor-pointer rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
-                  !filters.state
-                    ? 'text-foreground'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                All
-              </button>
-            </div>
-            <ViewToggle value={viewMode} onChange={setViewMode} />
-          </>
-        )}
+              All
+            </button>
+          </div>
+          <ViewToggle value={viewMode} onChange={setViewMode} />
+        </>
 
         {/* Spacer */}
         <div className="flex-1" />
@@ -488,33 +484,20 @@ export function Header({ currentPage, onNavigate }: { currentPage: string; onNav
           {searchOpen ? <X className="h-4 w-4" /> : <Search className="h-4 w-4" />}
         </Button>
 
-        {/* Nav — far right */}
-        <div className="mx-1 h-5 w-px bg-border shrink-0" />
-        <nav className="flex gap-1 shrink-0">
-          <button
-            onClick={() => onNavigate('alerts')}
-            className={`cursor-pointer rounded px-2.5 py-1 text-sm transition-colors ${
-              currentPage === 'alerts'
-                ? 'bg-accent font-semibold text-foreground'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            Alerts
-          </button>
-          <Button
-            size="sm"
-            onClick={() => setSilenceFormOpen(true)}
-            className="h-7 text-xs"
-          >
-            <Plus className="mr-1 h-3.5 w-3.5" />
-            Silence erstellen
-          </Button>
-        </nav>
+        {/* Create silence — far right */}
+        <Button
+          size="sm"
+          onClick={() => setSilenceFormOpen(true)}
+          className="h-7 text-xs shrink-0"
+        >
+          <Plus className="mr-1 h-3.5 w-3.5" />
+          Create silence
+        </Button>
       </div>
 
       {/* ── Active label matchers row — inline editable ── */}
-      {currentPage === 'alerts' && filters.labelMatchers.length > 0 && (
-        <div className="flex items-center gap-2 px-4 pb-2 flex-wrap pt-1.5">
+      {filters.labelMatchers.length > 0 && (
+        <div className="flex items-center gap-2 px-4 pb-2 flex-wrap">
           {filters.labelMatchers.map((m) => (
             <MatcherChip
               key={m.id}
@@ -560,7 +543,7 @@ export function Header({ currentPage, onNavigate }: { currentPage: string; onNav
 
     <Sheet open={silenceFormOpen} onClose={() => setSilenceFormOpen(false)}>
       <div className="p-5 pt-10">
-        <h2 className="mb-4 text-base font-semibold">Silence erstellen</h2>
+        <h2 className="mb-4 text-base font-semibold">Create silence</h2>
         <SilenceForm
           availableClusters={clusters.map((c) => c.name).length > 0 ? clusters.map((c) => c.name) : ['default']}
           onSuccess={() => setSilenceFormOpen(false)}
