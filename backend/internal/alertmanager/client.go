@@ -77,7 +77,7 @@ func (c *Client) CreateSilence(ctx context.Context, s PostableSilence) (string, 
 
 // DeleteSilence deletes a silence by ID.
 func (c *Client) DeleteSilence(ctx context.Context, id string) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, c.baseURL+"/api/v2/silences/"+id, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, c.baseURL+"/api/v2/silence/"+id, nil)
 	if err != nil {
 		return fmt.Errorf("create request: %w", err)
 	}

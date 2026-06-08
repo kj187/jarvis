@@ -128,7 +128,7 @@ func TestCreateSilence(t *testing.T) {
 func TestDeleteSilence(t *testing.T) {
 	deleted := false
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodDelete {
+		if r.Method == http.MethodDelete && r.URL.Path == "/api/v2/silence/silence-1" {
 			deleted = true
 			w.WriteHeader(http.StatusOK)
 			return
