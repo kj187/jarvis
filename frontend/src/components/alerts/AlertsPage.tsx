@@ -131,8 +131,10 @@ export function AlertsPage() {
         <div className="px-4">
           <AlertListView
             alerts={filtered}
+            silences={silences}
             onSelectAlert={setSelectedFingerprint}
             selectedFingerprint={selectedFingerprint}
+            stateFilter={filters.state}
           />
         </div>
       )}
