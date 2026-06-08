@@ -65,7 +65,7 @@ func TestUpsertFingerprint_UpdatesLastSeenAt(t *testing.T) {
 	}
 }
 
-func TestGetOrCreateActiveEvent_CreatesNew(t *testing.T) {
+func TestRecordStatusChange_CreatesNew(t *testing.T) {
 	s := newTestStore(t)
 
 	labels := map[string]string{"alertname": "TestAlert"}
@@ -73,9 +73,9 @@ func TestGetOrCreateActiveEvent_CreatesNew(t *testing.T) {
 		t.Fatalf("upsert: %v", err)
 	}
 
-	ev, err := s.GetOrCreateActiveEvent("fp1", "homelab", "http://am:9093", models.EventStatusFiring, time.Now(), nil)
+	ev, err := s.RecordStatusChange("fp1", "homelab", "http://am:9093", models.EventStatusFiring, time.Now(), nil)
 	if err != nil {
-		t.Fatalf("GetOrCreateActiveEvent: %v", err)
+		t.Fatalf("RecordStatusChange: %v", err)
 	}
 	if ev.ID == 0 {
 		t.Error("expected non-zero event ID")
@@ -85,106 +85,221 @@ func TestGetOrCreateActiveEvent_CreatesNew(t *testing.T) {
 	}
 }
 
-func TestGetOrCreateActiveEvent_ReturnsExisting(t *testing.T) {
+func TestRecordStatusChange_Idempotent(t *testing.T) {
 	s := newTestStore(t)
 
-	labels := map[string]string{"alertname": "TestAlert"}
-	s.UpsertFingerprint("fp1", "TestAlert", "homelab", labels) //nolint:errcheck
+	s.UpsertFingerprint("fp1", "TestAlert", "homelab", nil) //nolint:errcheck
 
-	ev1, err := s.GetOrCreateActiveEvent("fp1", "homelab", "http://am:9093", models.EventStatusFiring, time.Now(), nil)
+	ev1, err := s.RecordStatusChange("fp1", "homelab", "http://am:9093", models.EventStatusFiring, time.Now(), nil)
 	if err != nil {
 		t.Fatalf("first call: %v", err)
 	}
-	ev2, err := s.GetOrCreateActiveEvent("fp1", "homelab", "http://am:9093", models.EventStatusFiring, time.Now(), nil)
+	ev2, err := s.RecordStatusChange("fp1", "homelab", "http://am:9093", models.EventStatusFiring, time.Now(), nil)
 	if err != nil {
 		t.Fatalf("second call: %v", err)
 	}
 	if ev1.ID != ev2.ID {
-		t.Errorf("expected same event ID (%d), got %d", ev1.ID, ev2.ID)
+		t.Errorf("idempotent: expected same event ID (%d), got %d", ev1.ID, ev2.ID)
 	}
 }
 
-func TestGetOrCreateActiveEvent_GracePeriod(t *testing.T) {
+func TestRecordStatusChange_GracePeriod(t *testing.T) {
 	s := newTestStore(t)
 
-	labels := map[string]string{"alertname": "TestAlert"}
-	s.UpsertFingerprint("fp1", "TestAlert", "homelab", labels) //nolint:errcheck
+	s.UpsertFingerprint("fp1", "TestAlert", "homelab", nil) //nolint:errcheck
 
-	// Create and immediately resolve an event.
-	ev1, err := s.GetOrCreateActiveEvent("fp1", "homelab", "http://am:9093", models.EventStatusFiring, time.Now(), nil)
+	// Create firing event, then immediately resolve it.
+	ev1, err := s.RecordStatusChange("fp1", "homelab", "http://am:9093", models.EventStatusFiring, time.Now(), nil)
 	if err != nil {
-		t.Fatalf("create event: %v", err)
+		t.Fatalf("firing: %v", err)
 	}
-	if err := s.ResolveEvents([]string{"fp1"}, time.Now()); err != nil {
+	if err := s.RecordResolved("fp1", time.Now()); err != nil {
 		t.Fatalf("resolve: %v", err)
 	}
 
-	// Within grace period (< 60s) — must re-open, not create a new event.
-	ev2, err := s.GetOrCreateActiveEvent("fp1", "homelab", "http://am:9093", models.EventStatusFiring, time.Now(), nil)
+	// Re-fire within grace period (< 60s) — must return the original firing row,
+	// not create a new one, and the resolved row must be deleted.
+	ev2, err := s.RecordStatusChange("fp1", "homelab", "http://am:9093", models.EventStatusFiring, time.Now(), nil)
 	if err != nil {
-		t.Fatalf("reopen: %v", err)
+		t.Fatalf("refire: %v", err)
 	}
 	if ev1.ID != ev2.ID {
-		t.Errorf("grace period: expected same event ID (%d), got %d", ev1.ID, ev2.ID)
+		t.Errorf("grace period: expected original firing ID (%d), got %d", ev1.ID, ev2.ID)
 	}
-	if ev2.EndsAt != nil {
-		t.Error("ends_at should be NULL after reopen")
+
+	// Only one row should remain (the resolved row was deleted).
+	events, total, _ := s.GetHistory("fp1", 10, 0)
+	if total != 1 {
+		t.Errorf("grace period: expected 1 row in DB, got %d", total)
+	}
+	if events[0].Status != models.EventStatusFiring {
+		t.Errorf("remaining row status = %q, want firing", events[0].Status)
+	}
+}
+
+func TestRecordStatusChange_GracePeriodExpired(t *testing.T) {
+	s := newTestStore(t)
+
+	s.UpsertFingerprint("fp1", "TestAlert", "homelab", nil) //nolint:errcheck
+
+	// Firing → resolve far in the past (beyond grace period).
+	s.RecordStatusChange("fp1", "homelab", "http://am:9093", models.EventStatusFiring, time.Now().Add(-5*time.Minute), nil) //nolint:errcheck
+	// Insert resolved row with old recorded_at to bypass the 60s grace period.
+	//nolint:errcheck
+	s.db.Exec(
+		`INSERT INTO alert_events (fingerprint, cluster_name, alertmanager_url, status, starts_at, recorded_at) VALUES (?, ?, ?, ?, ?, ?)`,
+		"fp1", "homelab", "http://am:9093", "resolved",
+		time.Now().Add(-5*time.Minute), time.Now().Add(-90*time.Second),
+	)
+
+	// Re-fire outside grace period → new firing row + occurrence_count increment.
+	ev, err := s.RecordStatusChange("fp1", "homelab", "http://am:9093", models.EventStatusFiring, time.Now(), nil)
+	if err != nil {
+		t.Fatalf("refire: %v", err)
+	}
+	if ev.Status != models.EventStatusFiring {
+		t.Errorf("Status = %q, want firing", ev.Status)
+	}
+
+	st, _ := s.GetStats("fp1")
+	if st == nil {
+		t.Fatal("stats nil")
+	}
+	if st.OccurrenceCount != 2 {
+		t.Errorf("OccurrenceCount = %d, want 2", st.OccurrenceCount)
+	}
+}
+
+func TestRecordStatusChange_Transitions(t *testing.T) {
+	s := newTestStore(t)
+
+	s.UpsertFingerprint("fp1", "TestAlert", "homelab", nil) //nolint:errcheck
+	now := time.Now()
+
+	transitions := []string{
+		models.EventStatusFiring,
+		models.EventStatusSuppressed,
+		models.EventStatusExpired,
+		models.EventStatusFiring,
+	}
+	var ids []int64
+	for _, status := range transitions {
+		ev, err := s.RecordStatusChange("fp1", "homelab", "http://am:9093", status, now, nil)
+		if err != nil {
+			t.Fatalf("RecordStatusChange(%s): %v", status, err)
+		}
+		ids = append(ids, ev.ID)
+	}
+
+	// All IDs must be distinct (each transition = new row).
+	seen := map[int64]bool{}
+	for _, id := range ids {
+		if seen[id] {
+			t.Errorf("duplicate event ID %d in transition sequence", id)
+		}
+		seen[id] = true
+	}
+
+	events, total, _ := s.GetHistory("fp1", 10, 0)
+	if total != 4 {
+		t.Errorf("expected 4 rows, got %d", total)
+	}
+	// Newest first — last transition (firing) is at index 0.
+	if events[0].Status != models.EventStatusFiring {
+		t.Errorf("events[0].Status = %q, want firing", events[0].Status)
 	}
 }
 
 func TestOccurrenceCount_IncrementOnRefiring(t *testing.T) {
 	s := newTestStore(t)
 
-	labels := map[string]string{"alertname": "TestAlert"}
-	s.UpsertFingerprint("fp1", "TestAlert", "homelab", labels) //nolint:errcheck
+	s.UpsertFingerprint("fp1", "TestAlert", "homelab", nil) //nolint:errcheck
 
-	// First firing.
-	s.GetOrCreateActiveEvent("fp1", "homelab", "http://am:9093", models.EventStatusFiring, time.Now().Add(-2*time.Minute), nil) //nolint:errcheck
+	// First firing — no increment (starts at 1).
+	s.RecordStatusChange("fp1", "homelab", "http://am:9093", models.EventStatusFiring, time.Now().Add(-5*time.Minute), nil) //nolint:errcheck
 
-	// Resolve (simulate time passing beyond grace period).
-	resolvedAt := time.Now().Add(-90 * time.Second)
-	s.ResolveEvents([]string{"fp1"}, resolvedAt) //nolint:errcheck
+	// Insert resolved row with old recorded_at to bypass the 60s grace period.
+	//nolint:errcheck
+	s.db.Exec(
+		`INSERT INTO alert_events (fingerprint, cluster_name, alertmanager_url, status, starts_at, recorded_at) VALUES (?, ?, ?, ?, ?, ?)`,
+		"fp1", "homelab", "http://am:9093", "resolved",
+		time.Now().Add(-5*time.Minute), time.Now().Add(-90*time.Second),
+	)
 
-	// Second firing (after grace period).
-	s.GetOrCreateActiveEvent("fp1", "homelab", "http://am:9093", models.EventStatusFiring, time.Now(), nil) //nolint:errcheck
-
-	// We need to manually set ends_at in the past to bypass grace period for test.
-	// The grace period check uses ends_at >= cutoff; we set it far in the past.
-	s.db.Exec(`UPDATE alert_events SET ends_at = ? WHERE fingerprint = ? AND ends_at IS NOT NULL`, //nolint:errcheck
-		time.Now().Add(-120*time.Second), "fp1")
-
-	s.GetOrCreateActiveEvent("fp1", "homelab", "http://am:9093", models.EventStatusFiring, time.Now(), nil) //nolint:errcheck
+	// Second firing → must increment occurrence_count.
+	s.RecordStatusChange("fp1", "homelab", "http://am:9093", models.EventStatusFiring, time.Now(), nil) //nolint:errcheck
 
 	st, _ := s.GetStats("fp1")
 	if st == nil {
 		t.Fatal("stats nil")
 	}
-	// occurrence_count starts at 1 (first insert), +1 on each re-fire after prior events.
-	if st.OccurrenceCount < 1 {
-		t.Errorf("OccurrenceCount = %d, want ≥ 1", st.OccurrenceCount)
+	if st.OccurrenceCount != 2 {
+		t.Errorf("OccurrenceCount = %d, want 2", st.OccurrenceCount)
 	}
 }
 
-func TestResolveEvents(t *testing.T) {
+func TestOccurrenceCount_NoIncrementOnSuppressedExpired(t *testing.T) {
+	s := newTestStore(t)
+
+	s.UpsertFingerprint("fp1", "TestAlert", "homelab", nil) //nolint:errcheck
+
+	// Silence cycle: firing → suppressed → expired → firing (same episode).
+	s.RecordStatusChange("fp1", "homelab", "http://am:9093", models.EventStatusFiring, time.Now(), nil)     //nolint:errcheck
+	s.RecordStatusChange("fp1", "homelab", "http://am:9093", models.EventStatusSuppressed, time.Now(), nil) //nolint:errcheck
+	s.RecordStatusChange("fp1", "homelab", "http://am:9093", models.EventStatusExpired, time.Now(), nil)    //nolint:errcheck
+	s.RecordStatusChange("fp1", "homelab", "http://am:9093", models.EventStatusFiring, time.Now(), nil)     //nolint:errcheck
+
+	st, _ := s.GetStats("fp1")
+	if st == nil {
+		t.Fatal("stats nil")
+	}
+	// No full resolution occurred → occurrence_count stays at 1.
+	if st.OccurrenceCount != 1 {
+		t.Errorf("OccurrenceCount = %d, want 1 (no resolution between firings)", st.OccurrenceCount)
+	}
+}
+
+func TestRecordResolved(t *testing.T) {
 	s := newTestStore(t)
 
 	s.UpsertFingerprint("fp1", "A", "c", nil) //nolint:errcheck
 	s.UpsertFingerprint("fp2", "B", "c", nil) //nolint:errcheck
 
-	s.GetOrCreateActiveEvent("fp1", "c", "u", models.EventStatusFiring, time.Now(), nil) //nolint:errcheck
-	s.GetOrCreateActiveEvent("fp2", "c", "u", models.EventStatusFiring, time.Now(), nil) //nolint:errcheck
+	s.RecordStatusChange("fp1", "c", "u", models.EventStatusFiring, time.Now(), nil) //nolint:errcheck
+	s.RecordStatusChange("fp2", "c", "u", models.EventStatusFiring, time.Now(), nil) //nolint:errcheck
 
-	if err := s.ResolveEvents([]string{"fp1", "fp2"}, time.Now()); err != nil {
-		t.Fatalf("ResolveEvents: %v", err)
+	if err := s.RecordResolved("fp1", time.Now()); err != nil {
+		t.Fatalf("RecordResolved fp1: %v", err)
+	}
+	if err := s.RecordResolved("fp2", time.Now()); err != nil {
+		t.Fatalf("RecordResolved fp2: %v", err)
 	}
 
 	events1, _, _ := s.GetHistory("fp1", 10, 0)
-	if len(events1) == 0 || events1[0].EndsAt == nil {
-		t.Error("fp1 event not resolved")
+	if len(events1) == 0 || events1[0].Status != models.EventStatusResolved {
+		t.Errorf("fp1 not resolved: %+v", events1)
 	}
 	events2, _, _ := s.GetHistory("fp2", 10, 0)
-	if len(events2) == 0 || events2[0].EndsAt == nil {
-		t.Error("fp2 event not resolved")
+	if len(events2) == 0 || events2[0].Status != models.EventStatusResolved {
+		t.Errorf("fp2 not resolved: %+v", events2)
+	}
+}
+
+func TestRecordResolved_Idempotent(t *testing.T) {
+	s := newTestStore(t)
+
+	s.UpsertFingerprint("fp1", "A", "c", nil)                                        //nolint:errcheck
+	s.RecordStatusChange("fp1", "c", "u", models.EventStatusFiring, time.Now(), nil) //nolint:errcheck
+	s.RecordResolved("fp1", time.Now())                                              //nolint:errcheck
+
+	// Second resolve call — must be a no-op.
+	if err := s.RecordResolved("fp1", time.Now()); err != nil {
+		t.Fatalf("second RecordResolved: %v", err)
+	}
+
+	_, total, _ := s.GetHistory("fp1", 10, 0)
+	if total != 2 {
+		t.Errorf("expected 2 rows (firing + resolved), got %d", total)
 	}
 }
 

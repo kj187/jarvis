@@ -94,8 +94,8 @@ func TestRecorder_ResolvedTransition(t *testing.T) {
 	if len(events) == 0 {
 		t.Fatal("expected events")
 	}
-	if events[0].EndsAt == nil {
-		t.Error("expected ends_at to be set after resolve")
+	if events[0].Status != models.EventStatusResolved {
+		t.Errorf("expected resolved status, got %q", events[0].Status)
 	}
 }
 
@@ -205,11 +205,13 @@ func (r *Recorder) processAlerts(ctx context.Context, allAlerts []models.Enriche
 				eventStatus = models.EventStatusExpired
 			}
 		}
-		r.store.GetOrCreateActiveEvent(a.Fingerprint, a.ClusterName, a.AlertmanagerURL, eventStatus, a.StartsAt, a.Annotations) //nolint:errcheck
+		r.store.RecordStatusChange(a.Fingerprint, a.ClusterName, a.AlertmanagerURL, eventStatus, a.StartsAt, a.Annotations) //nolint:errcheck
 	}
 
 	if len(resolvedFPs) > 0 {
-		r.store.ResolveEvents(resolvedFPs, now)       //nolint:errcheck
+		for _, fp := range resolvedFPs {
+			r.store.RecordResolved(fp, now) //nolint:errcheck
+		}
 		r.store.ReleaseClaimsForResolved(resolvedFPs) //nolint:errcheck
 		for _, fp := range resolvedFPs {
 			r.alertStore.MarkResolved(fp)

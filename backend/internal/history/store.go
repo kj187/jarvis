@@ -39,65 +39,50 @@ func (s *Store) UpsertFingerprint(fingerprint, alertname, clusterName string, la
 
 // ── Events ────────────────────────────────────────────────────────────────────
 
-// GetOrCreateActiveEvent returns the existing open event for a fingerprint, or
-// creates a new one. Implements the Grace Period (60s): if the last resolved
-// event is younger than 60s the event is re-opened instead of creating a new
-// one. occurrence_count is only incremented when there were prior events
-// (not on the very first firing).
-func (s *Store) GetOrCreateActiveEvent(
+// RecordStatusChange records a status transition as an immutable append-only row.
+// Idempotent: if the last recorded status equals the new status, no row is inserted.
+// Grace Period (60s): if the alert re-fires within 60 s of a resolved row, that
+// resolved row is deleted and the prior firing row is returned — no new insert.
+// occurrence_count is incremented only when re-firing after a full resolution.
+func (s *Store) RecordStatusChange(
 	fingerprint, clusterName, amURL, status string,
 	startsAt time.Time,
 	annotations map[string]string,
 ) (*models.AlertEvent, error) {
-	// 1. Check for an already-open event (ends_at IS NULL).
-	existing, err := s.getOpenEvent(fingerprint)
+	last, err := s.getLastEvent(fingerprint)
 	if err != nil {
 		return nil, err
 	}
-	if existing != nil {
-		// Expired transition: close the current open event so a new expired event is created.
-		// Set ends_at beyond the grace window so the re-open query won't pick it up.
-		if status == models.EventStatusExpired && existing.Status != models.EventStatusExpired {
-			pastEndsAt := time.Now().UTC().Add(-2 * time.Minute)
-			_, err = s.db.Exec(`UPDATE alert_events SET ends_at = ?, status = 'resolved' WHERE id = ?`,
-				pastEndsAt, existing.ID)
+
+	// Idempotency: same status → return existing row unchanged.
+	if last != nil && last.Status == status {
+		return last, nil
+	}
+
+	lastStatus := ""
+	if last != nil {
+		lastStatus = last.Status
+	}
+
+	// Grace Period: alert re-fires within 60 s of resolved → discard resolved row.
+	if status == models.EventStatusFiring && lastStatus == models.EventStatusResolved {
+		if time.Since(last.RecordedAt) < 60*time.Second {
+			if _, err := s.db.Exec(`DELETE FROM alert_events WHERE id = ?`, last.ID); err != nil {
+				return nil, fmt.Errorf("grace period delete resolved: %w", err)
+			}
+			prev, err := s.getLastEvent(fingerprint)
 			if err != nil {
-				return nil, fmt.Errorf("close event for expired transition: %w", err)
+				return nil, err
 			}
-			// Fall through: grace period won't re-open the closed event; create new expired event.
-		} else {
-			// Keep the event's status in sync with the current poll state.
-			if existing.Status != status {
-				_, _ = s.db.Exec(`UPDATE alert_events SET status = ? WHERE id = ?`, status, existing.ID)
+			if prev != nil {
+				return prev, nil
 			}
-			return existing, nil
+			// No prior row after deletion — fall through to insert a fresh firing row.
+			// Reset lastStatus so occurrence_count is not incremented.
+			lastStatus = ""
 		}
 	}
 
-	// 2. Grace Period: re-open if last resolved event is < 60s old.
-	graceEvent, err := s.getRecentResolvedEvent(fingerprint, 60*time.Second)
-	if err != nil {
-		return nil, err
-	}
-	if graceEvent != nil {
-		_, err = s.db.Exec(`UPDATE alert_events SET ends_at = NULL, status = ?, starts_at = ?, recorded_at = ? WHERE id = ?`,
-			status, startsAt.UTC(), time.Now().UTC(), graceEvent.ID)
-		if err != nil {
-			return nil, fmt.Errorf("reopen event: %w", err)
-		}
-		graceEvent.Status = status
-		graceEvent.StartsAt = startsAt
-		graceEvent.EndsAt = nil
-		return graceEvent, nil
-	}
-
-	// 3. Check if there were prior events to decide whether to increment occurrence_count.
-	hadPrior, err := s.hadPreviousEvents(fingerprint)
-	if err != nil {
-		return nil, err
-	}
-
-	// 4. Create a new event.
 	annJSON, err := json.Marshal(annotations)
 	if err != nil {
 		return nil, fmt.Errorf("marshal annotations: %w", err)
@@ -108,19 +93,19 @@ func (s *Store) GetOrCreateActiveEvent(
 		VALUES (?, ?, ?, ?, ?, ?, ?)
 	`, fingerprint, clusterName, amURL, status, startsAt.UTC(), string(annJSON), now)
 	if err != nil {
-		return nil, fmt.Errorf("insert event: %w", err)
+		return nil, fmt.Errorf("insert status change: %w", err)
 	}
 	id, err := res.LastInsertId()
 	if err != nil {
 		return nil, fmt.Errorf("last insert id: %w", err)
 	}
 
-	// 5. Increment occurrence_count only if this is a re-firing (not first ever).
-	if hadPrior {
-		if _, err := s.db.Exec(`
-			UPDATE alert_fingerprints SET occurrence_count = occurrence_count + 1
-			WHERE fingerprint = ?
-		`, fingerprint); err != nil {
+	// Increment occurrence_count only on genuine re-fire after full resolution.
+	if status == models.EventStatusFiring && lastStatus == models.EventStatusResolved {
+		if _, err := s.db.Exec(
+			`UPDATE alert_fingerprints SET occurrence_count = occurrence_count + 1 WHERE fingerprint = ?`,
+			fingerprint,
+		); err != nil {
 			return nil, fmt.Errorf("increment occurrence_count: %w", err)
 		}
 	}
@@ -131,31 +116,26 @@ func (s *Store) GetOrCreateActiveEvent(
 		ClusterName:     clusterName,
 		AlertmanagerURL: amURL,
 		Status:          status,
-		StartsAt:        startsAt,
+		StartsAt:        startsAt.UTC(),
 		RecordedAt:      now,
 	}, nil
 }
 
-// ResolveEvents closes all open events for the given fingerprints.
-func (s *Store) ResolveEvents(fingerprints []string, endsAt time.Time) error {
-	if len(fingerprints) == 0 {
+// RecordResolved inserts a resolved row for a fingerprint, inheriting cluster
+// info and starts_at from the last known event. No-op if already resolved or
+// no history exists for this fingerprint.
+func (s *Store) RecordResolved(fingerprint string, resolvedAt time.Time) error {
+	last, err := s.getLastEvent(fingerprint)
+	if err != nil {
+		return err
+	}
+	if last == nil || last.Status == models.EventStatusResolved {
 		return nil
 	}
-	// Build parameterized query.
-	args := make([]interface{}, 0, len(fingerprints)+1)
-	args = append(args, endsAt.UTC())
-	placeholders := ""
-	for i, fp := range fingerprints {
-		if i > 0 {
-			placeholders += ","
-		}
-		placeholders += "?"
-		args = append(args, fp)
-	}
-	_, err := s.db.Exec( // #nosec G202 -- placeholders are ? params, not user input
-		`UPDATE alert_events SET ends_at = ?, status = 'resolved' WHERE ends_at IS NULL AND fingerprint IN (`+placeholders+`)`,
-		args...,
-	)
+	_, err = s.db.Exec(`
+		INSERT INTO alert_events (fingerprint, cluster_name, alertmanager_url, status, starts_at, annotations, recorded_at)
+		VALUES (?, ?, ?, 'resolved', ?, ?, ?)
+	`, fingerprint, last.ClusterName, last.AlertmanagerURL, last.StartsAt.UTC(), last.Annotations, resolvedAt.UTC())
 	return err
 }
 
@@ -177,7 +157,7 @@ func (s *Store) GetHistory(fingerprint string, limit, offset int) ([]models.Aler
 		SELECT id, fingerprint, cluster_name, alertmanager_url, status, starts_at, ends_at, annotations, recorded_at
 		FROM alert_events
 		WHERE fingerprint = ?
-		ORDER BY starts_at DESC
+		ORDER BY recorded_at DESC
 		LIMIT ? OFFSET ?
 	`, fingerprint, limit, offset)
 	if err != nil {
@@ -477,36 +457,16 @@ func (s *Store) GetSilenceEvents(fingerprint string) ([]models.SilenceEvent, err
 
 // ── Internal helpers ──────────────────────────────────────────────────────────
 
-func (s *Store) getOpenEvent(fingerprint string) (*models.AlertEvent, error) {
+// getLastEvent returns the most recent event for a fingerprint ordered by recorded_at.
+func (s *Store) getLastEvent(fingerprint string) (*models.AlertEvent, error) {
 	var e models.AlertEvent
 	var startsAt, recordedAt time.Time
-	err := s.db.QueryRow(`
-		SELECT id, fingerprint, cluster_name, alertmanager_url, status, starts_at, recorded_at
-		FROM alert_events WHERE fingerprint = ? AND ends_at IS NULL
-		ORDER BY starts_at DESC LIMIT 1
-	`, fingerprint).Scan(&e.ID, &e.Fingerprint, &e.ClusterName, &e.AlertmanagerURL, &e.Status, &startsAt, &recordedAt)
-	if err == sql.ErrNoRows {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	e.StartsAt = startsAt.UTC()
-	e.RecordedAt = recordedAt.UTC()
-	return &e, nil
-}
-
-func (s *Store) getRecentResolvedEvent(fingerprint string, maxAge time.Duration) (*models.AlertEvent, error) {
-	cutoff := time.Now().UTC().Add(-maxAge)
-	var e models.AlertEvent
 	var endsAt sql.NullTime
-	var startsAt, recordedAt time.Time
 	err := s.db.QueryRow(`
 		SELECT id, fingerprint, cluster_name, alertmanager_url, status, starts_at, ends_at, recorded_at
-		FROM alert_events
-		WHERE fingerprint = ? AND status = 'resolved' AND ends_at IS NOT NULL AND ends_at >= ?
-		ORDER BY ends_at DESC LIMIT 1
-	`, fingerprint, cutoff).Scan(&e.ID, &e.Fingerprint, &e.ClusterName, &e.AlertmanagerURL,
+		FROM alert_events WHERE fingerprint = ?
+		ORDER BY recorded_at DESC LIMIT 1
+	`, fingerprint).Scan(&e.ID, &e.Fingerprint, &e.ClusterName, &e.AlertmanagerURL,
 		&e.Status, &startsAt, &endsAt, &recordedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -521,10 +481,4 @@ func (s *Store) getRecentResolvedEvent(fingerprint string, maxAge time.Duration)
 		e.EndsAt = &t
 	}
 	return &e, nil
-}
-
-func (s *Store) hadPreviousEvents(fingerprint string) (bool, error) {
-	var count int
-	err := s.db.QueryRow(`SELECT COUNT(*) FROM alert_events WHERE fingerprint = ?`, fingerprint).Scan(&count)
-	return count > 0, err
 }

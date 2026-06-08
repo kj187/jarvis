@@ -200,16 +200,18 @@ func (r *Recorder) poll(ctx context.Context) {
 			}
 		}
 
-		if _, err := r.store.GetOrCreateActiveEvent(a.Fingerprint, a.ClusterName, a.AlertmanagerURL,
+		if _, err := r.store.RecordStatusChange(a.Fingerprint, a.ClusterName, a.AlertmanagerURL,
 			eventStatus, a.StartsAt, a.Annotations); err != nil {
-			r.logger.Error("get or create event", "fp", a.Fingerprint, "err", err)
+			r.logger.Error("record status change", "fp", a.Fingerprint, "err", err)
 		}
 	}
 
 	// Resolve missing alerts.
 	if len(resolvedFPs) > 0 {
-		if err := r.store.ResolveEvents(resolvedFPs, now); err != nil {
-			r.logger.Error("resolve events", "err", err)
+		for _, fp := range resolvedFPs {
+			if err := r.store.RecordResolved(fp, now); err != nil {
+				r.logger.Error("record resolved", "fp", fp, "err", err)
+			}
 		}
 		if err := r.store.ReleaseClaimsForResolved(resolvedFPs); err != nil {
 			r.logger.Error("release claims for resolved", "err", err)
