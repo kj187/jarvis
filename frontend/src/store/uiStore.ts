@@ -38,7 +38,7 @@ interface UIStore {
 }
 
 const defaultFilters: Filters = {
-  state: '',
+  state: 'active',
   search: '',
   labelMatchers: [],
 }

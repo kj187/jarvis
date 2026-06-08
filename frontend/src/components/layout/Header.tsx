@@ -4,12 +4,13 @@ import { Wifi, WifiOff, RefreshCw, Play, Pause, Search, X, Plus } from 'lucide-r
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
+import { Sheet } from '@/components/ui/sheet'
 import { ViewToggle } from '@/components/alerts/ViewToggle'
+import { SilenceForm } from '@/components/silences/SilenceForm'
 import { useUIStore } from '@/store/uiStore'
 import { useQuery } from '@tanstack/react-query'
 import { fetchClusters } from '@/api/client'
 import { useAlerts } from '@/hooks/useAlerts'
-import { useSilences } from '@/hooks/useSilences'
 import type { LabelMatcherOperator } from '@/types'
 
 const STATE_OPTIONS = [
@@ -209,8 +210,9 @@ export function Header({ currentPage, onNavigate }: { currentPage: string; onNav
     refetchInterval: 30_000,
   })
 
+  const [silenceFormOpen, setSilenceFormOpen] = useState(false)
+
   const { data: allAlerts = [] } = useAlerts()
-  const { data: silences = [] } = useSilences()
 
   // label → sorted unique values map
   const labelValueMap = useMemo(() => {
@@ -275,12 +277,15 @@ export function Header({ currentPage, onNavigate }: { currentPage: string; onNav
   }
 
   function toggleState(value: string) {
-    setFilter('state', filters.state === value ? '' : value)
+    const next = filters.state === value ? '' : value
+    setFilter('state', next)
+    if (next !== 'active') setViewMode('list')
   }
 
   const isSpinning = refreshing || pollSpinning
 
   return (
+    <>
     <header className="sticky top-0 z-30 border-b border-border backdrop-blur" style={{ backgroundColor: '#172131' }}>
       {/* ── Main row ── */}
       <div className="flex items-center gap-2 px-4 py-2">
@@ -343,16 +348,6 @@ export function Header({ currentPage, onNavigate }: { currentPage: string; onNav
               aria-label="State filter"
             >
             <span className="text-xs text-muted-foreground shrink-0 select-none px-1.5">STATE</span>
-              <button
-                onClick={() => setFilter('state', '')}
-                className={`cursor-pointer rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
-                  !filters.state
-                    ? 'text-foreground'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                All
-              </button>
               {STATE_OPTIONS.map(({ value, label, dot, activeBg, activeDot }) => {
                 const isActive = filters.state === value
                 return (
@@ -370,6 +365,16 @@ export function Header({ currentPage, onNavigate }: { currentPage: string; onNav
                   </button>
                 )
               })}
+              <button
+                onClick={() => { setFilter('state', ''); setViewMode('list') }}
+                className={`cursor-pointer rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
+                  !filters.state
+                    ? 'text-foreground'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                All
+              </button>
             </div>
           </>
         )}
@@ -479,7 +484,7 @@ export function Header({ currentPage, onNavigate }: { currentPage: string; onNav
         </Button>
 
         {/* View toggle */}
-        {currentPage === 'alerts' && (
+        {currentPage === 'alerts' && filters.state === 'active' && (
           <ViewToggle value={viewMode} onChange={setViewMode} />
         )}
 
@@ -499,19 +504,14 @@ export function Header({ currentPage, onNavigate }: { currentPage: string; onNav
               {alertCounts.filtered}/{alertCounts.total}
             </span>
           </button>
-          <button
-            onClick={() => onNavigate('silences')}
-            className={`cursor-pointer rounded px-2.5 py-1 text-sm transition-colors ${
-              currentPage === 'silences'
-                ? 'bg-accent font-semibold text-foreground'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
+          <Button
+            size="sm"
+            onClick={() => setSilenceFormOpen(true)}
+            className="h-7 text-xs"
           >
-            Silences
-            <span className="ml-1.5 tabular-nums text-xs opacity-70">
-              {silences.length}
-            </span>
-          </button>
+            <Plus className="mr-1 h-3.5 w-3.5" />
+            Silence erstellen
+          </Button>
         </nav>
       </div>
 
@@ -560,5 +560,17 @@ export function Header({ currentPage, onNavigate }: { currentPage: string; onNav
         </div>
       )}
     </header>
+
+    <Sheet open={silenceFormOpen} onClose={() => setSilenceFormOpen(false)}>
+      <div className="p-5 pt-10">
+        <h2 className="mb-4 text-base font-semibold">Silence erstellen</h2>
+        <SilenceForm
+          availableClusters={clusters.map((c) => c.name).length > 0 ? clusters.map((c) => c.name) : ['default']}
+          onSuccess={() => setSilenceFormOpen(false)}
+          onCancel={() => setSilenceFormOpen(false)}
+        />
+      </div>
+    </Sheet>
+    </>
   )
 }
