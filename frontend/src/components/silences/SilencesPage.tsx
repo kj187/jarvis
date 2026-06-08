@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus } from 'lucide-react'
+import { Plus, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Sheet } from '@/components/ui/sheet'
 import { SilenceCard } from './SilenceCard'
@@ -11,7 +11,7 @@ import { fetchClusters } from '@/api/client'
 import type { Silence } from '@/types'
 
 export function SilencesPage() {
-  const { data: silences = [], isLoading } = useSilences()
+  const { data: silences = [], isLoading, isFetching } = useSilences()
   const { data: alerts = [] } = useAlerts()
   const { data: clusters = [] } = useQuery({
     queryKey: ['clusters'],
@@ -58,6 +58,9 @@ export function SilencesPage() {
         <div className="flex items-center gap-3">
           <h1 className="text-base font-semibold">Silences</h1>
           <span className="text-xs text-muted-foreground">{sorted.length}</span>
+          {isFetching && !isLoading && (
+            <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+          )}
         </div>
         <div className="flex items-center gap-2">
           <Button
@@ -89,6 +92,7 @@ export function SilencesPage() {
             alerts={alerts}
             onEdit={handleEdit}
             onDelete={handleDelete}
+            isDeleting={deleteMutation.isPending && deleteMutation.variables?.id === s.id}
           />
         ))}
       </div>
@@ -97,11 +101,12 @@ export function SilencesPage() {
       <Sheet open={formOpen} onClose={() => setFormOpen(false)}>
         <div className="p-5 pt-10">
           <h2 className="mb-4 text-base font-semibold">
-            {editSilence ? 'Silence bearbeiten' : 'Silence erstellen'}
+            {!editSilence ? 'Silence erstellen' : editSilence.status.state === 'expired' ? 'Silence recreaten' : 'Silence bearbeiten'}
           </h2>
           <SilenceForm
-            clusters={clusterNames.length > 0 ? clusterNames : ['default']}
+            availableClusters={clusterNames.length > 0 ? clusterNames : ['default']}
             prefillSilence={editSilence ?? undefined}
+            isRecreate={editSilence?.status.state === 'expired'}
             onSuccess={() => setFormOpen(false)}
             onCancel={() => setFormOpen(false)}
           />

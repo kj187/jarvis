@@ -36,7 +36,7 @@ export function Sheet({ open, onClose, children, className }: SheetProps) {
         aria-modal="true"
         className={cn(
           'fixed inset-y-0 right-0 z-50 flex w-full flex-col border-l border-border bg-card shadow-xl',
-          'sm:max-w-xl lg:max-w-2xl',
+          'sm:max-w-2xl lg:max-w-4xl',
           className,
         )}
       >

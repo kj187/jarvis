@@ -1,7 +1,7 @@
-import { formatDistanceToNow, format } from 'date-fns'
+import { formatDistanceToNow } from 'date-fns'
 import { de } from 'date-fns/locale'
 import { User } from 'lucide-react'
-import { useActiveClaim, useClaimHistory, useSetClaim, useReleaseClaim } from '@/hooks/useAlertClaim'
+import { useActiveClaim, useSetClaim, useReleaseClaim } from '@/hooks/useAlertClaim'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useState } from 'react'
@@ -14,7 +14,6 @@ interface AlertClaimSectionProps {
 
 export function AlertClaimSection({ fingerprint }: AlertClaimSectionProps) {
   const { data: activeClaim, isLoading } = useActiveClaim(fingerprint)
-  const { data: history = [] } = useClaimHistory(fingerprint)
   const setClaimMutation = useSetClaim(fingerprint)
   const releaseMutation = useReleaseClaim(fingerprint)
 
@@ -106,42 +105,6 @@ export function AlertClaimSection({ fingerprint }: AlertClaimSectionProps) {
         </>
       )}
 
-      {/* Claim history */}
-      {history.length > 0 && (
-        <div>
-          <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Claim-Historie
-          </p>
-          <div className="overflow-x-auto rounded border border-border">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-b border-border bg-accent/30">
-                  <th className="px-2 py-1.5 text-left text-muted-foreground">Name</th>
-                  <th className="px-2 py-1.5 text-left text-muted-foreground">Von</th>
-                  <th className="px-2 py-1.5 text-left text-muted-foreground">Bis</th>
-                  <th className="px-2 py-1.5 text-left text-muted-foreground">Grund</th>
-                </tr>
-              </thead>
-              <tbody>
-                {history.map((c) => (
-                  <tr key={c.id} className="border-b border-border last:border-0">
-                    <td className="px-2 py-1.5 font-medium">{c.claimedBy}</td>
-                    <td className="px-2 py-1.5 text-muted-foreground">
-                      {format(new Date(c.claimedAt), 'dd.MM. HH:mm', { locale: de })}
-                    </td>
-                    <td className="px-2 py-1.5 text-muted-foreground">
-                      {c.releasedAt
-                        ? format(new Date(c.releasedAt), 'dd.MM. HH:mm', { locale: de })
-                        : '—'}
-                    </td>
-                    <td className="px-2 py-1.5 text-muted-foreground">{c.releaseReason ?? '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

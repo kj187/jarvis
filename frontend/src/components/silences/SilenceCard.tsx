@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Edit, Trash2 } from 'lucide-react'
+import { Edit, Trash2, Loader2 } from 'lucide-react'
 import { Card, CardHeader, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { SilenceExpiry } from './SilenceExpiry'
@@ -11,9 +11,10 @@ interface SilenceCardProps {
   alerts: EnrichedAlert[]
   onEdit: (silence: Silence) => void
   onDelete: (silence: Silence) => void
+  isDeleting?: boolean
 }
 
-export function SilenceCard({ silence, alerts, onEdit, onDelete }: SilenceCardProps) {
+export function SilenceCard({ silence, alerts, onEdit, onDelete, isDeleting = false }: SilenceCardProps) {
   const [confirmDelete, setConfirmDelete] = useState(false)
 
   // Count affected alerts
@@ -24,7 +25,12 @@ export function SilenceCard({ silence, alerts, onEdit, onDelete }: SilenceCardPr
   const isExpired = silence.status.state === 'expired'
 
   return (
-    <Card className={cn('transition-opacity', isExpired && 'opacity-60')}>
+    <Card className={cn('relative transition-opacity', isExpired && 'opacity-60', isDeleting && 'opacity-50')}>
+      {isDeleting && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-background/60">
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        </div>
+      )}
       <CardHeader className="pb-2">
         <div className="flex items-start justify-between gap-2">
           <div className="space-y-1 flex-1 min-w-0">

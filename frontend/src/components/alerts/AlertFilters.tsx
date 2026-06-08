@@ -88,7 +88,8 @@ export function AlertFilters({
         <Select
           value={newOp}
           onChange={(e) => setNewOp(e.target.value as LabelMatcherOperator)}
-          className="h-8 w-14 text-xs px-1"
+          className="h-8 w-14 shrink-0"
+          selectClassName="text-xs font-mono"
         >
           {OPERATORS.map((op) => (
             <option key={op} value={op}>{op}</option>

@@ -1,5 +1,13 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { fetchSilences, upsertSilence, deleteSilence, type UpsertSilenceBody } from '@/api/client'
+import { fetchSilences, fetchSilenceEvents, upsertSilence, deleteSilence, triggerPoll, type UpsertSilenceBody } from '@/api/client'
+
+export function useSilenceEvents(fingerprint: string) {
+  return useQuery({
+    queryKey: ['silence-events', fingerprint],
+    queryFn: () => fetchSilenceEvents(fingerprint),
+    enabled: Boolean(fingerprint),
+  })
+}
 
 export function useSilences(cluster?: string) {
   return useQuery({
@@ -15,6 +23,8 @@ export function useUpsertSilence() {
     mutationFn: (body: UpsertSilenceBody) => upsertSilence(body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['silences'] })
+      qc.invalidateQueries({ queryKey: ['silence-events'] })
+      triggerPoll().catch(() => {})
     },
   })
 }
@@ -33,8 +43,10 @@ export function useDeleteSilence() {
       fingerprint?: string
       by?: string
     }) => deleteSilence(id, cluster, { fingerprint, by }),
-    onSuccess: () => {
+    onSuccess: (_, { fingerprint }) => {
       qc.invalidateQueries({ queryKey: ['silences'] })
+      if (fingerprint) qc.invalidateQueries({ queryKey: ['silence-events', fingerprint] })
+      triggerPoll().catch(() => {})
     },
   })
 }

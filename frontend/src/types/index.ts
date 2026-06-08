@@ -133,6 +133,19 @@ export interface LabelMatcher {
   value: string
 }
 
+// ── Silence Events ────────────────────────────────────────────────────────────
+
+export interface SilenceEvent {
+  id: number
+  fingerprint: string
+  silenceId: string
+  clusterName: string
+  action: 'created' | 'updated' | 'deleted'
+  performedBy: string
+  comment: string
+  recordedAt: string
+}
+
 // ── WebSocket Events ──────────────────────────────────────────────────────────
 
 export interface WSEvent<T = unknown> {

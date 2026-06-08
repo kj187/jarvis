@@ -142,6 +142,7 @@ export function AlertsPage() {
         alert={selectedAlert}
         onClose={() => setSelectedFingerprint(null)}
         onAddLabelMatcher={addLabelMatcher}
+        silences={silences}
       />
     </div>
   )

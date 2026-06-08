@@ -6,6 +6,7 @@ import type {
   Comment,
   Claim,
   Silence,
+  SilenceEvent,
   ClusterInfo,
 } from '@/types'
 
@@ -113,6 +114,10 @@ export function fetchClaimHistory(fingerprint: string): Promise<Claim[]> {
   return request<Claim[]>(`/alerts/${fingerprint}/claims/history`)
 }
 
+export function fetchSilenceEvents(fingerprint: string): Promise<SilenceEvent[]> {
+  return request<SilenceEvent[]>(`/alerts/${fingerprint}/silence-events`)
+}
+
 // ── Silences ──────────────────────────────────────────────────────────────────
 
 export function fetchSilences(cluster?: string): Promise<Silence[]> {
@@ -144,6 +149,12 @@ export function deleteSilence(id: string, cluster: string, params?: { fingerprin
   if (params?.fingerprint) q.set('fingerprint', params.fingerprint)
   if (params?.by) q.set('by', params.by)
   return request<void>(`/silences/${id}?${q.toString()}`, { method: 'DELETE' })
+}
+
+// ── Poll trigger ─────────────────────────────────────────────────────────────
+
+export function triggerPoll(): Promise<void> {
+  return request<void>('/poll', { method: 'POST' })
 }
 
 // ── Clusters ──────────────────────────────────────────────────────────────────

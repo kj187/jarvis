@@ -301,8 +301,8 @@ export function Header({ currentPage, onNavigate }: { currentPage: string; onNav
             <Select
               value={newOp}
               onChange={(e) => setNewOp(e.target.value as LabelMatcherOperator)}
-              className="h-7 w-14 text-xs px-1"
-              style={{ backgroundColor: '#18181B' }}
+              className="h-7 w-14 shrink-0"
+              selectClassName="text-xs font-mono"
               aria-label="Operator"
             >
               {OPERATORS.map((op) => (
