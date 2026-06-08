@@ -220,7 +220,11 @@ function AlertEntry({
       {/* Timestamp + maintainer */}
       <div className="mb-1 flex items-center gap-2 text-xs text-muted-foreground">
         <span>
-          {formatDistanceToNow(new Date(alert.startsAt), { addSuffix: true, locale: de })}
+          {alert.status.state === 'resolved'
+            ? 'Aufgelöst'
+            : new Date(alert.startsAt) > new Date()
+              ? `Läuft ab ${formatDistanceToNow(new Date(alert.endsAt), { addSuffix: true, locale: de })}`
+              : formatDistanceToNow(new Date(alert.startsAt), { addSuffix: true, locale: de })}
         </span>
         {maintainer && <span>{maintainer}</span>}
       </div>
