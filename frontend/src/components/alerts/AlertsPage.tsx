@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { useAlerts } from '@/hooks/useAlerts'
 import { useSilences } from '@/hooks/useSilences'
 import { useWebSocket } from '@/hooks/useWebSocket'
@@ -108,15 +108,21 @@ export function AlertsPage() {
       null
     : null
 
-  // Keep header alert counts in sync
-  useEffect(() => {
-    const byState = { active: 0, suppressed: 0, resolved: 0 }
+  const byState = useMemo(() => {
+    const counts = { active: 0, suppressed: 0, resolved: 0 }
     alerts.forEach((alert) => {
       const s = getEffectiveAlertState(alert, silences)
-      if (s in byState) byState[s as keyof typeof byState]++
+      if (s in counts) counts[s as keyof typeof counts]++
     })
+    return counts
+  }, [alerts, silences])
+
+  // Keep header alert counts in sync — use primitive count values as deps
+  // to avoid re-triggering when byState object reference changes on re-render
+  useEffect(() => {
     setAlertCounts({ filtered: filtered.length, total: alerts.length, byState })
-  }, [filtered.length, alerts.length, alerts, silences, setAlertCounts])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtered.length, alerts.length, byState.active, byState.suppressed, byState.resolved, setAlertCounts])
 
   return (
     <div className="flex flex-col gap-4">
