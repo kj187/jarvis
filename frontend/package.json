@@ -40,7 +40,7 @@
     "@vitejs/plugin-react": "^4.5.0",
     "@vitest/coverage-v8": "^4.1.8",
     "eslint": "^9.20.0",
-    "jsdom": "^26.1.0",
+    "jsdom": "^29.1.1",
     "tailwindcss": "^4.1.6",
     "typescript": "^5.8.3",
     "vite": "^6.3.5",
