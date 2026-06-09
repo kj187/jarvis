@@ -39,12 +39,15 @@ func newTestRecorder(t *testing.T) (*Recorder, *mockHub) {
 	store := NewStore(db)
 	alertStore := &AlertStore{}
 	rec := &Recorder{
-		alertStore:   alertStore,
-		store:        store,
-		hub:          hub,
-		interval:     time.Minute,
-		logger:       slog.Default(),
-		prevSnapshot: make(map[string]string),
+		alertStore:        alertStore,
+		store:             store,
+		hub:               hub,
+		interval:          time.Minute,
+		logger:            slog.Default(),
+		prevSnapshot:      make(map[string]string),
+		prevSilenceInfo:   make(map[string]silenceInfoEntry),
+		prevAlertSilences: make(map[string][]string),
+		claimReleaseDelay: 10 * time.Millisecond,
 	}
 	return rec, hub
 }
@@ -212,7 +215,20 @@ func (r *Recorder) processAlerts(ctx context.Context, allAlerts []models.Enriche
 		for _, fp := range resolvedFPs {
 			r.store.RecordResolved(fp, now) //nolint:errcheck
 		}
-		r.store.ReleaseClaimsForResolved(resolvedFPs) //nolint:errcheck
+		for _, fp := range resolvedFPs {
+			go func(fp string) {
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(r.claimReleaseDelay):
+				}
+				still, err := r.store.IsStillResolved(fp)
+				if err != nil || !still {
+					return
+				}
+				r.store.ReleaseClaimsForResolved([]string{fp}) //nolint:errcheck
+			}(fp)
+		}
 		for _, fp := range resolvedFPs {
 			r.alertStore.MarkResolved(fp)
 		}
@@ -225,4 +241,59 @@ func (r *Recorder) processAlerts(ctx context.Context, allAlerts []models.Enriche
 
 	r.alertStore.Set(allAlerts)
 	r.hub.BroadcastJSON(models.WSTypeAlertsUpdate, map[string]interface{}{"alerts": allAlerts})
+}
+
+// TestRecorder_ClaimReleasedAfterGenuineResolution verifies that a claim is
+// released after claimReleaseDelay when the alert stays resolved (no re-fire).
+func TestRecorder_ClaimReleasedAfterGenuineResolution(t *testing.T) {
+	rec, _ := newTestRecorder(t)
+	ctx := context.Background()
+
+	rec.processAlerts(ctx, alert("fp1", "active"))
+	if _, err := rec.store.SetClaim("fp1", nil, "alice", ""); err != nil {
+		t.Fatalf("SetClaim: %v", err)
+	}
+
+	// Alert disappears — genuine resolution, no re-fire follows.
+	rec.processAlerts(ctx, noAlerts())
+
+	// Claim still active — delay not elapsed yet.
+	c, _ := rec.store.GetActiveClaim("fp1")
+	if c == nil {
+		t.Fatal("claim should still be active before claimReleaseDelay elapses")
+	}
+
+	// Wait for the delayed goroutine to fire and release.
+	time.Sleep(5 * rec.claimReleaseDelay)
+
+	c, _ = rec.store.GetActiveClaim("fp1")
+	if c != nil {
+		t.Error("claim should be released after genuine resolution + delay")
+	}
+}
+
+// TestRecorder_ClaimNotReleasedOnGracePeriodRefire verifies that a claim is
+// NOT released when the alert re-fires within the grace period (transient miss).
+func TestRecorder_ClaimNotReleasedOnGracePeriodRefire(t *testing.T) {
+	rec, _ := newTestRecorder(t)
+	ctx := context.Background()
+
+	rec.processAlerts(ctx, alert("fp1", "active"))
+	if _, err := rec.store.SetClaim("fp1", nil, "alice", ""); err != nil {
+		t.Fatalf("SetClaim: %v", err)
+	}
+
+	// Alert disappears for one poll (transient miss).
+	rec.processAlerts(ctx, noAlerts())
+
+	// Alert comes back immediately — grace period deletes the resolved row.
+	rec.processAlerts(ctx, alert("fp1", "active"))
+
+	// Wait past the claim release delay; goroutine must have checked and skipped.
+	time.Sleep(5 * rec.claimReleaseDelay)
+
+	c, _ := rec.store.GetActiveClaim("fp1")
+	if c == nil {
+		t.Error("claim must survive a grace-period re-fire")
+	}
 }

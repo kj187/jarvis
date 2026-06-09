@@ -416,6 +416,17 @@ func (s *Store) ReleaseClaimsForResolved(fingerprints []string) error {
 	return err
 }
 
+// IsStillResolved reports whether the most recent event for the fingerprint is
+// still "resolved". Guards the delayed claim release against grace-period
+// re-fires that rolled back the resolved row before the delay elapsed.
+func (s *Store) IsStillResolved(fingerprint string) (bool, error) {
+	last, err := s.getLastEvent(fingerprint)
+	if err != nil || last == nil {
+		return false, err
+	}
+	return last.Status == models.EventStatusResolved, nil
+}
+
 // ── Silence Events ────────────────────────────────────────────────────────────
 
 // RecordSilenceEvent persists a user-triggered silence action.

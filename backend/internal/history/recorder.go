@@ -32,6 +32,11 @@ type Recorder struct {
 	prevSnapshot      map[string]string           // fingerprint → status
 	prevSilenceInfo   map[string]silenceInfoEntry // silenceID → {state, cluster, comment}
 	prevAlertSilences map[string][]string         // fingerprint → []silenceID
+
+	// claimReleaseDelay is how long to wait after detecting a resolution before
+	// releasing claims. Must exceed the 60s grace period so grace-period re-fires
+	// can cancel the release before it runs.
+	claimReleaseDelay time.Duration
 }
 
 type silenceInfoEntry struct {
@@ -60,6 +65,7 @@ func NewRecorder(
 		prevSnapshot:      make(map[string]string),
 		prevSilenceInfo:   make(map[string]silenceInfoEntry),
 		prevAlertSilences: make(map[string][]string),
+		claimReleaseDelay: 65 * time.Second,
 	}
 }
 
@@ -219,8 +225,25 @@ func (r *Recorder) poll(ctx context.Context) {
 				r.logger.Error("record resolved", "fp", fp, "err", err)
 			}
 		}
-		if err := r.store.ReleaseClaimsForResolved(resolvedFPs); err != nil {
-			r.logger.Error("release claims for resolved", "err", err)
+		for _, fp := range resolvedFPs {
+			go func(fp string) {
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(r.claimReleaseDelay):
+				}
+				still, err := r.store.IsStillResolved(fp)
+				if err != nil {
+					r.logger.Error("check still resolved for claim release", "fp", fp, "err", err)
+					return
+				}
+				if !still {
+					return
+				}
+				if err := r.store.ReleaseClaimsForResolved([]string{fp}); err != nil {
+					r.logger.Error("delayed release claims for resolved", "fp", fp, "err", err)
+				}
+			}(fp)
 		}
 
 		// Keep resolved alerts in-memory for 20 minutes (greyed out), then remove.
