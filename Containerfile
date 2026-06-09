@@ -7,7 +7,7 @@ COPY frontend/ ./
 RUN pnpm build
 
 # Stage 2: Backend Build
-FROM golang:1.24-alpine AS backend
+FROM golang:1.25-alpine AS backend
 WORKDIR /app
 COPY backend/go.mod backend/go.sum ./
 RUN go mod download
