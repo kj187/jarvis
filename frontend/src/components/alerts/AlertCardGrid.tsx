@@ -70,12 +70,13 @@ function estimateHeight(group: CardGroup, silences: Silence[]): number {
   return h
 }
 
-// Greedy bin-packing: place each group into the shortest column.
+// Greedy bin-packing (LPT): sort tallest first so left columns fill first.
 // Ties broken by lowest index → left columns fill first.
 function distributeColumns(groups: CardGroup[], silences: Silence[], numCols: number): CardGroup[][] {
   const cols: CardGroup[][] = Array.from({ length: numCols }, () => [])
   const heights = Array(numCols).fill(0)
-  for (const group of groups) {
+  const sorted = [...groups].sort((a, b) => estimateHeight(b, silences) - estimateHeight(a, silences))
+  for (const group of sorted) {
     let minIdx = 0
     for (let i = 1; i < numCols; i++) {
       if (heights[i] < heights[minIdx]) minIdx = i
