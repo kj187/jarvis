@@ -63,7 +63,7 @@ jobs:
           fi
 
       - name: Upload test results
-        uses: dorny/test-reporter@v1
+        uses: dorny/test-reporter@v3
         if: always()
         with:
           name: Backend Test Results
@@ -146,7 +146,7 @@ jobs:
           fi
 
       - name: Upload test results
-        uses: dorny/test-reporter@v1
+        uses: dorny/test-reporter@v3
         if: always()
         with:
           name: Frontend Test Results
