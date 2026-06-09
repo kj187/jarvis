@@ -34,6 +34,35 @@ Scopes: `alerts` `silences` `claims` `comments` `ws` `api` `db` `config` `fronte
 **Cutting a release — ONLY when user explicitly asks:**
 Never trigger a release automatically. Only when the user says "release" or "create a release": load `/project:release` and follow the process step-by-step.
 
+**Release Workflow (full):**
+```
+# Option A: work on main
+git push                        → CI runs (tests, lint, security, build)
+
+# Option B: feature branch → merge first, then release
+git checkout -b feature/my-feature
+git push && gh pr create        → CI runs on PR
+# merge PR → back on main
+
+# When ready to release (either way):
+/project:release                → changelog, semver bump, create + push tag
+git push --tags                 → triggers release.yml
+
+# release.yml does automatically:
+#   1. Build linux/amd64 + linux/arm64 Docker image (Containerfile, multi-stage)
+#   2. Push → ghcr.io/kj187/jarvis:v1.2.3 + ghcr.io/kj187/jarvis:1.2 + :latest
+#   3. Create GitHub Release (auto-generated release notes)
+```
+
+**Image structure:** Frontend is embedded into the Go binary at build time (`//go:build prod` + `embed.FS`). Single image, no separate frontend container.
+
+**Dependabot** (`.github/dependabot.yml`) — runs automatically every Monday:
+- `backend/go.mod` → Go dependencies (one PR per update)
+- `frontend/package.json` → npm/pnpm packages (minor+patch grouped into one PR)
+- `.github/workflows/` → GitHub Actions versions
+
+Dependabot PRs run through CI. Green CI → merge, done. No manual intervention needed.
+
 **Deep reference (self-invoke when needed — user does not need to type these):**
 
 | Command | When to load |
