@@ -1,0 +1,23 @@
+[allowlist]
+description = "Exclude paths matching .gitignore"
+paths = [
+  '''tmp/''',
+  '''backend/tmp/''',
+  '''backend/bin/''',
+  '''backend/\.config/''',
+  '''frontend/node_modules/''',
+  '''frontend/dist/''',
+  '''frontend/\.vite/''',
+  '''frontend/\.npm/''',
+  '''frontend/coverage/''',
+  '''frontend/test-results/''',
+  '''\.pnpm-store/''',
+  '''node_modules/''',
+  '''dist/''',
+  '''\.cache/''',
+  '''data/''',
+  '''coverage/''',
+  '''\.env\.example''',
+  '''pnpm-lock\.yaml''',
+  '''go\.sum''',
+]

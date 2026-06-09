@@ -34,4 +34,8 @@ if git diff --cached --name-only | grep -q "^frontend/"; then
   fi
 fi
 
+# ── Secret scanning (always, all file types) ──────────────────────────────────
+echo "  [Security] Running gitleaks (secret scan)..."
+git diff --cached | podman run --rm -i zricethezav/gitleaks:latest detect --pipe --redact
+
 echo "✅ All pre-commit checks passed."
