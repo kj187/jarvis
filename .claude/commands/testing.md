@@ -1,3 +1,7 @@
+---
+description: Test strategy, commands, utilities, CI pipeline, and coverage targets for backend and frontend
+---
+
 # Jarvis — Test Strategy & Execution
 
 Slash-Command: `/project:testing`

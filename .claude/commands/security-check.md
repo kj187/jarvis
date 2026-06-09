@@ -1,3 +1,7 @@
+---
+description: Run all security tools (gosec, govulncheck, golangci-lint, pnpm audit) and new-code security checklist
+---
+
 # Jarvis — Security Check
 
 Slash-Command: `/project:security-check`

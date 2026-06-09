@@ -1,3 +1,7 @@
+---
+description: Full architecture reference — data model, API endpoints, component tree, state machine, data flow
+---
+
 # Jarvis — Full Architecture Reference
 
 Slash-Command: `/project:architecture`
@@ -258,12 +262,12 @@ App.tsx               → Router + RootLayout
     │   ├── AlertCard.tsx      → card + claim avatar badge + count badge
     │   ├── AlertListView.tsx  → table view
     │   ├── AlertListRow.tsx   → single table row
-    │   ├── AlertDetailPanel.tsx → slide-over (all sections)
-    │   ├── AlertHistoryTable.tsx → paginated firing history
+    │   ├── AlertDetailPanel.tsx → slide-over (all sections incl. inline history)
     │   ├── AlertComments.tsx  → comment list + input form
     │   ├── AlertClaimSection.tsx → claim UI + history + buttons
     │   ├── AlertBadge.tsx     → severity badge
     │   ├── AlertFilters.tsx   → label matcher chips + state dropdown
+    │   ├── LabelChip.tsx      → label chip with color style (shared by labels + filter chips)
     │   └── ViewToggle.tsx     → ⊞ / ☰ toggle
     └── silences/
         ├── SilencesPage.tsx   → silence list

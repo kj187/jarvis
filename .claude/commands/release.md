@@ -1,3 +1,7 @@
+---
+description: Full release process — changelog generation, semver bump, tag, GHCR push, GitHub Release
+---
+
 # Jarvis — Creating a Release
 
 Slash-Command: `/project:release`

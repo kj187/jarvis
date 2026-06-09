@@ -14,6 +14,35 @@ Jarvis is a web frontend for Prometheus Alertmanager. The Go 1.24+ backend (Echo
 | TanStack Query WS patching | WS events patch the cache directly (`setQueryData`) — no extra refetch round-trip |
 | Zustand v5 with `persist` | `viewMode` + `filters` persisted in localStorage, but URL params take precedence |
 
+## Development Workflow — always follow
+
+**Feature / bug fix:**
+1. Write failing test first (TDD) — implementation + tests always in the **same commit**
+2. After any Go model change → mirror type in `frontend/src/types/index.ts` (exact camelCase field names)
+3. `go test ./...` must pass. Pre-commit hook runs automatically: gosec + govulncheck + golangci-lint. **Never `--no-verify`.**
+4. Frontend checklist: `cursor: pointer` on all clickable elements · no `console.log` · no `dangerouslySetInnerHTML` · import shared utils from `lib/alertUtils.ts` (never re-implement in components)
+5. New API endpoint: register `/api/v1/alerts/groups` **before** `/:fingerprint/*` in `router.go`
+
+**Commits — Conventional Commits:**
+```
+feat(<scope>): ...     → MINOR  |  fix(<scope>): ...     → PATCH
+security(<scope>): ... → PATCH  |  BREAKING CHANGE: ...  → MAJOR
+test(<scope>): ...     → no bump (tests always in same commit as implementation)
+```
+Scopes: `alerts` `silences` `claims` `comments` `ws` `api` `db` `config` `frontend` `docker`
+
+**Cutting a release — ONLY when user explicitly asks:**
+Never trigger a release automatically. Only when the user says "release" or "create a release": load `/project:release` and follow the process step-by-step.
+
+**Deep reference (self-invoke when needed — user does not need to type these):**
+
+| Command | When to load |
+|---|---|
+| `/project:architecture` | Full data model, all API endpoints, component tree, state machine |
+| `/project:add-feature` | Detailed TDD checklist for backend + frontend |
+| `/project:security-check` | Security tool commands + new-code checklist |
+| `/project:testing` | Full test matrix, utilities, CI pipeline |
+
 ## Critical Invariants — NEVER break
 
 1. **Grace Period (60s)**: Alert seen again within 60s after `resolved` → reopen old event, create **no** new one. Prevents ghost-resolve entries on poll misses.
@@ -25,19 +54,6 @@ Jarvis is a web frontend for Prometheus Alertmanager. The Go 1.24+ backend (Echo
 7. **`cursor: pointer` on all clickable elements** — globally in CSS: `a, button, [role="button"] { cursor: pointer }`.
 8. **SQLite single writer**: `SetMaxOpenConns(1)` + WAL mode. Never open multiple writers.
 9. **CORS/WS Origin**: No wildcard `*`. `JARVIS_ALLOWED_ORIGINS` is used as allow-list for both.
-
-## Git Workflow
-
-```bash
-# Enable pre-commit hooks (once after git clone):
-git config core.hooksPath .githooks
-
-# Commit conventions (Conventional Commits):
-# feat(<scope>): ...    → MINOR bump
-# fix(<scope>): ...     → PATCH bump
-# security(<scope>): .. → PATCH bump
-# BREAKING CHANGE: ...  → MAJOR bump
-```
 
 ## Test Commands
 
@@ -75,17 +91,9 @@ All these tools also run automatically in the **pre-commit hook** (`.githooks/pr
 
 ```bash
 cp .env.example .env    # Edit .env, configure at least one cluster
+git config core.hooksPath .githooks   # Enable pre-commit hooks (once after clone)
 podman compose -f compose.dev.yml up
 # Frontend: http://localhost:5173 (Vite HMR)
 # Backend:  http://localhost:8080 (air auto-rebuild)
 ```
 
-## Further Reference (`.claude/commands/`)
-
-| Command | When to use |
-|---|---|
-| `/project:architecture` | Full data model, API endpoints, component tree, state machine |
-| `/project:add-feature` | TDD workflow + checklist for new features (backend + frontend) |
-| `/project:security-check` | Run security tools manually + new code checklist |
-| `/project:testing` | Test strategy, utilities, scenarios, coverage targets |
-| `/project:release` | Full release process (changelog, tag, GHCR, GitHub Release) |

@@ -1,3 +1,7 @@
+---
+description: TDD workflow and checklist for adding a new backend endpoint or frontend component
+---
+
 # Jarvis — Adding a New Feature
 
 Slash-Command: `/project:add-feature`
