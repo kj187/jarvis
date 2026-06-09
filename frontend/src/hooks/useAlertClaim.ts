@@ -1,10 +1,16 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import {
   fetchActiveClaim,
   fetchClaimHistory,
   setClaim,
   releaseClaim,
 } from '@/api/client'
+
+function invalidateClaimQueries(qc: QueryClient, fingerprint: string): void {
+  qc.invalidateQueries({ queryKey: ['claim', fingerprint] })
+  qc.invalidateQueries({ queryKey: ['claim-history', fingerprint] })
+  qc.invalidateQueries({ queryKey: ['alerts'] })
+}
 
 export function useActiveClaim(fingerprint: string) {
   return useQuery({
@@ -27,11 +33,7 @@ export function useSetClaim(fingerprint: string) {
   return useMutation({
     mutationFn: (body: { claimedBy: string; note?: string; eventId?: number }) =>
       setClaim(fingerprint, body),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['claim', fingerprint] })
-      qc.invalidateQueries({ queryKey: ['claim-history', fingerprint] })
-      qc.invalidateQueries({ queryKey: ['alerts'] })
-    },
+    onSuccess: () => invalidateClaimQueries(qc, fingerprint),
   })
 }
 
@@ -39,10 +41,6 @@ export function useReleaseClaim(fingerprint: string) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (by: string) => releaseClaim(fingerprint, by),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['claim', fingerprint] })
-      qc.invalidateQueries({ queryKey: ['claim-history', fingerprint] })
-      qc.invalidateQueries({ queryKey: ['alerts'] })
-    },
+    onSuccess: () => invalidateClaimQueries(qc, fingerprint),
   })
 }

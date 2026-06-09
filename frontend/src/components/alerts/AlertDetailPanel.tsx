@@ -6,6 +6,7 @@ import { ExternalLink, BookOpen, ChevronDown, ChevronUp, BellOff, Pencil, Trash2
 import { cn } from '@/lib/utils'
 import { Sheet } from '@/components/ui/sheet'
 import { AlertBadge, StatusBadge } from './AlertBadge'
+import { labelColorStyle } from './LabelChip'
 import { AlertComments } from './AlertComments'
 import { SilenceForm } from '@/components/silences/SilenceForm'
 import { useAlerts, useAlertHistory, useAlertStats } from '@/hooks/useAlerts'
@@ -18,17 +19,6 @@ import type { EnrichedAlert, LabelMatcher, Silence, SilenceMatcher } from '@/typ
 const USERNAME_KEY = 'jarvis-username'
 
 // ── Silence helpers ───────────────────────────────────────────────────────────
-
-function labelColorStyle(key: string) {
-  let h = 5381
-  for (let i = 0; i < key.length; i++) h = ((h << 5) + h + key.charCodeAt(i)) >>> 0
-  const hue = h % 360
-  return {
-    backgroundColor: `hsl(${hue} 40% 16%)`,
-    color: `hsl(${hue} 70% 72%)`,
-    borderColor: `hsl(${hue} 35% 30%)`,
-  }
-}
 
 function matcherOp(m: SilenceMatcher): string {
   if (m.isRegex) return m.isEqual ? '=~' : '!~'
@@ -229,6 +219,20 @@ export function AlertDetailPanel({
   const half = Math.ceil(labelEntries.length / 2)
   const leftLabels = labelEntries.slice(0, half)
   const rightLabels = labelEntries.slice(half)
+
+  const renderLabelColumn = (labels: [string, string][]) =>
+    labels.map(([k, v]) => (
+      <div key={k} className="flex flex-col gap-0.5">
+        <span
+          className="cursor-pointer font-mono text-[10px] text-muted-foreground hover:text-foreground"
+          title="Add as filter"
+          onClick={() => onAddLabelMatcher({ name: k, operator: '=', value: v })}
+        >
+          {k}
+        </span>
+        <span className="break-all text-xs">{v}</span>
+      </div>
+    ))
 
   const annotationEntries = Object.entries(alert.annotations)
 
@@ -589,34 +593,8 @@ export function AlertDetailPanel({
         {/* Labels */}
         <Section title="Labels">
           <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-            <div className="space-y-2">
-              {leftLabels.map(([k, v]) => (
-                <div key={k} className="flex flex-col gap-0.5">
-                  <span
-                    className="cursor-pointer font-mono text-[10px] text-muted-foreground hover:text-foreground"
-                    title="Add as filter"
-                    onClick={() => onAddLabelMatcher({ name: k, operator: '=', value: v })}
-                  >
-                    {k}
-                  </span>
-                  <span className="break-all text-xs">{v}</span>
-                </div>
-              ))}
-            </div>
-            <div className="space-y-2">
-              {rightLabels.map(([k, v]) => (
-                <div key={k} className="flex flex-col gap-0.5">
-                  <span
-                    className="cursor-pointer font-mono text-[10px] text-muted-foreground hover:text-foreground"
-                    title="Add as filter"
-                    onClick={() => onAddLabelMatcher({ name: k, operator: '=', value: v })}
-                  >
-                    {k}
-                  </span>
-                  <span className="break-all text-xs">{v}</span>
-                </div>
-              ))}
-            </div>
+            <div className="space-y-2">{renderLabelColumn(leftLabels)}</div>
+            <div className="space-y-2">{renderLabelColumn(rightLabels)}</div>
           </div>
         </Section>
 
