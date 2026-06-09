@@ -25,10 +25,13 @@ go test -run TestGracePeriod ./internal/history/...  # Single test
 # ── Frontend ─────────────────────────────────────────────────
 cd frontend
 
-pnpm test                          # Vitest unit tests (watch mode)
+pnpm test                          # Vitest unit tests (single run)
+pnpm test:watch                    # Vitest watch mode
 pnpm test:coverage                 # Vitest with coverage
+pnpm test:ci                       # CI mode: JUnit XML + coverage (used in CI)
 pnpm test:e2e                      # Playwright E2E (browser must be installed)
 pnpm exec playwright install       # Install Playwright browsers (once)
+pnpm duplication                   # jscpd code duplication check
 ```
 
 ---
@@ -39,11 +42,18 @@ pnpm exec playwright install       # Install Playwright browsers (once)
 |---|---|---|
 | `internal/config` | `config_test.go` | Config parsing, cluster-N iteration, HOST_ALIAS logic |
 | `internal/db` | `db_test.go` | `Migrate` idempotent, PRAGMA settings |
+| `internal/cluster` | `registry_test.go` | `NewRegistry`, `Get`, `All` — single/multi-cluster |
 | `internal/history` | `store_test.go` | `UpsertFingerprint`, `GetOrCreateActiveEvent`, grace period (60s), `occurrence_count` logic |
+| `internal/history` | `store_extra_test.go` | `GetClaimHistory`, `RecordSilenceEvent`, `GetSilenceEvents`, `GetRecentResolved`, `SeedResolved` |
 | `internal/history` | `alert_store_test.go` | `Set`/`Get`/`MarkResolved`/`RemoveByFingerprint` (thread safety via goroutines) |
+| `internal/history` | `lifecycle_test.go` | Integration: FiringToResolved, SuppressedExpired, GracePeriod, ReoccurrenceAfterResolution, FullCycle |
 | `internal/history` | `recorder_test.go` | Diff logic: firing/resolved/suppressed/expired transitions |
 | `internal/alertmanager` | `client_test.go` | HTTP client against `httptest.NewServer` |
-| `internal/api` | `alerts_test.go` etc. | Handler tests via `echo.NewContext` |
+| `internal/api` | `alerts_test.go` | Alert list/detail handler |
+| `internal/api` | `claims_test.go` | Claim set/release handler |
+| `internal/api` | `comments_test.go` | Comment create/delete handler |
+| `internal/api` | `silences_test.go` | Silence list/create handler |
+| `internal/api` | `router_test.go` | Route registration, `/groups` before `/:fingerprint/*` |
 | `internal/ws` | `hub_test.go` | Broadcast, client register/unregister, slow client drop |
 
 ---
@@ -167,15 +177,22 @@ Playwright E2E runs **only in CI** (too slow for pre-commit).
 
 ```yaml
 backend:
-  - go test -v -race -coverprofile=coverage.out ./...
+  - go test -v -race -coverprofile=coverage.out ./... | go-junit-report → report.xml
+  - Coverage summary → GITHUB_STEP_SUMMARY (go tool cover -func)
+  - dorny/test-reporter@v1 uploads report.xml as "Backend Tests"
+  - upload-artifact: coverage.out + report.xml
   - gosec ./...
   - govulncheck ./...
   - golangci-lint run
 
 frontend:
-  - pnpm audit
-  - pnpm test:coverage
+  - pnpm audit --audit-level=high
+  - pnpm test:ci   # JUnit XML → test-results/junit.xml + lcov/json-summary coverage
+  - Coverage summary → GITHUB_STEP_SUMMARY (Statements/Branches/Functions/Lines)
+  - dorny/test-reporter@v1 uploads junit.xml as "Frontend Tests"
+  - upload-artifact: coverage/
   - pnpm build
+  - pnpm duplication  # jscpd code duplication check
 ```
 
 ---

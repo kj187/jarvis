@@ -52,7 +52,7 @@ jobs:
         uses: dorny/test-reporter@v1
         if: always()
         with:
-          name: Backend Tests
+          name: Backend Test Results
           path: backend/report.xml
           reporter: java-junit
 
@@ -135,7 +135,7 @@ jobs:
         uses: dorny/test-reporter@v1
         if: always()
         with:
-          name: Frontend Tests
+          name: Frontend Test Results
           path: frontend/test-results/junit.xml
           reporter: java-junit
 

@@ -142,9 +142,15 @@ func TestRecordStatusChange_GracePeriodExpired(t *testing.T) {
 
 	s.UpsertFingerprint("fp1", "TestAlert", "homelab", nil) //nolint:errcheck
 
-	// Firing → resolve far in the past (beyond grace period).
-	s.RecordStatusChange("fp1", "homelab", "http://am:9093", models.EventStatusFiring, time.Now().Add(-5*time.Minute), nil) //nolint:errcheck
-	// Insert resolved row with old recorded_at to bypass the 60s grace period.
+	// Insert firing and resolved directly with controlled recorded_at so that
+	// resolved (now-90s) is newer than firing (now-3m) → getLastEvent returns resolved,
+	// and 90s > 60s grace period → no grace-period deletion.
+	//nolint:errcheck
+	s.db.Exec(
+		`INSERT INTO alert_events (fingerprint, cluster_name, alertmanager_url, status, starts_at, recorded_at) VALUES (?, ?, ?, ?, ?, ?)`,
+		"fp1", "homelab", "http://am:9093", "firing",
+		time.Now().Add(-5*time.Minute), time.Now().Add(-3*time.Minute),
+	)
 	//nolint:errcheck
 	s.db.Exec(
 		`INSERT INTO alert_events (fingerprint, cluster_name, alertmanager_url, status, starts_at, recorded_at) VALUES (?, ?, ?, ?, ?, ?)`,
@@ -215,10 +221,15 @@ func TestOccurrenceCount_IncrementOnRefiring(t *testing.T) {
 
 	s.UpsertFingerprint("fp1", "TestAlert", "homelab", nil) //nolint:errcheck
 
-	// First firing — no increment (starts at 1).
-	s.RecordStatusChange("fp1", "homelab", "http://am:9093", models.EventStatusFiring, time.Now().Add(-5*time.Minute), nil) //nolint:errcheck
-
-	// Insert resolved row with old recorded_at to bypass the 60s grace period.
+	// Insert firing and resolved directly with controlled recorded_at so that
+	// resolved (now-90s) is newer than firing (now-3m) → getLastEvent returns resolved,
+	// and 90s > 60s grace period → no grace-period deletion.
+	//nolint:errcheck
+	s.db.Exec(
+		`INSERT INTO alert_events (fingerprint, cluster_name, alertmanager_url, status, starts_at, recorded_at) VALUES (?, ?, ?, ?, ?, ?)`,
+		"fp1", "homelab", "http://am:9093", "firing",
+		time.Now().Add(-5*time.Minute), time.Now().Add(-3*time.Minute),
+	)
 	//nolint:errcheck
 	s.db.Exec(
 		`INSERT INTO alert_events (fingerprint, cluster_name, alertmanager_url, status, starts_at, recorded_at) VALUES (?, ?, ?, ?, ?, ?)`,

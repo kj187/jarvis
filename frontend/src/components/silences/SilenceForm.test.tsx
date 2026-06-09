@@ -233,11 +233,6 @@ describe('SilenceForm – matcher management', () => {
       { wrapper: makeWrapper() },
     )
     // Only 1 matcher → remove button disabled
-    const removeButtons = screen.getAllByRole('button').filter(
-      (b) => b.getAttribute('disabled') !== null && b.closest('[style*="gridTemplateColumns"]'),
-    )
-    // The × button for the single matcher should be disabled
-    // Test by checking we can't reduce below 1 via add/remove cycle
     expect(screen.getAllByDisplayValue('=')).toHaveLength(1)
   })
 })
