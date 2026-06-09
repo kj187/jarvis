@@ -10,6 +10,9 @@ jobs:
   backend:
     name: Backend
     runs-on: ubuntu-latest
+    permissions:
+      checks: write
+      contents: read
     defaults:
       run:
         working-directory: backend
@@ -25,8 +28,42 @@ jobs:
       - name: Download dependencies
         run: go mod download
 
+      - name: Install go-junit-report
+        run: go install github.com/jstemmer/go-junit-report/v2@latest
+
       - name: Run tests
-        run: go test -v -race -coverprofile=coverage.out ./...
+        run: |
+          set -o pipefail
+          go test -v -race -coverprofile=coverage.out ./... 2>&1 | go-junit-report -set-exit-code > report.xml
+
+      - name: Coverage summary
+        if: always()
+        run: |
+          if [ -f coverage.out ]; then
+            {
+              echo "## Backend Coverage"
+              echo '```'
+              go tool cover -func=coverage.out
+              echo '```'
+            } >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Upload test results
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: Backend Tests
+          path: backend/report.xml
+          reporter: java-junit
+
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-coverage
+          path: |
+            backend/coverage.out
+            backend/report.xml
 
       - name: Run gosec
         run: |
@@ -47,6 +84,9 @@ jobs:
   frontend:
     name: Frontend
     runs-on: ubuntu-latest
+    permissions:
+      checks: write
+      contents: read
     defaults:
       run:
         working-directory: frontend
@@ -69,7 +109,45 @@ jobs:
         run: pnpm audit --audit-level=high
 
       - name: Run tests with coverage
-        run: pnpm test:coverage
+        run: pnpm test:ci
+
+      - name: Coverage summary
+        if: always()
+        run: |
+          if [ -f coverage/coverage-summary.json ]; then
+            node -e "
+              const s = require('./coverage/coverage-summary.json').total;
+              const fmt = (v) => v.pct.toFixed(1) + '%';
+              process.stdout.write([
+                '## Frontend Coverage',
+                '| Metric | Coverage |',
+                '|--------|----------|',
+                '| Statements | ' + fmt(s.statements) + ' |',
+                '| Branches | ' + fmt(s.branches) + ' |',
+                '| Functions | ' + fmt(s.functions) + ' |',
+                '| Lines | ' + fmt(s.lines) + ' |',
+                ''
+              ].join('\n'));
+            " >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Upload test results
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: Frontend Tests
+          path: frontend/test-results/junit.xml
+          reporter: java-junit
+
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: frontend-coverage
+          path: frontend/coverage/
 
       - name: Build
         run: pnpm build
+
+      - name: Check code duplication
+        run: pnpm duplication

@@ -10,8 +10,10 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "test:ci": "vitest run --reporter=default --reporter=junit --outputFile.junit=test-results/junit.xml --coverage --coverage.reporter=text --coverage.reporter=lcov --coverage.reporter=json-summary",
     "test:e2e": "playwright test",
-    "lint": "eslint src --ext ts,tsx"
+    "lint": "eslint src --ext ts,tsx",
+    "duplication": "jscpd"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.75.0",
@@ -42,6 +44,7 @@
     "tailwindcss": "^4.1.6",
     "typescript": "^5.8.3",
     "vite": "^6.3.5",
-    "vitest": "^4.1.8"
+    "vitest": "^4.1.8",
+    "jscpd": "^4.0.5"
   }
 }

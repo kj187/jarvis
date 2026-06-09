@@ -1,0 +1,7 @@
+{
+  "threshold": 5,
+  "minTokens": 50,
+  "path": ["src"],
+  "ignore": ["**/*.test.ts", "**/*.test.tsx"],
+  "reporters": ["console"]
+}

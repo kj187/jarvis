@@ -18,6 +18,7 @@ frontend/node_modules/
 frontend/dist/
 frontend/.vite/
 frontend/.npm/
+frontend/coverage/
 *.tsbuildinfo
 node_modules/
 dist/
