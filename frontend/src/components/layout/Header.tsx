@@ -377,7 +377,9 @@ export function Header() {
               All
             </button>
           </div>
-          <ViewToggle value={viewMode} onChange={setViewMode} />
+          {(!filters.state || filters.state === 'active') && (
+            <ViewToggle value={viewMode} onChange={setViewMode} />
+          )}
         </>
 
         {/* Spacer */}
