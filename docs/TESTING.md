@@ -7,7 +7,7 @@
 No local Go installation required — tests run in a container. For local development:
 
 ```bash
-go version  # requires Go 1.24+
+go version  # requires Go 1.25+
 ```
 
 ### Run All Tests
