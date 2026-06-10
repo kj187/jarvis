@@ -234,7 +234,11 @@ export function AlertDetailPanel({
       </div>
     ))
 
-  const annotationEntries = Object.entries(alert.annotations)
+  const summaryText = alert.annotations['summary']
+  const descriptionText = alert.annotations['description']
+  const annotationEntries = Object.entries(alert.annotations).filter(
+    ([k]) => k !== 'summary' && k !== 'description' && k !== 'dashboard',
+  )
 
   return (
     <>
@@ -586,6 +590,20 @@ export function AlertDetailPanel({
                   <span className="break-all">{v}</span>
                 </div>
               ))}
+            </div>
+          </Section>
+        )}
+
+        {/* Summary / Description */}
+        {(summaryText || descriptionText) && (
+          <Section title="Summary" defaultOpen={true}>
+            <div className="space-y-2">
+              {summaryText && (
+                <p className="text-sm text-foreground">{summaryText}</p>
+              )}
+              {descriptionText && (
+                <p className="text-xs text-muted-foreground leading-relaxed">{descriptionText}</p>
+              )}
             </div>
           </Section>
         )}
