@@ -1,3 +1,5 @@
+import { formatDistanceToNow } from 'date-fns'
+import { enUS } from 'date-fns/locale'
 import type { EnrichedAlert, LabelMatcher, Silence } from '@/types'
 
 // ── Label utilities ────────────────────────────────────────────────────────
@@ -135,6 +137,23 @@ export function formatSilenceDuration(ms: number): string {
   }
   if (minutes >= 1) return `${minutes}m`
   return '<1m'
+}
+
+// ── Time formatting ───────────────────────────────────────────────────────────
+
+/**
+ * Formats a date as relative ("2h ago") or absolute ("Jun 5, 2025, 2:30 PM").
+ * Pass the user's timeFormat preference explicitly — no store dependency.
+ */
+export function formatTime(
+  date: Date | string,
+  format: 'relative' | 'absolute',
+): string {
+  const d = new Date(date)
+  if (format === 'absolute') {
+    return d.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })
+  }
+  return formatDistanceToNow(d, { addSuffix: true, locale: enUS })
 }
 
 // ── Severity ordering ─────────────────────────────────────────────────────

@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { LabelMatcher } from '@/types'
+import { useSettingsStore } from '@/store/useSettingsStore'
 
 export type ViewMode = 'card' | 'list'
 
@@ -33,6 +34,8 @@ interface UIStore {
   removeLabelMatcher: (id: string) => void
   clearLabelMatchers: () => void
   resetFilters: () => void
+  /** Replaces all locked matchers with the given defaults. Non-locked matchers are preserved. */
+  syncLockedMatchers: (defaults: Omit<LabelMatcher, 'id' | 'locked'>[]) => void
   setWsConnected: (connected: boolean) => void
   setPollingPaused: (paused: boolean) => void
   setAlertCounts: (counts: AlertCounts) => void
@@ -52,7 +55,7 @@ function nextId(): string {
 export const useUIStore = create<UIStore>()(
   persist(
     (set) => ({
-      viewMode: 'card',
+      viewMode: useSettingsStore.getState().defaultViewMode,
       selectedFingerprint: null,
       filters: defaultFilters,
       wsConnected: false,
@@ -89,14 +92,53 @@ export const useUIStore = create<UIStore>()(
         set((s) => ({
           filters: {
             ...s.filters,
-            labelMatchers: s.filters.labelMatchers.filter((m) => m.id !== id),
+            // Never remove locked matchers from the header
+            labelMatchers: s.filters.labelMatchers.filter((m) => m.id !== id || m.locked),
           },
         })),
 
       clearLabelMatchers: () =>
-        set((s) => ({ filters: { ...s.filters, labelMatchers: [] } })),
+        set((s) => ({
+          filters: {
+            ...s.filters,
+            labelMatchers: s.filters.labelMatchers.filter((m) => m.locked),
+          },
+        })),
 
-      resetFilters: () => set({ filters: defaultFilters }),
+      resetFilters: () =>
+        set((s) => ({
+          filters: {
+            ...defaultFilters,
+            labelMatchers: s.filters.labelMatchers.filter((m) => m.locked),
+          },
+        })),
+
+      syncLockedMatchers: (defaults) =>
+        set((s) => {
+          // Build a set of keys for the incoming locked matchers so we can
+          // drop any non-locked matchers that would become duplicates.
+          const lockedKeys = new Set(
+            defaults.map((d) => `${d.name}${d.operator}${d.value}`),
+          )
+          return {
+            filters: {
+              ...s.filters,
+              labelMatchers: [
+                ...defaults.map((d) => ({
+                  ...d,
+                  id: `locked:${d.name}${d.operator}${d.value}`,
+                  locked: true as const,
+                })),
+                // Drop old locked matchers AND any unlocked duplicates
+                ...s.filters.labelMatchers.filter(
+                  (m) =>
+                    !m.locked &&
+                    !lockedKeys.has(`${m.name}${m.operator}${m.value}`),
+                ),
+              ],
+            },
+          }
+        }),
 
       setWsConnected: (connected) => set({ wsConnected: connected }),
       setPollingPaused: (paused) => set({ pollingPaused: paused }),
@@ -105,8 +147,11 @@ export const useUIStore = create<UIStore>()(
     {
       name: 'jarvis-ui',
       partialize: (s) => ({
-        viewMode: s.viewMode,
-        filters: s.filters,
+        filters: {
+          ...s.filters,
+          // Locked matchers are derived from Settings on every mount — never persist them.
+          labelMatchers: s.filters.labelMatchers.filter((m) => !m.locked),
+        },
       }),
     },
   ),

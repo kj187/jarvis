@@ -135,6 +135,7 @@ export function AlertsPage() {
             silences={silences}
             onSelectAlert={setSelectedFingerprint}
             selectedFingerprint={selectedFingerprint}
+            resolvedMode={filters.state === 'resolved'}
           />
         </div>
       ) : (
@@ -145,6 +146,7 @@ export function AlertsPage() {
             onSelectAlert={setSelectedFingerprint}
             selectedFingerprint={selectedFingerprint}
             stateFilter={filters.state}
+            resolvedMode={filters.state === 'resolved'}
           />
         </div>
       )}

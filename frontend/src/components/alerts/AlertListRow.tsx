@@ -1,12 +1,11 @@
-import { formatDistanceToNow } from 'date-fns'
-import { enUS } from 'date-fns/locale'
 import { Bell, BellOff, RefreshCw, User, X } from 'lucide-react'
 import { useState, useRef, useEffect } from 'react'
-import { StatusBadge } from './AlertBadge'
+import { AlertBadge, StatusBadge } from './AlertBadge'
 import { HIDDEN_LABEL_KEYS, LabelChip } from './LabelChip'
 import { useAlertStats } from '@/hooks/useAlerts'
 import { useSetClaim, useReleaseClaim } from '@/hooks/useAlertClaim'
 import { getSilenceState, formatSilenceDuration } from '@/lib/alertUtils'
+import { useFormatTime } from '@/hooks/useFormatTime'
 import type { EnrichedAlert, Silence } from '@/types'
 import { cn } from '@/lib/utils'
 
@@ -23,6 +22,7 @@ interface AlertListRowProps {
   onCreateSilence?: (alerts: EnrichedAlert[], prefillSilence?: Silence, isRecreate?: boolean) => void
   onExpireSilence?: (id: string, cluster: string) => void
   showStateColumn?: boolean
+  showSeverityColumn?: boolean
 }
 
 export function AlertListRow({
@@ -36,6 +36,7 @@ export function AlertListRow({
   onCreateSilence,
   onExpireSilence,
   showStateColumn = true,
+  showSeverityColumn = false,
 }: AlertListRowProps) {
   const alertname = alert.labels['alertname'] ?? '—'
   const isResolved = alert.status.state === 'resolved'
@@ -76,6 +77,7 @@ export function AlertListRow({
   }
 
   const { data: stats } = useAlertStats(alert.fingerprint)
+  const formatTime = useFormatTime()
 
   const { type: silenceType, silence, remaining } = silences
     ? getSilenceState(alert, silences)
@@ -122,14 +124,19 @@ export function AlertListRow({
           <StatusBadge state={alert.status.state} />
         </td>
       )}
+      {showSeverityColumn && (
+        <td className="px-4 py-2">
+          <AlertBadge severity={alert.labels['severity'] ?? 'none'} />
+        </td>
+      )}
       <td className="px-4 py-2 text-sm text-muted-foreground">
         <div className="flex flex-col gap-0.5">
           <span title={new Date(alert.startsAt).toLocaleString('en-US')}>
-            {formatDistanceToNow(new Date(alert.startsAt), { addSuffix: true, locale: enUS })}
+            {formatTime(alert.startsAt)}
           </span>
           {isResolved && stats?.lastResolvedAt && (
             <span className="text-xs text-green-600/70" title={new Date(stats.lastResolvedAt).toLocaleString('en-US')}>
-              ✓ {formatDistanceToNow(new Date(stats.lastResolvedAt), { addSuffix: true, locale: enUS })}
+              ✓ {formatTime(stats.lastResolvedAt)}
             </span>
           )}
         </div>

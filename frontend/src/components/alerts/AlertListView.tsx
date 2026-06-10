@@ -19,6 +19,7 @@ interface AlertListViewProps {
   onSelectAlert: (fingerprint: string) => void
   selectedFingerprint?: string | null
   stateFilter?: string
+  resolvedMode?: boolean
 }
 
 interface SilenceSheetState {
@@ -147,7 +148,7 @@ function buildGroupsBySeverity(alerts: EnrichedAlert[]): Map<string, AlertGroupD
   return result
 }
 
-export function AlertListView({ alerts, silences, onSelectAlert, selectedFingerprint, stateFilter }: AlertListViewProps) {
+export function AlertListView({ alerts, silences, onSelectAlert, selectedFingerprint, stateFilter, resolvedMode }: AlertListViewProps) {
   const showStateColumn = !stateFilter
   const [sortKey, setSortKey] = useState<SortKey>('alertname')
   const [sortAsc, setSortAsc] = useState(true)
@@ -213,6 +214,73 @@ export function AlertListView({ alerts, silences, onSelectAlert, selectedFingerp
     return (
       <div className="flex flex-col items-center justify-center py-24 text-muted-foreground">
         <p className="text-lg">No alerts</p>
+      </div>
+    )
+  }
+
+  // ── Resolved mode: flat list sorted by endsAt desc ─────────────────────────
+  if (resolvedMode) {
+    const sorted = [...alerts].sort(
+      (a, b) => new Date(b.endsAt).getTime() - new Date(a.endsAt).getTime(),
+    )
+    return (
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-border">
+              <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Alert Name
+              </th>
+              <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Severity
+              </th>
+              <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Time
+              </th>
+              <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Actions
+              </th>
+              <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Claim
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map((alert) => (
+              <AlertListRow
+                key={alert.fingerprint}
+                alert={alert}
+                onClick={onSelectAlert}
+                selected={selectedFingerprint === alert.fingerprint}
+                silences={silences}
+                onCreateSilence={openSilenceForm}
+                onExpireSilence={(id, cluster) => expireMutation.mutate({ id, cluster })}
+                showStateColumn={false}
+                showSeverityColumn={true}
+              />
+            ))}
+          </tbody>
+        </table>
+
+        <Sheet open={silenceSheet.open} onClose={closeSilenceForm} className="sm:max-w-2xl lg:max-w-3xl">
+          <div className="p-5 pt-10">
+            <h2 className="mb-4 text-base font-semibold">
+              {silenceSheet.isRecreate ? 'Extend silence' : 'Create silence'}
+            </h2>
+            <SilenceForm
+              availableClusters={
+                clusterNames.length > 0
+                  ? clusterNames
+                  : [...new Set(silenceSheet.alerts.map((a) => a.clusterName))]
+              }
+              prefillAlerts={silenceSheet.prefillSilence ? undefined : silenceSheet.alerts}
+              prefillSilence={silenceSheet.prefillSilence}
+              isRecreate={silenceSheet.isRecreate}
+              onSuccess={closeSilenceForm}
+              onCancel={closeSilenceForm}
+            />
+          </div>
+        </Sheet>
       </div>
     )
   }

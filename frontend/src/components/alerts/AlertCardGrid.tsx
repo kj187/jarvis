@@ -8,6 +8,7 @@ interface AlertCardGridProps {
   silences: Silence[]
   onSelectAlert: (fingerprint: string) => void
   selectedFingerprint?: string | null
+  resolvedMode?: boolean
 }
 
 interface CardGroup {
@@ -92,8 +93,42 @@ export function AlertCardGrid({
   silences,
   onSelectAlert,
   selectedFingerprint,
+  resolvedMode,
 }: AlertCardGridProps) {
   const numCols = useColumns()
+
+  // Resolved mode: flat grid sorted by endsAt desc, each alert is its own card
+  if (resolvedMode) {
+    const sorted = [...alerts].sort(
+      (a, b) => new Date(b.endsAt).getTime() - new Date(a.endsAt).getTime(),
+    )
+    if (sorted.length === 0) {
+      return (
+        <div className="flex flex-col items-center justify-center py-24 text-muted-foreground">
+          <p className="text-lg">No alerts</p>
+        </div>
+      )
+    }
+    const cols: EnrichedAlert[][] = Array.from({ length: numCols }, () => [])
+    sorted.forEach((alert, i) => cols[i % numCols].push(alert))
+    return (
+      <div className="flex gap-3">
+        {cols.map((colAlerts, colIdx) => (
+          <div key={colIdx} className="flex min-w-0 flex-1 flex-col gap-3">
+            {colAlerts.map((alert) => (
+              <AlertCard
+                key={alert.fingerprint}
+                alerts={[alert]}
+                silences={silences}
+                onClick={onSelectAlert}
+                selectedFingerprint={selectedFingerprint}
+              />
+            ))}
+          </div>
+        ))}
+      </div>
+    )
+  }
 
   // Group by alertname + severity
   const groupMap = new Map<string, CardGroup>()

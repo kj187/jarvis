@@ -6,22 +6,36 @@ import {
   fetchAlertStats,
 } from '@/api/client'
 import { useUIStore } from '@/store/uiStore'
+import { useSettingsStore } from '@/store/useSettingsStore'
+import type { EnrichedAlert } from '@/types'
 
 export function useAlerts(params?: { cluster?: string; severity?: string; state?: string }) {
   const pollingPaused = useUIStore((s) => s.pollingPaused)
+  const pollIntervalSeconds = useSettingsStore((s) => s.pollIntervalSeconds)
+  const resolvedMaxAgeDays = useSettingsStore((s) => s.resolvedMaxAgeDays)
+
   return useQuery({
     queryKey: ['alerts', params],
     queryFn: () => fetchAlerts(params),
-    refetchInterval: pollingPaused ? false : 15_000,
+    refetchInterval: pollingPaused ? false : pollIntervalSeconds * 1000,
+    select: (data: EnrichedAlert[]) => {
+      const cutoff = Date.now() - resolvedMaxAgeDays * 24 * 60 * 60 * 1000
+      return data.filter((alert) => {
+        if (alert.status?.state !== 'resolved') return true
+        // endsAt is the resolution time for resolved alerts in Alertmanager
+        return new Date(alert.endsAt).getTime() > cutoff
+      })
+    },
   })
 }
 
 export function useAlertGroups() {
   const pollingPaused = useUIStore((s) => s.pollingPaused)
+  const pollIntervalSeconds = useSettingsStore((s) => s.pollIntervalSeconds)
   return useQuery({
     queryKey: ['alerts-groups'],
     queryFn: fetchAlertGroups,
-    refetchInterval: pollingPaused ? false : 15_000,
+    refetchInterval: pollingPaused ? false : pollIntervalSeconds * 1000,
   })
 }
 

@@ -132,6 +132,8 @@ export interface LabelMatcher {
   name: string
   operator: LabelMatcherOperator
   value: string
+  /** Locked matchers come from Settings default filters — cannot be removed from the header. */
+  locked?: boolean
 }
 
 // ── Silence Events ────────────────────────────────────────────────────────────

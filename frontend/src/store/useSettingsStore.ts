@@ -1,0 +1,72 @@
+import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
+import type { LabelMatcherOperator } from '@/types'
+
+export interface DefaultFilter {
+  name: string
+  operator: LabelMatcherOperator
+  value: string
+}
+
+export interface UserSettings {
+  // Display
+  timeFormat: 'relative' | 'absolute'
+  defaultViewMode: 'card' | 'list'
+
+  // Alerts
+  resolvedMaxAgeDays: number
+
+  // Default filter (locked, always present in header)
+  defaultFilters: DefaultFilter[]
+
+  // Silences
+  defaultSilenceDurationMinutes: number
+  defaultCreatorName: string
+
+  // Polling
+  pollIntervalSeconds: number
+}
+
+export const POLL_OPTIONS = [5, 10, 15, 20, 25, 30, 60] as const
+export type PollOption = (typeof POLL_OPTIONS)[number]
+
+export const ALLOWED_SILENCE_DURATIONS = [15, 30, 60, 240, 480, 1440, 4320] as const
+
+export const DEFAULT_SETTINGS: UserSettings = {
+  timeFormat: 'relative',
+  defaultViewMode: 'card',
+  resolvedMaxAgeDays: 30,
+  defaultFilters: [],
+  defaultSilenceDurationMinutes: 60,
+  defaultCreatorName: '',
+  pollIntervalSeconds: 15,
+}
+
+interface SettingsStore extends UserSettings {
+  update: (partial: Partial<UserSettings>) => void
+  reset: () => void
+}
+
+export const useSettingsStore = create<SettingsStore>()(
+  persist(
+    (set) => ({
+      ...DEFAULT_SETTINGS,
+
+      update: (partial) => set((s) => ({ ...s, ...partial })),
+      reset: () => set({ ...DEFAULT_SETTINGS }),
+    }),
+    {
+      name: 'jarvis-user-settings',
+    },
+  ),
+)
+
+export function clampResolvedMaxAgeDays(v: number): number {
+  return Math.max(1, Math.min(365, v))
+}
+
+export function nearestPollOption(v: number): PollOption {
+  return POLL_OPTIONS.reduce((best, opt) =>
+    Math.abs(opt - v) < Math.abs(best - v) ? opt : best,
+  )
+}
