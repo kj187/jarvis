@@ -2,13 +2,14 @@
 
 ## Architecture Overview
 
-Jarvis is a web frontend for Prometheus Alertmanager. The Go 1.25+ backend (Echo v4) polls all configured Alertmanager clusters, stores every alert lifecycle in SQLite, keeps the current poll snapshot in an in-memory store, and pushes updates via WebSocket to the React 19 / TypeScript / Vite 6 frontend. The Go module path is `github.com/kj187/jarvis/backend`.
+Jarvis is a web frontend for Prometheus Alertmanager. The Go 1.25+ backend (Echo v4) polls all configured Alertmanager clusters, stores every alert lifecycle in SQLite or PostgreSQL, keeps the current poll snapshot in an in-memory store, and pushes updates via WebSocket to the React 19 / TypeScript / Vite 6 frontend. The Go module path is `github.com/kj187/jarvis/backend`.
 
 ## Technology Decisions
 
 | Decision | Why |
 |---|---|
-| `modernc.org/sqlite` instead of `mattn/go-sqlite3` | Pure Go — no C compiler needed in container build (Podman/distroless) |
+| `modernc.org/sqlite` + `pgx/v5` | Both are pure Go — no C compiler needed in container build (Podman/distroless) |
+| `JARVIS_DB_DSN` selects dialect | Prefix `postgres://` → PostgreSQL via `pgx/v5/stdlib`; anything else → SQLite file path |
 | No CGO | Container build with `CGO_ENABLED=0`, distroless final image has no C runtime |
 | `//go:build prod` tag | `embed.FS` cannot compile a non-existent `dist/` directory — two files (prod/!prod) instead of one |
 | TanStack Query WS patching | WS events patch the cache directly (`setQueryData`) — no extra refetch round-trip |
@@ -81,8 +82,10 @@ Dependabot PRs run through CI. Green CI → merge, done. No manual intervention 
 5. **Route order in Echo router**: `/api/v1/alerts/groups` must be registered **before** `/api/v1/alerts/:fingerprint/*`, otherwise `groups` is interpreted as a fingerprint.
 6. **No `console.log` in production code** (not caught by `golangci-lint` — check manually).
 7. **`cursor: pointer` on all clickable elements** — globally in CSS: `a, button, [role="button"] { cursor: pointer }`.
-8. **SQLite single writer**: `SetMaxOpenConns(1)` + WAL mode. Never open multiple writers.
-9. **CORS/WS Origin**: No wildcard `*`. `JARVIS_ALLOWED_ORIGINS` is used as allow-list for both.
+8. **SQLite single writer**: `SetMaxOpenConns(1)` + WAL mode — only for SQLite dialect. PostgreSQL uses the default pool. Never add `SetMaxOpenConns(1)` for PostgreSQL.
+9. **`JARVIS_DB_DSN` never logged raw**: `db.RedactDSN()` must wrap the DSN before any log call. Password stays out of logs.
+10. **`rebind()` in `history/store.go`**: All SQL queries use `?` placeholders — `rebind()` converts them to `$N` for PostgreSQL at call time. Never write `$1` literals directly in query strings.
+11. **CORS/WS Origin**: No wildcard `*`. `JARVIS_ALLOWED_ORIGINS` is used as allow-list for both.
 
 ## Test Commands
 
