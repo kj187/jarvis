@@ -9,7 +9,7 @@ import { HIDDEN_LABEL_KEYS, LabelChip } from './LabelChip'
 import { Sheet } from '@/components/ui/sheet'
 import { SilenceForm } from '@/components/silences/SilenceForm'
 import { fetchClusters, deleteSilence } from '@/api/client'
-import { formatSilenceDuration } from '@/lib/alertUtils'
+import { formatSilenceDuration, severityOrder } from '@/lib/alertUtils'
 import type { EnrichedAlert, Silence } from '@/types'
 import { cn } from '@/lib/utils'
 
@@ -220,9 +220,13 @@ export function AlertListView({ alerts, silences, onSelectAlert, selectedFingerp
 
   // ── Resolved mode: flat list sorted by endsAt desc ─────────────────────────
   if (resolvedMode) {
-    const sorted = [...alerts].sort(
-      (a, b) => new Date(b.endsAt).getTime() - new Date(a.endsAt).getTime(),
-    )
+    const sorted = [...alerts].sort((a, b) => {
+      const timeDiff = new Date(b.endsAt).getTime() - new Date(a.endsAt).getTime()
+      if (timeDiff !== 0) return timeDiff
+      const sevDiff = severityOrder(a.labels['severity'] ?? 'none') - severityOrder(b.labels['severity'] ?? 'none')
+      if (sevDiff !== 0) return sevDiff
+      return (a.labels['alertname'] ?? '').localeCompare(b.labels['alertname'] ?? '')
+    })
     return (
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
