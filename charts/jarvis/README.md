@@ -129,7 +129,13 @@ clusters:
     hostAlias: https://alertmanager.prod.example.com
 ```
 
-### Ingress with nginx WebSocket support
+### Ingress with WebSocket support
+
+Jarvis uses WebSocket (`/ws`) for live alert updates. The ingress must not strip or block the `Upgrade` / `Connection` headers.
+
+#### ingress-nginx
+
+ingress-nginx requires explicit WebSocket annotations:
 
 ```yaml
 ingress:
@@ -142,6 +148,31 @@ ingress:
     nginx.ingress.kubernetes.io/configuration-snippet: |
       proxy_set_header Upgrade $http_upgrade;
       proxy_set_header Connection "upgrade";
+  hosts:
+    - host: jarvis.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: jarvis-tls
+      hosts:
+        - jarvis.example.com
+
+config:
+  allowedOrigins: "https://jarvis.example.com"
+```
+
+#### Traefik (v2 / v3)
+
+Traefik forwards WebSocket connections out of the box — no extra annotations are required. Only add annotations if you need HTTPS redirect or custom middleware:
+
+```yaml
+ingress:
+  enabled: true
+  className: traefik
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
   hosts:
     - host: jarvis.example.com
       paths:
