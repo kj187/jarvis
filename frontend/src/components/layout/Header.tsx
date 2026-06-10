@@ -393,7 +393,7 @@ export function Header() {
                 >
                   <span className={`h-1.5 w-1.5 rounded-full ${isActive ? activeDot : dot}`} />
                   {label}
-                  <span className="tabular-nums opacity-75">{count}</span>
+                  {value !== 'resolved' && <span className="tabular-nums opacity-75">{count}</span>}
                 </button>
               )
             })}

@@ -210,11 +210,11 @@ describe('Header – refresh button', () => {
 })
 
 describe('Header – alert count', () => {
-  it('shows per-state counts in state pills', () => {
+  it('shows active and suppressed counts, not resolved count', () => {
     useUIStore.setState({ alertCounts: { filtered: 3, total: 30, byState: { active: 5, suppressed: 2, resolved: 10 } } })
     renderHeader()
     expect(screen.getByText('5')).toBeInTheDocument()
     expect(screen.getByText('2')).toBeInTheDocument()
-    expect(screen.getByText('10')).toBeInTheDocument()
+    expect(screen.queryByText('10')).not.toBeInTheDocument()
   })
 })
