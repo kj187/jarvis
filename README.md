@@ -1,5 +1,7 @@
 # Jarvis
 
+> **Built with AI** — Jarvis was developed entirely using AI coding assistants. This is an intentional workflow choice, not a shortcut: the codebase follows established Go and React best practices, enforces security standards through automated tooling (gosec, govulncheck, golangci-lint, pnpm audit) on every commit and in CI, and applies defense-in-depth measures (strict CSP, read-only container filesystem, no-new-privileges). See [SECURITY.md](SECURITY.md) for details.
+
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![CI](https://github.com/kj187/jarvis/actions/workflows/ci.yml/badge.svg)](https://github.com/kj187/jarvis/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/kj187/jarvis)](https://github.com/kj187/jarvis/releases/latest)
@@ -9,9 +11,8 @@
 
 It was inspired by [Karma](https://github.com/prymitive/karma), which is a great project. However, I was missing features that matter for day-to-day on-call work: full persistence across restarts, the ability to comment on individual alerts, a claiming system so the team knows who is handling what, and a solid foundation to build further operational tooling on top of. Jarvis is the result.
 
-> **AI Disclaimer** — Jarvis was built entirely with AI coding assistants. Security tooling runs in CI (gosec, govulncheck, golangci-lint, pnpm audit) and common mitigations are in place (strict CSP, read-only container filesystem, no-new-privileges), but no human audit has been performed. See [SECURITY.md](SECURITY.md) for details.
-
 ![Jarvis Screenshot](docs/assets/screenshot.png)
+
 
 ## Why Jarvis?
 
@@ -178,6 +179,10 @@ The detail panel is the central hub for working with a single alert. It slides i
 - Other team members can see who has claimed an alert on both the card and list view
 - Unclaim at any time
 
+When an alert is claimed, the owner's name appears as a chip in the detail panel header and as an "In progress" banner on the alert card. The claim history is recorded in the History table.
+
+![Alert Detail Panel — Claimed](docs/assets/feature-detail-claimed.png)
+
 **Silence controls**
 - Create a new silence directly from the panel — the form opens pre-filled with the alert's labels
 - Extend or delete an existing silence if the alert is currently suppressed
@@ -320,7 +325,7 @@ See [.env.example](.env.example) for all options. Key settings:
 | `JARVIS_PORT` | `8080` | HTTP port |
 | `JARVIS_POLL_INTERVAL` | `15s` | Alertmanager poll interval |
 | `JARVIS_DB_PATH` | `/data/jarvis.db` | SQLite database path |
-| `JARVIS_ALLOWED_ORIGINS` | _(same-origin)_ | CORS + WebSocket origin whitelist |
+| `JARVIS_ALLOWED_ORIGINS` | _(same-origin)_ | Comma-separated list of allowed origins for CORS and WebSocket connections (e.g. `https://jarvis.example.com`). Only needed when the browser-visible URL differs from the backend's own host — for example during local development (`http://localhost:5173`) or when a reverse proxy rewrites the hostname. Not needed in the default single-binary production deployment, where the Go server serves the embedded frontend from the same origin. |
 | `JARVIS_RUNBOOK_BASE_URL` | — | Base URL for runbook links (alert label `runbook` is appended) |
 | `JARVIS_CLUSTER_1_NAME` | — | Cluster display name |
 | `JARVIS_CLUSTER_1_ALERTMANAGER_URL` | — | Internal Alertmanager URL |
@@ -333,7 +338,7 @@ Add additional clusters with `JARVIS_CLUSTER_2_*`, `JARVIS_CLUSTER_3_*`, etc.
 
 **Backend**: Go 1.25 · Echo v4 · SQLite (modernc.org/sqlite, CGO-free) · gorilla/websocket
 
-**Frontend**: React 19 · TypeScript 5.7 · Vite 6 · Tailwind CSS v4 · Zustand v5 · TanStack Query v5
+**Frontend**: React 19 · TypeScript 5.8 · Vite 6 · Tailwind CSS v4 · Zustand v5 · TanStack Query v5
 
 **Infrastructure**: Podman multi-stage build · distroless/static-debian12
 

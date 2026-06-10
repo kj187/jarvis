@@ -2,7 +2,7 @@
 
 ## Architecture Overview
 
-Jarvis is a web frontend for Prometheus Alertmanager. The Go 1.24+ backend (Echo v4) polls all configured Alertmanager clusters, stores every alert lifecycle in SQLite, keeps the current poll snapshot in an in-memory store, and pushes updates via WebSocket to the React 19 / TypeScript / Vite 6 frontend. The Go module path is `github.com/kj187/jarvis/backend`.
+Jarvis is a web frontend for Prometheus Alertmanager. The Go 1.25+ backend (Echo v4) polls all configured Alertmanager clusters, stores every alert lifecycle in SQLite, keeps the current poll snapshot in an in-memory store, and pushes updates via WebSocket to the React 19 / TypeScript / Vite 6 frontend. The Go module path is `github.com/kj187/jarvis/backend`.
 
 ## Technology Decisions
 
