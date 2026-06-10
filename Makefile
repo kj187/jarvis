@@ -1,12 +1,13 @@
 COMPOSE_DEV        = podman compose -f compose.dev.yml
-COMPOSE_TEST_AM    = podman compose -f compose.dev.yml -f compose.test-alertmanager.yml
+COMPOSE_TEST_DEPS  = podman compose -f compose.test-dependencies.yml
 GITLEAKS           = podman run --rm -v "$(CURDIR):/repo:ro,z" zricethezav/gitleaks:latest
 FRONTEND_CONTAINER = jarvis_frontend_1
 
 .PHONY: help \
         setup \
-        up up-build down logs \
+        up up-build down logs ps \
         test-am-up test-am-down \
+        test-pg-up test-pg-down \
         test-all test-backend test-frontend \
         lint gosec govulncheck audit security-all \
         scan scan-history scan-staged scan-all \
@@ -35,11 +36,20 @@ down: ## Stop dev environment
 logs: ## Follow dev logs
 	$(COMPOSE_DEV) logs -f
 
-test-am-up: ## Start dev env + test Alertmanager (port 9094)
-	$(COMPOSE_TEST_AM) up -d
+ps: ## Show status of all running containers (dev + test deps)
+	podman compose ps
 
-test-am-down: ## Stop dev env + test Alertmanager
-	$(COMPOSE_TEST_AM) down
+test-am-up: ## Start test Alertmanager (port 9094) — requires dev stack running
+	$(COMPOSE_TEST_DEPS) up -d test-alertmanager
+
+test-am-down: ## Stop test Alertmanager
+	$(COMPOSE_TEST_DEPS) stop test-alertmanager
+
+test-pg-up: ## Start test PostgreSQL (port 5432, jarvis/jarvis/jarvis) — requires dev stack running
+	$(COMPOSE_TEST_DEPS) up -d test-postgres
+
+test-pg-down: ## Stop test PostgreSQL
+	$(COMPOSE_TEST_DEPS) stop test-postgres
 
 # ── Tests ──────────────────────────────────────────────────────────────────────
 

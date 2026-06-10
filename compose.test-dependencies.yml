@@ -1,0 +1,46 @@
+# Standalone test dependencies — joins the dev network (jarvis_default) as external.
+# Requires: make up (dev stack) must be running first so the network exists.
+#
+# Usage (via Makefile):
+#   make test-am-up / make test-am-down
+#   make test-pg-up / make test-pg-down
+#
+# Reachable from backend container:
+#   Alertmanager: http://test-alertmanager:9093
+#   PostgreSQL:   postgres://jarvis:jarvis@test-postgres:5432/jarvis?sslmode=disable
+#
+# Reachable from host:
+#   Alertmanager: http://localhost:9094
+#   PostgreSQL:   postgres://jarvis:jarvis@localhost:5432/jarvis?sslmode=disable
+
+services:
+  test-alertmanager:
+    image: docker.io/prom/alertmanager:latest
+    container_name: jarvis_test_alertmanager
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+      - '--web.listen-address=0.0.0.0:9093'
+    ports:
+      - "9094:9093"
+    volumes:
+      - ./scripts/test-alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro,z
+    restart: unless-stopped
+
+  test-postgres:
+    image: docker.io/postgres:16-alpine
+    container_name: jarvis_test_postgres
+    environment:
+      POSTGRES_DB: jarvis
+      POSTGRES_USER: jarvis
+      POSTGRES_PASSWORD: jarvis
+    ports:
+      - "5432:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    restart: unless-stopped
+
+networks:
+  default:
+    name: jarvis_default
+    external: true
