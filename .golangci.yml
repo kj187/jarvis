@@ -1,5 +1,4 @@
-run:
-  timeout: 5m
+version: "2"
 
 linters:
   enable:
@@ -8,18 +7,15 @@ linters:
     - bodyclose
     - noctx
     - staticcheck
-    - unused
     - govet
-    - gofmt
     - misspell
     - dupl
-
-linters-settings:
-  gosec:
-    severity: medium
-    confidence: medium
-  dupl:
-    threshold: 100
+  settings:
+    gosec:
+      severity: medium
+      confidence: medium
+    dupl:
+      threshold: 100
 
 issues:
   exclude-rules:
