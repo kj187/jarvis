@@ -3,7 +3,6 @@ name: Bug Report
 about: Report a bug in Jarvis
 title: 'fix: '
 labels: bug
-assignees: kj187
 ---
 
 ## Description

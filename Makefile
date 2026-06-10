@@ -4,6 +4,7 @@ GITLEAKS           = podman run --rm -v "$(CURDIR):/repo:ro,z" zricethezav/gitle
 FRONTEND_CONTAINER = jarvis_frontend_1
 
 .PHONY: help \
+        setup \
         up up-build down logs \
         test-am-up test-am-down \
         test-all test-backend test-frontend \
@@ -15,6 +16,10 @@ FRONTEND_CONTAINER = jarvis_frontend_1
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
 		| awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
+
+setup: ## One-time setup: activate pre-commit hooks
+	git config core.hooksPath .githooks
+	@echo "Pre-commit hooks activated."
 
 # ── Dev environment ────────────────────────────────────────────────────────────
 
