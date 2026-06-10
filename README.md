@@ -123,7 +123,7 @@ Open the Settings panel by clicking the **⚙ gear icon** in the top-right area 
 |---|---|
 | **Time format** | Switch between *Relative* ("6 days ago") and *Absolute* ("Jun 4, 2025, 12:30 PM") timestamps. A live preview updates as you toggle. |
 | **Default view** | Choose whether the app starts in *Card* or *List* view on every page load. |
-| **Resolved alert max age** | Hide resolved alerts older than N days (1–365). Useful for keeping the resolved tab focused on recent events. |
+| **Resolved page size** | Number of resolved alerts shown per page (10 / 25 / 50 / 100). Set via the per-page selector in the resolved view; persisted in localStorage. |
 | **Default filter** | Label matchers that are always active — see below. |
 | **Default silence duration** | Pre-selected duration when the silence creation form opens (15 min to 3 days). |
 | **Creator name** | Pre-fills the "Created by" field in new silences. |
@@ -169,6 +169,8 @@ Full alert history persisted in SQLite — survives container restarts and Alert
 ![Resolved View](docs/assets/feature-resolved.png)
 
 The resolved view is Jarvis's history log. Every alert that has ever fired is recorded in SQLite with its complete lifecycle, and the resolved view shows all alerts that have reached a `resolved` state. This is the core capability that separates Jarvis from in-memory-only UIs.
+
+Alerts are displayed as a flat list sorted by resolution time (newest first). A **page browser** at the top and bottom allows navigation through large result sets. The **per-page selector** (10 / 25 / 50 / 100) is persisted in localStorage so your preference is remembered across sessions.
 
 **What is stored per alert:**
 - First seen timestamp (when it first fired, ever)
@@ -358,7 +360,7 @@ See [.env.example](.env.example) for all options. Key settings:
 |---|---|---|
 | `JARVIS_PORT` | `8080` | HTTP port |
 | `JARVIS_POLL_INTERVAL` | `15s` | Alertmanager poll interval |
-| `JARVIS_DB_PATH` | `/data/jarvis.db` | SQLite database path |
+| `JARVIS_DB_DSN` | `/data/jarvis.db` | Database DSN — SQLite file path **or** `postgres://` URL (see below) |
 | `JARVIS_ALLOWED_ORIGINS` | _(same-origin)_ | Comma-separated list of allowed origins for CORS and WebSocket connections (e.g. `https://jarvis.example.com`). Only needed when the browser-visible URL differs from the backend's own host — for example during local development (`http://localhost:5173`) or when a reverse proxy rewrites the hostname. Not needed in the default single-binary production deployment, where the Go server serves the embedded frontend from the same origin. |
 | `JARVIS_RUNBOOK_BASE_URL` | — | Base URL for runbook links (alert label `runbook` is appended) |
 | `JARVIS_CLUSTER_1_NAME` | — | Cluster display name |
@@ -368,9 +370,32 @@ See [.env.example](.env.example) for all options. Key settings:
 
 Add additional clusters with `JARVIS_CLUSTER_2_*`, `JARVIS_CLUSTER_3_*`, etc.
 
+### Database
+
+Jarvis supports two database backends — configured via `JARVIS_DB_DSN`:
+
+**SQLite** (default — no setup required):
+```env
+JARVIS_DB_DSN=/data/jarvis.db
+```
+
+**PostgreSQL** (external, persistent across container recreations):
+```env
+JARVIS_DB_DSN=postgres://jarvis:secret@postgres:5432/jarvis?sslmode=disable
+```
+
+The dialect is detected automatically from the DSN prefix. Schema migrations run on every startup (idempotent — safe to restart). The password in `JARVIS_DB_DSN` is redacted in all log output.
+
+> **Local testing with PostgreSQL** — use `compose.test-dependencies.yml`:
+> ```bash
+> podman compose -f compose.dev.yml -f compose.test-dependencies.yml up -d
+> # Then set in .env:
+> # JARVIS_DB_DSN=postgres://jarvis:jarvis@test-postgres:5432/jarvis?sslmode=disable
+> ```
+
 ## Tech Stack
 
-**Backend**: Go 1.25 · Echo v4 · SQLite (modernc.org/sqlite, CGO-free) · gorilla/websocket
+**Backend**: Go 1.25 · Echo v4 · SQLite / PostgreSQL (`pgx/v5`, CGO-free) · gorilla/websocket
 
 **Frontend**: React 19 · TypeScript 5.8 · Vite 6 · Tailwind CSS v4 · Zustand v5 · TanStack Query v5
 
