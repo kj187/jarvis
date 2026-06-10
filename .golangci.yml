@@ -16,14 +16,13 @@ linters:
       confidence: medium
     dupl:
       threshold: 100
-
-issues:
-  exclude-rules:
-    - path: "_test.go"
-      linters:
-        - gosec
-        - errcheck
-    - path: "internal/history/store.go"
-      linters:
-        - gosec
-      text: "G202"
+  exclusions:
+    rules:
+      - path: "_test.go"
+        linters:
+          - gosec
+          - errcheck
+      - path: "internal/history/store.go"
+        linters:
+          - gosec
+        text: "G202"
