@@ -196,7 +196,7 @@ jobs:
         uses: azure/setup-helm@v4
 
       - name: Install helm-unittest plugin
-        run: helm plugin install https://github.com/helm-unittest/helm-unittest
+        run: helm plugin install https://github.com/helm-unittest/helm-unittest --verify=false
 
       - name: Lint chart
         run: helm lint charts/jarvis/
