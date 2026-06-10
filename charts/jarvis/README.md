@@ -29,6 +29,24 @@ helm upgrade jarvis oci://ghcr.io/kj187/charts/jarvis --version <version> -f val
 helm uninstall jarvis
 ```
 
+## Testing
+
+The chart ships unit tests via [helm-unittest](https://github.com/helm-unittest/helm-unittest). No Kubernetes cluster is needed.
+
+```bash
+# Install plugin once
+helm plugin install https://github.com/helm-unittest/helm-unittest
+
+# Run all chart tests
+helm unittest charts/jarvis/
+
+# Also available via Makefile
+make helm-lint    # static validation
+make helm-test    # unit tests
+```
+
+Tests cover four suites (`deployment`, `configmap`, `secret`, `ingress`) and run automatically in the pre-commit hook (when `charts/` files are staged) and in CI.
+
 ## Values
 
 | Key | Type | Default | Description |

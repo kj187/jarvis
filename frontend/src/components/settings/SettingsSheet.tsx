@@ -8,7 +8,6 @@ import { Button } from '@/components/ui/button'
 import { formatTime } from '@/lib/alertUtils'
 import {
   useSettingsStore,
-  DEFAULT_SETTINGS,
   ALLOWED_SILENCE_DURATIONS,
   POLL_OPTIONS,
 } from '@/store/useSettingsStore'
