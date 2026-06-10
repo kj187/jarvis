@@ -1,0 +1,66 @@
+suite: ingress
+templates:
+  - templates/ingress.yaml
+
+tests:
+  - it: does not render Ingress when disabled
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: renders Ingress when enabled
+    set:
+      ingress.enabled: true
+    asserts:
+      - hasDocuments:
+          count: 1
+      - isKind:
+          of: Ingress
+
+  - it: sets ingressClassName when configured
+    set:
+      ingress.enabled: true
+      ingress.className: nginx
+    asserts:
+      - equal:
+          path: spec.ingressClassName
+          value: nginx
+
+  - it: omits ingressClassName when empty
+    set:
+      ingress.enabled: true
+      ingress.className: ""
+    asserts:
+      - notExists:
+          path: spec.ingressClassName
+
+  - it: renders host and path from default values
+    set:
+      ingress.enabled: true
+    asserts:
+      - equal:
+          path: spec.rules[0].host
+          value: jarvis.example.com
+      - equal:
+          path: spec.rules[0].http.paths[0].path
+          value: /
+
+  - it: renders TLS when configured
+    values:
+      - ./values/ingress-tls.yaml
+    asserts:
+      - hasDocuments:
+          count: 1
+      - equal:
+          path: spec.tls[0].secretName
+          value: jarvis-tls
+      - equal:
+          path: spec.tls[0].hosts[0]
+          value: jarvis.example.com
+
+  - it: applies annotations
+    set:
+      ingress.enabled: true
+    asserts:
+      - isNotNullOrEmpty:
+          path: metadata.labels

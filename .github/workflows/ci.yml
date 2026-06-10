@@ -182,3 +182,24 @@ jobs:
 
       - name: Check code duplication
         run: pnpm duplication
+
+  helm:
+    name: Helm
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+
+      - name: Install helm-unittest plugin
+        run: helm plugin install https://github.com/helm-unittest/helm-unittest
+
+      - name: Lint chart
+        run: helm lint charts/jarvis/
+
+      - name: Run unit tests
+        run: helm unittest charts/jarvis/

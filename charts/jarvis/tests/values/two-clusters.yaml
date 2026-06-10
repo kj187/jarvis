@@ -1,0 +1,7 @@
+clusters:
+  - name: staging
+    alertmanagerUrl: http://am-staging:9093
+    prometheusUrl: http://prom-staging:9090
+  - name: production
+    alertmanagerUrl: http://am-prod:9093
+    hostAlias: https://alertmanager.example.com

@@ -9,6 +9,7 @@ FRONTEND_CONTAINER = jarvis_frontend_1
         test-am-up test-am-down \
         test-pg-up test-pg-down \
         test-all test-backend test-frontend \
+        helm-lint helm-test \
         lint gosec govulncheck audit security-all \
         scan scan-history scan-staged scan-all \
         build \
@@ -53,13 +54,19 @@ test-pg-down: ## Stop test PostgreSQL
 
 # ── Tests ──────────────────────────────────────────────────────────────────────
 
-test-all: test-backend test-frontend ## Run all tests (backend + frontend)
+test-all: test-backend test-frontend helm-lint helm-test ## Run all tests (backend + frontend + helm)
 
 test-backend: ## Backend: go test -race ./...
 	cd backend && go test -v -race ./...
 
 test-frontend: ## Frontend: pnpm test (requires dev container running)
 	podman exec -e CI=true $(FRONTEND_CONTAINER) sh -c "cd /app && pnpm test"
+
+helm-lint: ## Helm: lint chart
+	helm lint charts/jarvis/
+
+helm-test: ## Helm: run unit tests (requires helm-unittest plugin)
+	helm unittest charts/jarvis/
 
 # ── Lint & static analysis ─────────────────────────────────────────────────────
 
