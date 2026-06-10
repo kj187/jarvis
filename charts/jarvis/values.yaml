@@ -1,0 +1,118 @@
+replicaCount: 1
+
+image:
+  repository: ghcr.io/kj187/jarvis
+  pullPolicy: IfNotPresent
+  # Overrides the image tag. Defaults to the chart appVersion.
+  tag: ""
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  # distroless/static-debian12 nonroot UID
+  runAsUser: 65532
+  runAsGroup: 65532
+  fsGroup: 65532
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: [ALL]
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: false
+  className: ""
+  # WebSocket requires these nginx annotations when using ingress-nginx:
+  #   nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+  #   nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+  #   nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+  #   nginx.ingress.kubernetes.io/configuration-snippet: |
+  #     proxy_set_header Upgrade $http_upgrade;
+  #     proxy_set_header Connection "upgrade";
+  annotations: {}
+  hosts:
+    - host: jarvis.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+  #  - secretName: jarvis-tls
+  #    hosts:
+  #      - jarvis.example.com
+
+resources: {}
+  # limits:
+  #   cpu: 200m
+  #   memory: 128Mi
+  # requests:
+  #   cpu: 50m
+  #   memory: 64Mi
+
+config:
+  logLevel: info
+  pollInterval: 15s
+  runbookBaseURL: ""
+  # Comma-separated list of allowed browser origins for CORS and WebSocket.
+  # Required when the browser-visible hostname differs from the backend host
+  # (e.g. when accessed via an ingress). Example: "https://jarvis.example.com"
+  # Leave empty for same-origin-only access.
+  allowedOrigins: ""
+
+# Alertmanager cluster configuration.
+# At least one cluster is required. Add additional clusters by appending entries.
+clusters:
+  - name: default
+    alertmanagerUrl: http://alertmanager:9093
+    # Optional Prometheus URL for rule lookups
+    prometheusUrl: ""
+    # Optional: overrides host/scheme for browser links when the internal URL
+    # differs from what the browser can reach (e.g. via ingress).
+    hostAlias: ""
+
+# Database configuration.
+database:
+  # DSN for the database connection. Two dialects are supported:
+  #   SQLite (default):  a file path, e.g. /data/jarvis.db
+  #   PostgreSQL:        a postgres:// URL, e.g. postgres://user:pass@host:5432/db?sslmode=disable
+  # The dialect is detected automatically from the DSN prefix.
+  # The DSN is stored in a Kubernetes Secret and never logged in plain text.
+  dsn: /data/jarvis.db
+  # Use an existing Secret instead of letting the chart create one.
+  # When set, `dsn` above is ignored.
+  existingSecret: ""
+  existingSecretKey: dsn
+
+# Persistent storage for the SQLite database file.
+# Ignored when using PostgreSQL (database.dsn starts with "postgres://").
+persistence:
+  enabled: false
+  storageClass: ""
+  accessMode: ReadWriteOnce
+  size: 1Gi
+  annotations: {}
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 80
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

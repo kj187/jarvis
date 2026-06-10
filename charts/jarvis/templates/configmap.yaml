@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "jarvis.fullname" . }}
+  labels:
+    {{- include "jarvis.labels" . | nindent 4 }}
+data:
+  JARVIS_PORT: "8080"
+  JARVIS_LOG_LEVEL: {{ .Values.config.logLevel | quote }}
+  JARVIS_POLL_INTERVAL: {{ .Values.config.pollInterval | quote }}
+  {{- if .Values.config.runbookBaseURL }}
+  JARVIS_RUNBOOK_BASE_URL: {{ .Values.config.runbookBaseURL | quote }}
+  {{- end }}
+  {{- if .Values.config.allowedOrigins }}
+  JARVIS_ALLOWED_ORIGINS: {{ .Values.config.allowedOrigins | quote }}
+  {{- end }}
+  {{- range $i, $cluster := .Values.clusters }}
+  {{- $n := add $i 1 }}
+  JARVIS_CLUSTER_{{ $n }}_NAME: {{ $cluster.name | quote }}
+  JARVIS_CLUSTER_{{ $n }}_ALERTMANAGER_URL: {{ $cluster.alertmanagerUrl | quote }}
+  {{- if $cluster.prometheusUrl }}
+  JARVIS_CLUSTER_{{ $n }}_PROMETHEUS_URL: {{ $cluster.prometheusUrl | quote }}
+  {{- end }}
+  {{- if $cluster.hostAlias }}
+  JARVIS_CLUSTER_{{ $n }}_HOST_ALIAS: {{ $cluster.hostAlias | quote }}
+  {{- end }}
+  {{- end }}

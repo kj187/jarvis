@@ -1,0 +1,41 @@
+Jarvis has been deployed!
+
+1. Get the application URL:
+{{- if .Values.ingress.enabled }}
+{{- range $host := .Values.ingress.hosts }}
+  http{{ if $.Values.ingress.tls }}s{{ end }}://{{ $host.host }}
+{{- end }}
+{{- else if contains "NodePort" .Values.service.type }}
+  export NODE_PORT=$(kubectl get --namespace {{ .Release.Namespace }} -o jsonpath="{.spec.ports[0].nodePort}" services {{ include "jarvis.fullname" . }})
+  export NODE_IP=$(kubectl get nodes --namespace {{ .Release.Namespace }} -o jsonpath="{.items[0].status.addresses[0].address}")
+  echo http://$NODE_IP:$NODE_PORT
+{{- else if contains "LoadBalancer" .Values.service.type }}
+  NOTE: It may take a few minutes for the LoadBalancer IP to be available.
+  export SERVICE_IP=$(kubectl get svc --namespace {{ .Release.Namespace }} {{ include "jarvis.fullname" . }} --template "{{"{{range (index .status.loadBalancer.ingress 0)}}{{.}}{{end}}"}}")
+  echo http://$SERVICE_IP:{{ .Values.service.port }}
+{{- else }}
+  kubectl --namespace {{ .Release.Namespace }} port-forward svc/{{ include "jarvis.fullname" . }} 8080:{{ .Values.service.port }}
+  Then open: http://localhost:8080
+{{- end }}
+
+2. Database:
+{{- if .Values.database.existingSecret }}
+  Using existing secret "{{ .Values.database.existingSecret }}" for DSN.
+{{- else if or (hasPrefix "postgres://" .Values.database.dsn) (hasPrefix "postgresql://" .Values.database.dsn) }}
+  PostgreSQL backend configured. Schema migrations run automatically on startup.
+{{- else }}
+  SQLite backend. Data stored at /data/jarvis.db inside the pod.
+  {{- if not .Values.persistence.enabled }}
+  WARNING: persistence.enabled=false — data will be lost when the pod restarts.
+             Set persistence.enabled=true and configure a StorageClass for production use.
+  {{- end }}
+{{- end }}
+
+3. WebSocket (required for live updates):
+   If you are using ingress-nginx, add these annotations to your ingress:
+     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+     nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+     nginx.ingress.kubernetes.io/configuration-snippet: |
+       proxy_set_header Upgrade $http_upgrade;
+       proxy_set_header Connection "upgrade";

@@ -1,0 +1,18 @@
+apiVersion: v2
+name: jarvis
+description: Web frontend for Prometheus Alertmanager with persistent alert history
+type: application
+version: 0.0.0
+appVersion: "0.0.0"
+keywords:
+  - alertmanager
+  - prometheus
+  - monitoring
+  - alerts
+  - observability
+home: https://github.com/kj187/jarvis
+sources:
+  - https://github.com/kj187/jarvis
+maintainers:
+  - name: kj187
+    url: https://github.com/kj187
