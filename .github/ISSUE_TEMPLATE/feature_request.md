@@ -3,7 +3,6 @@ name: Feature Request
 about: Propose a new feature or improvement
 title: 'feat: '
 labels: enhancement
-assignees: kj187
 ---
 
 ## Problem

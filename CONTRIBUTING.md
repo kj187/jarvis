@@ -12,9 +12,14 @@ No local Go or Node installation required — everything runs in containers.
 ## Development Setup
 
 ```bash
+# 1. Activate pre-commit hooks (once after cloning)
+make setup
+
+# 2. Copy and configure environment
 cp .env.example .env
 # Edit .env — configure at least one cluster
 
+# 3. Start development stack (hot-reload)
 podman compose -f compose.dev.yml up
 # Frontend: http://localhost:5173 (Vite HMR)
 # Backend:  http://localhost:8080 (air hot-reload)

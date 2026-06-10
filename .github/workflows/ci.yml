@@ -80,6 +80,14 @@ jobs:
             backend/coverage.out
             backend/report.xml
 
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: backend/coverage.out
+          flags: backend
+          fail_ci_if_error: false
+
       - name: Run gosec
         run: |
           go install github.com/securego/gosec/v2/cmd/gosec@v2.27.1
@@ -160,6 +168,14 @@ jobs:
         with:
           name: frontend-coverage
           path: frontend/coverage/
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          directory: frontend/coverage/
+          flags: frontend
+          fail_ci_if_error: false
 
       - name: Build
         run: pnpm build
