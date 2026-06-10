@@ -43,7 +43,7 @@ jobs:
         run: go mod download
 
       - name: Install go-junit-report
-        run: go install github.com/jstemmer/go-junit-report/v2@latest
+        run: go install github.com/jstemmer/go-junit-report/v2@v2.1.0
 
       - name: Run tests
         run: |
@@ -81,19 +81,19 @@ jobs:
 
       - name: Run gosec
         run: |
-          go install github.com/securego/gosec/v2/cmd/gosec@latest
+          go install github.com/securego/gosec/v2/cmd/gosec@v2.27.1
           gosec ./...
 
       - name: Run govulncheck
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@latest
+          go install golang.org/x/vuln/cmd/govulncheck@v1.3.0
           govulncheck ./...
 
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v6
         with:
           working-directory: backend
-          version: latest
+          version: v1.64.8
 
   frontend:
     name: Frontend

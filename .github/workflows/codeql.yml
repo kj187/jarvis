@@ -10,6 +10,8 @@ on:
 
 jobs:
   analyze:
+    # TODO: Enable once repo is public (Code Scanning requires GitHub Advanced Security for private repos)
+    if: false
     name: Analyze (${{ matrix.language }})
     runs-on: ubuntu-latest
     permissions:
