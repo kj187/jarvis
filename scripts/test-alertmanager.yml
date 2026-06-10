@@ -1,0 +1,12 @@
+global:
+  resolve_timeout: 1h
+
+route:
+  group_by: ['alertname', 'cluster', 'namespace']
+  group_wait: 5s
+  group_interval: 5s
+  repeat_interval: 30m
+  receiver: 'null'
+
+receivers:
+  - name: 'null'
