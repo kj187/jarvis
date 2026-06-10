@@ -393,6 +393,19 @@ The dialect is detected automatically from the DSN prefix. Schema migrations run
 > # JARVIS_DB_DSN=postgres://jarvis:jarvis@test-postgres:5432/jarvis?sslmode=disable
 > ```
 
+## Kubernetes / Helm
+
+Jarvis ships a Helm chart published to GHCR as an OCI artifact alongside the Docker image. No separate Helm registry is needed.
+
+```bash
+helm install jarvis oci://ghcr.io/kj187/charts/jarvis \
+  --version <version> \
+  --set clusters[0].name=production \
+  --set clusters[0].alertmanagerUrl=http://alertmanager:9093
+```
+
+For a full values reference, installation examples (SQLite with PVC, PostgreSQL, multi-cluster, ingress-nginx with WebSocket), and upgrade instructions see [charts/jarvis/README.md](charts/jarvis/README.md).
+
 ## Tech Stack
 
 **Backend**: Go 1.25 · Echo v4 · SQLite / PostgreSQL (`pgx/v5`, CGO-free) · gorilla/websocket

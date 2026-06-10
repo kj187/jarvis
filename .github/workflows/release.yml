@@ -55,3 +55,34 @@ jobs:
         with:
           generate_release_notes: true
           make_latest: true
+
+  helm-publish:
+    name: Helm Chart
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+
+      - name: Patch Chart versions
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          sed -i "s/^version:.*/version: ${VERSION}/" charts/jarvis/Chart.yaml
+          sed -i "s/^appVersion:.*/appVersion: \"${GITHUB_REF_NAME}\"/" charts/jarvis/Chart.yaml
+
+      - name: Log in to GHCR (Helm)
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | \
+            helm registry login ghcr.io --username "${{ github.actor }}" --password-stdin
+
+      - name: Package and push chart
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          helm package charts/jarvis --version "${VERSION}"
+          helm push "jarvis-${VERSION}.tgz" oci://ghcr.io/kj187/charts
