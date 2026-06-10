@@ -94,7 +94,7 @@ jobs:
         uses: golangci/golangci-lint-action@v9
         with:
           working-directory: backend
-          version: latest
+          version: v2.12.2
 
   frontend:
     name: Frontend
