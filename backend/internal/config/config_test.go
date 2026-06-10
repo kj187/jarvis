@@ -29,8 +29,8 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.PollInterval != 15*time.Second {
 		t.Errorf("PollInterval = %v, want 15s", cfg.PollInterval)
 	}
-	if cfg.DBPath != "/data/jarvis.db" {
-		t.Errorf("DBPath = %q, want /data/jarvis.db", cfg.DBPath)
+	if cfg.DBDSN != "/data/jarvis.db" {
+		t.Errorf("DBPath = %q, want /data/jarvis.db", cfg.DBDSN)
 	}
 	if len(cfg.AllowedOrigins) != 0 {
 		t.Errorf("AllowedOrigins = %v, want empty", cfg.AllowedOrigins)

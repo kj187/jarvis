@@ -4,28 +4,82 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"os"
-	"path/filepath"
+	"net/url"
+	"strings"
 
+	_ "github.com/jackc/pgx/v5/stdlib"
 	_ "modernc.org/sqlite"
 )
 
-// Open opens (or creates) the SQLite database at the given path.
-// It creates the parent directory if needed and applies required PRAGMAs.
-func Open(path string) (*sql.DB, error) {
+// Dialect identifies the database engine.
+type Dialect string
+
+const (
+	DialectSQLite   Dialect = "sqlite"
+	DialectPostgres Dialect = "postgres"
+)
+
+// DetectDialect returns the dialect for a given DSN.
+// DSNs starting with "postgres://" or "postgresql://" are PostgreSQL;
+// everything else is treated as a SQLite file path.
+func DetectDialect(dsn string) Dialect {
+	if strings.HasPrefix(dsn, "postgres://") || strings.HasPrefix(dsn, "postgresql://") {
+		return DialectPostgres
+	}
+	return DialectSQLite
+}
+
+// RedactDSN replaces the password in a DSN with "***" for safe log output.
+// Returns the original string if it cannot be parsed or has no password.
+func RedactDSN(dsn string) string {
+	u, err := url.Parse(dsn)
+	if err != nil || u.User == nil {
+		return dsn
+	}
+	_, hasPassword := u.User.Password()
+	if !hasPassword {
+		return dsn
+	}
+	// Rebuild manually to avoid url.String() percent-encoding "***".
+	redacted := u.Scheme + "://" + u.User.Username() + ":***@" + u.Host + u.RequestURI()
+	return redacted
+}
+
+// Open opens a database connection for the given DSN and returns the
+// connection and its dialect. Use RedactDSN before logging the DSN.
+func Open(dsn string) (*sql.DB, Dialect, error) {
+	switch DetectDialect(dsn) {
+	case DialectPostgres:
+		return openPostgres(dsn)
+	default:
+		return openSQLite(dsn)
+	}
+}
+
+// Migrate creates all tables and indexes for the given dialect (idempotent).
+func Migrate(database *sql.DB, dialect Dialect) error {
+	switch dialect {
+	case DialectPostgres:
+		return migratePostgres(database)
+	default:
+		return migrateSQLite(database)
+	}
+}
+
+func openSQLite(path string) (*sql.DB, Dialect, error) {
 	if path != ":memory:" {
-		if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
-			return nil, fmt.Errorf("create db directory: %w", err)
+		if err := ensureDir(path); err != nil {
+			return nil, DialectSQLite, err
 		}
 	}
 
-	db, err := sql.Open("sqlite", path)
+	database, err := sql.Open("sqlite", path)
 	if err != nil {
-		return nil, fmt.Errorf("open sqlite: %w", err)
+		return nil, DialectSQLite, fmt.Errorf("open sqlite: %w", err)
 	}
 
-	// Single writer — prevents "database is locked" errors.
-	db.SetMaxOpenConns(1)
+	// SQLite requires a single writer to avoid "database is locked".
+	database.SetMaxOpenConns(1)
 
 	pragmas := []string{
 		"PRAGMA journal_mode=WAL",
@@ -33,79 +87,24 @@ func Open(path string) (*sql.DB, error) {
 		"PRAGMA busy_timeout=5000",
 	}
 	for _, p := range pragmas {
-		if _, err := db.ExecContext(context.Background(), p); err != nil {
-			return nil, fmt.Errorf("apply pragma %q: %w", p, err)
+		if _, err := database.ExecContext(context.Background(), p); err != nil {
+			return nil, DialectSQLite, fmt.Errorf("apply pragma %q: %w", p, err)
 		}
 	}
 
-	return db, nil
+	return database, DialectSQLite, nil
 }
 
-// Migrate creates all tables and indexes (idempotent — safe to call on startup).
-func Migrate(db *sql.DB) error {
-	stmts := []string{
-		`CREATE TABLE IF NOT EXISTS alert_fingerprints (
-			fingerprint      TEXT PRIMARY KEY,
-			alertname        TEXT NOT NULL,
-			cluster_name     TEXT NOT NULL,
-			labels           TEXT NOT NULL,
-			first_seen_at    DATETIME NOT NULL,
-			last_seen_at     DATETIME NOT NULL,
-			occurrence_count INTEGER DEFAULT 1
-		)`,
-		`CREATE TABLE IF NOT EXISTS alert_events (
-			id               INTEGER PRIMARY KEY AUTOINCREMENT,
-			fingerprint      TEXT NOT NULL REFERENCES alert_fingerprints(fingerprint),
-			cluster_name     TEXT NOT NULL,
-			alertmanager_url TEXT NOT NULL,
-			status           TEXT NOT NULL,
-			starts_at        DATETIME NOT NULL,
-			ends_at          DATETIME,
-			annotations      TEXT,
-			recorded_at      DATETIME NOT NULL DEFAULT (datetime('now'))
-		)`,
-		`CREATE TABLE IF NOT EXISTS alert_comments (
-			id           INTEGER PRIMARY KEY AUTOINCREMENT,
-			fingerprint  TEXT NOT NULL REFERENCES alert_fingerprints(fingerprint),
-			event_id     INTEGER REFERENCES alert_events(id),
-			author_name  TEXT NOT NULL,
-			body         TEXT NOT NULL,
-			created_at   DATETIME NOT NULL DEFAULT (datetime('now'))
-		)`,
-		`CREATE TABLE IF NOT EXISTS alert_claims (
-			id             INTEGER PRIMARY KEY AUTOINCREMENT,
-			fingerprint    TEXT NOT NULL REFERENCES alert_fingerprints(fingerprint),
-			event_id       INTEGER REFERENCES alert_events(id),
-			claimed_by     TEXT NOT NULL,
-			claimed_at     DATETIME NOT NULL DEFAULT (datetime('now')),
-			note           TEXT,
-			released_at    DATETIME,
-			released_by    TEXT,
-			release_reason TEXT
-		)`,
-		`CREATE TABLE IF NOT EXISTS silence_events (
-			id           INTEGER PRIMARY KEY AUTOINCREMENT,
-			fingerprint  TEXT NOT NULL,
-			silence_id   TEXT NOT NULL,
-			cluster_name TEXT NOT NULL,
-			action       TEXT NOT NULL,
-			performed_by TEXT NOT NULL,
-			comment      TEXT NOT NULL DEFAULT '',
-			recorded_at  DATETIME NOT NULL DEFAULT (datetime('now'))
-		)`,
-		`CREATE INDEX IF NOT EXISTS idx_alert_events_fingerprint ON alert_events(fingerprint)`,
-		`CREATE INDEX IF NOT EXISTS idx_alert_events_starts_at   ON alert_events(starts_at DESC)`,
-		`CREATE INDEX IF NOT EXISTS idx_alert_events_fingerprint_recorded ON alert_events(fingerprint, recorded_at DESC)`,
-		`CREATE INDEX IF NOT EXISTS idx_alert_comments_fingerprint ON alert_comments(fingerprint)`,
-		`CREATE INDEX IF NOT EXISTS idx_alert_claims_fingerprint ON alert_claims(fingerprint)`,
-		`CREATE INDEX IF NOT EXISTS idx_alert_claims_active      ON alert_claims(fingerprint) WHERE released_at IS NULL`,
-		`CREATE INDEX IF NOT EXISTS idx_silence_events_fingerprint ON silence_events(fingerprint, recorded_at DESC)`,
+func openPostgres(dsn string) (*sql.DB, Dialect, error) {
+	database, err := sql.Open("pgx", dsn)
+	if err != nil {
+		return nil, DialectPostgres, fmt.Errorf("open postgres: %w", err)
 	}
 
-	for _, stmt := range stmts {
-		if _, err := db.ExecContext(context.Background(), stmt); err != nil {
-			return fmt.Errorf("migrate: %w", err)
-		}
+	if err := database.PingContext(context.Background()); err != nil {
+		_ = database.Close()
+		return nil, DialectPostgres, fmt.Errorf("ping postgres: %w", err)
 	}
-	return nil
+
+	return database, DialectPostgres, nil
 }

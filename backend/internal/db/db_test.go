@@ -6,41 +6,77 @@ import (
 )
 
 func TestOpen_InMemory(t *testing.T) {
-	db, err := Open(":memory:")
+	database, dialect, err := Open(":memory:")
 	if err != nil {
 		t.Fatalf("Open() error: %v", err)
 	}
-	defer func() { _ = db.Close() }()
+	defer func() { _ = database.Close() }()
 
-	if err := db.PingContext(context.Background()); err != nil {
+	if dialect != DialectSQLite {
+		t.Errorf("dialect = %q, want sqlite", dialect)
+	}
+	if err := database.PingContext(context.Background()); err != nil {
 		t.Fatalf("Ping() error: %v", err)
 	}
 }
 
+func TestDetectDialect(t *testing.T) {
+	cases := []struct {
+		dsn  string
+		want Dialect
+	}{
+		{"postgres://user:pass@host/db", DialectPostgres},
+		{"postgresql://user:pass@host/db", DialectPostgres},
+		{"/data/jarvis.db", DialectSQLite},
+		{":memory:", DialectSQLite},
+		{"./local.db", DialectSQLite},
+	}
+	for _, tc := range cases {
+		if got := DetectDialect(tc.dsn); got != tc.want {
+			t.Errorf("DetectDialect(%q) = %q, want %q", tc.dsn, got, tc.want)
+		}
+	}
+}
+
+func TestRedactDSN(t *testing.T) {
+	cases := []struct {
+		input string
+		want  string
+	}{
+		{"postgres://user:secret@host:5432/db", "postgres://user:***@host:5432/db"},
+		{"postgres://user@host/db", "postgres://user@host/db"},
+		{"/data/jarvis.db", "/data/jarvis.db"},
+	}
+	for _, tc := range cases {
+		if got := RedactDSN(tc.input); got != tc.want {
+			t.Errorf("RedactDSN(%q) = %q, want %q", tc.input, got, tc.want)
+		}
+	}
+}
+
 func TestMigrate_Idempotent(t *testing.T) {
-	db, err := Open(":memory:")
+	database, _, err := Open(":memory:")
 	if err != nil {
 		t.Fatalf("Open() error: %v", err)
 	}
-	defer func() { _ = db.Close() }()
+	defer func() { _ = database.Close() }()
 
-	// Run twice — must not fail.
-	if err := Migrate(db); err != nil {
+	if err := Migrate(database, DialectSQLite); err != nil {
 		t.Fatalf("first Migrate() error: %v", err)
 	}
-	if err := Migrate(db); err != nil {
+	if err := Migrate(database, DialectSQLite); err != nil {
 		t.Fatalf("second Migrate() error: %v", err)
 	}
 }
 
 func TestMigrate_TablesExist(t *testing.T) {
-	db, err := Open(":memory:")
+	database, _, err := Open(":memory:")
 	if err != nil {
 		t.Fatalf("Open() error: %v", err)
 	}
-	defer func() { _ = db.Close() }()
+	defer func() { _ = database.Close() }()
 
-	if err := Migrate(db); err != nil {
+	if err := Migrate(database, DialectSQLite); err != nil {
 		t.Fatalf("Migrate() error: %v", err)
 	}
 
@@ -52,7 +88,7 @@ func TestMigrate_TablesExist(t *testing.T) {
 	}
 	for _, table := range tables {
 		var count int
-		err := db.QueryRowContext(
+		err := database.QueryRowContext(
 			context.Background(),
 			`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?`, table,
 		).Scan(&count)
@@ -66,14 +102,14 @@ func TestMigrate_TablesExist(t *testing.T) {
 }
 
 func TestPragmas(t *testing.T) {
-	db, err := Open(":memory:")
+	database, _, err := Open(":memory:")
 	if err != nil {
 		t.Fatalf("Open() error: %v", err)
 	}
-	defer func() { _ = db.Close() }()
+	defer func() { _ = database.Close() }()
 
 	var mode string
-	if err := db.QueryRowContext(context.Background(), "PRAGMA journal_mode").Scan(&mode); err != nil {
+	if err := database.QueryRowContext(context.Background(), "PRAGMA journal_mode").Scan(&mode); err != nil {
 		t.Fatalf("PRAGMA journal_mode: %v", err)
 	}
 	// In-memory SQLite always reports "memory" mode, not "wal" — that's expected.
@@ -82,7 +118,7 @@ func TestPragmas(t *testing.T) {
 	}
 
 	var fk int
-	if err := db.QueryRowContext(context.Background(), "PRAGMA foreign_keys").Scan(&fk); err != nil {
+	if err := database.QueryRowContext(context.Background(), "PRAGMA foreign_keys").Scan(&fk); err != nil {
 		t.Fatalf("PRAGMA foreign_keys: %v", err)
 	}
 	if fk != 1 {
