@@ -1,13 +1,16 @@
 COMPOSE_DEV        = podman compose -f compose.dev.yml
+COMPOSE_TEST_AM    = podman compose -f compose.dev.yml -f compose.test-alertmanager.yml
 GITLEAKS           = podman run --rm -v "$(CURDIR):/repo:ro,z" zricethezav/gitleaks:latest
 FRONTEND_CONTAINER = jarvis_frontend_1
 
 .PHONY: help \
         up up-build down logs \
+        test-am-up test-am-down \
         test-all test-backend test-frontend \
         lint gosec govulncheck audit security-all \
         scan scan-history scan-staged scan-all \
-        build
+        build \
+        alerts-fire alerts-resolve alerts-fire-test alerts-resolve-test
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -26,6 +29,12 @@ down: ## Stop dev environment
 
 logs: ## Follow dev logs
 	$(COMPOSE_DEV) logs -f
+
+test-am-up: ## Start dev env + test Alertmanager (port 9094)
+	$(COMPOSE_TEST_AM) up -d
+
+test-am-down: ## Stop dev env + test Alertmanager
+	$(COMPOSE_TEST_AM) down
 
 # ── Tests ──────────────────────────────────────────────────────────────────────
 
@@ -70,3 +79,17 @@ scan-all: scan scan-history scan-staged ## gitleaks: run all three scans (files 
 
 build: ## Build production container image locally
 	podman build -f Containerfile -t jarvis:local .
+
+# ── Test alerts ────────────────────────────────────────────────────────────────
+
+alerts-fire: ## Fire 10 Kubernetes-themed test alerts (test_suite=jarvis) to Alertmanager
+	@bash scripts/fire-test-alerts.sh
+
+alerts-resolve: ## Resolve all test alerts fired by alerts-fire
+	@bash scripts/resolve-test-alerts.sh
+
+alerts-fire-test: ## Fire test alerts to the local test Alertmanager (port 9094, requires screenshot-up)
+	@ALERTMANAGER_URL=http://localhost:9094 bash scripts/fire-test-alerts.sh
+
+alerts-resolve-test: ## Resolve test alerts on the local test Alertmanager
+	@ALERTMANAGER_URL=http://localhost:9094 bash scripts/resolve-test-alerts.sh
