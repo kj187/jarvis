@@ -29,9 +29,9 @@ func TestHub_BroadcastToClients(t *testing.T) {
 		t.Fatalf("dial ws: %v", err)
 	}
 	if resp != nil && resp.Body != nil {
-		resp.Body.Close()
+		_ = resp.Body.Close()
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	// Give the hub time to register the client.
 	time.Sleep(50 * time.Millisecond)
@@ -42,7 +42,9 @@ func TestHub_BroadcastToClients(t *testing.T) {
 
 	hub.BroadcastJSON("test_event", map[string]string{"key": "value"})
 
-	conn.SetReadDeadline(time.Now().Add(time.Second))
+	if err := conn.SetReadDeadline(time.Now().Add(time.Second)); err != nil {
+		t.Fatalf("SetReadDeadline: %v", err)
+	}
 	_, msg, err := conn.ReadMessage()
 	if err != nil {
 		t.Fatalf("read message: %v", err)
@@ -64,7 +66,7 @@ func TestHub_ClientCountAfterDisconnect(t *testing.T) {
 		t.Fatalf("dial ws: %v", err)
 	}
 	if resp != nil && resp.Body != nil {
-		resp.Body.Close()
+		_ = resp.Body.Close()
 	}
 
 	time.Sleep(50 * time.Millisecond)
@@ -72,7 +74,7 @@ func TestHub_ClientCountAfterDisconnect(t *testing.T) {
 		t.Errorf("ClientCount = %d, want 1", hub.ClientCount())
 	}
 
-	conn.Close()
+	_ = conn.Close()
 	time.Sleep(100 * time.Millisecond)
 
 	if hub.ClientCount() != 0 {

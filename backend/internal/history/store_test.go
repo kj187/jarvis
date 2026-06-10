@@ -1,6 +1,7 @@
 package history
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -17,7 +18,7 @@ func newTestStore(t *testing.T) *Store {
 	if err := idb.Migrate(db); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
-	t.Cleanup(func() { db.Close() })
+	t.Cleanup(func() { _ = db.Close() })
 	return NewStore(db)
 }
 
@@ -145,14 +146,12 @@ func TestRecordStatusChange_GracePeriodExpired(t *testing.T) {
 	// Insert firing and resolved directly with controlled recorded_at so that
 	// resolved (now-90s) is newer than firing (now-3m) → getLastEvent returns resolved,
 	// and 90s > 60s grace period → no grace-period deletion.
-	//nolint:errcheck
-	s.db.Exec(
+	s.db.ExecContext(context.Background(), //nolint:errcheck
 		`INSERT INTO alert_events (fingerprint, cluster_name, alertmanager_url, status, starts_at, recorded_at) VALUES (?, ?, ?, ?, ?, ?)`,
 		"fp1", "homelab", "http://am:9093", "firing",
 		time.Now().Add(-5*time.Minute), time.Now().Add(-3*time.Minute),
 	)
-	//nolint:errcheck
-	s.db.Exec(
+	s.db.ExecContext(context.Background(), //nolint:errcheck
 		`INSERT INTO alert_events (fingerprint, cluster_name, alertmanager_url, status, starts_at, recorded_at) VALUES (?, ?, ?, ?, ?, ?)`,
 		"fp1", "homelab", "http://am:9093", "resolved",
 		time.Now().Add(-5*time.Minute), time.Now().Add(-90*time.Second),
@@ -224,14 +223,12 @@ func TestOccurrenceCount_IncrementOnRefiring(t *testing.T) {
 	// Insert firing and resolved directly with controlled recorded_at so that
 	// resolved (now-90s) is newer than firing (now-3m) → getLastEvent returns resolved,
 	// and 90s > 60s grace period → no grace-period deletion.
-	//nolint:errcheck
-	s.db.Exec(
+	s.db.ExecContext(context.Background(), //nolint:errcheck
 		`INSERT INTO alert_events (fingerprint, cluster_name, alertmanager_url, status, starts_at, recorded_at) VALUES (?, ?, ?, ?, ?, ?)`,
 		"fp1", "homelab", "http://am:9093", "firing",
 		time.Now().Add(-5*time.Minute), time.Now().Add(-3*time.Minute),
 	)
-	//nolint:errcheck
-	s.db.Exec(
+	s.db.ExecContext(context.Background(), //nolint:errcheck
 		`INSERT INTO alert_events (fingerprint, cluster_name, alertmanager_url, status, starts_at, recorded_at) VALUES (?, ?, ?, ?, ?, ?)`,
 		"fp1", "homelab", "http://am:9093", "resolved",
 		time.Now().Add(-5*time.Minute), time.Now().Add(-90*time.Second),

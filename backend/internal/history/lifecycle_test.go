@@ -57,7 +57,7 @@ func assertOccurrence(t *testing.T, store *Store, fp string, want int) {
 // triggers a genuine re-occurrence.
 func bypassGracePeriod(t *testing.T, store *Store, fp string) {
 	t.Helper()
-	rows, err := store.db.Query(
+	rows, err := store.db.QueryContext(context.Background(),
 		`SELECT id, recorded_at FROM alert_events WHERE fingerprint = ? ORDER BY recorded_at ASC`, fp,
 	)
 	if err != nil {
@@ -71,14 +71,14 @@ func bypassGracePeriod(t *testing.T, store *Store, fp string) {
 	for rows.Next() {
 		var e entry
 		if err := rows.Scan(&e.id, &e.recordedAt); err != nil {
-			rows.Close()
+			_ = rows.Close()
 			t.Fatalf("bypassGracePeriod scan: %v", err)
 		}
 		entries = append(entries, e)
 	}
-	rows.Close()
+	_ = rows.Close()
 	for _, e := range entries {
-		if _, err := store.db.Exec(`UPDATE alert_events SET recorded_at = ? WHERE id = ?`,
+		if _, err := store.db.ExecContext(context.Background(), `UPDATE alert_events SET recorded_at = ? WHERE id = ?`,
 			e.recordedAt.Add(-90*time.Second), e.id); err != nil {
 			t.Fatalf("bypassGracePeriod update id=%d: %v", e.id, err)
 		}

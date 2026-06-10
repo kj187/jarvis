@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -27,7 +28,7 @@ func newTestServerWithAM(t *testing.T, amURL string) *Server {
 	if err := idb.Migrate(db); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
-	t.Cleanup(func() { db.Close() })
+	t.Cleanup(func() { _ = db.Close() })
 
 	alertStore := &history.AlertStore{}
 	store := history.NewStore(db)
@@ -50,7 +51,7 @@ func TestGetSilences_Empty(t *testing.T) {
 
 	srv := newTestServerWithAM(t, am.URL)
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/silences", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/silences", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 
@@ -85,7 +86,7 @@ func TestGetSilences_WithData(t *testing.T) {
 
 	srv := newTestServerWithAM(t, am.URL)
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/silences", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/silences", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 
@@ -108,7 +109,7 @@ func TestGetSilences_WithClusterFilter(t *testing.T) {
 	e := echo.New()
 
 	// Filter by existing cluster
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/silences?cluster=testcluster", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/silences?cluster=testcluster", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 
@@ -128,7 +129,7 @@ func TestGetSilences_AMError_BestEffort(t *testing.T) {
 
 	srv := newTestServerWithAM(t, am.URL)
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/silences", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/silences", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 
@@ -161,7 +162,7 @@ func TestCreateSilence_HappyPath(t *testing.T) {
 		"comment":   "test silence",
 	}
 	b, _ := json.Marshal(body)
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/silences", bytes.NewReader(b))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/silences", bytes.NewReader(b))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
@@ -196,7 +197,7 @@ func TestCreateSilence_MissingComment(t *testing.T) {
 		// comment missing
 	}
 	b, _ := json.Marshal(body)
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/silences", bytes.NewReader(b))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/silences", bytes.NewReader(b))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
@@ -230,7 +231,7 @@ func TestCreateSilence_MissingCluster(t *testing.T) {
 		"comment":   "test",
 	}
 	b, _ := json.Marshal(body)
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/silences", bytes.NewReader(b))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/silences", bytes.NewReader(b))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
@@ -264,7 +265,7 @@ func TestCreateSilence_UnknownCluster(t *testing.T) {
 		"comment":   "test",
 	}
 	b, _ := json.Marshal(body)
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/silences", bytes.NewReader(b))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/silences", bytes.NewReader(b))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
@@ -298,7 +299,7 @@ func TestCreateSilence_AMError(t *testing.T) {
 		"comment":   "test",
 	}
 	b, _ := json.Marshal(body)
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/silences", bytes.NewReader(b))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/silences", bytes.NewReader(b))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
@@ -330,7 +331,7 @@ func TestDeleteSilence_Success(t *testing.T) {
 
 			srv := newTestServerWithAM(t, am.URL)
 			e := echo.New()
-			req := httptest.NewRequest(http.MethodDelete, tt.url, nil)
+			req := httptest.NewRequestWithContext(context.Background(), http.MethodDelete, tt.url, nil)
 			rec := httptest.NewRecorder()
 			c := e.NewContext(req, rec)
 			c.SetParamNames("id")
@@ -363,7 +364,7 @@ func TestDeleteSilence_ClusterErrors(t *testing.T) {
 
 			srv := newTestServerWithAM(t, am.URL)
 			e := echo.New()
-			req := httptest.NewRequest(http.MethodDelete, tt.url, nil)
+			req := httptest.NewRequestWithContext(context.Background(), http.MethodDelete, tt.url, nil)
 			rec := httptest.NewRecorder()
 			c := e.NewContext(req, rec)
 			c.SetParamNames("id")
@@ -389,7 +390,7 @@ func TestDeleteSilence_AMError(t *testing.T) {
 
 	srv := newTestServerWithAM(t, am.URL)
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodDelete, "/?cluster=testcluster", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodDelete, "/?cluster=testcluster", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	c.SetParamNames("id")

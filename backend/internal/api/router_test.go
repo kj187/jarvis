@@ -23,7 +23,7 @@ func newTestRouter(t *testing.T, origins []string) *httptest.Server {
 	if err := idb.Migrate(db); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
-	t.Cleanup(func() { db.Close() })
+	t.Cleanup(func() { _ = db.Close() })
 
 	alertStore := &history.AlertStore{}
 	store := history.NewStore(db)
@@ -36,102 +36,32 @@ func newTestRouter(t *testing.T, origins []string) *httptest.Server {
 	return httptest.NewServer(e)
 }
 
-// TestRouteOrder_GroupsBeforeFingerprint verifies the critical invariant:
-// /api/v1/alerts/groups must not be matched as a fingerprint parameter.
-func TestRouteOrder_GroupsBeforeFingerprint(t *testing.T) {
+// TestRoutes verifies that all registered routes return 200.
+// Critical invariant: /api/v1/alerts/groups must not be matched as a fingerprint parameter.
+func TestRoutes(t *testing.T) {
 	srv := newTestRouter(t, nil)
 	defer srv.Close()
 
-	// /api/v1/alerts/groups must return 200, not treat "groups" as a fingerprint
-	var client http.Client
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, srv.URL+"/api/v1/alerts/groups", nil)
-	resp, err := client.Do(req)
-	if err != nil {
-		t.Fatalf("GET /alerts/groups: %v", err)
+	routes := []string{
+		"/api/v1/alerts/groups", // must not be interpreted as fingerprint "groups"
+		"/api/v1/alerts",
+		"/api/v1/status",
+		"/api/v1/silences",
+		"/api/v1/clusters",
+		"/health",
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Errorf("/alerts/groups status = %d, want 200 (got matched as fingerprint?)", resp.StatusCode)
-	}
-}
-
-func TestRoute_AlertsList(t *testing.T) {
-	srv := newTestRouter(t, nil)
-	defer srv.Close()
 
 	var client http.Client
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, srv.URL+"/api/v1/alerts", nil)
-	resp, err := client.Do(req)
-	if err != nil {
-		t.Fatalf("GET /alerts: %v", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Errorf("/alerts status = %d, want 200", resp.StatusCode)
-	}
-}
-
-func TestRoute_Health(t *testing.T) {
-	srv := newTestRouter(t, nil)
-	defer srv.Close()
-
-	var client http.Client
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, srv.URL+"/health", nil)
-	resp, err := client.Do(req)
-	if err != nil {
-		t.Fatalf("GET /health: %v", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Errorf("/health status = %d, want 200", resp.StatusCode)
-	}
-}
-
-func TestRoute_Status(t *testing.T) {
-	srv := newTestRouter(t, nil)
-	defer srv.Close()
-
-	var client http.Client
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, srv.URL+"/api/v1/status", nil)
-	resp, err := client.Do(req)
-	if err != nil {
-		t.Fatalf("GET /status: %v", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Errorf("/api/v1/status status = %d, want 200", resp.StatusCode)
-	}
-}
-
-func TestRoute_Silences(t *testing.T) {
-	srv := newTestRouter(t, nil)
-	defer srv.Close()
-
-	var client http.Client
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, srv.URL+"/api/v1/silences", nil)
-	resp, err := client.Do(req)
-	if err != nil {
-		t.Fatalf("GET /silences: %v", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Errorf("/api/v1/silences status = %d, want 200", resp.StatusCode)
-	}
-}
-
-func TestRoute_Clusters(t *testing.T) {
-	srv := newTestRouter(t, nil)
-	defer srv.Close()
-
-	var client http.Client
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, srv.URL+"/api/v1/clusters", nil)
-	resp, err := client.Do(req)
-	if err != nil {
-		t.Fatalf("GET /clusters: %v", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Errorf("/api/v1/clusters status = %d, want 200", resp.StatusCode)
+	for _, path := range routes {
+		req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, srv.URL+path, nil)
+		resp, err := client.Do(req)
+		if err != nil {
+			t.Fatalf("GET %s: %v", path, err)
+		}
+		_ = resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Errorf("GET %s = %d, want 200", path, resp.StatusCode)
+		}
 	}
 }
 
@@ -148,7 +78,7 @@ func TestCORS_AllowedOrigin(t *testing.T) {
 	if err != nil {
 		t.Fatalf("preflight request: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	origin := resp.Header.Get("Access-Control-Allow-Origin")
 	if origin != "http://allowed.example.com" {
@@ -169,7 +99,7 @@ func TestCORS_NoWildcard(t *testing.T) {
 	if err != nil {
 		t.Fatalf("preflight request: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	origin := resp.Header.Get("Access-Control-Allow-Origin")
 	if origin == "*" {
@@ -192,7 +122,7 @@ func TestCORS_NoCORSConfigured(t *testing.T) {
 	if err != nil {
 		t.Fatalf("request: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("status = %d, want 200", resp.StatusCode)
 	}
@@ -210,7 +140,7 @@ func TestTriggerPoll_NilTrigger(t *testing.T) {
 	if err != nil {
 		t.Fatalf("POST /poll: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	_ = srv // suppress unused warning
 	if resp.StatusCode != http.StatusNoContent {
 		t.Errorf("status = %d, want 204", resp.StatusCode)

@@ -33,7 +33,7 @@ func newTestRecorder(t *testing.T) (*Recorder, *mockHub) {
 	if err := idb.Migrate(db); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
-	t.Cleanup(func() { db.Close() })
+	t.Cleanup(func() { _ = db.Close() })
 
 	hub := &mockHub{}
 	store := NewStore(db)

@@ -1,6 +1,7 @@
 package history
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -28,7 +29,7 @@ func (s *Store) UpsertFingerprint(fingerprint, alertname, clusterName string, la
 		return fmt.Errorf("marshal labels: %w", err)
 	}
 	now := time.Now().UTC()
-	_, err = s.db.Exec(`
+	_, err = s.db.ExecContext(context.Background(), `
 		INSERT INTO alert_fingerprints (fingerprint, alertname, cluster_name, labels, first_seen_at, last_seen_at, occurrence_count)
 		VALUES (?, ?, ?, ?, ?, ?, 1)
 		ON CONFLICT(fingerprint) DO UPDATE SET
@@ -67,7 +68,7 @@ func (s *Store) RecordStatusChange(
 	// Grace Period: alert re-fires within 60 s of resolved → discard resolved row.
 	if status == models.EventStatusFiring && lastStatus == models.EventStatusResolved {
 		if time.Since(last.RecordedAt) < 60*time.Second {
-			if _, err := s.db.Exec(`DELETE FROM alert_events WHERE id = ?`, last.ID); err != nil {
+			if _, err := s.db.ExecContext(context.Background(), `DELETE FROM alert_events WHERE id = ?`, last.ID); err != nil {
 				return nil, fmt.Errorf("grace period delete resolved: %w", err)
 			}
 			prev, err := s.getLastEvent(fingerprint)
@@ -88,7 +89,7 @@ func (s *Store) RecordStatusChange(
 		return nil, fmt.Errorf("marshal annotations: %w", err)
 	}
 	now := time.Now().UTC()
-	res, err := s.db.Exec(`
+	res, err := s.db.ExecContext(context.Background(), `
 		INSERT INTO alert_events (fingerprint, cluster_name, alertmanager_url, status, starts_at, annotations, recorded_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?)
 	`, fingerprint, clusterName, amURL, status, startsAt.UTC(), string(annJSON), now)
@@ -102,7 +103,7 @@ func (s *Store) RecordStatusChange(
 
 	// Increment occurrence_count only on genuine re-fire after full resolution.
 	if status == models.EventStatusFiring && lastStatus == models.EventStatusResolved {
-		if _, err := s.db.Exec(
+		if _, err := s.db.ExecContext(context.Background(),
 			`UPDATE alert_fingerprints SET occurrence_count = occurrence_count + 1 WHERE fingerprint = ?`,
 			fingerprint,
 		); err != nil {
@@ -132,7 +133,7 @@ func (s *Store) RecordResolved(fingerprint string, resolvedAt time.Time) error {
 	if last == nil || last.Status == models.EventStatusResolved {
 		return nil
 	}
-	_, err = s.db.Exec(`
+	_, err = s.db.ExecContext(context.Background(), `
 		INSERT INTO alert_events (fingerprint, cluster_name, alertmanager_url, status, starts_at, annotations, recorded_at)
 		VALUES (?, ?, ?, 'resolved', ?, ?, ?)
 	`, fingerprint, last.ClusterName, last.AlertmanagerURL, last.StartsAt.UTC(), last.Annotations, resolvedAt.UTC())
@@ -149,11 +150,11 @@ func (s *Store) GetHistory(fingerprint string, limit, offset int) ([]models.Aler
 	}
 
 	var total int
-	if err := s.db.QueryRow(`SELECT COUNT(*) FROM alert_events WHERE fingerprint = ?`, fingerprint).Scan(&total); err != nil {
+	if err := s.db.QueryRowContext(context.Background(), `SELECT COUNT(*) FROM alert_events WHERE fingerprint = ?`, fingerprint).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("count events: %w", err)
 	}
 
-	rows, err := s.db.Query(`
+	rows, err := s.db.QueryContext(context.Background(), `
 		SELECT id, fingerprint, cluster_name, alertmanager_url, status, starts_at, ends_at, annotations, recorded_at
 		FROM alert_events
 		WHERE fingerprint = ?
@@ -163,7 +164,7 @@ func (s *Store) GetHistory(fingerprint string, limit, offset int) ([]models.Aler
 	if err != nil {
 		return nil, 0, fmt.Errorf("query events: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var events []models.AlertEvent
 	for rows.Next() {
@@ -191,7 +192,7 @@ func (s *Store) GetHistory(fingerprint string, limit, offset int) ([]models.Aler
 // GetStats returns occurrence statistics for a fingerprint.
 func (s *Store) GetStats(fingerprint string) (*models.AlertStats, error) {
 	var st models.AlertStats
-	err := s.db.QueryRow(`
+	err := s.db.QueryRowContext(context.Background(), `
 		SELECT fingerprint, alertname, cluster_name, first_seen_at, last_seen_at, occurrence_count
 		FROM alert_fingerprints WHERE fingerprint = ?
 	`, fingerprint).Scan(&st.Fingerprint, &st.Alertname, &st.ClusterName, &st.FirstSeenAt, &st.LastSeenAt, &st.OccurrenceCount)
@@ -205,7 +206,7 @@ func (s *Store) GetStats(fingerprint string) (*models.AlertStats, error) {
 	st.LastSeenAt = st.LastSeenAt.UTC()
 
 	var resolvedAt sql.NullTime
-	_ = s.db.QueryRow(`
+	_ = s.db.QueryRowContext(context.Background(), `
 		SELECT recorded_at FROM alert_events
 		WHERE fingerprint = ? AND status = 'resolved'
 		ORDER BY recorded_at DESC LIMIT 1
@@ -222,7 +223,7 @@ func (s *Store) GetStats(fingerprint string) (*models.AlertStats, error) {
 
 // GetComments returns all comments for a fingerprint (newest first).
 func (s *Store) GetComments(fingerprint string) ([]models.Comment, error) {
-	rows, err := s.db.Query(`
+	rows, err := s.db.QueryContext(context.Background(), `
 		SELECT id, fingerprint, event_id, author_name, body, created_at
 		FROM alert_comments WHERE fingerprint = ?
 		ORDER BY created_at DESC
@@ -230,7 +231,7 @@ func (s *Store) GetComments(fingerprint string) ([]models.Comment, error) {
 	if err != nil {
 		return nil, fmt.Errorf("query comments: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var comments []models.Comment
 	for rows.Next() {
@@ -252,7 +253,7 @@ func (s *Store) GetComments(fingerprint string) ([]models.Comment, error) {
 // AddComment inserts a new comment.
 func (s *Store) AddComment(fingerprint string, eventID *int64, authorName, body string) (*models.Comment, error) {
 	now := time.Now().UTC()
-	res, err := s.db.Exec(`
+	res, err := s.db.ExecContext(context.Background(), `
 		INSERT INTO alert_comments (fingerprint, event_id, author_name, body, created_at)
 		VALUES (?, ?, ?, ?, ?)
 	`, fingerprint, eventID, authorName, body, now)
@@ -272,7 +273,7 @@ func (s *Store) AddComment(fingerprint string, eventID *int64, authorName, body 
 
 // DeleteComment deletes a comment by ID. Returns false if no row was deleted.
 func (s *Store) DeleteComment(id int64) (bool, error) {
-	res, err := s.db.Exec(`DELETE FROM alert_comments WHERE id = ?`, id)
+	res, err := s.db.ExecContext(context.Background(), `DELETE FROM alert_comments WHERE id = ?`, id)
 	if err != nil {
 		return false, fmt.Errorf("delete comment: %w", err)
 	}
@@ -287,7 +288,7 @@ func (s *Store) GetActiveClaim(fingerprint string) (*models.Claim, error) {
 	var c models.Claim
 	var eventID sql.NullInt64
 	var claimedAt time.Time
-	err := s.db.QueryRow(`
+	err := s.db.QueryRowContext(context.Background(), `
 		SELECT id, fingerprint, event_id, claimed_by, claimed_at, note
 		FROM alert_claims WHERE fingerprint = ? AND released_at IS NULL
 		ORDER BY claimed_at DESC LIMIT 1
@@ -310,7 +311,7 @@ func (s *Store) GetActiveClaim(fingerprint string) (*models.Claim, error) {
 func (s *Store) SetClaim(fingerprint string, eventID *int64, claimedBy, note string) (*models.Claim, error) {
 	now := time.Now().UTC()
 	// Release existing active claims.
-	_, err := s.db.Exec(`
+	_, err := s.db.ExecContext(context.Background(), `
 		UPDATE alert_claims SET released_at = ?, released_by = 'system', release_reason = ?
 		WHERE fingerprint = ? AND released_at IS NULL
 	`, now, models.ReleaseReasonReclaimed, fingerprint)
@@ -318,7 +319,7 @@ func (s *Store) SetClaim(fingerprint string, eventID *int64, claimedBy, note str
 		return nil, fmt.Errorf("release existing claims: %w", err)
 	}
 
-	res, err := s.db.Exec(`
+	res, err := s.db.ExecContext(context.Background(), `
 		INSERT INTO alert_claims (fingerprint, event_id, claimed_by, claimed_at, note)
 		VALUES (?, ?, ?, ?, ?)
 	`, fingerprint, eventID, claimedBy, now, note)
@@ -340,7 +341,7 @@ func (s *Store) SetClaim(fingerprint string, eventID *int64, claimedBy, note str
 // active claim was found.
 func (s *Store) ReleaseClaim(fingerprint, releasedBy, reason string) (bool, error) {
 	now := time.Now().UTC()
-	res, err := s.db.Exec(`
+	res, err := s.db.ExecContext(context.Background(), `
 		UPDATE alert_claims SET released_at = ?, released_by = ?, release_reason = ?
 		WHERE fingerprint = ? AND released_at IS NULL
 	`, now, releasedBy, reason, fingerprint)
@@ -353,7 +354,7 @@ func (s *Store) ReleaseClaim(fingerprint, releasedBy, reason string) (bool, erro
 
 // GetClaimHistory returns all claims for a fingerprint (newest first).
 func (s *Store) GetClaimHistory(fingerprint string) ([]models.Claim, error) {
-	rows, err := s.db.Query(`
+	rows, err := s.db.QueryContext(context.Background(), `
 		SELECT id, fingerprint, event_id, claimed_by, claimed_at, note, released_at, released_by, release_reason
 		FROM alert_claims WHERE fingerprint = ?
 		ORDER BY claimed_at DESC
@@ -361,7 +362,7 @@ func (s *Store) GetClaimHistory(fingerprint string) ([]models.Claim, error) {
 	if err != nil {
 		return nil, fmt.Errorf("query claims: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var claims []models.Claim
 	for rows.Next() {
@@ -408,7 +409,7 @@ func (s *Store) ReleaseClaimsForResolved(fingerprints []string) error {
 		placeholders += "?"
 		args = append(args, fp)
 	}
-	_, err := s.db.Exec( // #nosec G202 -- placeholders are ? params, not user input
+	_, err := s.db.ExecContext(context.Background(), // #nosec G202 -- placeholders are ? params, not user input
 		`UPDATE alert_claims SET released_at = ?, released_by = ?, release_reason = ?
 		 WHERE released_at IS NULL AND fingerprint IN (`+placeholders+`)`,
 		args...,
@@ -432,7 +433,7 @@ func (s *Store) IsStillResolved(fingerprint string) (bool, error) {
 // RecordSilenceEvent persists a user-triggered silence action.
 func (s *Store) RecordSilenceEvent(fingerprint, silenceID, clusterName, action, performedBy, comment string) (*models.SilenceEvent, error) {
 	now := time.Now().UTC()
-	res, err := s.db.Exec(`
+	res, err := s.db.ExecContext(context.Background(), `
 		INSERT INTO silence_events (fingerprint, silence_id, cluster_name, action, performed_by, comment, recorded_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?)
 	`, fingerprint, silenceID, clusterName, action, performedBy, comment, now)
@@ -454,7 +455,7 @@ func (s *Store) RecordSilenceEvent(fingerprint, silenceID, clusterName, action, 
 
 // GetSilenceEvents returns all silence events for a fingerprint (newest first).
 func (s *Store) GetSilenceEvents(fingerprint string) ([]models.SilenceEvent, error) {
-	rows, err := s.db.Query(`
+	rows, err := s.db.QueryContext(context.Background(), `
 		SELECT id, fingerprint, silence_id, cluster_name, action, performed_by, comment, recorded_at
 		FROM silence_events WHERE fingerprint = ?
 		ORDER BY recorded_at DESC
@@ -462,7 +463,7 @@ func (s *Store) GetSilenceEvents(fingerprint string) ([]models.SilenceEvent, err
 	if err != nil {
 		return nil, fmt.Errorf("query silence events: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var events []models.SilenceEvent
 	for rows.Next() {
@@ -485,7 +486,7 @@ func (s *Store) getLastEvent(fingerprint string) (*models.AlertEvent, error) {
 	var e models.AlertEvent
 	var startsAt, recordedAt time.Time
 	var endsAt sql.NullTime
-	err := s.db.QueryRow(`
+	err := s.db.QueryRowContext(context.Background(), `
 		SELECT id, fingerprint, cluster_name, alertmanager_url, status, starts_at, ends_at, recorded_at
 		FROM alert_events WHERE fingerprint = ?
 		ORDER BY recorded_at DESC LIMIT 1
@@ -511,7 +512,7 @@ func (s *Store) getLastEvent(fingerprint string) (*models.AlertEvent, error) {
 // Used to seed the in-memory AlertStore on startup so resolved alerts survive restarts.
 func (s *Store) GetRecentResolved(window time.Duration) ([]models.EnrichedAlert, error) {
 	since := time.Now().UTC().Add(-window)
-	rows, err := s.db.Query(`
+	rows, err := s.db.QueryContext(context.Background(), `
 		SELECT e.fingerprint, e.cluster_name, e.alertmanager_url, e.starts_at, e.recorded_at, e.annotations, f.labels
 		FROM alert_events e
 		JOIN alert_fingerprints f ON f.fingerprint = e.fingerprint
@@ -526,7 +527,7 @@ func (s *Store) GetRecentResolved(window time.Duration) ([]models.EnrichedAlert,
 	if err != nil {
 		return nil, fmt.Errorf("get recent resolved: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var alerts []models.EnrichedAlert
 	for rows.Next() {

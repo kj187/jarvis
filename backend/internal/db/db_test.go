@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"testing"
 )
 
@@ -9,9 +10,9 @@ func TestOpen_InMemory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open() error: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
-	if err := db.Ping(); err != nil {
+	if err := db.PingContext(context.Background()); err != nil {
 		t.Fatalf("Ping() error: %v", err)
 	}
 }
@@ -21,7 +22,7 @@ func TestMigrate_Idempotent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open() error: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Run twice — must not fail.
 	if err := Migrate(db); err != nil {
@@ -37,7 +38,7 @@ func TestMigrate_TablesExist(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open() error: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	if err := Migrate(db); err != nil {
 		t.Fatalf("Migrate() error: %v", err)
@@ -51,7 +52,8 @@ func TestMigrate_TablesExist(t *testing.T) {
 	}
 	for _, table := range tables {
 		var count int
-		err := db.QueryRow(
+		err := db.QueryRowContext(
+			context.Background(),
 			`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?`, table,
 		).Scan(&count)
 		if err != nil {
@@ -68,10 +70,10 @@ func TestPragmas(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open() error: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	var mode string
-	if err := db.QueryRow("PRAGMA journal_mode").Scan(&mode); err != nil {
+	if err := db.QueryRowContext(context.Background(), "PRAGMA journal_mode").Scan(&mode); err != nil {
 		t.Fatalf("PRAGMA journal_mode: %v", err)
 	}
 	// In-memory SQLite always reports "memory" mode, not "wal" — that's expected.
@@ -80,7 +82,7 @@ func TestPragmas(t *testing.T) {
 	}
 
 	var fk int
-	if err := db.QueryRow("PRAGMA foreign_keys").Scan(&fk); err != nil {
+	if err := db.QueryRowContext(context.Background(), "PRAGMA foreign_keys").Scan(&fk); err != nil {
 		t.Fatalf("PRAGMA foreign_keys: %v", err)
 	}
 	if fk != 1 {

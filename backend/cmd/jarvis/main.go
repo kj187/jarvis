@@ -40,7 +40,7 @@ func main() {
 		logger.Error("open database", "err", err)
 		os.Exit(1)
 	}
-	defer database.Close()
+	defer func() { _ = database.Close() }()
 
 	if err := db.Migrate(database); err != nil {
 		logger.Error("migrate database", "err", err)

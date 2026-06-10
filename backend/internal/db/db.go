@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"os"
@@ -32,7 +33,7 @@ func Open(path string) (*sql.DB, error) {
 		"PRAGMA busy_timeout=5000",
 	}
 	for _, p := range pragmas {
-		if _, err := db.Exec(p); err != nil {
+		if _, err := db.ExecContext(context.Background(), p); err != nil {
 			return nil, fmt.Errorf("apply pragma %q: %w", p, err)
 		}
 	}
@@ -102,7 +103,7 @@ func Migrate(db *sql.DB) error {
 	}
 
 	for _, stmt := range stmts {
-		if _, err := db.Exec(stmt); err != nil {
+		if _, err := db.ExecContext(context.Background(), stmt); err != nil {
 			return fmt.Errorf("migrate: %w", err)
 		}
 	}

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -24,7 +25,7 @@ func newTestServer(t *testing.T) (*Server, *history.AlertStore) {
 	if err := idb.Migrate(db); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
-	t.Cleanup(func() { db.Close() })
+	t.Cleanup(func() { _ = db.Close() })
 
 	alertStore := &history.AlertStore{}
 	store := history.NewStore(db)
@@ -39,7 +40,7 @@ func newTestServer(t *testing.T) (*Server, *history.AlertStore) {
 func TestGetAlerts_Empty(t *testing.T) {
 	srv, _ := newTestServer(t)
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/alerts", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/alerts", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 
@@ -58,7 +59,7 @@ func TestGetAlerts_WithAlerts(t *testing.T) {
 	})
 
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/alerts", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/alerts", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 
@@ -76,7 +77,7 @@ func TestGetAlerts_WithAlerts(t *testing.T) {
 func TestGetAlertHistory_InvalidFingerprint(t *testing.T) {
 	srv, _ := newTestServer(t)
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/alerts/INVALID!/history", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/alerts/INVALID!/history", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	c.SetParamNames("fingerprint")
@@ -91,7 +92,7 @@ func TestGetAlertHistory_InvalidFingerprint(t *testing.T) {
 func TestGetHealth(t *testing.T) {
 	srv, _ := newTestServer(t)
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/health", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 

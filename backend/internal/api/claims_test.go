@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -26,7 +27,7 @@ func newTestServerFull(t *testing.T) (*Server, *history.AlertStore, *history.Sto
 	if err := idb.Migrate(db); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
-	t.Cleanup(func() { db.Close() })
+	t.Cleanup(func() { _ = db.Close() })
 
 	alertStore := &history.AlertStore{}
 	store := history.NewStore(db)
@@ -51,7 +52,7 @@ func seedClaimHTTP(t *testing.T, srv *Server, e *echo.Echo, fp string, claimedBy
 	t.Helper()
 	body := map[string]interface{}{"claimedBy": claimedBy}
 	b, _ := json.Marshal(body)
-	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(b))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/", bytes.NewReader(b))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
@@ -65,7 +66,7 @@ func seedClaimHTTP(t *testing.T, srv *Server, e *echo.Echo, fp string, claimedBy
 func TestGetClaim_InvalidFingerprint(t *testing.T) {
 	srv, _, _ := newTestServerFull(t)
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	c.SetParamNames("fingerprint")
@@ -81,7 +82,7 @@ func TestGetClaim_NotFound(t *testing.T) {
 	srv, _, store := newTestServerFull(t)
 	seedFP(t, store, "abc123")
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	c.SetParamNames("fingerprint")
@@ -104,7 +105,7 @@ func TestSetClaim_HappyPath(t *testing.T) {
 
 	body := map[string]interface{}{"claimedBy": "alice", "note": "investigating"}
 	b, _ := json.Marshal(body)
-	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(b))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/", bytes.NewReader(b))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
@@ -127,7 +128,7 @@ func TestSetClaim_InvalidFingerprint(t *testing.T) {
 	e := echo.New()
 	body := map[string]interface{}{"claimedBy": "alice"}
 	b, _ := json.Marshal(body)
-	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(b))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/", bytes.NewReader(b))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
@@ -146,7 +147,7 @@ func TestSetClaim_MissingClaimedBy(t *testing.T) { //nolint:dupl
 	e := echo.New()
 	body := map[string]interface{}{"note": "no user"}
 	b, _ := json.Marshal(body)
-	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(b))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/", bytes.NewReader(b))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
@@ -169,7 +170,7 @@ func TestGetClaim_AfterSet(t *testing.T) { //nolint:dupl
 	e := echo.New()
 	seedClaimHTTP(t, srv, e, "deadbeef", "bob")
 
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	c.SetParamNames("fingerprint")
@@ -191,7 +192,7 @@ func TestReleaseClaim_HappyPath(t *testing.T) {
 	e := echo.New()
 	seedClaimHTTP(t, srv, e, "deadbeef", "carol")
 
-	req := httptest.NewRequest(http.MethodDelete, "/?by=carol", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodDelete, "/?by=carol", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	c.SetParamNames("fingerprint")
@@ -207,7 +208,7 @@ func TestReleaseClaim_HappyPath(t *testing.T) {
 func TestReleaseClaim_NoClaim(t *testing.T) {
 	srv, _, _ := newTestServerFull(t)
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodDelete, "/?by=nobody", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodDelete, "/?by=nobody", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	c.SetParamNames("fingerprint")
@@ -226,7 +227,7 @@ func TestReleaseClaim_NoClaim(t *testing.T) {
 func TestReleaseClaim_InvalidFingerprint(t *testing.T) {
 	srv, _, _ := newTestServerFull(t)
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodDelete, "/", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodDelete, "/", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	c.SetParamNames("fingerprint")
@@ -241,7 +242,7 @@ func TestReleaseClaim_InvalidFingerprint(t *testing.T) {
 func TestGetClaimHistory_Empty(t *testing.T) { //nolint:dupl
 	srv, _, _ := newTestServerFull(t)
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	c.SetParamNames("fingerprint")
@@ -264,7 +265,7 @@ func TestGetClaimHistory_WithClaims(t *testing.T) { //nolint:dupl
 	e := echo.New()
 	seedClaimHTTP(t, srv, e, "abc123", "dave")
 
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	c.SetParamNames("fingerprint")
@@ -283,7 +284,7 @@ func TestGetClaimHistory_WithClaims(t *testing.T) { //nolint:dupl
 func TestGetClaimHistory_InvalidFingerprint(t *testing.T) {
 	srv, _, _ := newTestServerFull(t)
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	c.SetParamNames("fingerprint")

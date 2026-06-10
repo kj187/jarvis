@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -14,7 +15,7 @@ import (
 func TestGetComments_Empty(t *testing.T) { //nolint:dupl
 	srv, _, _ := newTestServerFull(t)
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	c.SetParamNames("fingerprint")
@@ -34,7 +35,7 @@ func TestGetComments_Empty(t *testing.T) { //nolint:dupl
 func TestGetComments_InvalidFingerprint(t *testing.T) {
 	srv, _, _ := newTestServerFull(t)
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	c.SetParamNames("fingerprint")
@@ -53,7 +54,7 @@ func TestAddComment_HappyPath(t *testing.T) {
 
 	body := map[string]interface{}{"authorName": "alice", "body": "looks good"}
 	b, _ := json.Marshal(body)
-	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(b))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/", bytes.NewReader(b))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
@@ -79,7 +80,7 @@ func TestAddComment_InvalidFingerprint(t *testing.T) {
 	e := echo.New()
 	body := map[string]interface{}{"authorName": "alice", "body": "test"}
 	b, _ := json.Marshal(body)
-	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(b))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/", bytes.NewReader(b))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
@@ -106,7 +107,7 @@ func TestAddComment_MissingFields(t *testing.T) {
 			seedFP(t, store, "abc123")
 			e := echo.New()
 			b, _ := json.Marshal(tt.body)
-			req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(b))
+			req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/", bytes.NewReader(b))
 			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 			rec := httptest.NewRecorder()
 			c := e.NewContext(req, rec)
@@ -132,7 +133,7 @@ func TestGetComments_AfterAdd(t *testing.T) {
 
 	body := map[string]interface{}{"authorName": "bob", "body": "checking this"}
 	b, _ := json.Marshal(body)
-	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(b))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/", bytes.NewReader(b))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
@@ -142,7 +143,7 @@ func TestGetComments_AfterAdd(t *testing.T) {
 		t.Fatalf("addComment: %v", err)
 	}
 
-	req2 := httptest.NewRequest(http.MethodGet, "/", nil)
+	req2 := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
 	rec2 := httptest.NewRecorder()
 	c2 := e.NewContext(req2, rec2)
 	c2.SetParamNames("fingerprint")
@@ -169,7 +170,7 @@ func TestDeleteComment_Errors(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			srv, _, _ := newTestServerFull(t)
 			e := echo.New()
-			req := httptest.NewRequest(http.MethodDelete, "/", nil)
+			req := httptest.NewRequestWithContext(context.Background(), http.MethodDelete, "/", nil)
 			rec := httptest.NewRecorder()
 			c := e.NewContext(req, rec)
 			c.SetParamNames("fingerprint", "id")
@@ -190,7 +191,7 @@ func TestDeleteComment_Errors(t *testing.T) {
 func TestDeleteComment_InvalidFingerprint(t *testing.T) {
 	srv, _, _ := newTestServerFull(t)
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodDelete, "/", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodDelete, "/", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	c.SetParamNames("fingerprint", "id")
@@ -210,7 +211,7 @@ func TestDeleteComment_HappyPath(t *testing.T) {
 	// Add a comment first to get a real ID
 	body := map[string]interface{}{"authorName": "carol", "body": "to be deleted"}
 	b, _ := json.Marshal(body)
-	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(b))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/", bytes.NewReader(b))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
@@ -227,7 +228,7 @@ func TestDeleteComment_HappyPath(t *testing.T) {
 		t.Fatalf("unmarshal comment: %v", err)
 	}
 
-	req2 := httptest.NewRequest(http.MethodDelete, "/", nil)
+	req2 := httptest.NewRequestWithContext(context.Background(), http.MethodDelete, "/", nil)
 	rec2 := httptest.NewRecorder()
 	c2 := e.NewContext(req2, rec2)
 	c2.SetParamNames("fingerprint", "id")

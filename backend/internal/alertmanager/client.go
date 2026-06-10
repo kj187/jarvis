@@ -61,7 +61,7 @@ func (c *Client) CreateSilence(ctx context.Context, s PostableSilence) (string, 
 	if err != nil {
 		return "", fmt.Errorf("post silence: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		b, _ := io.ReadAll(resp.Body)
@@ -86,7 +86,7 @@ func (c *Client) DeleteSilence(ctx context.Context, id string) error {
 	if err != nil {
 		return fmt.Errorf("delete silence: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
 		b, _ := io.ReadAll(resp.Body)
@@ -113,7 +113,7 @@ func (c *Client) get(ctx context.Context, path string, v interface{}) error {
 	if err != nil {
 		return fmt.Errorf("request %s: %w", path, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		b, _ := io.ReadAll(resp.Body)
