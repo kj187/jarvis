@@ -26,17 +26,17 @@ func (m *mockHub) BroadcastJSON(eventType string, payload interface{}) {
 
 func newTestRecorder(t *testing.T) (*Recorder, *mockHub) {
 	t.Helper()
-	db, err := idb.Open(":memory:")
+	database, dialect, err := idb.Open(":memory:")
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
-	if err := idb.Migrate(db); err != nil {
+	if err := idb.Migrate(database, dialect); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
-	t.Cleanup(func() { _ = db.Close() })
+	t.Cleanup(func() { _ = database.Close() })
 
 	hub := &mockHub{}
-	store := NewStore(db)
+	store := NewStore(database, dialect)
 	alertStore := &AlertStore{}
 	rec := &Recorder{
 		alertStore:        alertStore,

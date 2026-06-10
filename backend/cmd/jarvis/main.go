@@ -35,14 +35,15 @@ func main() {
 	slog.SetDefault(logger)
 
 	// ── Database ──────────────────────────────────────────────────────────────
-	database, err := db.Open(cfg.DBPath)
+	database, dialect, err := db.Open(cfg.DBDSN)
 	if err != nil {
-		logger.Error("open database", "err", err)
+		logger.Error("open database", "dialect", db.DetectDialect(cfg.DBDSN), "err", err)
 		os.Exit(1)
 	}
 	defer func() { _ = database.Close() }()
+	logger.Info("database connected", "dialect", dialect, "dsn", db.RedactDSN(cfg.DBDSN))
 
-	if err := db.Migrate(database); err != nil {
+	if err := db.Migrate(database, dialect); err != nil {
 		logger.Error("migrate database", "err", err)
 		os.Exit(1)
 	}
@@ -55,7 +56,7 @@ func main() {
 
 	// ── Stores ────────────────────────────────────────────────────────────────
 	alertStore := &history.AlertStore{}
-	store := history.NewStore(database)
+	store := history.NewStore(database, dialect)
 
 	// ── WebSocket Hub ─────────────────────────────────────────────────────────
 	hub := ws.NewHub(cfg.AllowedOrigins, logger)

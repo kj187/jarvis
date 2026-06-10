@@ -15,7 +15,9 @@ type Config struct {
 	Port           string
 	LogLevel       string
 	PollInterval   time.Duration
-	DBPath         string
+	// DBDSN is the database connection string. Starts with "postgres://" or
+	// "postgresql://" for PostgreSQL; anything else is treated as a SQLite file path.
+	DBDSN          string
 	RunbookBaseURL string
 	AllowedOrigins []string
 	Clusters       []ClusterConfig
@@ -61,7 +63,7 @@ func Load() (*Config, error) {
 		Port:           getEnv("JARVIS_PORT", "8080"),
 		LogLevel:       getEnv("JARVIS_LOG_LEVEL", "info"),
 		PollInterval:   pollInterval,
-		DBPath:         getEnv("JARVIS_DB_PATH", "/data/jarvis.db"),
+		DBDSN:          getEnv("JARVIS_DB_DSN", "/data/jarvis.db"),
 		RunbookBaseURL: getEnv("JARVIS_RUNBOOK_BASE_URL", ""),
 		AllowedOrigins: allowedOrigins,
 		Clusters:       clusters,
