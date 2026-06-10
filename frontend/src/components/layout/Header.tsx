@@ -1,12 +1,13 @@
 import { useRef, useState, useMemo, useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { Wifi, WifiOff, RefreshCw, Play, Pause, Search, X, Plus } from 'lucide-react'
+import { Wifi, WifiOff, RefreshCw, Play, Pause, Search, X, Plus, Settings, Lock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Sheet } from '@/components/ui/sheet'
 import { ViewToggle } from '@/components/alerts/ViewToggle'
 import { SilenceForm } from '@/components/silences/SilenceForm'
+import { SettingsSheet } from '@/components/settings/SettingsSheet'
 import { useUIStore } from '@/store/uiStore'
 import { useQuery } from '@tanstack/react-query'
 import { fetchClusters } from '@/api/client'
@@ -95,6 +96,35 @@ function ComboInput({
           ))}
         </div>
       )}
+    </div>
+  )
+}
+
+// ── Locked (read-only) matcher chip from Settings default filter ──────────────
+
+function LockedMatcherChip({
+  name,
+  operator,
+  value,
+}: {
+  name: string
+  operator: string
+  value: string
+}) {
+  return (
+    <div
+      className="flex items-center rounded border border-border/60 h-7 opacity-75"
+      title="Default filter set in Settings — open Settings (⚙) to change or remove"
+      style={{ backgroundColor: '#18181B' }}
+    >
+      <span className="px-2 text-xs text-muted-foreground shrink-0 select-none whitespace-nowrap overflow-hidden text-ellipsis" style={{ maxWidth: '120px' }}>
+        {name}
+      </span>
+      <div className="h-3.5 w-px bg-border shrink-0" />
+      <span className="px-1.5 text-xs text-muted-foreground font-mono shrink-0">{operator}</span>
+      <div className="h-3.5 w-px bg-border shrink-0" />
+      <span className="px-2 text-xs text-foreground shrink-0">{value}</span>
+      <Lock className="mr-1.5 ml-0.5 h-2.5 w-2.5 text-muted-foreground/50 shrink-0" />
     </div>
   )
 }
@@ -213,6 +243,7 @@ export function Header() {
   })
 
   const [silenceFormOpen, setSilenceFormOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
 
   const { data: allAlerts = [] } = useAlerts()
 
@@ -486,6 +517,18 @@ export function Header() {
           {searchOpen ? <X className="h-4 w-4" /> : <Search className="h-4 w-4" />}
         </Button>
 
+        {/* Settings */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 shrink-0"
+          onClick={() => setSettingsOpen(true)}
+          title="Settings"
+          aria-label="Open settings"
+        >
+          <Settings className="h-4 w-4" />
+        </Button>
+
         {/* Create silence — far right */}
         <Button
           size="sm"
@@ -497,21 +540,30 @@ export function Header() {
         </Button>
       </div>
 
-      {/* ── Active label matchers row — inline editable ── */}
+      {/* ── Active label matchers row — locked first, then editable ── */}
       {filters.labelMatchers.length > 0 && (
         <div className="flex items-center gap-2 px-4 pb-2 flex-wrap">
-          {filters.labelMatchers.map((m) => (
-            <MatcherChip
-              key={m.id}
-              id={m.id}
-              name={m.name}
-              operator={m.operator}
-              value={m.value}
-              valueOptions={Array.from(labelValueMap.get(m.name) ?? []).sort()}
-              onUpdate={(partial) => updateLabelMatcher(m.id, partial)}
-              onRemove={() => removeLabelMatcher(m.id)}
-            />
-          ))}
+          {filters.labelMatchers.map((m) =>
+            m.locked ? (
+              <LockedMatcherChip
+                key={m.id}
+                name={m.name}
+                operator={m.operator}
+                value={m.value}
+              />
+            ) : (
+              <MatcherChip
+                key={m.id}
+                id={m.id}
+                name={m.name}
+                operator={m.operator}
+                value={m.value}
+                valueOptions={Array.from(labelValueMap.get(m.name) ?? []).sort()}
+                onUpdate={(partial) => updateLabelMatcher(m.id, partial)}
+                onRemove={() => removeLabelMatcher(m.id)}
+              />
+            ),
+          )}
         </div>
       )}
 
@@ -553,6 +605,13 @@ export function Header() {
         />
       </div>
     </Sheet>
+
+    <SettingsSheet
+      open={settingsOpen}
+      onClose={() => setSettingsOpen(false)}
+      availableLabelNames={availableLabelNames}
+      labelValueMap={labelValueMap}
+    />
     </>
   )
 }

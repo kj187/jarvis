@@ -109,6 +109,38 @@ The complete filter state is encoded into the URL as query parameters. This mean
 
 ---
 
+### User Settings
+
+Per-user preferences stored in the browser — no server config required.
+
+![Settings Panel](docs/assets/feature-settings-panel.png)
+
+Open the Settings panel by clicking the **⚙ gear icon** in the top-right area of the header (next to "Create silence"). Settings are persisted in `localStorage` and apply immediately without a page reload.
+
+#### Available settings
+
+| Setting | Description |
+|---|---|
+| **Time format** | Switch between *Relative* ("6 days ago") and *Absolute* ("Jun 4, 2025, 12:30 PM") timestamps. A live preview updates as you toggle. |
+| **Default view** | Choose whether the app starts in *Card* or *List* view on every page load. |
+| **Resolved alert max age** | Hide resolved alerts older than N days (1–365). Useful for keeping the resolved tab focused on recent events. |
+| **Default filter** | Label matchers that are always active — see below. |
+| **Default silence duration** | Pre-selected duration when the silence creation form opens (15 min to 3 days). |
+| **Creator name** | Pre-fills the "Created by" field in new silences. |
+| **Poll interval** | How often Jarvis polls Alertmanager — choose 5 / 10 / 15 / 20 / 25 / 30 / 60 seconds via a slider. |
+
+#### Default filters — permanent header chips
+
+![Locked filter chip in header](docs/assets/feature-settings-locked-filter.png)
+
+Default filters appear as **locked chips** in the filter row of the header. They behave like regular label matchers but cannot be removed from the header — they stay active at all times, across page reloads and view changes.
+
+A **lock icon** and dimmed appearance distinguish them from manually added filters. Hovering over a locked chip shows the tooltip: *"Default filter set in Settings — open Settings (⚙) to change or remove."*
+
+To remove or modify a default filter, open Settings → Default Filter → click **×** on the chip, or clear the list and save.
+
+---
+
 ### Suppressed View
 
 Silenced alerts displayed with active silence duration and expiry time.

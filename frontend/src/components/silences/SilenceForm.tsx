@@ -12,6 +12,7 @@ import { useAlerts } from '@/hooks/useAlerts'
 import { useSilences } from '@/hooks/useSilences'
 import { matchesLabelMatchers } from '@/lib/alertUtils'
 import { upsertSilence, triggerPoll } from '@/api/client'
+import { useSettingsStore } from '@/store/useSettingsStore'
 import type { EnrichedAlert, LabelMatcher, LabelMatcherOperator, Silence } from '@/types'
 
 const USERNAME_KEY = 'jarvis-username'
@@ -354,10 +355,22 @@ export function SilenceForm({
     return [{ id: nextId(), name: '', operator: '=', value: '' }]
   })
 
-  // Duration spinners
-  const [dDays, setDDays] = useState(0)
-  const [dHours, setDHours] = useState(1)
-  const [dMinutes, setDMinutes] = useState(0)
+  // Duration spinners — initialize from settings when creating a new silence
+  const [dDays, setDDays] = useState(() => {
+    if (prefillSilence && !isRecreate) return 0
+    const mins = useSettingsStore.getState().defaultSilenceDurationMinutes
+    return Math.floor(mins / (24 * 60))
+  })
+  const [dHours, setDHours] = useState(() => {
+    if (prefillSilence && !isRecreate) return 1
+    const mins = useSettingsStore.getState().defaultSilenceDurationMinutes
+    return Math.floor((mins % (24 * 60)) / 60)
+  })
+  const [dMinutes, setDMinutes] = useState(() => {
+    if (prefillSilence && !isRecreate) return 0
+    const mins = useSettingsStore.getState().defaultSilenceDurationMinutes
+    return mins % 60
+  })
 
   // End-mode toggle — edit starts in calendar (has existing end date), create in duration
   const [endMode, setEndMode] = useState<'duration' | 'calendar'>(() =>
@@ -374,7 +387,9 @@ export function SilenceForm({
     prefillSilence && !isRecreate ? format(new Date(prefillSilence.endsAt), "yyyy-MM-dd'T'HH:mm") : '',
   )
 
-  const [createdBy, setCreatedBy] = useState(() => localStorage.getItem(USERNAME_KEY) ?? '')
+  const [createdBy, setCreatedBy] = useState(
+    () => localStorage.getItem(USERNAME_KEY) ?? useSettingsStore.getState().defaultCreatorName,
+  )
   const [comment, setComment] = useState(prefillSilence?.comment ?? '')
 
   const [results, setResults] = useState<Map<string, ClusterResult>>(new Map())

@@ -1,6 +1,4 @@
 import { useState } from 'react'
-import { formatDistanceToNow } from 'date-fns'
-import { enUS } from 'date-fns/locale'
 import { Bell, BellOff, User } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getFilterableLabels, getSilenceState, formatSilenceDuration } from '@/lib/alertUtils'
@@ -11,6 +9,7 @@ import { SilenceForm } from '@/components/silences/SilenceForm'
 import { useQuery } from '@tanstack/react-query'
 import { fetchClusters } from '@/api/client'
 import { useAlertStats } from '@/hooks/useAlerts'
+import { useFormatTime } from '@/hooks/useFormatTime'
 import type { EnrichedAlert, Silence } from '@/types'
 
 const PAGE_SIZE = 3
@@ -56,6 +55,7 @@ function AlertEntry({
   const claim = alert.activeClaim ?? null
   const maintainer = claim ? null : (alert.labels['maintainer'] ?? null)
   const allLabels = getFilterableLabels(alert)
+  const formatTime = useFormatTime()
   const labels = Object.entries(allLabels)
     .filter(([k]) => !HIDDEN_LABEL_KEYS.has(k) && !commonLabelKeys.has(k))
     .sort(([a], [b]) => {
@@ -88,7 +88,7 @@ function AlertEntry({
           <div className="min-w-0 flex-1">
             <div className="font-semibold text-blue-200">In progress: {claim.claimedBy}</div>
             <div className="text-blue-400">
-              {formatDistanceToNow(new Date(claim.claimedAt), { addSuffix: true, locale: enUS })}
+              {formatTime(claim.claimedAt)}
             </div>
             {claim.note && <div className="mt-0.5 text-blue-300/80">{claim.note}</div>}
           </div>
@@ -100,14 +100,14 @@ function AlertEntry({
         <div className="flex items-center gap-2">
           <span title={new Date(alert.startsAt).toLocaleString('en-US')}>
             {new Date(alert.startsAt) > new Date()
-              ? `Expires ${formatDistanceToNow(new Date(alert.endsAt), { addSuffix: true, locale: enUS })}`
-              : formatDistanceToNow(new Date(alert.startsAt), { addSuffix: true, locale: enUS })}
+              ? `Expires ${formatTime(alert.endsAt)}`
+              : formatTime(alert.startsAt)}
           </span>
           {maintainer && <span>{maintainer}</span>}
         </div>
         {isResolved && stats?.lastResolvedAt && (
           <span className="text-green-600/70" title={new Date(stats.lastResolvedAt).toLocaleString('en-US')}>
-            ✓ {formatDistanceToNow(new Date(stats.lastResolvedAt), { addSuffix: true, locale: enUS })}
+            ✓ {formatTime(stats.lastResolvedAt)}
           </span>
         )}
       </div>
