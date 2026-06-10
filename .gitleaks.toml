@@ -1,5 +1,9 @@
 [allowlist]
 description = "Exclude paths matching .gitignore"
+regexes = [
+  # Go module checksums (go.sum h1: hashes) are false positives
+  '''h1:[A-Za-z0-9+/=]{44}''',
+]
 paths = [
   '''tmp/''',
   '''backend/tmp/''',

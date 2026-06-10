@@ -36,6 +36,8 @@ fi
 
 # ── Secret scanning (always, all file types) ──────────────────────────────────
 echo "  [Security] Running gitleaks (secret scan)..."
-git diff --cached | podman run --rm -i zricethezav/gitleaks:latest detect --pipe --redact
+git diff --cached | podman run --rm -i \
+  -v "$PWD/.gitleaks.toml:/repo/.gitleaks.toml:ro" \
+  zricethezav/gitleaks:latest detect --pipe --redact -c /repo/.gitleaks.toml
 
 echo "✅ All pre-commit checks passed."
