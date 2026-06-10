@@ -1,0 +1,12 @@
+ingress:
+  enabled: true
+  className: nginx
+  hosts:
+    - host: jarvis.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: jarvis-tls
+      hosts:
+        - jarvis.example.com

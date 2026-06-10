@@ -1,0 +1,95 @@
+suite: deployment
+templates:
+  - templates/deployment.yaml
+
+tests:
+  - it: renders one Deployment by default
+    asserts:
+      - hasDocuments:
+          count: 1
+      - isKind:
+          of: Deployment
+
+  - it: uses chart appVersion as image tag by default
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: ghcr.io/kj187/jarvis:0.0.0
+
+  - it: uses custom image tag when set
+    set:
+      image.tag: v1.2.3
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: ghcr.io/kj187/jarvis:v1.2.3
+
+  - it: exposes container port 8080
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].ports[0].containerPort
+          value: 8080
+
+  - it: reads JARVIS_DB_DSN from chart-created secret by default
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].env[0].name
+          value: JARVIS_DB_DSN
+      - equal:
+          path: spec.template.spec.containers[0].env[0].valueFrom.secretKeyRef.key
+          value: dsn
+
+  - it: reads JARVIS_DB_DSN from existing secret when configured
+    set:
+      database.existingSecret: my-secret
+      database.existingSecretKey: database-url
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].env[0].valueFrom.secretKeyRef.name
+          value: my-secret
+      - equal:
+          path: spec.template.spec.containers[0].env[0].valueFrom.secretKeyRef.key
+          value: database-url
+
+  - it: mounts emptyDir at /data when persistence disabled
+    asserts:
+      - equal:
+          path: spec.template.spec.volumes[0].emptyDir
+          value: {}
+      - equal:
+          path: spec.template.spec.containers[0].volumeMounts[0].mountPath
+          value: /data
+
+  - it: mounts PVC at /data when persistence enabled
+    set:
+      persistence.enabled: true
+    asserts:
+      - isNotNullOrEmpty:
+          path: spec.template.spec.volumes[0].persistentVolumeClaim.claimName
+
+  - it: does not manage replica count when autoscaling enabled
+    set:
+      autoscaling.enabled: true
+    asserts:
+      - notExists:
+          path: spec.replicas
+
+  - it: sets replica count when autoscaling disabled
+    set:
+      replicaCount: 3
+    asserts:
+      - equal:
+          path: spec.replicas
+          value: 3
+
+  - it: applies readOnlyRootFilesystem security context
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].securityContext.readOnlyRootFilesystem
+          value: true
+
+  - it: runs as non-root
+    asserts:
+      - equal:
+          path: spec.template.spec.securityContext.runAsNonRoot
+          value: true

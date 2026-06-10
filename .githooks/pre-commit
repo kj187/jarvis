@@ -34,6 +34,15 @@ if git diff --cached --name-only | grep -q "^frontend/"; then
   fi
 fi
 
+# ── Helm checks (only if chart files changed) ─────────────────────────────────
+if git diff --cached --name-only | grep -q "^charts/"; then
+  echo "  [Helm] Running helm lint..."
+  helm lint charts/jarvis/
+
+  echo "  [Helm] Running helm unittest..."
+  helm unittest charts/jarvis/
+fi
+
 # ── Secret scanning (always, all file types) ──────────────────────────────────
 echo "  [Security] Running gitleaks (secret scan)..."
 git diff --cached | podman run --rm -i \

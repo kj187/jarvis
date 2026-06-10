@@ -1,0 +1,98 @@
+suite: configmap
+templates:
+  - templates/configmap.yaml
+
+tests:
+  - it: renders one ConfigMap
+    asserts:
+      - hasDocuments:
+          count: 1
+      - isKind:
+          of: ConfigMap
+
+  - it: sets JARVIS_PORT to 8080
+    asserts:
+      - equal:
+          path: data.JARVIS_PORT
+          value: "8080"
+
+  - it: sets log level from config.logLevel
+    set:
+      config.logLevel: debug
+    asserts:
+      - equal:
+          path: data.JARVIS_LOG_LEVEL
+          value: debug
+
+  - it: sets poll interval from config.pollInterval
+    set:
+      config.pollInterval: 30s
+    asserts:
+      - equal:
+          path: data.JARVIS_POLL_INTERVAL
+          value: 30s
+
+  - it: includes JARVIS_RUNBOOK_BASE_URL when set
+    set:
+      config.runbookBaseURL: https://wiki.example.com/runbooks/
+    asserts:
+      - equal:
+          path: data.JARVIS_RUNBOOK_BASE_URL
+          value: https://wiki.example.com/runbooks/
+
+  - it: omits JARVIS_RUNBOOK_BASE_URL when empty
+    asserts:
+      - notExists:
+          path: data.JARVIS_RUNBOOK_BASE_URL
+
+  - it: includes JARVIS_ALLOWED_ORIGINS when set
+    set:
+      config.allowedOrigins: https://jarvis.example.com
+    asserts:
+      - equal:
+          path: data.JARVIS_ALLOWED_ORIGINS
+          value: https://jarvis.example.com
+
+  - it: omits JARVIS_ALLOWED_ORIGINS when empty
+    asserts:
+      - notExists:
+          path: data.JARVIS_ALLOWED_ORIGINS
+
+  - it: generates JARVIS_CLUSTER_1_* for default cluster
+    asserts:
+      - equal:
+          path: data.JARVIS_CLUSTER_1_NAME
+          value: default
+      - equal:
+          path: data.JARVIS_CLUSTER_1_ALERTMANAGER_URL
+          value: http://alertmanager:9093
+
+  - it: omits optional cluster fields when not set
+    asserts:
+      - notExists:
+          path: data.JARVIS_CLUSTER_1_PROMETHEUS_URL
+      - notExists:
+          path: data.JARVIS_CLUSTER_1_HOST_ALIAS
+
+  - it: generates JARVIS_CLUSTER_2_* for second cluster
+    values:
+      - ./values/two-clusters.yaml
+    asserts:
+      - equal:
+          path: data.JARVIS_CLUSTER_1_NAME
+          value: staging
+      - equal:
+          path: data.JARVIS_CLUSTER_1_ALERTMANAGER_URL
+          value: http://am-staging:9093
+      - equal:
+          path: data.JARVIS_CLUSTER_1_PROMETHEUS_URL
+          value: http://prom-staging:9090
+      - equal:
+          path: data.JARVIS_CLUSTER_2_NAME
+          value: production
+      - equal:
+          path: data.JARVIS_CLUSTER_2_ALERTMANAGER_URL
+          value: http://am-prod:9093
+      - equal:
+          path: data.JARVIS_CLUSTER_2_HOST_ALIAS
+          value: https://alertmanager.example.com
