@@ -237,12 +237,6 @@ export function AlertListView({ alerts, silences, onSelectAlert, selectedFingerp
               <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Time
               </th>
-              <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Actions
-              </th>
-              <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Claim
-              </th>
             </tr>
           </thead>
           <tbody>
@@ -253,10 +247,11 @@ export function AlertListView({ alerts, silences, onSelectAlert, selectedFingerp
                 onClick={onSelectAlert}
                 selected={selectedFingerprint === alert.fingerprint}
                 silences={silences}
-                onCreateSilence={openSilenceForm}
-                onExpireSilence={(id, cluster) => expireMutation.mutate({ id, cluster })}
                 showStateColumn={false}
                 showSeverityColumn={true}
+                showActionsColumn={false}
+                showClaimColumn={false}
+                noOpacity={true}
               />
             ))}
           </tbody>

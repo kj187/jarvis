@@ -23,6 +23,9 @@ interface AlertListRowProps {
   onExpireSilence?: (id: string, cluster: string) => void
   showStateColumn?: boolean
   showSeverityColumn?: boolean
+  showActionsColumn?: boolean
+  showClaimColumn?: boolean
+  noOpacity?: boolean
 }
 
 export function AlertListRow({
@@ -37,6 +40,9 @@ export function AlertListRow({
   onExpireSilence,
   showStateColumn = true,
   showSeverityColumn = false,
+  showActionsColumn = true,
+  showClaimColumn = true,
+  noOpacity = false,
 }: AlertListRowProps) {
   const alertname = alert.labels['alertname'] ?? '—'
   const isResolved = alert.status.state === 'resolved'
@@ -101,7 +107,7 @@ export function AlertListRow({
         indented && !selected && !alert.activeClaim && 'bg-background/60',
         alert.activeClaim && !selected && 'bg-blue-950/30 hover:bg-blue-950/50',
         isLastInGroup && 'border-b border-border/60',
-        isResolved && 'opacity-50',
+        isResolved && !noOpacity && 'opacity-50',
         selected && 'bg-accent',
       )}
     >
@@ -141,7 +147,7 @@ export function AlertListRow({
           )}
         </div>
       </td>
-      <td className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
+      {showActionsColumn && <td className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
         <div className="flex flex-wrap items-center gap-1.5">
           {stats && stats.occurrenceCount > 1 && (
             <span
@@ -206,8 +212,8 @@ export function AlertListRow({
             </button>
           )}
         </div>
-      </td>
-      <td className="px-4 py-2 text-sm" onClick={(e) => e.stopPropagation()}>
+      </td>}
+      {showClaimColumn && <td className="px-4 py-2 text-sm" onClick={(e) => e.stopPropagation()}>
         {alert.activeClaim ? (
           <div className="flex items-center gap-1.5">
             <span className="flex items-center gap-1 text-blue-400">
@@ -260,7 +266,7 @@ export function AlertListRow({
             <User className="h-3.5 w-3.5" />
           </button>
         )}
-      </td>
+      </td>}
     </tr>
   )
 }
