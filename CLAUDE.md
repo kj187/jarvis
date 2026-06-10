@@ -102,6 +102,15 @@ cd frontend
 pnpm test                        # Vitest unit tests
 pnpm test:coverage               # With coverage
 pnpm test:e2e                    # Playwright E2E
+
+# Helm (no cluster needed — helm-unittest plugin required)
+helm lint charts/jarvis/         # Static chart validation
+helm unittest charts/jarvis/     # Unit tests (deployment, configmap, secret, ingress)
+
+# All via Makefile
+make test-all                    # backend + frontend + helm lint + helm unittest
+make helm-lint                   # helm lint only
+make helm-test                   # helm unittest only
 ```
 
 ## Security Tools

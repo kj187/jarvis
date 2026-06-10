@@ -342,14 +342,34 @@ Any release shipping API v2 should work. If you run into a compatibility issue w
 cp .env.example .env
 # Edit .env — set at minimum JARVIS_CLUSTER_1_ALERTMANAGER_URL
 
-# 2. Start development stack (hot-reload)
+# 2. Activate pre-commit hooks (once after clone)
+git config core.hooksPath .githooks
+
+# 3. Start development stack (hot-reload)
 podman compose -f compose.dev.yml up
 # Frontend: http://localhost:5173
 # Backend:  http://localhost:8080
 
-# 3. Production build
+# 4. Production build
 podman compose up --build -d
 # http://localhost:8080
+```
+
+### Running tests
+
+```bash
+make test-all        # backend (go test -race) + frontend (vitest) + helm lint + helm unittest
+
+make test-backend    # go test -race ./...
+make test-frontend   # pnpm test (requires dev container running)
+make helm-lint       # helm lint charts/jarvis/
+make helm-test       # helm unittest charts/jarvis/ (requires helm-unittest plugin)
+```
+
+Helm unit tests run without a Kubernetes cluster. Install the plugin once:
+
+```bash
+helm plugin install https://github.com/helm-unittest/helm-unittest
 ```
 
 ## Configuration
