@@ -46,3 +46,6 @@ backend/tmp/
 .cache/
 
 tmp/
+
+# Claude Code local settings (machine-specific permissions)
+.claude/settings.local.json
