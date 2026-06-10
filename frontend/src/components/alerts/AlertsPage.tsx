@@ -128,14 +128,13 @@ export function AlertsPage() {
       {/* Content */}
       {isLoading ? (
         <div className="px-4 text-sm text-muted-foreground">Loading…</div>
-      ) : viewMode === 'card' ? (
+      ) : viewMode === 'card' && filters.state !== 'resolved' && filters.state !== 'suppressed' ? (
         <div className="px-4">
           <AlertCardGrid
             alerts={filtered}
             silences={silences}
             onSelectAlert={setSelectedFingerprint}
             selectedFingerprint={selectedFingerprint}
-            resolvedMode={filters.state === 'resolved'}
           />
         </div>
       ) : (
