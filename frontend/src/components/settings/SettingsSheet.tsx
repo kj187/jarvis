@@ -11,7 +11,6 @@ import {
   DEFAULT_SETTINGS,
   ALLOWED_SILENCE_DURATIONS,
   POLL_OPTIONS,
-  clampResolvedMaxAgeDays,
 } from '@/store/useSettingsStore'
 import type { DefaultFilter } from '@/store/useSettingsStore'
 import type { LabelMatcherOperator } from '@/types'
@@ -294,34 +293,6 @@ export function SettingsSheet({
                 { value: 'list', label: 'List' },
               ]}
             />
-          </SettingRow>
-        </Section>
-
-        <div className="h-px bg-border" />
-
-        {/* ── Alerts ── */}
-        <Section title="Alerts">
-          <SettingRow
-            label="Resolved alert max age"
-            hint="Resolved alerts older than this are hidden."
-          >
-            <div className="flex items-center gap-1.5">
-              <Input
-                type="number"
-                min={1}
-                max={365}
-                value={settings.resolvedMaxAgeDays}
-                onChange={(e) =>
-                  update({ resolvedMaxAgeDays: parseInt(e.target.value, 10) || settings.resolvedMaxAgeDays })
-                }
-                onBlur={(e) => {
-                  const v = parseInt(e.target.value, 10)
-                  update({ resolvedMaxAgeDays: isNaN(v) ? DEFAULT_SETTINGS.resolvedMaxAgeDays : clampResolvedMaxAgeDays(v) })
-                }}
-                className="h-7 w-16 text-center text-xs"
-              />
-              <span className="text-xs text-muted-foreground">days</span>
-            </div>
           </SettingRow>
         </Section>
 

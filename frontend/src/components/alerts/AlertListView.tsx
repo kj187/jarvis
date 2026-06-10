@@ -1,5 +1,5 @@
-import { Fragment, useState } from 'react'
-import { ArrowUpDown, Bell, BellOff, ChevronDown, ChevronRight, RefreshCw, X } from 'lucide-react'
+import { Fragment, useState, useEffect } from 'react'
+import { ArrowUpDown, Bell, BellOff, ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, RefreshCw, X } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import { enUS } from 'date-fns/locale'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -10,6 +10,7 @@ import { Sheet } from '@/components/ui/sheet'
 import { SilenceForm } from '@/components/silences/SilenceForm'
 import { fetchClusters, deleteSilence } from '@/api/client'
 import { formatSilenceDuration, severityOrder } from '@/lib/alertUtils'
+import { useSettingsStore, RESOLVED_PAGE_SIZE_OPTIONS } from '@/store/useSettingsStore'
 import type { EnrichedAlert, Silence } from '@/types'
 import { cn } from '@/lib/utils'
 
@@ -40,6 +41,13 @@ interface AlertGroupData {
   states: string[]
   claimCount: number
   commonSummary?: string
+}
+
+function buildPageWindow(current: number, total: number): (number | '…')[] {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
+  if (current <= 4) return [1, 2, 3, 4, 5, '…', total]
+  if (current >= total - 3) return [1, '…', total - 4, total - 3, total - 2, total - 1, total]
+  return [1, '…', current - 1, current, current + 1, '…', total]
 }
 
 const SEVERITY_ORDER = ['critical', 'warning', 'info', 'none']
@@ -154,6 +162,13 @@ export function AlertListView({ alerts, silences, onSelectAlert, selectedFingerp
   const [sortAsc, setSortAsc] = useState(true)
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
   const [silenceSheet, setSilenceSheet] = useState<SilenceSheetState>({ open: false, alerts: [] })
+  const resolvedPageSize = useSettingsStore((s) => s.resolvedPageSize)
+  const updateSettings = useSettingsStore((s) => s.update)
+  const [resolvedPage, setResolvedPage] = useState(1)
+
+  useEffect(() => {
+    setResolvedPage(1)
+  }, [resolvedPageSize])
 
   const qc = useQueryClient()
   const { data: clusters = [] } = useQuery({ queryKey: ['clusters'], queryFn: fetchClusters })
@@ -218,7 +233,7 @@ export function AlertListView({ alerts, silences, onSelectAlert, selectedFingerp
     )
   }
 
-  // ── Resolved mode: flat list sorted by endsAt desc ─────────────────────────
+  // ── Resolved mode: flat paginated list sorted by endsAt desc ───────────────
   if (resolvedMode) {
     const sorted = [...alerts].sort((a, b) => {
       const timeDiff = new Date(b.endsAt).getTime() - new Date(a.endsAt).getTime()
@@ -227,39 +242,148 @@ export function AlertListView({ alerts, silences, onSelectAlert, selectedFingerp
       if (sevDiff !== 0) return sevDiff
       return (a.labels['alertname'] ?? '').localeCompare(b.labels['alertname'] ?? '')
     })
+
+    const totalAlerts = sorted.length
+    const totalPages = Math.max(1, Math.ceil(totalAlerts / resolvedPageSize))
+    const safePage = Math.min(resolvedPage, totalPages)
+    const startIdx = (safePage - 1) * resolvedPageSize
+    const endIdx = Math.min(startIdx + resolvedPageSize, totalAlerts)
+    const pageAlerts = sorted.slice(startIdx, endIdx)
+    const pageWindow = buildPageWindow(safePage, totalPages)
+
+    const pageNavButtons = (
+      <div className="flex items-center gap-0.5">
+        <button
+          type="button"
+          onClick={() => setResolvedPage(1)}
+          disabled={safePage === 1}
+          className="cursor-pointer p-1 rounded text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-default"
+          aria-label="First page"
+        >
+          <ChevronsLeft className="h-3.5 w-3.5" />
+        </button>
+        <button
+          type="button"
+          onClick={() => setResolvedPage((p) => Math.max(1, p - 1))}
+          disabled={safePage === 1}
+          className="cursor-pointer p-1 rounded text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-default"
+          aria-label="Previous page"
+        >
+          <ChevronLeft className="h-3.5 w-3.5" />
+        </button>
+        {pageWindow.map((entry, i) =>
+          entry === '…' ? (
+            <span key={`ellipsis-${i}`} className="px-1 text-xs text-muted-foreground/50 select-none">…</span>
+          ) : (
+            <button
+              key={entry}
+              type="button"
+              onClick={() => setResolvedPage(entry as number)}
+              className={cn(
+                'min-w-[26px] px-1.5 py-0.5 text-xs rounded cursor-pointer transition-colors tabular-nums',
+                safePage === entry
+                  ? 'bg-accent text-foreground font-medium'
+                  : 'text-muted-foreground hover:text-foreground',
+              )}
+            >
+              {entry}
+            </button>
+          ),
+        )}
+        <button
+          type="button"
+          onClick={() => setResolvedPage((p) => Math.min(totalPages, p + 1))}
+          disabled={safePage === totalPages}
+          className="cursor-pointer p-1 rounded text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-default"
+          aria-label="Next page"
+        >
+          <ChevronRight className="h-3.5 w-3.5" />
+        </button>
+        <button
+          type="button"
+          onClick={() => setResolvedPage(totalPages)}
+          disabled={safePage === totalPages}
+          className="cursor-pointer p-1 rounded text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-default"
+          aria-label="Last page"
+        >
+          <ChevronsRight className="h-3.5 w-3.5" />
+        </button>
+      </div>
+    )
+
     return (
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-border">
-              <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Alert Name
-              </th>
-              <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Severity
-              </th>
-              <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Time
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.map((alert) => (
-              <AlertListRow
-                key={alert.fingerprint}
-                alert={alert}
-                onClick={onSelectAlert}
-                selected={selectedFingerprint === alert.fingerprint}
-                silences={silences}
-                showStateColumn={false}
-                showSeverityColumn={true}
-                showActionsColumn={false}
-                showClaimColumn={false}
-                noOpacity={true}
-              />
+      <div>
+        {/* ── Top bar: page navigator + count + page size selector ── */}
+        <div className="flex items-center gap-3 mb-2">
+          {totalAlerts > 0 && pageNavButtons}
+          {totalAlerts > 0 && (
+            <span className="text-xs text-muted-foreground tabular-nums">
+              {startIdx + 1}–{endIdx} of {totalAlerts}
+            </span>
+          )}
+          <div className="flex items-center gap-0.5">
+            <span className="text-xs text-muted-foreground mr-1.5">Per page:</span>
+            {RESOLVED_PAGE_SIZE_OPTIONS.map((size) => (
+              <button
+                key={size}
+                type="button"
+                onClick={() => updateSettings({ resolvedPageSize: size })}
+                className={cn(
+                  'px-2.5 py-1 text-xs rounded cursor-pointer transition-colors',
+                  resolvedPageSize === size
+                    ? 'bg-accent text-foreground font-medium'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                {size}
+              </button>
             ))}
-          </tbody>
-        </table>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border">
+                <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Alert Name
+                </th>
+                <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Severity
+                </th>
+                <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Time
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {pageAlerts.map((alert) => (
+                <AlertListRow
+                  key={alert.fingerprint}
+                  alert={alert}
+                  onClick={onSelectAlert}
+                  selected={selectedFingerprint === alert.fingerprint}
+                  silences={silences}
+                  showStateColumn={false}
+                  showSeverityColumn={true}
+                  showActionsColumn={false}
+                  showClaimColumn={false}
+                  noOpacity={true}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* ── Bottom: page navigator + count ── */}
+        {totalAlerts > 0 && (
+          <div className="flex items-center gap-3 mt-3 px-1">
+            {pageNavButtons}
+            <span className="text-xs text-muted-foreground tabular-nums">
+              {startIdx + 1}–{endIdx} of {totalAlerts}
+            </span>
+          </div>
+        )}
 
         <Sheet open={silenceSheet.open} onClose={closeSilenceForm} className="sm:max-w-2xl lg:max-w-3xl">
           <div className="p-5 pt-10">

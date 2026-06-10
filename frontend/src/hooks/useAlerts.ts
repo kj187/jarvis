@@ -9,20 +9,20 @@ import { useUIStore } from '@/store/uiStore'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import type { EnrichedAlert } from '@/types'
 
+const RESOLVED_MAX_AGE_MS = 90 * 24 * 60 * 60 * 1000
+
 export function useAlerts(params?: { cluster?: string; severity?: string; state?: string }) {
   const pollingPaused = useUIStore((s) => s.pollingPaused)
   const pollIntervalSeconds = useSettingsStore((s) => s.pollIntervalSeconds)
-  const resolvedMaxAgeDays = useSettingsStore((s) => s.resolvedMaxAgeDays)
 
   return useQuery({
     queryKey: ['alerts', params],
     queryFn: () => fetchAlerts(params),
     refetchInterval: pollingPaused ? false : pollIntervalSeconds * 1000,
     select: (data: EnrichedAlert[]) => {
-      const cutoff = Date.now() - resolvedMaxAgeDays * 24 * 60 * 60 * 1000
+      const cutoff = Date.now() - RESOLVED_MAX_AGE_MS
       return data.filter((alert) => {
         if (alert.status?.state !== 'resolved') return true
-        // endsAt is the resolution time for resolved alerts in Alertmanager
         return new Date(alert.endsAt).getTime() > cutoff
       })
     },
