@@ -31,6 +31,7 @@ Most Alertmanager UIs are read-only dashboards. Jarvis is built for teams that n
 - **Multi-cluster** — poll multiple Alertmanager instances simultaneously
 - **Grace period** — 60s ghost-resolve prevention
 - **Single binary** — Go backend embeds the Vite build; one container
+- **Authentication** — optional, three modes: `none` (open), `internal` (built-in user management), `oidc` (Keycloak, Authentik, Dex, any OIDC provider)
 
 ## Views
 
