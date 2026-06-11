@@ -74,6 +74,32 @@ func TestGetAlerts_WithAlerts(t *testing.T) {
 	}
 }
 
+func TestValidateFingerprint(t *testing.T) {
+	valid := []string{
+		"1234567890abcdef", // exactly 16 hex chars
+		"abcdef1234567890",
+		"ffffffffffffffff",
+		"0000000000000000",
+	}
+	invalid := []string{
+		"INVALID!",          // non-hex
+		"abc123",            // too short
+		"1234567890abcdef0", // too long (17 chars)
+		"1234567890ABCDEF",  // uppercase rejected
+		"",
+	}
+	for _, fp := range valid {
+		if !validateFingerprint(fp) {
+			t.Errorf("validateFingerprint(%q) = false, want true", fp)
+		}
+	}
+	for _, fp := range invalid {
+		if validateFingerprint(fp) {
+			t.Errorf("validateFingerprint(%q) = true, want false", fp)
+		}
+	}
+}
+
 func TestGetAlertHistory_InvalidFingerprint(t *testing.T) {
 	srv, _ := newTestServer(t)
 	e := echo.New()

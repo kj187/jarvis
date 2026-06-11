@@ -80,13 +80,13 @@ func TestGetClaim_InvalidFingerprint(t *testing.T) {
 
 func TestGetClaim_NotFound(t *testing.T) {
 	srv, _, store := newTestServerFull(t)
-	seedFP(t, store, "abc123")
+	seedFP(t, store, "1234567890abcdef")
 	e := echo.New()
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	c.SetParamNames("fingerprint")
-	c.SetParamValues("abc123")
+	c.SetParamValues("1234567890abcdef")
 
 	err := srv.getClaim(c)
 	if err == nil {
@@ -100,7 +100,7 @@ func TestGetClaim_NotFound(t *testing.T) {
 
 func TestSetClaim_HappyPath(t *testing.T) {
 	srv, _, store := newTestServerFull(t)
-	seedFP(t, store, "abc123")
+	seedFP(t, store, "1234567890abcdef")
 	e := echo.New()
 
 	body := map[string]interface{}{"claimedBy": "alice", "note": "investigating"}
@@ -110,7 +110,7 @@ func TestSetClaim_HappyPath(t *testing.T) {
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	c.SetParamNames("fingerprint")
-	c.SetParamValues("abc123")
+	c.SetParamValues("1234567890abcdef")
 
 	if err := srv.setClaim(c); err != nil {
 		t.Fatalf("setClaim: %v", err)
@@ -143,7 +143,7 @@ func TestSetClaim_InvalidFingerprint(t *testing.T) {
 
 func TestSetClaim_MissingClaimedBy(t *testing.T) { //nolint:dupl
 	srv, _, store := newTestServerFull(t)
-	seedFP(t, store, "abc123")
+	seedFP(t, store, "1234567890abcdef")
 	e := echo.New()
 	body := map[string]interface{}{"note": "no user"}
 	b, _ := json.Marshal(body)
@@ -152,7 +152,7 @@ func TestSetClaim_MissingClaimedBy(t *testing.T) { //nolint:dupl
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	c.SetParamNames("fingerprint")
-	c.SetParamValues("abc123")
+	c.SetParamValues("1234567890abcdef")
 
 	err := srv.setClaim(c)
 	if err == nil {
@@ -166,15 +166,15 @@ func TestSetClaim_MissingClaimedBy(t *testing.T) { //nolint:dupl
 
 func TestGetClaim_AfterSet(t *testing.T) { //nolint:dupl
 	srv, _, store := newTestServerFull(t)
-	seedFP(t, store, "deadbeef")
+	seedFP(t, store, "deadbeef00000000")
 	e := echo.New()
-	seedClaimHTTP(t, srv, e, "deadbeef", "bob")
+	seedClaimHTTP(t, srv, e, "deadbeef00000000", "bob")
 
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	c.SetParamNames("fingerprint")
-	c.SetParamValues("deadbeef")
+	c.SetParamValues("deadbeef00000000")
 	if err := srv.getClaim(c); err != nil {
 		t.Fatalf("getClaim: %v", err)
 	}
@@ -188,15 +188,15 @@ func TestGetClaim_AfterSet(t *testing.T) { //nolint:dupl
 
 func TestReleaseClaim_HappyPath(t *testing.T) {
 	srv, _, store := newTestServerFull(t)
-	seedFP(t, store, "deadbeef")
+	seedFP(t, store, "deadbeef00000000")
 	e := echo.New()
-	seedClaimHTTP(t, srv, e, "deadbeef", "carol")
+	seedClaimHTTP(t, srv, e, "deadbeef00000000", "carol")
 
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodDelete, "/?by=carol", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	c.SetParamNames("fingerprint")
-	c.SetParamValues("deadbeef")
+	c.SetParamValues("deadbeef00000000")
 	if err := srv.releaseClaim(c); err != nil {
 		t.Fatalf("releaseClaim: %v", err)
 	}
@@ -212,7 +212,7 @@ func TestReleaseClaim_NoClaim(t *testing.T) {
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	c.SetParamNames("fingerprint")
-	c.SetParamValues("abc123")
+	c.SetParamValues("1234567890abcdef")
 
 	err := srv.releaseClaim(c)
 	if err == nil {
@@ -246,7 +246,7 @@ func TestGetClaimHistory_Empty(t *testing.T) { //nolint:dupl
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	c.SetParamNames("fingerprint")
-	c.SetParamValues("abc123")
+	c.SetParamValues("1234567890abcdef")
 
 	if err := srv.getClaimHistory(c); err != nil {
 		t.Fatalf("getClaimHistory: %v", err)
@@ -261,15 +261,15 @@ func TestGetClaimHistory_Empty(t *testing.T) { //nolint:dupl
 
 func TestGetClaimHistory_WithClaims(t *testing.T) { //nolint:dupl
 	srv, _, store := newTestServerFull(t)
-	seedFP(t, store, "abc123")
+	seedFP(t, store, "1234567890abcdef")
 	e := echo.New()
-	seedClaimHTTP(t, srv, e, "abc123", "dave")
+	seedClaimHTTP(t, srv, e, "1234567890abcdef", "dave")
 
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	c.SetParamNames("fingerprint")
-	c.SetParamValues("abc123")
+	c.SetParamValues("1234567890abcdef")
 	if err := srv.getClaimHistory(c); err != nil {
 		t.Fatalf("getClaimHistory: %v", err)
 	}
@@ -307,7 +307,7 @@ func TestSetClaim_TooLong(t *testing.T) {
 	for _, tt := range tests { //nolint:dupl
 		t.Run(tt.name, func(t *testing.T) {
 			srv, _, store := newTestServerFull(t)
-			seedFP(t, store, "abc123")
+			seedFP(t, store, "1234567890abcdef")
 			e := echo.New()
 			b, _ := json.Marshal(tt.body)
 			req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/", bytes.NewReader(b))
@@ -315,7 +315,7 @@ func TestSetClaim_TooLong(t *testing.T) {
 			rec := httptest.NewRecorder()
 			c := e.NewContext(req, rec)
 			c.SetParamNames("fingerprint")
-			c.SetParamValues("abc123")
+			c.SetParamValues("1234567890abcdef")
 
 			err := srv.setClaim(c)
 			if err == nil {
