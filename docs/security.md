@@ -2,9 +2,9 @@
 
 ## Overview
 
-Jarvis assumes deployment behind a trusted reverse proxy (e.g. Traefik, nginx).
-Authentication and TLS termination are handled externally. This document
-describes the security measures built into the application itself.
+Jarvis ships with built-in authentication (see [authentication.md](authentication.md)).
+It assumes deployment behind a trusted reverse proxy (e.g. Traefik, nginx) for TLS termination.
+This document describes the security measures built into the application itself.
 
 ---
 

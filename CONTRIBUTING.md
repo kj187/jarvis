@@ -46,7 +46,7 @@ security(backend): add gosec and govulncheck to pre-commit hooks
 
 ## Testing
 
-See [docs/TESTING.md](docs/TESTING.md) for full instructions.
+See [docs/testing.md](docs/testing.md) for full instructions.
 
 Pre-commit hooks run Go unit tests, gosec, govulncheck, and golangci-lint
 automatically before each commit.

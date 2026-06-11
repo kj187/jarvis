@@ -22,7 +22,7 @@ Instead, please report it via one of the following channels:
 
 ## Security Measures
 
-See [docs/SECURITY.md](docs/SECURITY.md) for a full description of:
+See [docs/security.md](docs/security.md) for a full description of:
 
 - Static analysis tooling (gosec, govulncheck, golangci-lint)
 - Container hardening (distroless, non-root, read-only FS)
