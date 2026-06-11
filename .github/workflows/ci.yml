@@ -15,7 +15,9 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # ratchet:actions/checkout@v4
       - name: Install ratchet
-        run: go install github.com/sethvargo/ratchet@latest
+        run: |
+          go install github.com/sethvargo/ratchet@latest
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
       - name: Verify all Actions are SHA-pinned
         run: ratchet check .github/workflows/ci.yml .github/workflows/release.yml .github/workflows/codeql.yml
 
