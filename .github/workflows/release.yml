@@ -12,6 +12,8 @@ jobs:
     permissions:
       packages: write
       contents: write
+      id-token: write # required for keyless cosign signing via GitHub OIDC
+      attestations: write # required for build provenance and SBOM attestations
 
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # ratchet:actions/checkout@v4
@@ -39,6 +41,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push
+        id: build
         uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # ratchet:docker/build-push-action@v7
         with:
           context: .
@@ -49,6 +52,16 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          provenance: mode=max
+          attestations: type=sbom
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # ratchet:sigstore/cosign-installer@v3
+
+      - name: Sign image with keyless signing (GitHub OIDC)
+        run: |
+          cosign sign --yes \
+            ghcr.io/kj187/jarvis@${{ steps.build.outputs.digest }}
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # ratchet:softprops/action-gh-release@v3
