@@ -5,9 +5,11 @@ import (
 
 	"github.com/labstack/echo/v4"
 
+	"github.com/kj187/jarvis/backend/internal/auth"
 	"github.com/kj187/jarvis/backend/internal/cluster"
 	"github.com/kj187/jarvis/backend/internal/config"
 	"github.com/kj187/jarvis/backend/internal/history"
+	"github.com/kj187/jarvis/backend/internal/users"
 	"github.com/kj187/jarvis/backend/internal/ws"
 )
 
@@ -18,12 +20,14 @@ type pollTriggerer interface {
 
 // Server holds shared dependencies for all API handlers.
 type Server struct {
-	alertStore  *history.AlertStore
-	store       *history.Store
-	hub         *ws.Hub
-	registry    *cluster.Registry
-	cfg         *config.Config
-	pollTrigger pollTriggerer
+	alertStore   *history.AlertStore
+	store        *history.Store
+	hub          *ws.Hub
+	registry     *cluster.Registry
+	cfg          *config.Config
+	pollTrigger  pollTriggerer
+	authProvider auth.Provider
+	userStore    *users.Store
 }
 
 // NewServer creates a new Server with the given dependencies.
@@ -34,14 +38,18 @@ func NewServer(
 	registry *cluster.Registry,
 	cfg *config.Config,
 	pollTrigger pollTriggerer,
+	authProvider auth.Provider,
+	userStore *users.Store,
 ) *Server {
 	return &Server{
-		alertStore:  alertStore,
-		store:       store,
-		hub:         hub,
-		registry:    registry,
-		cfg:         cfg,
-		pollTrigger: pollTrigger,
+		alertStore:   alertStore,
+		store:        store,
+		hub:          hub,
+		registry:     registry,
+		cfg:          cfg,
+		pollTrigger:  pollTrigger,
+		authProvider: authProvider,
+		userStore:    userStore,
 	}
 }
 
