@@ -4,12 +4,13 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/kj187/jarvis/backend/internal/auth"
 	"github.com/kj187/jarvis/backend/internal/models"
 	"github.com/labstack/echo/v4"
 )
 
 const (
-	maxAuthorNameLen = 100
+	maxAuthorNameLen  = 100
 	maxCommentBodyLen = 10_000
 )
 
@@ -45,17 +46,30 @@ func (s *Server) addComment(c echo.Context) error {
 	if err := c.Bind(&body); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
 	}
-	if body.AuthorName == "" || body.Body == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "authorName and body are required")
-	}
-	if len([]rune(body.AuthorName)) > maxAuthorNameLen {
-		return echo.NewHTTPError(http.StatusBadRequest, "authorName too long (max 100 characters)")
+	if body.Body == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "body is required")
 	}
 	if len([]rune(body.Body)) > maxCommentBodyLen {
 		return echo.NewHTTPError(http.StatusBadRequest, "body too long (max 10000 characters)")
 	}
 
-	comment, err := s.store.AddComment(fp, body.EventID, body.AuthorName, body.Body)
+	authorName := body.AuthorName
+	if s.authProvider.Mode() == "none" {
+		if authorName == "" {
+			return echo.NewHTTPError(http.StatusBadRequest, "authorName and body are required")
+		}
+	} else {
+		u := auth.UserFromContext(c)
+		if u == nil || u.Username == "" {
+			return echo.NewHTTPError(http.StatusUnauthorized, "unauthorized")
+		}
+		authorName = u.Username
+	}
+	if len([]rune(authorName)) > maxAuthorNameLen {
+		return echo.NewHTTPError(http.StatusBadRequest, "authorName too long (max 100 characters)")
+	}
+
+	comment, err := s.store.AddComment(fp, body.EventID, authorName, body.Body)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to add comment")
 	}
@@ -79,6 +93,23 @@ func (s *Server) deleteComment(c echo.Context) error {
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil || id <= 0 {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid comment id")
+	}
+
+	if s.authProvider.Mode() != "none" {
+		u := auth.UserFromContext(c)
+		if u == nil || u.Username == "" {
+			return echo.NewHTTPError(http.StatusUnauthorized, "unauthorized")
+		}
+		comment, err := s.store.GetComment(fp, id)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, "failed to get comment")
+		}
+		if comment == nil {
+			return echo.NewHTTPError(http.StatusNotFound, "comment not found")
+		}
+		if comment.AuthorName != u.Username {
+			return echo.NewHTTPError(http.StatusForbidden, "forbidden")
+		}
 	}
 
 	deleted, err := s.store.DeleteComment(id, fp)

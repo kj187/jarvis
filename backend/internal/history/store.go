@@ -305,6 +305,28 @@ func (s *Store) GetComments(fingerprint string) ([]models.Comment, error) {
 	return comments, rows.Err()
 }
 
+// GetComment returns a comment by ID scoped to fingerprint.
+func (s *Store) GetComment(fingerprint string, id int64) (*models.Comment, error) {
+	var c models.Comment
+	var eventID sql.NullInt64
+	var createdAt time.Time
+	err := s.queryRow(context.Background(), `
+		SELECT id, fingerprint, event_id, author_name, body, created_at
+		FROM alert_comments WHERE fingerprint = ? AND id = ?
+	`, fingerprint, id).Scan(&c.ID, &c.Fingerprint, &eventID, &c.AuthorName, &c.Body, &createdAt)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get comment: %w", err)
+	}
+	c.CreatedAt = createdAt.UTC()
+	if eventID.Valid {
+		c.EventID = &eventID.Int64
+	}
+	return &c, nil
+}
+
 // AddComment inserts a new comment.
 func (s *Store) AddComment(fingerprint string, eventID *int64, authorName, body string) (*models.Comment, error) {
 	now := time.Now().UTC()

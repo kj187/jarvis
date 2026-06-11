@@ -6,14 +6,17 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	amclient "github.com/kj187/jarvis/backend/internal/alertmanager"
+	"github.com/kj187/jarvis/backend/internal/auth"
 	"github.com/kj187/jarvis/backend/internal/cluster"
 	"github.com/kj187/jarvis/backend/internal/config"
 	idb "github.com/kj187/jarvis/backend/internal/db"
 	"github.com/kj187/jarvis/backend/internal/history"
+	"github.com/kj187/jarvis/backend/internal/users"
 	"github.com/kj187/jarvis/backend/internal/ws"
 	"github.com/labstack/echo/v4"
 )
@@ -32,6 +35,7 @@ func newTestServerWithAM(t *testing.T, amURL string) *Server {
 
 	alertStore := &history.AlertStore{}
 	store := history.NewStore(database, dialect)
+	userStore := users.NewStore(database, dialect)
 	hub := ws.NewHub(nil, nil)
 	go hub.Run()
 
@@ -39,7 +43,7 @@ func newTestServerWithAM(t *testing.T, amURL string) *Server {
 		{Name: "testcluster", AlertmanagerURL: amURL, AlertmanagerLinkURL: amURL},
 	})
 	cfg := &config.Config{}
-	return NewServer(alertStore, store, hub, registry, cfg, nil)
+	return NewServer(alertStore, store, hub, registry, cfg, nil, auth.NoneProvider{}, userStore)
 }
 
 func TestGetSilences_Empty(t *testing.T) {
@@ -403,5 +407,54 @@ func TestDeleteSilence_AMError(t *testing.T) {
 	he, ok := err.(*echo.HTTPError)
 	if !ok || he.Code != http.StatusBadGateway {
 		t.Errorf("expected 502, got %v", err)
+	}
+	if strings.Contains(he.Message.(string), "AM error") {
+		t.Fatalf("expected generic error message, got: %v", he.Message)
+	}
+}
+
+func TestCreateSilence_AuthMode_UsesContextUserForAudit(t *testing.T) {
+	am := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(amclient.PostSilenceResponse{SilenceID: "new-silence"}) //nolint:errcheck
+	}))
+	defer am.Close()
+
+	srv := newTestServerWithAM(t, am.URL)
+	srv.authProvider = auth.NewInternalProvider(srv.userStore)
+	seedFP(t, srv.store, "1234567890abcdef")
+	e := echo.New()
+
+	now := time.Now().UTC()
+	body := map[string]interface{}{
+		"cluster":     "testcluster",
+		"matchers":    []interface{}{},
+		"startsAt":    now.Format(time.RFC3339),
+		"endsAt":      now.Add(time.Hour).Format(time.RFC3339),
+		"createdBy":   "spoofed",
+		"performedBy": "spoofed",
+		"comment":     "test silence",
+		"fingerprint": "1234567890abcdef",
+	}
+	b, _ := json.Marshal(body)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/silences", bytes.NewReader(b))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.Set(auth.ContextKey, &auth.User{ID: "u1", Username: "real-user", Role: "user", Provider: "internal"})
+
+	if err := srv.createSilence(c); err != nil {
+		t.Fatalf("createSilence: %v", err)
+	}
+
+	events, err := srv.store.GetSilenceEvents("1234567890abcdef")
+	if err != nil {
+		t.Fatalf("GetSilenceEvents: %v", err)
+	}
+	if len(events) != 1 {
+		t.Fatalf("expected 1 silence event, got %d", len(events))
+	}
+	if events[0].PerformedBy != "real-user" {
+		t.Fatalf("performedBy = %q, want real-user", events[0].PerformedBy)
 	}
 }

@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/kj187/jarvis/backend/internal/auth"
 	"github.com/labstack/echo/v4"
 )
 
@@ -271,5 +272,74 @@ func TestDeleteComment_HappyPath(t *testing.T) {
 	}
 	if rec2.Code != http.StatusNoContent {
 		t.Errorf("status = %d, want 204", rec2.Code)
+	}
+}
+
+func TestAddComment_AuthMode_UsesContextUser(t *testing.T) { //nolint:dupl
+	srv, _, store := newTestServerFull(t)
+	srv.authProvider = auth.NewInternalProvider(srv.userStore)
+	seedFP(t, store, "1234567890abcdef")
+	e := echo.New()
+
+	body := map[string]interface{}{"authorName": "spoofed", "body": "hello"}
+	b, _ := json.Marshal(body)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/", bytes.NewReader(b))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("fingerprint")
+	c.SetParamValues("1234567890abcdef")
+	c.Set(auth.ContextKey, &auth.User{ID: "u1", Username: "real-user", Role: "user", Provider: "internal"})
+
+	if err := srv.addComment(c); err != nil {
+		t.Fatalf("addComment: %v", err)
+	}
+	if !contains(rec.Body.String(), "real-user") || contains(rec.Body.String(), "spoofed") {
+		t.Fatalf("expected context user as author, got: %s", rec.Body.String())
+	}
+}
+
+func TestDeleteComment_AuthMode_OnlyOwnerCanDelete(t *testing.T) {
+	srv, _, store := newTestServerFull(t)
+	srv.authProvider = auth.NewInternalProvider(srv.userStore)
+	seedFP(t, store, "1234567890abcdef")
+	e := echo.New()
+
+	// Add as alice.
+	body := map[string]interface{}{"authorName": "ignored", "body": "owned comment"}
+	b, _ := json.Marshal(body)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/", bytes.NewReader(b))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("fingerprint")
+	c.SetParamValues("1234567890abcdef")
+	c.Set(auth.ContextKey, &auth.User{ID: "u1", Username: "alice", Role: "user", Provider: "internal"})
+	if err := srv.addComment(c); err != nil {
+		t.Fatalf("addComment: %v", err)
+	}
+
+	var comment struct {
+		ID int64 `json:"id"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &comment); err != nil {
+		t.Fatalf("unmarshal comment: %v", err)
+	}
+
+	// Delete as bob -> forbidden.
+	req2 := httptest.NewRequestWithContext(context.Background(), http.MethodDelete, "/", nil)
+	rec2 := httptest.NewRecorder()
+	c2 := e.NewContext(req2, rec2)
+	c2.SetParamNames("fingerprint", "id")
+	c2.SetParamValues("1234567890abcdef", fmt.Sprintf("%d", comment.ID))
+	c2.Set(auth.ContextKey, &auth.User{ID: "u2", Username: "bob", Role: "user", Provider: "internal"})
+
+	err := srv.deleteComment(c2)
+	if err == nil {
+		t.Fatal("expected forbidden for non-owner delete")
+	}
+	he, ok := err.(*echo.HTTPError)
+	if !ok || he.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %v", err)
 	}
 }
