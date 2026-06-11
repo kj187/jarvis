@@ -93,3 +93,62 @@ tests:
       - equal:
           path: spec.template.spec.securityContext.runAsNonRoot
           value: true
+
+  - it: does not add JARVIS_SECRET_KEY env when auth.provider is none
+    asserts:
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: JARVIS_SECRET_KEY
+
+  - it: adds JARVIS_SECRET_KEY from chart secret when auth.provider is internal
+    set:
+      auth.provider: internal
+      auth.secretKey: "deadbeef"
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: JARVIS_SECRET_KEY
+            valueFrom:
+              secretKeyRef:
+                name: RELEASE-NAME-jarvis
+                key: secret-key
+
+  - it: adds JARVIS_SECRET_KEY from existingSecret when auth.existingSecret is set
+    set:
+      auth.provider: internal
+      auth.existingSecret: jarvis-auth
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: JARVIS_SECRET_KEY
+            valueFrom:
+              secretKeyRef:
+                name: jarvis-auth
+                key: secret-key
+
+  - it: adds JARVIS_AUTH_OIDC_CLIENT_SECRET when auth.provider is oidc
+    set:
+      auth.provider: oidc
+      auth.existingSecret: jarvis-auth
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: JARVIS_AUTH_OIDC_CLIENT_SECRET
+            valueFrom:
+              secretKeyRef:
+                name: jarvis-auth
+                key: oidc-client-secret
+
+  - it: does not add JARVIS_AUTH_OIDC_CLIENT_SECRET when auth.provider is internal
+    set:
+      auth.provider: internal
+      auth.existingSecret: jarvis-auth
+    asserts:
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: JARVIS_AUTH_OIDC_CLIENT_SECRET

@@ -92,6 +92,35 @@ clusters:
     # differs from what the browser can reach (e.g. via ingress).
     hostAlias: ""
 
+# Authentication configuration.
+# See docs/authentication.md for the full reference.
+auth:
+  # Authentication provider: none | internal | oidc
+  # none:     no login required; all write actions are publicly accessible (default)
+  # internal: local user accounts managed via the built-in admin panel
+  # oidc:     delegate login to an external OIDC provider (Keycloak, Authentik, Dex, etc.)
+  provider: none
+  # Secret key for signing session tokens (min 32 random bytes in hex or base64).
+  # Required when provider is "internal" or "oidc".
+  # Use auth.existingSecret in production to avoid storing the key in values.
+  secretKey: ""
+  # Use an existing Kubernetes Secret for auth credentials.
+  # The Secret must contain the keys referenced by auth.existingSecretKeys.
+  existingSecret: ""
+  existingSecretKeys:
+    secretKey: secret-key
+    oidcClientSecret: oidc-client-secret
+  oidc:
+    # OIDC issuer URL (e.g. https://keycloak.example.com/realms/myrealm)
+    issuer: ""
+    clientId: ""
+    # Client secret — stored in the auth Secret, never in the ConfigMap.
+    clientSecret: ""
+    # Redirect URL — must match the configuration in the OIDC provider.
+    # Example: https://jarvis.example.com/auth/oidc/callback
+    redirectUrl: ""
+    scopes: "openid,profile,email"
+
 # Database configuration.
 database:
   # DSN for the database connection. Two dialects are supported:
