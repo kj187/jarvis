@@ -376,17 +376,37 @@ helm plugin install https://github.com/helm-unittest/helm-unittest --version v0.
 
 See [.env.example](.env.example) for all options. Key settings:
 
+**Core**
+
 | Variable | Default | Description |
 |---|---|---|
-| `JARVIS_PORT` | `8080` | HTTP port |
-| `JARVIS_POLL_INTERVAL` | `15s` | Alertmanager poll interval |
+| `JARVIS_PORT` | `8080` | HTTP listen port |
+| `JARVIS_LOG_LEVEL` | `info` | Log verbosity: `info` or `debug` |
+| `JARVIS_POLL_INTERVAL` | `15s` | Alertmanager poll interval (Go duration, e.g. `30s`) |
 | `JARVIS_DB_DSN` | `/data/jarvis.db` | Database DSN — SQLite file path **or** `postgres://` URL (see below) |
-| `JARVIS_ALLOWED_ORIGINS` | _(same-origin)_ | Comma-separated list of allowed origins for CORS and WebSocket connections (e.g. `https://jarvis.example.com`). Only needed when the browser-visible URL differs from the backend's own host — for example during local development (`http://localhost:5173`) or when a reverse proxy rewrites the hostname. Not needed in the default single-binary production deployment, where the Go server serves the embedded frontend from the same origin. |
+| `JARVIS_ALLOWED_ORIGINS` | _(same-origin)_ | Comma-separated allowed CORS / WebSocket origins (e.g. `https://jarvis.example.com`). Required when browser URL differs from backend host. |
 | `JARVIS_RUNBOOK_BASE_URL` | — | Base URL for runbook links (alert label `runbook` is appended) |
-| `JARVIS_CLUSTER_1_NAME` | — | Cluster display name |
-| `JARVIS_CLUSTER_1_ALERTMANAGER_URL` | — | Internal Alertmanager URL |
+
+**Authentication** — see [docs/authentication.md](docs/authentication.md) for full details
+
+| Variable | Default | Description |
+|---|---|---|
+| `JARVIS_AUTH_PROVIDER` | `none` | Authentication mode: `none`, `internal`, or `oidc` |
+| `JARVIS_SECRET_KEY` | — | JWT signing key, min 32 bytes (required for `internal` / `oidc`) |
+| `JARVIS_AUTH_OIDC_ISSUER` | — | OIDC provider issuer URL (required for `oidc`) |
+| `JARVIS_AUTH_OIDC_CLIENT_ID` | — | OIDC client ID (required for `oidc`) |
+| `JARVIS_AUTH_OIDC_CLIENT_SECRET` | — | OIDC client secret (required for `oidc`) |
+| `JARVIS_AUTH_OIDC_REDIRECT_URL` | — | OIDC callback URL, must match provider config (required for `oidc`) |
+| `JARVIS_AUTH_OIDC_SCOPES` | `openid,profile,email` | Comma-separated OIDC scopes |
+
+**Clusters** (repeat for N = 1, 2, 3, …)
+
+| Variable | Default | Description |
+|---|---|---|
+| `JARVIS_CLUSTER_1_NAME` | — | Cluster display name (**required**) |
+| `JARVIS_CLUSTER_1_ALERTMANAGER_URL` | — | Internal Alertmanager URL (**required**) |
 | `JARVIS_CLUSTER_1_PROMETHEUS_URL` | — | Internal Prometheus URL (optional) |
-| `JARVIS_CLUSTER_1_HOST_ALIAS` | — | Browser-visible AM URL, if different from internal (optional) |
+| `JARVIS_CLUSTER_1_HOST_ALIAS` | — | Browser-visible AM URL when different from internal (optional) |
 
 Add additional clusters with `JARVIS_CLUSTER_2_*`, `JARVIS_CLUSTER_3_*`, etc.
 
@@ -417,51 +437,39 @@ The dialect is detected automatically from the DSN prefix. Schema migrations run
 > # JARVIS_DB_DSN=postgres://jarvis:jarvis@test-postgres:5432/jarvis?sslmode=disable
 > ```
 
-## Deployment & Authentication
+## Authentication
 
-**Jarvis has no built-in authentication.** This is an intentional design decision: authentication is a solved problem at the reverse proxy layer, and every team uses a different solution (OAuth2 Proxy, Keycloak, Authentik, Authelia, basic auth, mTLS, etc.). Duplicating this in Jarvis would mean maintaining a second auth system that is unlikely to match what the team already runs.
+Jarvis ships with built-in authentication. Three modes are available, set via `JARVIS_AUTH_PROVIDER`:
 
-**The consequence:** every HTTP request that reaches Jarvis can read alert history, post comments, claim alerts, create silences, and proxy mutating requests to Alertmanager. Access control must happen before the request reaches Jarvis.
+| Mode | Description |
+|------|-------------|
+| `none` | No login (default). Write actions are publicly accessible. Fine for private networks. |
+| `internal` | Local accounts with bcrypt passwords. First-run wizard creates the admin account. |
+| `oidc` | Delegate login to Keycloak, Authentik, Dex, or any OIDC provider. |
 
-### Minimum deployment requirements
+**Quick start — internal accounts:**
 
-1. **Do not expose Jarvis directly to the internet** — it should only be reachable through a reverse proxy or VPN.
-2. **Enforce authentication at the reverse proxy** — use whatever auth your organisation already operates (OAuth2, SSO, basic auth, client certificates).
-3. **Restrict to trusted users** — anyone who can reach the service can modify alert state and proxy requests to Alertmanager.
-
-### Example: OAuth2 Proxy in front of Jarvis
-
-```
-[Browser] → [OAuth2 Proxy (auth)] → [Jarvis :8080]
-```
-
-The OAuth2 Proxy handles the login flow and only forwards authenticated sessions to Jarvis. Set `JARVIS_ALLOWED_ORIGINS` to the public-facing URL so that WebSocket connections are accepted.
-
-### Example: Kubernetes Ingress with authentication
-
-```yaml
-ingress:
-  enabled: true
-  className: nginx
-  annotations:
-    nginx.ingress.kubernetes.io/auth-url: "https://auth.example.com/oauth2/auth"
-    nginx.ingress.kubernetes.io/auth-signin: "https://auth.example.com/oauth2/start"
-    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
-    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
-    nginx.ingress.kubernetes.io/configuration-snippet: |
-      proxy_set_header Upgrade $http_upgrade;
-      proxy_set_header Connection "upgrade";
-  hosts:
-    - host: jarvis.example.com
-      paths:
-        - path: /
-          pathType: Prefix
-
-config:
-  allowedOrigins: "https://jarvis.example.com"
+```env
+JARVIS_AUTH_PROVIDER=internal
+JARVIS_SECRET_KEY=$(openssl rand -hex 32)
 ```
 
-For a threat model and full security discussion see [docs/SECURITY.md](docs/SECURITY.md).
+On first access Jarvis redirects to `/setup` where the admin account is created. Additional users are managed via the admin panel at `/admin/users`.
+
+**Quick start — OIDC:**
+
+```env
+JARVIS_AUTH_PROVIDER=oidc
+JARVIS_SECRET_KEY=$(openssl rand -hex 32)
+JARVIS_AUTH_OIDC_ISSUER=https://keycloak.example.com/realms/myrealm
+JARVIS_AUTH_OIDC_CLIENT_ID=jarvis
+JARVIS_AUTH_OIDC_CLIENT_SECRET=<client-secret>
+JARVIS_AUTH_OIDC_REDIRECT_URL=https://jarvis.example.com/auth/oidc/callback
+```
+
+For the full reference — provider setup, OIDC flow, role mapping, Kubernetes secrets, session details — see **[docs/authentication.md](docs/authentication.md)**.
+
+For a threat model and full security discussion see [docs/security.md](docs/security.md).
 
 ---
 
@@ -488,8 +496,9 @@ For a full values reference, installation examples (SQLite with PVC, PostgreSQL,
 
 ## Documentation
 
-- [docs/TESTING.md](docs/TESTING.md) — how to run tests
-- [docs/SECURITY.md](docs/SECURITY.md) — security measures
+- [docs/authentication.md](docs/authentication.md) — authentication providers, first-run wizard, OIDC setup, Helm
+- [docs/testing.md](docs/testing.md) — how to run tests
+- [docs/security.md](docs/security.md) — security measures
 - [CONTRIBUTING.md](CONTRIBUTING.md) — contribution guidelines
 - [SECURITY.md](SECURITY.md) — responsible disclosure
 

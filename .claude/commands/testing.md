@@ -201,6 +201,6 @@ frontend:
 
 ---
 
-## `docs/TESTING.md`
+## `docs/testing.md`
 
 Full guide for contributors — prerequisites, setup, local execution, coverage reports.
