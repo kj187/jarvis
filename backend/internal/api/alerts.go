@@ -10,7 +10,8 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-var fingerprintRegex = regexp.MustCompile(`^[a-f0-9]{1,64}$`)
+// Alertmanager generates 16-character lowercase hex fingerprints (FNV-1a hash).
+var fingerprintRegex = regexp.MustCompile(`^[a-f0-9]{16}$`)
 
 func validateFingerprint(fp string) bool {
 	return fingerprintRegex.MatchString(fp)

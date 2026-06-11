@@ -19,7 +19,7 @@ func TestGetComments_Empty(t *testing.T) { //nolint:dupl
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	c.SetParamNames("fingerprint")
-	c.SetParamValues("abc123")
+	c.SetParamValues("1234567890abcdef")
 
 	if err := srv.getComments(c); err != nil {
 		t.Fatalf("getComments: %v", err)
@@ -49,7 +49,7 @@ func TestGetComments_InvalidFingerprint(t *testing.T) {
 
 func TestAddComment_HappyPath(t *testing.T) {
 	srv, _, store := newTestServerFull(t)
-	seedFP(t, store, "abc123")
+	seedFP(t, store, "1234567890abcdef")
 	e := echo.New()
 
 	body := map[string]interface{}{"authorName": "alice", "body": "looks good"}
@@ -59,7 +59,7 @@ func TestAddComment_HappyPath(t *testing.T) {
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	c.SetParamNames("fingerprint")
-	c.SetParamValues("abc123")
+	c.SetParamValues("1234567890abcdef")
 
 	if err := srv.addComment(c); err != nil {
 		t.Fatalf("addComment: %v", err)
@@ -104,7 +104,7 @@ func TestAddComment_MissingFields(t *testing.T) {
 	for _, tt := range tests { //nolint:dupl
 		t.Run(tt.name, func(t *testing.T) {
 			srv, _, store := newTestServerFull(t)
-			seedFP(t, store, "abc123")
+			seedFP(t, store, "1234567890abcdef")
 			e := echo.New()
 			b, _ := json.Marshal(tt.body)
 			req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/", bytes.NewReader(b))
@@ -112,7 +112,7 @@ func TestAddComment_MissingFields(t *testing.T) {
 			rec := httptest.NewRecorder()
 			c := e.NewContext(req, rec)
 			c.SetParamNames("fingerprint")
-			c.SetParamValues("abc123")
+			c.SetParamValues("1234567890abcdef")
 
 			err := srv.addComment(c)
 			if err == nil {
@@ -137,7 +137,7 @@ func TestAddComment_TooLong(t *testing.T) {
 	for _, tt := range tests { //nolint:dupl
 		t.Run(tt.name, func(t *testing.T) {
 			srv, _, store := newTestServerFull(t)
-			seedFP(t, store, "abc123")
+			seedFP(t, store, "1234567890abcdef")
 			e := echo.New()
 			b, _ := json.Marshal(tt.body)
 			req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/", bytes.NewReader(b))
@@ -145,7 +145,7 @@ func TestAddComment_TooLong(t *testing.T) {
 			rec := httptest.NewRecorder()
 			c := e.NewContext(req, rec)
 			c.SetParamNames("fingerprint")
-			c.SetParamValues("abc123")
+			c.SetParamValues("1234567890abcdef")
 
 			err := srv.addComment(c)
 			if err == nil {
@@ -161,7 +161,7 @@ func TestAddComment_TooLong(t *testing.T) {
 
 func TestGetComments_AfterAdd(t *testing.T) {
 	srv, _, store := newTestServerFull(t)
-	seedFP(t, store, "abc123")
+	seedFP(t, store, "1234567890abcdef")
 	e := echo.New()
 
 	body := map[string]interface{}{"authorName": "bob", "body": "checking this"}
@@ -171,7 +171,7 @@ func TestGetComments_AfterAdd(t *testing.T) {
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	c.SetParamNames("fingerprint")
-	c.SetParamValues("abc123")
+	c.SetParamValues("1234567890abcdef")
 	if err := srv.addComment(c); err != nil {
 		t.Fatalf("addComment: %v", err)
 	}
@@ -180,7 +180,7 @@ func TestGetComments_AfterAdd(t *testing.T) {
 	rec2 := httptest.NewRecorder()
 	c2 := e.NewContext(req2, rec2)
 	c2.SetParamNames("fingerprint")
-	c2.SetParamValues("abc123")
+	c2.SetParamValues("1234567890abcdef")
 	if err := srv.getComments(c2); err != nil {
 		t.Fatalf("getComments: %v", err)
 	}
@@ -207,7 +207,7 @@ func TestDeleteComment_Errors(t *testing.T) {
 			rec := httptest.NewRecorder()
 			c := e.NewContext(req, rec)
 			c.SetParamNames("fingerprint", "id")
-			c.SetParamValues("abc123", tt.id)
+			c.SetParamValues("1234567890abcdef", tt.id)
 
 			err := srv.deleteComment(c)
 			if err == nil {
@@ -238,7 +238,7 @@ func TestDeleteComment_InvalidFingerprint(t *testing.T) {
 
 func TestDeleteComment_HappyPath(t *testing.T) {
 	srv, _, store := newTestServerFull(t)
-	seedFP(t, store, "abc123")
+	seedFP(t, store, "1234567890abcdef")
 	e := echo.New()
 
 	// Add a comment first to get a real ID
@@ -249,7 +249,7 @@ func TestDeleteComment_HappyPath(t *testing.T) {
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	c.SetParamNames("fingerprint")
-	c.SetParamValues("abc123")
+	c.SetParamValues("1234567890abcdef")
 	if err := srv.addComment(c); err != nil {
 		t.Fatalf("addComment: %v", err)
 	}
@@ -265,7 +265,7 @@ func TestDeleteComment_HappyPath(t *testing.T) {
 	rec2 := httptest.NewRecorder()
 	c2 := e.NewContext(req2, rec2)
 	c2.SetParamNames("fingerprint", "id")
-	c2.SetParamValues("abc123", fmt.Sprintf("%d", comment.ID))
+	c2.SetParamValues("1234567890abcdef", fmt.Sprintf("%d", comment.ID))
 	if err := srv.deleteComment(c2); err != nil {
 		t.Fatalf("deleteComment: %v", err)
 	}
