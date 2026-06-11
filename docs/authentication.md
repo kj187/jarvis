@@ -20,6 +20,10 @@ JARVIS_AUTH_PROVIDER=none
 
 Anyone who can reach Jarvis can read alerts and perform write actions (claims, comments, silences). Suitable for private networks with no external access.
 
+On first load, Jarvis shows a one-time notice explaining that authentication is not configured:
+
+![No-auth notice](assets/auth-noauth-notice.png)
+
 ### Internal accounts
 
 ```env
@@ -73,6 +77,12 @@ When `JARVIS_AUTH_PROVIDER=internal` and no admin account exists in the database
 
 The setup endpoint is disabled once at least one user exists in the database.
 
+![First-run setup page](assets/auth-setup.png)
+
+After setup, users log in via the login modal (triggered by the **Login** button in the header):
+
+![Login modal — internal](assets/auth-login-internal.png)
+
 ### Admin Panel
 
 Admins can manage users at `/admin/users`:
@@ -81,13 +91,21 @@ Admins can manage users at `/admin/users`:
 - Reset passwords
 - Delete users
 
-The admin panel is only accessible to users with the `admin` role.
+The admin panel is only accessible to users with the `admin` role. Open it from the user menu in the header (top right corner).
+
+![User menu](assets/auth-user-menu.png)
+
+![Admin panel — User Management](assets/auth-admin-panel.png)
 
 ---
 
 ## OIDC Provider
 
 Jarvis uses the **Authorization Code Flow with PKCE**. No client-side secrets are exposed to the browser.
+
+Users are redirected to the OIDC provider on login. The login modal shows a single **Login with SSO** button:
+
+![Login modal — OIDC](assets/auth-login-oidc.png)
 
 ### Flow
 
