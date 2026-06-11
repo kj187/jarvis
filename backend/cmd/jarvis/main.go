@@ -11,11 +11,13 @@ import (
 	"time"
 
 	"github.com/kj187/jarvis/backend/internal/api"
+	"github.com/kj187/jarvis/backend/internal/auth"
 	"github.com/kj187/jarvis/backend/internal/cluster"
 	"github.com/kj187/jarvis/backend/internal/config"
 	"github.com/kj187/jarvis/backend/internal/db"
 	"github.com/kj187/jarvis/backend/internal/history"
 	"github.com/kj187/jarvis/backend/internal/static"
+	"github.com/kj187/jarvis/backend/internal/users"
 	"github.com/kj187/jarvis/backend/internal/ws"
 )
 
@@ -57,6 +59,29 @@ func main() {
 	// ── Stores ────────────────────────────────────────────────────────────────
 	alertStore := &history.AlertStore{}
 	store := history.NewStore(database, dialect)
+	userStore := users.NewStore(database, dialect)
+
+	// ── Auth Provider ─────────────────────────────────────────────────────────
+	var authProvider auth.Provider
+	switch cfg.AuthProvider {
+	case "internal":
+		authProvider = auth.NewInternalProvider(userStore)
+		logger.Info("auth provider: internal")
+	case "oidc":
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		oidcProvider, err := auth.NewOIDCProvider(ctx, cfg.OIDCIssuer, cfg.OIDCClientID,
+			cfg.OIDCClientSecret, cfg.OIDCRedirectURL, cfg.OIDCScopes, userStore)
+		cancel()
+		if err != nil {
+			logger.Error("oidc provider init", "err", err)
+			os.Exit(1)
+		}
+		authProvider = oidcProvider
+		logger.Info("auth provider: oidc", "issuer", cfg.OIDCIssuer)
+	default:
+		authProvider = auth.NoneProvider{}
+		logger.Info("auth provider: none (write actions blocked)")
+	}
 
 	// ── WebSocket Hub ─────────────────────────────────────────────────────────
 	hub := ws.NewHub(cfg.AllowedOrigins, logger)
@@ -66,7 +91,7 @@ func main() {
 	recorder := history.NewRecorder(registry, alertStore, store, hub, cfg.PollInterval, logger)
 
 	// ── HTTP Router ───────────────────────────────────────────────────────────
-	router := api.NewRouter(alertStore, store, hub, registry, cfg, static.StaticFiles, recorder)
+	router := api.NewRouter(alertStore, store, hub, registry, cfg, static.StaticFiles, recorder, authProvider, userStore)
 
 	server := &http.Server{
 		Addr:         ":" + cfg.Port,
