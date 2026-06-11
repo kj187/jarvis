@@ -73,6 +73,19 @@ func migrateSQLite(database *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_alert_claims_fingerprint ON alert_claims(fingerprint)`,
 		`CREATE INDEX IF NOT EXISTS idx_alert_claims_active      ON alert_claims(fingerprint) WHERE released_at IS NULL`,
 		`CREATE INDEX IF NOT EXISTS idx_silence_events_fingerprint ON silence_events(fingerprint, recorded_at DESC)`,
+		`CREATE TABLE IF NOT EXISTS users (
+			id             TEXT PRIMARY KEY,
+			username       TEXT NOT NULL UNIQUE,
+			email          TEXT,
+			password_hash  TEXT,
+			role           TEXT NOT NULL DEFAULT 'user',
+			provider       TEXT NOT NULL DEFAULT 'internal',
+			oidc_sub       TEXT UNIQUE,
+			created_at     DATETIME NOT NULL,
+			last_login_at  DATETIME
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)`,
+		`CREATE INDEX IF NOT EXISTS idx_users_oidc_sub ON users(oidc_sub)`,
 	}
 
 	for _, stmt := range stmts {
