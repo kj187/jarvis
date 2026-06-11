@@ -47,6 +47,16 @@ const defaultFilters: Filters = {
   labelMatchers: [],
 }
 
+export const VIEW_MODE_KEY = 'jarvis-viewMode'
+
+function loadViewMode(): ViewMode {
+  try {
+    const v = localStorage.getItem(VIEW_MODE_KEY)
+    if (v === 'list' || v === 'card') return v
+  } catch { /* ignore */ }
+  return useSettingsStore.getState().defaultViewMode
+}
+
 let _nextId = 1
 function nextId(): string {
   return String(_nextId++)
@@ -55,14 +65,17 @@ function nextId(): string {
 export const useUIStore = create<UIStore>()(
   persist(
     (set) => ({
-      viewMode: useSettingsStore.getState().defaultViewMode,
+      viewMode: loadViewMode(),
       selectedFingerprint: null,
       filters: defaultFilters,
       wsConnected: false,
       pollingPaused: false,
       alertCounts: { filtered: 0, total: 0, byState: { active: 0, suppressed: 0, resolved: 0 } },
 
-      setViewMode: (mode) => set({ viewMode: mode }),
+      setViewMode: (mode) => {
+        try { localStorage.setItem(VIEW_MODE_KEY, mode) } catch { /* ignore */ }
+        set({ viewMode: mode })
+      },
       setSelectedFingerprint: (fp) => set({ selectedFingerprint: fp }),
       setFilter: (key, value) =>
         set((s) => ({ filters: { ...s.filters, [key]: value } })),

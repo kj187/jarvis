@@ -8,6 +8,9 @@ import type {
   Silence,
   SilenceEvent,
   ClusterInfo,
+  AuthUser,
+  ProviderInfo,
+  AdminUser,
 } from '@/types'
 
 const BASE = '/api/v1'
@@ -155,6 +158,65 @@ export function deleteSilence(id: string, cluster: string, params?: { fingerprin
 
 export function triggerPoll(): Promise<void> {
   return request<void>('/poll', { method: 'POST' })
+}
+
+// ── Auth ─────────────────────────────────────────────────────────────────────
+
+export function fetchAuthInfo(): Promise<ProviderInfo> {
+  return fetch('/auth/info', { headers: { Accept: 'application/json' } })
+    .then((r) => r.json() as Promise<ProviderInfo>)
+}
+
+export function fetchAuthMe(): Promise<AuthUser | null> {
+  return fetch('/auth/me', { headers: { Accept: 'application/json' } })
+    .then((r) => (r.ok ? (r.json() as Promise<AuthUser>) : null))
+    .catch(() => null)
+}
+
+export function postLogin(username: string, password: string): Promise<{ user: AuthUser }> {
+  return fetch('/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ username, password }),
+  }).then(async (r) => {
+    if (!r.ok) throw new Error('invalid credentials')
+    return r.json() as Promise<{ user: AuthUser }>
+  })
+}
+
+export function postLogout(): Promise<void> {
+  return fetch('/auth/logout', { method: 'POST' }).then(() => undefined)
+}
+
+// ── Admin ─────────────────────────────────────────────────────────────────────
+
+export function fetchAdminUsers(): Promise<AdminUser[]> {
+  return request<AdminUser[]>('/admin/users')
+}
+
+export function createAdminUser(body: { username: string; password: string; role: string }): Promise<AdminUser> {
+  return request<AdminUser>('/admin/users', { method: 'POST', body: JSON.stringify(body) })
+}
+
+export function updateAdminUser(id: string, role: string): Promise<AdminUser> {
+  return request<AdminUser>(`/admin/users/${id}`, { method: 'PATCH', body: JSON.stringify({ role }) })
+}
+
+export function deleteAdminUser(id: string): Promise<void> {
+  return request<void>(`/admin/users/${id}`, { method: 'DELETE' })
+}
+
+// ── Setup ─────────────────────────────────────────────────────────────────────
+
+export function postSetup(username: string, password: string): Promise<{ ok: boolean }> {
+  return fetch('/setup', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ username, password }),
+  }).then((r) => {
+    if (!r.ok) throw new Error('setup failed')
+    return r.json() as Promise<{ ok: boolean }>
+  })
 }
 
 // ── Clusters ──────────────────────────────────────────────────────────────────
