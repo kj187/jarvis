@@ -1,5 +1,7 @@
 # Jarvis
 
+> **No built-in authentication.** Jarvis has no login screen and no API tokens by design. Every user who can reach the service can create silences, post comments, claim alerts, and make changes that are forwarded to Alertmanager. **You must place Jarvis behind a reverse proxy that enforces authentication and restricts access to trusted users.** Running Jarvis on a network-accessible port without authentication protection is a security risk. See the [Deployment & Authentication](#deployment--authentication) section below and [SECURITY.md](SECURITY.md) for details.
+
 > **Built with AI** — Jarvis was developed entirely using AI coding assistants. This is an intentional workflow choice, not a shortcut: the codebase follows established Go and React best practices, enforces security standards through automated tooling (gosec, govulncheck, golangci-lint, pnpm audit) on every commit and in CI, and applies defense-in-depth measures (strict CSP, read-only container filesystem, no-new-privileges). See [SECURITY.md](SECURITY.md) for details.
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
@@ -416,6 +418,54 @@ The dialect is detected automatically from the DSN prefix. Schema migrations run
 > # Then set in .env (sslmode=disable is intentional for the local test container):
 > # JARVIS_DB_DSN=postgres://jarvis:jarvis@test-postgres:5432/jarvis?sslmode=disable
 > ```
+
+## Deployment & Authentication
+
+**Jarvis has no built-in authentication.** This is an intentional design decision: authentication is a solved problem at the reverse proxy layer, and every team uses a different solution (OAuth2 Proxy, Keycloak, Authentik, Authelia, basic auth, mTLS, etc.). Duplicating this in Jarvis would mean maintaining a second auth system that is unlikely to match what the team already runs.
+
+**The consequence:** every HTTP request that reaches Jarvis can read alert history, post comments, claim alerts, create silences, and proxy mutating requests to Alertmanager. Access control must happen before the request reaches Jarvis.
+
+### Minimum deployment requirements
+
+1. **Do not expose Jarvis directly to the internet** — it should only be reachable through a reverse proxy or VPN.
+2. **Enforce authentication at the reverse proxy** — use whatever auth your organisation already operates (OAuth2, SSO, basic auth, client certificates).
+3. **Restrict to trusted users** — anyone who can reach the service can modify alert state and proxy requests to Alertmanager.
+
+### Example: OAuth2 Proxy in front of Jarvis
+
+```
+[Browser] → [OAuth2 Proxy (auth)] → [Jarvis :8080]
+```
+
+The OAuth2 Proxy handles the login flow and only forwards authenticated sessions to Jarvis. Set `JARVIS_ALLOWED_ORIGINS` to the public-facing URL so that WebSocket connections are accepted.
+
+### Example: Kubernetes Ingress with authentication
+
+```yaml
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/auth-url: "https://auth.example.com/oauth2/auth"
+    nginx.ingress.kubernetes.io/auth-signin: "https://auth.example.com/oauth2/start"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      proxy_set_header Upgrade $http_upgrade;
+      proxy_set_header Connection "upgrade";
+  hosts:
+    - host: jarvis.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+
+config:
+  allowedOrigins: "https://jarvis.example.com"
+```
+
+For a threat model and full security discussion see [docs/SECURITY.md](docs/SECURITY.md).
+
+---
 
 ## Kubernetes / Helm
 
