@@ -6,14 +6,15 @@ FRONTEND_CONTAINER = jarvis_frontend_1
 .PHONY: help \
         setup \
         up up-build down logs ps \
-        test-am-up test-am-down \
-        test-pg-up test-pg-down \
+        up-alertmanager down-alertmanager \
+        up-postgres down-postgres \
         test-all test-backend test-frontend \
         helm-lint helm-test \
         lint gosec govulncheck audit security-all \
         scan scan-history scan-staged scan-all \
         build \
-        alerts-fire alerts-resolve alerts-fire-test alerts-resolve-test
+        screenshots \
+        fixtures-create fixtures-remove
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -40,16 +41,16 @@ logs: ## Follow dev logs
 ps: ## Show status of all running containers (dev + test deps)
 	podman compose ps
 
-test-am-up: ## Start test Alertmanager (port 9094) — requires dev stack running
+up-alertmanager: ## Start test Alertmanager (port 9094) — requires dev stack running
 	$(COMPOSE_TEST_DEPS) up -d test-alertmanager
 
-test-am-down: ## Stop test Alertmanager
+down-alertmanager: ## Stop test Alertmanager
 	$(COMPOSE_TEST_DEPS) stop test-alertmanager
 
-test-pg-up: ## Start test PostgreSQL (port 5432, jarvis/jarvis/jarvis) — requires dev stack running
+up-postgres: ## Start test PostgreSQL (port 5432, jarvis/jarvis/jarvis) — requires dev stack running
 	$(COMPOSE_TEST_DEPS) up -d test-postgres
 
-test-pg-down: ## Stop test PostgreSQL
+down-postgres: ## Stop test PostgreSQL
 	$(COMPOSE_TEST_DEPS) stop test-postgres
 
 # ── Tests ──────────────────────────────────────────────────────────────────────
@@ -97,21 +98,24 @@ scan-staged: ## gitleaks: scan staged changes only (mirrors pre-commit behavior)
 
 scan-all: scan scan-history scan-staged ## gitleaks: run all three scans (files + history + staged)
 
+# ── Screenshots ───────────────────────────────────────────────────────────────
+
+screenshots: ## Regenerate auth UI screenshots into docs/assets/ (requires dev stack running)
+	podman exec -e CHROMIUM_PATH=/usr/bin/chromium $(FRONTEND_CONTAINER) \
+		sh -c "cd /app && pnpm exec playwright test --config playwright.screenshots.config.ts --reporter=list"
+	podman cp $(FRONTEND_CONTAINER):/app/test-results/auth-screenshots/. docs/assets/
+	rm -rf frontend/test-results/auth-screenshots
+	@echo "Screenshots written to docs/assets/"
+
 # ── Build ──────────────────────────────────────────────────────────────────────
 
 build: ## Build production container image locally
 	podman build -f Containerfile -t jarvis:local .
 
-# ── Test alerts ────────────────────────────────────────────────────────────────
+# ── Fixtures ───────────────────────────────────────────────────────────────────
 
-alerts-fire: ## Fire 10 Kubernetes-themed test alerts (test_suite=jarvis) to Alertmanager
+fixtures-create: ## Fire 10 Kubernetes-themed test alerts (test_suite=jarvis) to Alertmanager
 	@bash scripts/fire-test-alerts.sh
 
-alerts-resolve: ## Resolve all test alerts fired by alerts-fire
+fixtures-remove: ## Resolve all test alerts fired by fixtures-create
 	@bash scripts/resolve-test-alerts.sh
-
-alerts-fire-test: ## Fire test alerts to the local test Alertmanager (port 9094, requires screenshot-up)
-	@ALERTMANAGER_URL=http://localhost:9094 bash scripts/fire-test-alerts.sh
-
-alerts-resolve-test: ## Resolve test alerts on the local test Alertmanager
-	@ALERTMANAGER_URL=http://localhost:9094 bash scripts/resolve-test-alerts.sh
