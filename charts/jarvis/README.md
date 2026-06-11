@@ -83,6 +83,16 @@ Tests cover four suites (`deployment`, `configmap`, `secret`, `ingress`) and run
 | `database.dsn` | string | `/data/jarvis.db` | Database DSN (SQLite path or `postgres://` URL) |
 | `database.existingSecret` | string | `""` | Use an existing Secret for the DSN instead |
 | `database.existingSecretKey` | string | `dsn` | Key in the existing Secret |
+| `auth.provider` | string | `none` | Authentication mode: `none`, `internal`, or `oidc` |
+| `auth.secretKey` | string | `""` | JWT signing key (min 32 random bytes). Use `auth.existingSecret` in production. |
+| `auth.existingSecret` | string | `""` | Existing K8s Secret with `secret-key` (and `oidc-client-secret` for OIDC) |
+| `auth.existingSecretKeys.secretKey` | string | `secret-key` | Key in Secret for `JARVIS_SECRET_KEY` |
+| `auth.existingSecretKeys.oidcClientSecret` | string | `oidc-client-secret` | Key in Secret for `JARVIS_AUTH_OIDC_CLIENT_SECRET` |
+| `auth.oidc.issuer` | string | `""` | OIDC provider issuer URL |
+| `auth.oidc.clientId` | string | `""` | OIDC client ID |
+| `auth.oidc.clientSecret` | string | `""` | OIDC client secret (stored in Secret, not ConfigMap) |
+| `auth.oidc.redirectUrl` | string | `""` | OIDC redirect URL (must match provider config) |
+| `auth.oidc.scopes` | string | `openid,profile,email` | Comma-separated OIDC scopes |
 | `persistence.enabled` | bool | `false` | Enable PVC for SQLite storage |
 | `persistence.storageClass` | string | `""` | StorageClass name |
 | `persistence.accessMode` | string | `ReadWriteOnce` | PVC access mode |
@@ -133,6 +143,47 @@ database:
   existingSecret: jarvis-db-credentials
   existingSecretKey: dsn
 ```
+
+### Internal authentication
+
+```yaml
+auth:
+  provider: internal
+  secretKey: "$(openssl rand -hex 32)"   # replace with actual generated value
+```
+
+Or with an external Secret (recommended for production):
+
+```bash
+kubectl create secret generic jarvis-auth \
+  --from-literal=secret-key=$(openssl rand -hex 32)
+```
+
+```yaml
+auth:
+  provider: internal
+  existingSecret: jarvis-auth
+```
+
+### OIDC authentication
+
+```bash
+kubectl create secret generic jarvis-auth \
+  --from-literal=secret-key=$(openssl rand -hex 32) \
+  --from-literal=oidc-client-secret=<your-client-secret>
+```
+
+```yaml
+auth:
+  provider: oidc
+  existingSecret: jarvis-auth
+  oidc:
+    issuer: https://keycloak.example.com/realms/myrealm
+    clientId: jarvis
+    redirectUrl: https://jarvis.example.com/auth/oidc/callback
+```
+
+For provider-specific setup (Keycloak, Authentik) see [docs/authentication.md](../../docs/authentication.md).
 
 ### Multiple clusters
 
