@@ -325,9 +325,12 @@ func (s *Store) AddComment(fingerprint string, eventID *int64, authorName, body 
 	}, nil
 }
 
-// DeleteComment deletes a comment by ID. Returns false if no row was deleted.
-func (s *Store) DeleteComment(id int64) (bool, error) {
-	res, err := s.exec(context.Background(), `DELETE FROM alert_comments WHERE id = ?`, id)
+// DeleteComment deletes a comment by ID scoped to the given fingerprint.
+// Returns false if no row matched (either ID not found or fingerprint mismatch).
+// The fingerprint scope prevents cross-alert IDOR: callers cannot delete a comment
+// that belongs to a different alert by guessing sequential IDs.
+func (s *Store) DeleteComment(id int64, fingerprint string) (bool, error) {
+	res, err := s.exec(context.Background(), `DELETE FROM alert_comments WHERE id = ? AND fingerprint = ?`, id, fingerprint)
 	if err != nil {
 		return false, fmt.Errorf("delete comment: %w", err)
 	}

@@ -332,7 +332,7 @@ func TestComments(t *testing.T) {
 		t.Errorf("unexpected comments: %+v", comments)
 	}
 
-	deleted, err := s.DeleteComment(c.ID)
+	deleted, err := s.DeleteComment(c.ID, "fp1")
 	if err != nil || !deleted {
 		t.Fatalf("DeleteComment: deleted=%v err=%v", deleted, err)
 	}
@@ -340,6 +340,33 @@ func TestComments(t *testing.T) {
 	comments2, _ := s.GetComments("fp1")
 	if len(comments2) != 0 {
 		t.Errorf("expected 0 comments after delete, got %d", len(comments2))
+	}
+}
+
+func TestDeleteComment_WrongFingerprint(t *testing.T) {
+	s := newTestStore(t)
+
+	s.UpsertFingerprint("fp1", "A", "c", nil) //nolint:errcheck
+	s.UpsertFingerprint("fp2", "B", "c", nil) //nolint:errcheck
+
+	c, err := s.AddComment("fp1", nil, "alice", "hello")
+	if err != nil {
+		t.Fatalf("AddComment: %v", err)
+	}
+
+	// Attempt to delete fp1's comment while scoped to fp2 — must not delete.
+	deleted, err := s.DeleteComment(c.ID, "fp2")
+	if err != nil {
+		t.Fatalf("DeleteComment unexpected error: %v", err)
+	}
+	if deleted {
+		t.Error("expected false: comment belongs to fp1, not fp2")
+	}
+
+	// Original comment must still exist.
+	comments, _ := s.GetComments("fp1")
+	if len(comments) != 1 {
+		t.Errorf("expected comment to survive wrong-fingerprint delete, got %d comments", len(comments))
 	}
 }
 

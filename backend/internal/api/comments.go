@@ -70,7 +70,7 @@ func (s *Server) deleteComment(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid comment id")
 	}
 
-	deleted, err := s.store.DeleteComment(id)
+	deleted, err := s.store.DeleteComment(id, fp)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to delete comment")
 	}
