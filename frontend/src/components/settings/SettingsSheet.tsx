@@ -263,6 +263,8 @@ export function SettingsSheet({
       <div className="p-5 pt-10 space-y-6">
         <h2 className="text-base font-semibold">Settings</h2>
 
+        <>
+
         {/* ── Display ── */}
         <Section title="Display">
           <div className="space-y-1.5">
@@ -423,19 +425,20 @@ export function SettingsSheet({
         <div className="h-px bg-border" />
 
         {/* ── Footer ── */}
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={handleReset}
-          className={cn(
-            'w-full text-xs gap-1.5',
-            confirmReset && 'border-destructive text-destructive hover:bg-destructive/10',
-          )}
-        >
-          <RotateCcw className="h-3 w-3" />
-          {confirmReset ? 'Click again to confirm reset' : 'Reset to defaults'}
-        </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleReset}
+            className={cn(
+              'w-full text-xs gap-1.5',
+              confirmReset && 'border-destructive text-destructive hover:bg-destructive/10',
+            )}
+          >
+            <RotateCcw className="h-3 w-3" />
+            {confirmReset ? 'Click again to confirm reset' : 'Reset to defaults'}
+          </Button>
+        </>
       </div>
     </Sheet>
   )

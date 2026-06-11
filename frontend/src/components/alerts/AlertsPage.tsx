@@ -15,7 +15,6 @@ function useURLState() {
     viewMode,
     filters,
     selectedFingerprint,
-    setViewMode,
     setFilter,
     setSelectedFingerprint,
     clearLabelMatchers,
@@ -28,8 +27,6 @@ function useURLState() {
     if (hasHydrated.current) return
     hasHydrated.current = true
     const params = new URLSearchParams(window.location.search)
-    const view = params.get('view')
-    if (view === 'list' || view === 'card') setViewMode(view)
     setFilter('state', params.get('state') ?? 'active')
     const q = params.get('q')
     if (q) setFilter('search', q)
@@ -50,7 +47,6 @@ function useURLState() {
   // Write URL on changes
   useEffect(() => {
     const params = new URLSearchParams()
-    if (viewMode === 'list') params.set('view', 'list')
     if (filters.state) params.set('state', filters.state)
     if (filters.search) params.set('q', filters.search)
     if (filters.labelMatchers.length > 0) {

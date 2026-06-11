@@ -13,6 +13,7 @@ import { useSilences } from '@/hooks/useSilences'
 import { matchesLabelMatchers } from '@/lib/alertUtils'
 import { upsertSilence, triggerPoll } from '@/api/client'
 import { useSettingsStore } from '@/store/useSettingsStore'
+import { useAuthStore } from '@/store/authStore'
 import type { EnrichedAlert, LabelMatcher, LabelMatcherOperator, Silence } from '@/types'
 
 const USERNAME_KEY = 'jarvis-username'
@@ -302,6 +303,8 @@ export function SilenceForm({
   const { data: allAlerts = [] } = useAlerts()
   const { data: allSilences = [] } = useSilences()
   const qc = useQueryClient()
+  const { user, providerInfo } = useAuthStore()
+  const authMode = providerInfo?.mode ?? 'none'
   const isEdit = Boolean(prefillSilence) && !isRecreate
 
   const clusterUrlMap = useMemo(() => {
@@ -390,6 +393,7 @@ export function SilenceForm({
   const [createdBy, setCreatedBy] = useState(
     () => localStorage.getItem(USERNAME_KEY) ?? useSettingsStore.getState().defaultCreatorName,
   )
+  const effectiveCreatedBy = user?.username ?? createdBy
   const [comment, setComment] = useState(prefillSilence?.comment ?? '')
 
   const [results, setResults] = useState<Map<string, ClusterResult>>(new Map())
@@ -514,7 +518,7 @@ export function SilenceForm({
   // ── Submit ──────────────────────────────────────────────────────────────────
 
   async function handleSubmit() {
-    localStorage.setItem(USERNAME_KEY, createdBy.trim())
+    if (!user?.username) localStorage.setItem(USERNAME_KEY, createdBy.trim())
 
     const startDate = new Date(startsAt)
     const computedStartsAt = startDate.toISOString()
@@ -547,11 +551,11 @@ export function SilenceForm({
             matchers: amMatchers,
             startsAt: computedStartsAt,
             endsAt: computedEndsAt,
-            createdBy: createdBy.trim(),
+            createdBy: effectiveCreatedBy.trim(),
             comment: comment.trim(),
             id: prefillSilence?.clusterName === cluster ? prefillSilence?.id : undefined,
             fingerprint: fingerprint ?? prefillAlerts?.[0]?.fingerprint,
-            performedBy: createdBy.trim(),
+            performedBy: effectiveCreatedBy.trim(),
           })
           setResults((prev) => new Map(prev).set(cluster, { status: 'success', id: r.id }))
           hadSuccess = true
@@ -578,7 +582,7 @@ export function SilenceForm({
   const canSubmit =
     !timeError &&
     comment.trim() &&
-    createdBy.trim() &&
+    effectiveCreatedBy.trim() &&
     selectedClusters.length > 0 &&
     Boolean(startsAt) &&
     (endMode === 'calendar' ? Boolean(endsAt) : secs > 0)
@@ -828,12 +832,22 @@ export function SilenceForm({
           <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             Author
           </label>
-          <Input
-            value={createdBy}
-            onChange={(e) => setCreatedBy(e.target.value)}
-            placeholder="Your name"
-            className="text-xs"
-          />
+          {authMode !== 'none' ? (
+            user ? (
+              <div className="h-8 text-xs text-muted-foreground flex items-center px-2 rounded border border-border bg-muted">
+                {user.username}
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">Login required to create a silence.</p>
+            )
+          ) : (
+            <Input
+              value={createdBy}
+              onChange={(e) => setCreatedBy(e.target.value)}
+              placeholder="Your name"
+              className="text-xs"
+            />
+          )}
         </div>
 
         {/* Comment */}
@@ -906,7 +920,7 @@ export function SilenceForm({
             <span className="text-muted-foreground">Ende</span>
             <span className="font-mono">{previewEnd} <span className="text-muted-foreground ml-1">({previewDuration})</span></span>
             <span className="text-muted-foreground">Author</span>
-            <span>{createdBy}</span>
+            <span>{effectiveCreatedBy}</span>
             <span className="text-muted-foreground">Comment</span>
             <span className="break-all">{comment}</span>
           </div>

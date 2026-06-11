@@ -1,6 +1,6 @@
 import { useRef, useState, useMemo, useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { Wifi, WifiOff, RefreshCw, Play, Pause, Search, X, Plus, Settings, Lock } from 'lucide-react'
+import { Wifi, WifiOff, RefreshCw, Play, Pause, Search, X, Plus, Settings, Lock, LogIn, LogOut, User, Shield } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
@@ -8,7 +8,10 @@ import { Sheet } from '@/components/ui/sheet'
 import { ViewToggle } from '@/components/alerts/ViewToggle'
 import { SilenceForm } from '@/components/silences/SilenceForm'
 import { SettingsSheet } from '@/components/settings/SettingsSheet'
+import { LoginModal } from '@/components/auth/LoginModal'
+import { UserManagement } from '@/components/admin/UserManagement'
 import { useUIStore } from '@/store/uiStore'
+import { useAuthStore } from '@/store/authStore'
 import { useQuery } from '@tanstack/react-query'
 import { fetchClusters } from '@/api/client'
 import { useAlerts } from '@/hooks/useAlerts'
@@ -244,6 +247,10 @@ export function Header() {
 
   const [silenceFormOpen, setSilenceFormOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [loginModalOpen, setLoginModalOpen] = useState(false)
+  const [userMenuOpen, setUserMenuOpen] = useState(false)
+  const [adminOpen, setAdminOpen] = useState(false)
+  const { user, isAuthenticated, logout, providerInfo } = useAuthStore()
 
   const { data: allAlerts = [] } = useAlerts()
 
@@ -529,7 +536,7 @@ export function Header() {
           <Settings className="h-4 w-4" />
         </Button>
 
-        {/* Create silence — far right */}
+        {/* Create silence */}
         <Button
           size="sm"
           onClick={() => setSilenceFormOpen(true)}
@@ -538,6 +545,53 @@ export function Header() {
           <Plus className="mr-1 h-3.5 w-3.5" />
           Create silence
         </Button>
+
+        {/* Auth */}
+        {isAuthenticated && user ? (
+          <div className="relative shrink-0">
+            <button
+              className="flex items-center gap-1.5 rounded px-2 py-1 text-xs cursor-pointer text-foreground hover:bg-accent/60"
+              onClick={() => setUserMenuOpen((v) => !v)}
+              aria-label="User menu"
+            >
+              <User className="h-3.5 w-3.5" />
+              <span>{user.username}</span>
+            </button>
+            {userMenuOpen && (
+              <div
+                className="absolute right-0 top-full mt-1 z-50 min-w-36 rounded-md border border-border bg-card shadow-lg"
+                onMouseLeave={() => setUserMenuOpen(false)}
+              >
+                {user.role === 'admin' && (
+                  <button
+                    className="w-full flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-accent/60 cursor-pointer border-b border-border"
+                    onClick={() => { setUserMenuOpen(false); setAdminOpen(true) }}
+                  >
+                    <Shield className="h-3.5 w-3.5" />
+                    Admin
+                  </button>
+                )}
+                <button
+                  className="w-full flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-accent/60 cursor-pointer"
+                  onClick={() => { setUserMenuOpen(false); logout() }}
+                >
+                  <LogOut className="h-3.5 w-3.5" />
+                  Logout
+                </button>
+              </div>
+            )}
+          </div>
+        ) : providerInfo !== null && providerInfo.mode !== 'none' ? (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 text-xs shrink-0"
+            onClick={() => setLoginModalOpen(true)}
+          >
+            <LogIn className="mr-1 h-3.5 w-3.5" />
+            Login
+          </Button>
+        ) : null}
       </div>
 
       {/* ── Active label matchers row — locked first, then editable ── */}
@@ -612,6 +666,19 @@ export function Header() {
       availableLabelNames={availableLabelNames}
       labelValueMap={labelValueMap}
     />
+
+    <LoginModal
+      open={loginModalOpen}
+      onSuccess={() => setLoginModalOpen(false)}
+      onClose={() => setLoginModalOpen(false)}
+    />
+
+    <Sheet open={adminOpen} onClose={() => setAdminOpen(false)}>
+      <div className="p-5 pt-10">
+        <h2 className="mb-4 text-base font-semibold">User Management</h2>
+        <UserManagement />
+      </div>
+    </Sheet>
     </>
   )
 }

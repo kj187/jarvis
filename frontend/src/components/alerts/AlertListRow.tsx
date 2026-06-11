@@ -8,6 +8,7 @@ import { getSilenceState, formatSilenceDuration } from '@/lib/alertUtils'
 import { useFormatTime } from '@/hooks/useFormatTime'
 import type { EnrichedAlert, Silence } from '@/types'
 import { cn } from '@/lib/utils'
+import { useAuthStore } from '@/store/authStore'
 
 const USERNAME_KEY = 'jarvis-username'
 
@@ -52,6 +53,8 @@ export function AlertListRow({
   const nameInputRef = useRef<HTMLInputElement>(null)
   const setClaimMutation = useSetClaim(alert.fingerprint)
   const releaseMutation = useReleaseClaim(alert.fingerprint)
+  const { user, providerInfo } = useAuthStore()
+  const authMode = providerInfo?.mode ?? 'none'
 
   useEffect(() => {
     if (showNameInput) nameInputRef.current?.focus()
@@ -59,6 +62,13 @@ export function AlertListRow({
 
   function handleClaimClick(e: React.MouseEvent) {
     e.stopPropagation()
+    if (authMode !== 'none') {
+      if (user) {
+        setClaimMutation.mutate({ claimedBy: user.username })
+      }
+      // not logged in: do nothing (button will show tooltip)
+      return
+    }
     const stored = localStorage.getItem(USERNAME_KEY)
     if (stored) {
       setClaimMutation.mutate({ claimedBy: stored })
@@ -79,7 +89,7 @@ export function AlertListRow({
 
   function handleRelease(e: React.MouseEvent) {
     e.stopPropagation()
-    releaseMutation.mutate(localStorage.getItem(USERNAME_KEY) ?? 'unknown')
+    releaseMutation.mutate(user?.username ?? localStorage.getItem(USERNAME_KEY) ?? 'unknown')
   }
 
   const { data: stats } = useAlertStats(alert.fingerprint)
@@ -230,6 +240,15 @@ export function AlertListRow({
               <X className="h-3 w-3" />
             </button>
           </div>
+        ) : authMode !== 'none' && !user ? (
+          <button
+            type="button"
+            title="Login required"
+            className="cursor-pointer text-muted-foreground/20 transition-colors"
+            disabled
+          >
+            <User className="h-3.5 w-3.5" />
+          </button>
         ) : showNameInput ? (
           <form onSubmit={handleNameSubmit} className="flex items-center gap-1">
             <input

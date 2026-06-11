@@ -12,6 +12,7 @@ import { SilenceForm } from '@/components/silences/SilenceForm'
 import { useAlerts, useAlertHistory, useAlertStats } from '@/hooks/useAlerts'
 import { useActiveClaim, useSetClaim, useReleaseClaim, useClaimHistory } from '@/hooks/useAlertClaim'
 import { useDeleteSilence, useSilenceEvents, useUpsertSilence } from '@/hooks/useSilences'
+import { useAuthStore } from '@/store/authStore'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import type { EnrichedAlert, LabelMatcher, Silence, SilenceMatcher } from '@/types'
@@ -142,8 +143,11 @@ export function AlertDetailPanel({
   const [showNewSilenceForm, setShowNewSilenceForm] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [showClaimForm, setShowClaimForm] = useState(false)
-  const [claimName, setClaimName] = useState(() => localStorage.getItem(USERNAME_KEY) ?? '')
+  const [manualClaimName, setManualClaimName] = useState(() => localStorage.getItem(USERNAME_KEY) ?? '')
   const [claimNote, setClaimNote] = useState('')
+  const { user, providerInfo } = useAuthStore()
+  const authMode = providerInfo?.mode ?? 'none'
+  const claimName = user?.username ?? manualClaimName
   const [promptCopied, setPromptCopied] = useState(false)
 
   const { data: historyData } = useAlertHistory(
@@ -196,7 +200,7 @@ export function AlertDetailPanel({
 
   const handleDelete = (s: Silence) => {
     setDeletingId(s.id)
-    const by = localStorage.getItem(USERNAME_KEY) ?? 'unknown'
+    const by = user?.username ?? localStorage.getItem(USERNAME_KEY) ?? 'unknown'
     const snapshot = {
       all: qc.getQueryData<Silence[]>(['silences', undefined]),
       cluster: qc.getQueryData<Silence[]>(['silences', s.clusterName]),
@@ -272,7 +276,7 @@ export function AlertDetailPanel({
                 <span className="text-xs text-blue-300 font-medium">{activeClaim.claimedBy}</span>
                 <button
                   className="ml-1 text-[10px] text-muted-foreground hover:text-foreground cursor-pointer"
-                  onClick={() => releaseMutation.mutate(localStorage.getItem(USERNAME_KEY) ?? 'unknown')}
+                  onClick={() => releaseMutation.mutate(user?.username ?? localStorage.getItem(USERNAME_KEY) ?? 'unknown')}
                   disabled={releaseMutation.isPending}
                 >
                   ✕
@@ -340,25 +344,37 @@ export function AlertDetailPanel({
           </div>
 
           {showClaimForm && !activeClaim && (
+            authMode !== 'none' && !user ? (
+              <p className="mt-3 text-xs text-muted-foreground">
+                Login required to claim this alert.
+              </p>
+            ) : (
             <form
               className="mt-3 space-y-2"
               onSubmit={(e) => {
                 e.preventDefault()
                 if (!claimName.trim()) return
-                localStorage.setItem(USERNAME_KEY, claimName.trim())
+                if (authMode === 'none') localStorage.setItem(USERNAME_KEY, claimName.trim())
                 setClaimMutation.mutate(
                   { claimedBy: claimName.trim(), note: claimNote.trim() || undefined },
                   { onSuccess: () => { setShowClaimForm(false); setClaimNote('') } },
                 )
               }}
             >
-              <Input
-                value={claimName}
-                onChange={(e) => setClaimName(e.target.value)}
-                placeholder="Your name"
-                className="h-7 w-48 text-xs"
-                required
-              />
+              {authMode !== 'none' ? (
+                <div className="flex items-center gap-1.5 h-7 px-2 rounded border border-border bg-muted text-xs text-muted-foreground w-48">
+                  <User className="h-3 w-3 shrink-0" />
+                  <span>{user?.username ?? '…'}</span>
+                </div>
+              ) : (
+                <Input
+                  value={manualClaimName}
+                  onChange={(e) => setManualClaimName(e.target.value)}
+                  placeholder="Your name"
+                  className="h-7 w-48 text-xs"
+                  required
+                />
+              )}
               <textarea
                 value={claimNote}
                 onChange={(e) => setClaimNote(e.target.value)}
@@ -375,6 +391,7 @@ export function AlertDetailPanel({
                 </Button>
               </div>
             </form>
+            )
           )}
         </div>
 
@@ -424,7 +441,7 @@ export function AlertDetailPanel({
                             createdBy: s.createdBy,
                             comment: s.comment,
                             fingerprint: alert.fingerprint,
-                            performedBy: localStorage.getItem(USERNAME_KEY) ?? 'unknown',
+                            performedBy: user?.username ?? localStorage.getItem(USERNAME_KEY) ?? 'unknown',
                           })}
                         >
                           {label}
