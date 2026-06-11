@@ -12,6 +12,9 @@
 # Reachable from host:
 #   Alertmanager: http://localhost:9094
 #   PostgreSQL:   postgres://jarvis:jarvis@localhost:5432/jarvis?sslmode=disable
+#
+# NOTE: sslmode=disable is intentional here — this is a local ephemeral test
+# container with no TLS configured. Never use sslmode=disable in production.
 
 services:
   test-alertmanager:
