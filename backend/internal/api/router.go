@@ -58,7 +58,7 @@ func NewRouter(
 		ContentTypeNosniff:    "nosniff",
 		XFrameOptions:         "SAMEORIGIN",
 		HSTSMaxAge:            31536000,
-		ContentSecurityPolicy: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ws: wss:",
+		ContentSecurityPolicy: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'",
 	}))
 	e.Use(middleware.BodyLimit("1M"))
 
