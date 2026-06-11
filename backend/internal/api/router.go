@@ -4,15 +4,37 @@ import (
 	"embed"
 	"io/fs"
 	"net/http"
+	"time"
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	"golang.org/x/time/rate"
 
 	"github.com/kj187/jarvis/backend/internal/cluster"
 	"github.com/kj187/jarvis/backend/internal/config"
 	"github.com/kj187/jarvis/backend/internal/history"
 	"github.com/kj187/jarvis/backend/internal/ws"
 )
+
+// rateLimiter returns a per-IP rate limiter middleware for the given rate and burst.
+// rate is in requests per second; burst is the maximum burst size.
+func rateLimiter(r rate.Limit, burst int) echo.MiddlewareFunc {
+	return middleware.RateLimiterWithConfig(middleware.RateLimiterConfig{
+		Store: middleware.NewRateLimiterMemoryStoreWithConfig(
+			middleware.RateLimiterMemoryStoreConfig{
+				Rate:      r,
+				Burst:     burst,
+				ExpiresIn: 5 * time.Minute,
+			},
+		),
+		IdentifierExtractor: func(c echo.Context) (string, error) {
+			return c.RealIP(), nil
+		},
+		DenyHandler: func(c echo.Context, id string, err error) error {
+			return echo.NewHTTPError(http.StatusTooManyRequests, "rate limit exceeded")
+		},
+	})
+}
 
 // NewRouter creates and configures the Echo router.
 // staticFiles is the embedded FS (empty in dev mode, populated in prod).
@@ -71,19 +93,25 @@ func NewRouter(
 	api.GET("/alerts/:fingerprint/stats", srv.getAlertStats)
 	api.GET("/alerts/:fingerprint/silence-events", srv.getSilenceEvents)
 
+	// Rate limiters:
+	//   writeRL  — 30 req/min per IP for all mutating operations
+	//   pollRL   — 1 req/5s  per IP for /poll (matches the minimum client poll interval)
+	writeRL := rateLimiter(0.5, 10)  // 0.5 req/s = 30/min, burst 10
+	pollRL := rateLimiter(0.2, 2)    // 0.2 req/s = 1/5s, burst 2
+
 	api.GET("/alerts/:fingerprint/comments", srv.getComments)
-	api.POST("/alerts/:fingerprint/comments", srv.addComment)
-	api.DELETE("/alerts/:fingerprint/comments/:id", srv.deleteComment)
+	api.POST("/alerts/:fingerprint/comments", srv.addComment, writeRL)
+	api.DELETE("/alerts/:fingerprint/comments/:id", srv.deleteComment, writeRL)
 
 	api.GET("/alerts/:fingerprint/claim", srv.getClaim)
-	api.POST("/alerts/:fingerprint/claim", srv.setClaim)
-	api.DELETE("/alerts/:fingerprint/claim", srv.releaseClaim)
+	api.POST("/alerts/:fingerprint/claim", srv.setClaim, writeRL)
+	api.DELETE("/alerts/:fingerprint/claim", srv.releaseClaim, writeRL)
 	api.GET("/alerts/:fingerprint/claims/history", srv.getClaimHistory)
 
 	api.GET("/silences", srv.getSilences)
-	api.POST("/silences", srv.createSilence)
-	api.DELETE("/silences/:id", srv.deleteSilence)
-	api.POST("/poll", srv.triggerPoll)
+	api.POST("/silences", srv.createSilence, writeRL)
+	api.DELETE("/silences/:id", srv.deleteSilence, writeRL)
+	api.POST("/poll", srv.triggerPoll, pollRL)
 
 	api.GET("/clusters", srv.getClusters)
 
