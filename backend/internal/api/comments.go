@@ -8,6 +8,11 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
+const (
+	maxAuthorNameLen = 100
+	maxCommentBodyLen = 10_000
+)
+
 // GET /api/v1/alerts/:fingerprint/comments
 func (s *Server) getComments(c echo.Context) error {
 	fp := c.Param("fingerprint")
@@ -42,6 +47,12 @@ func (s *Server) addComment(c echo.Context) error {
 	}
 	if body.AuthorName == "" || body.Body == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "authorName and body are required")
+	}
+	if len([]rune(body.AuthorName)) > maxAuthorNameLen {
+		return echo.NewHTTPError(http.StatusBadRequest, "authorName too long (max 100 characters)")
+	}
+	if len([]rune(body.Body)) > maxCommentBodyLen {
+		return echo.NewHTTPError(http.StatusBadRequest, "body too long (max 10000 characters)")
 	}
 
 	comment, err := s.store.AddComment(fp, body.EventID, body.AuthorName, body.Body)
