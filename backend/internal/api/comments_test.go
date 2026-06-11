@@ -101,7 +101,40 @@ func TestAddComment_MissingFields(t *testing.T) {
 		{"missing authorName", map[string]interface{}{"body": "no author"}},
 		{"missing body", map[string]interface{}{"authorName": "alice"}},
 	}
-	for _, tt := range tests {
+	for _, tt := range tests { //nolint:dupl
+		t.Run(tt.name, func(t *testing.T) {
+			srv, _, store := newTestServerFull(t)
+			seedFP(t, store, "abc123")
+			e := echo.New()
+			b, _ := json.Marshal(tt.body)
+			req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/", bytes.NewReader(b))
+			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+			rec := httptest.NewRecorder()
+			c := e.NewContext(req, rec)
+			c.SetParamNames("fingerprint")
+			c.SetParamValues("abc123")
+
+			err := srv.addComment(c)
+			if err == nil {
+				t.Fatalf("expected error for %s", tt.name)
+			}
+			he, ok := err.(*echo.HTTPError)
+			if !ok || he.Code != http.StatusBadRequest {
+				t.Errorf("expected 400, got %v", err)
+			}
+		})
+	}
+}
+
+func TestAddComment_TooLong(t *testing.T) {
+	tests := []struct {
+		name string
+		body map[string]interface{}
+	}{
+		{"authorName too long", map[string]interface{}{"authorName": string(make([]rune, 101)), "body": "ok"}},
+		{"body too long", map[string]interface{}{"authorName": "alice", "body": string(make([]rune, 10_001))}},
+	}
+	for _, tt := range tests { //nolint:dupl
 		t.Run(tt.name, func(t *testing.T) {
 			srv, _, store := newTestServerFull(t)
 			seedFP(t, store, "abc123")

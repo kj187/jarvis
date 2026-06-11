@@ -7,6 +7,11 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
+const (
+	maxClaimedByLen = 100
+	maxClaimNoteLen = 1_000
+)
+
 // GET /api/v1/alerts/:fingerprint/claim
 func (s *Server) getClaim(c echo.Context) error {
 	fp := c.Param("fingerprint")
@@ -41,6 +46,12 @@ func (s *Server) setClaim(c echo.Context) error {
 	}
 	if body.ClaimedBy == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "claimedBy is required")
+	}
+	if len([]rune(body.ClaimedBy)) > maxClaimedByLen {
+		return echo.NewHTTPError(http.StatusBadRequest, "claimedBy too long (max 100 characters)")
+	}
+	if len([]rune(body.Note)) > maxClaimNoteLen {
+		return echo.NewHTTPError(http.StatusBadRequest, "note too long (max 1000 characters)")
 	}
 
 	claim, err := s.store.SetClaim(fp, body.EventID, body.ClaimedBy, body.Note)

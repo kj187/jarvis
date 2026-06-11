@@ -54,6 +54,12 @@ func (s *Server) createSilence(c echo.Context) error {
 	if body.Comment == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "comment is required")
 	}
+	if len([]rune(body.Comment)) > 2_000 {
+		return echo.NewHTTPError(http.StatusBadRequest, "comment too long (max 2000 characters)")
+	}
+	if len([]rune(body.CreatedBy)) > 100 {
+		return echo.NewHTTPError(http.StatusBadRequest, "createdBy too long (max 100 characters)")
+	}
 	if body.Cluster == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "cluster is required")
 	}
