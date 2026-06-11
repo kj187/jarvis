@@ -35,7 +35,7 @@ The chart ships unit tests via [helm-unittest](https://github.com/helm-unittest/
 
 ```bash
 # Install plugin once
-helm plugin install https://github.com/helm-unittest/helm-unittest
+helm plugin install https://github.com/helm-unittest/helm-unittest --version v0.8.2
 
 # Run all chart tests
 helm unittest charts/jarvis/
