@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 
+	"github.com/kj187/jarvis/backend/internal/auth"
 	"github.com/kj187/jarvis/backend/internal/models"
 	"github.com/labstack/echo/v4"
 )
@@ -44,17 +45,26 @@ func (s *Server) setClaim(c echo.Context) error {
 	if err := c.Bind(&body); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
 	}
-	if body.ClaimedBy == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "claimedBy is required")
+	claimedBy := body.ClaimedBy
+	if s.authProvider.Mode() == "none" {
+		if claimedBy == "" {
+			return echo.NewHTTPError(http.StatusBadRequest, "claimedBy is required")
+		}
+	} else {
+		u := auth.UserFromContext(c)
+		if u == nil || u.Username == "" {
+			return echo.NewHTTPError(http.StatusUnauthorized, "unauthorized")
+		}
+		claimedBy = u.Username
 	}
-	if len([]rune(body.ClaimedBy)) > maxClaimedByLen {
+	if len([]rune(claimedBy)) > maxClaimedByLen {
 		return echo.NewHTTPError(http.StatusBadRequest, "claimedBy too long (max 100 characters)")
 	}
 	if len([]rune(body.Note)) > maxClaimNoteLen {
 		return echo.NewHTTPError(http.StatusBadRequest, "note too long (max 1000 characters)")
 	}
 
-	claim, err := s.store.SetClaim(fp, body.EventID, body.ClaimedBy, body.Note)
+	claim, err := s.store.SetClaim(fp, body.EventID, claimedBy, body.Note)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to set claim")
 	}
@@ -77,7 +87,13 @@ func (s *Server) releaseClaim(c echo.Context) error {
 	}
 
 	by := c.QueryParam("by")
-	if by == "" {
+	if s.authProvider.Mode() != "none" {
+		u := auth.UserFromContext(c)
+		if u == nil || u.Username == "" {
+			return echo.NewHTTPError(http.StatusUnauthorized, "unauthorized")
+		}
+		by = u.Username
+	} else if by == "" {
 		by = "unknown"
 	}
 

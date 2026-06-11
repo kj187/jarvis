@@ -8,10 +8,12 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/kj187/jarvis/backend/internal/auth"
 	"github.com/kj187/jarvis/backend/internal/cluster"
 	"github.com/kj187/jarvis/backend/internal/config"
 	idb "github.com/kj187/jarvis/backend/internal/db"
 	"github.com/kj187/jarvis/backend/internal/history"
+	"github.com/kj187/jarvis/backend/internal/users"
 	"github.com/kj187/jarvis/backend/internal/ws"
 	"github.com/labstack/echo/v4"
 )
@@ -31,12 +33,13 @@ func newTestServerFull(t *testing.T) (*Server, *history.AlertStore, *history.Sto
 
 	alertStore := &history.AlertStore{}
 	store := history.NewStore(database, dialect)
+	userStore := users.NewStore(database, dialect)
 	hub := ws.NewHub(nil, nil)
 	go hub.Run()
 	registry := cluster.NewRegistry(nil)
 	cfg := &config.Config{}
 
-	return NewServer(alertStore, store, hub, registry, cfg, nil), alertStore, store
+	return NewServer(alertStore, store, hub, registry, cfg, nil, auth.NoneProvider{}, userStore), alertStore, store
 }
 
 // seedFP inserts a fingerprint row so FK constraints in claims/comments pass.
@@ -326,5 +329,29 @@ func TestSetClaim_TooLong(t *testing.T) {
 				t.Errorf("expected 400, got %v", err)
 			}
 		})
+	}
+}
+
+func TestSetClaim_AuthMode_UsesContextUser(t *testing.T) { //nolint:dupl
+	srv, _, store := newTestServerFull(t)
+	srv.authProvider = auth.NewInternalProvider(srv.userStore)
+	seedFP(t, store, "1234567890abcdef")
+	e := echo.New()
+
+	body := map[string]interface{}{"claimedBy": "spoofed", "note": "checking"}
+	b, _ := json.Marshal(body)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/", bytes.NewReader(b))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("fingerprint")
+	c.SetParamValues("1234567890abcdef")
+	c.Set(auth.ContextKey, &auth.User{ID: "u1", Username: "real-user", Role: "user", Provider: "internal"})
+
+	if err := srv.setClaim(c); err != nil {
+		t.Fatalf("setClaim: %v", err)
+	}
+	if !contains(rec.Body.String(), "real-user") || contains(rec.Body.String(), "spoofed") {
+		t.Fatalf("expected context user as claimedBy, got: %s", rec.Body.String())
 	}
 }

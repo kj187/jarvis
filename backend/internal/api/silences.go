@@ -6,6 +6,7 @@ import (
 	"time"
 
 	amclient "github.com/kj187/jarvis/backend/internal/alertmanager"
+	"github.com/kj187/jarvis/backend/internal/auth"
 	"github.com/kj187/jarvis/backend/internal/models"
 	"github.com/labstack/echo/v4"
 )
@@ -72,17 +73,28 @@ func (s *Server) createSilence(c echo.Context) error {
 	ctx, cancel := context.WithTimeout(c.Request().Context(), 10*time.Second)
 	defer cancel()
 
+	createdBy := body.CreatedBy
+	performedBy := body.PerformedBy
+	if s.authProvider.Mode() != "none" {
+		u := auth.UserFromContext(c)
+		if u == nil || u.Username == "" {
+			return echo.NewHTTPError(http.StatusUnauthorized, "unauthorized")
+		}
+		createdBy = u.Username
+		performedBy = u.Username
+	}
+
 	postable := amclient.PostableSilence{
 		ID:        body.ID,
 		Matchers:  body.Matchers,
 		StartsAt:  body.StartsAt,
 		EndsAt:    body.EndsAt,
-		CreatedBy: body.CreatedBy,
+		CreatedBy: createdBy,
 		Comment:   body.Comment,
 	}
 	id, err := cl.Client.CreateSilence(ctx, postable)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadGateway, "alertmanager error: "+err.Error())
+		return echo.NewHTTPError(http.StatusBadGateway, "alertmanager request failed")
 	}
 
 	if body.Fingerprint != "" {
@@ -92,9 +104,9 @@ func (s *Server) createSilence(c echo.Context) error {
 		} else if body.StartsAt.After(time.Now()) {
 			action = "pending"
 		}
-		performer := body.PerformedBy
+		performer := performedBy
 		if performer == "" {
-			performer = body.CreatedBy
+			performer = createdBy
 		}
 		_, _ = s.store.RecordSilenceEvent(body.Fingerprint, id, body.Cluster, action, performer, body.Comment)
 	}
@@ -122,11 +134,18 @@ func (s *Server) deleteSilence(c echo.Context) error {
 	defer cancel()
 
 	if err := cl.Client.DeleteSilence(ctx, silenceID); err != nil {
-		return echo.NewHTTPError(http.StatusBadGateway, "alertmanager error: "+err.Error())
+		return echo.NewHTTPError(http.StatusBadGateway, "alertmanager request failed")
 	}
 
 	fingerprint := c.QueryParam("fingerprint")
 	by := c.QueryParam("by")
+	if s.authProvider.Mode() != "none" {
+		u := auth.UserFromContext(c)
+		if u == nil || u.Username == "" {
+			return echo.NewHTTPError(http.StatusUnauthorized, "unauthorized")
+		}
+		by = u.Username
+	}
 	if fingerprint != "" {
 		if by == "" {
 			by = "unknown"

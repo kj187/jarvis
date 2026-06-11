@@ -8,11 +8,13 @@ import (
 
 	"github.com/labstack/echo/v4"
 
+	"github.com/kj187/jarvis/backend/internal/auth"
 	"github.com/kj187/jarvis/backend/internal/cluster"
 	"github.com/kj187/jarvis/backend/internal/config"
 	idb "github.com/kj187/jarvis/backend/internal/db"
 	"github.com/kj187/jarvis/backend/internal/history"
 	"github.com/kj187/jarvis/backend/internal/models"
+	"github.com/kj187/jarvis/backend/internal/users"
 	"github.com/kj187/jarvis/backend/internal/ws"
 )
 
@@ -29,12 +31,13 @@ func newTestServer(t *testing.T) (*Server, *history.AlertStore) {
 
 	alertStore := &history.AlertStore{}
 	store := history.NewStore(database, dialect)
+	userStore := users.NewStore(database, dialect)
 	hub := ws.NewHub(nil, nil)
 	go hub.Run()
 	registry := cluster.NewRegistry(nil)
 	cfg := &config.Config{}
 
-	return NewServer(alertStore, store, hub, registry, cfg, nil), alertStore
+	return NewServer(alertStore, store, hub, registry, cfg, nil, auth.NoneProvider{}, userStore), alertStore
 }
 
 func TestGetAlerts_Empty(t *testing.T) {

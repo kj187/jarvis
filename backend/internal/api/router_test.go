@@ -7,10 +7,12 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/kj187/jarvis/backend/internal/auth"
 	"github.com/kj187/jarvis/backend/internal/cluster"
 	"github.com/kj187/jarvis/backend/internal/config"
 	idb "github.com/kj187/jarvis/backend/internal/db"
 	"github.com/kj187/jarvis/backend/internal/history"
+	"github.com/kj187/jarvis/backend/internal/users"
 	"github.com/kj187/jarvis/backend/internal/ws"
 )
 
@@ -27,12 +29,13 @@ func newTestRouter(t *testing.T, origins []string) *httptest.Server {
 
 	alertStore := &history.AlertStore{}
 	store := history.NewStore(database, dialect)
+	userStore := users.NewStore(database, dialect)
 	hub := ws.NewHub(nil, nil)
 	go hub.Run()
 	registry := cluster.NewRegistry(nil)
 	cfg := &config.Config{AllowedOrigins: origins}
 
-	e := NewRouter(alertStore, store, hub, registry, cfg, embed.FS{}, nil)
+	e := NewRouter(alertStore, store, hub, registry, cfg, embed.FS{}, nil, auth.NoneProvider{}, userStore)
 	return httptest.NewServer(e)
 }
 
@@ -144,5 +147,21 @@ func TestTriggerPoll_NilTrigger(t *testing.T) {
 	_ = srv // suppress unused warning
 	if resp.StatusCode != http.StatusNoContent {
 		t.Errorf("status = %d, want 204", resp.StatusCode)
+	}
+}
+
+func TestSetupRoute_NotRegisteredInNoneMode(t *testing.T) {
+	srv := newTestRouter(t, nil)
+	defer srv.Close()
+
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, srv.URL+"/setup", nil)
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("POST /setup: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusMethodNotAllowed {
+		t.Errorf("status = %d, want 405", resp.StatusCode)
 	}
 }
