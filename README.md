@@ -369,7 +369,7 @@ make helm-test       # helm unittest charts/jarvis/ (requires helm-unittest plug
 Helm unit tests run without a Kubernetes cluster. Install the plugin once:
 
 ```bash
-helm plugin install https://github.com/helm-unittest/helm-unittest
+helm plugin install https://github.com/helm-unittest/helm-unittest --version v0.8.2
 ```
 
 ## Configuration
