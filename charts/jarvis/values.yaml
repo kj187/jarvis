@@ -96,7 +96,9 @@ clusters:
 database:
   # DSN for the database connection. Two dialects are supported:
   #   SQLite (default):  a file path, e.g. /data/jarvis.db
-  #   PostgreSQL:        a postgres:// URL, e.g. postgres://user:pass@host:5432/db?sslmode=disable
+  #   PostgreSQL:        a postgres:// URL, e.g. postgres://user:pass@host:5432/db?sslmode=require
+  #                      Use sslmode=require or verify-full in production. sslmode=disable
+  #                      transmits credentials in plain text.
   # The dialect is detected automatically from the DSN prefix.
   # The DSN is stored in a Kubernetes Secret and never logged in plain text.
   dsn: /data/jarvis.db

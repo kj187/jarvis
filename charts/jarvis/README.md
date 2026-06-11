@@ -123,7 +123,7 @@ clusters:
     alertmanagerUrl: http://alertmanager.monitoring.svc:9093
 
 database:
-  dsn: postgres://jarvis:secret@postgres.monitoring.svc:5432/jarvis?sslmode=disable
+  dsn: postgres://jarvis:secret@postgres.monitoring.svc:5432/jarvis?sslmode=require
 ```
 
 Use an external Secret to avoid storing credentials in values:

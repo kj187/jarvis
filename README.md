@@ -401,15 +401,19 @@ JARVIS_DB_DSN=/data/jarvis.db
 
 **PostgreSQL** (external, persistent across container recreations):
 ```env
-JARVIS_DB_DSN=postgres://jarvis:secret@postgres:5432/jarvis?sslmode=disable
+JARVIS_DB_DSN=postgres://jarvis:secret@postgres:5432/jarvis?sslmode=require
 ```
+
+> **TLS:** Use `sslmode=require` (or `sslmode=verify-full` with a CA cert) in production.
+> `sslmode=disable` transmits the database password in plain text and must not be used
+> outside of local ephemeral test containers.
 
 The dialect is detected automatically from the DSN prefix. Schema migrations run on every startup (idempotent — safe to restart). The password in `JARVIS_DB_DSN` is redacted in all log output.
 
 > **Local testing with PostgreSQL** — use `compose.test-dependencies.yml`:
 > ```bash
 > podman compose -f compose.dev.yml -f compose.test-dependencies.yml up -d
-> # Then set in .env:
+> # Then set in .env (sslmode=disable is intentional for the local test container):
 > # JARVIS_DB_DSN=postgres://jarvis:jarvis@test-postgres:5432/jarvis?sslmode=disable
 > ```
 
