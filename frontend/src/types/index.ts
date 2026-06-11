@@ -149,6 +149,31 @@ export interface SilenceEvent {
   recordedAt: string
 }
 
+// ── Auth ─────────────────────────────────────────────────────────────────────
+
+export interface AuthUser {
+  id: string
+  username: string
+  role: 'user' | 'admin'
+  provider: 'internal' | 'oidc'
+}
+
+export interface ProviderInfo {
+  mode: 'none' | 'internal' | 'oidc'
+  loginUrl: string
+  setupRequired?: boolean
+}
+
+export interface AdminUser {
+  id: string
+  username: string
+  email: string | null
+  role: 'user' | 'admin'
+  provider: 'internal' | 'oidc'
+  createdAt: string
+  lastLoginAt: string | null
+}
+
 // ── WebSocket Events ──────────────────────────────────────────────────────────
 
 export interface WSEvent<T = unknown> {
