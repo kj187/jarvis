@@ -1,7 +1,5 @@
 # Jarvis
 
-> **No built-in authentication.** Jarvis has no login screen and no API tokens by design. Every user who can reach the service can create silences, post comments, claim alerts, and make changes that are forwarded to Alertmanager. **You must place Jarvis behind a reverse proxy that enforces authentication and restricts access to trusted users.** Running Jarvis on a network-accessible port without authentication protection is a security risk. See the [Deployment & Authentication](#deployment--authentication) section below and [SECURITY.md](SECURITY.md) for details.
-
 > **Built with AI** — Jarvis was developed entirely using AI coding assistants. This is an intentional workflow choice, not a shortcut: the codebase follows established Go and React best practices, enforces security standards through automated tooling (gosec, govulncheck, golangci-lint, pnpm audit) on every commit and in CI, and applies defense-in-depth measures (strict CSP, read-only container filesystem, no-new-privileges). See [SECURITY.md](SECURITY.md) for details.
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
