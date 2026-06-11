@@ -3,6 +3,7 @@ package api
 import (
 	"embed"
 	"io/fs"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -53,6 +54,30 @@ func NewRouter(
 
 	// ── Middleware ────────────────────────────────────────────────────────────
 	e.Use(middleware.Recover())
+	e.Use(middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
+		LogMethod:   true,
+		LogURI:      true,
+		LogStatus:   true,
+		LogLatency:  true,
+		LogRemoteIP: true,
+		LogError:    true,
+		HandleError: true,
+		LogValuesFunc: func(c echo.Context, v middleware.RequestLoggerValues) error {
+			attrs := []any{
+				slog.String("method", v.Method),
+				slog.String("uri", v.URI),
+				slog.Int("status", v.Status),
+				slog.Duration("latency", v.Latency),
+				slog.String("remote_ip", v.RemoteIP),
+			}
+			if v.Error != nil {
+				slog.Error("request", append(attrs, slog.String("err", v.Error.Error()))...)
+			} else {
+				slog.Info("request", attrs...)
+			}
+			return nil
+		},
+	}))
 	e.Use(middleware.SecureWithConfig(middleware.SecureConfig{
 		XSSProtection:         "1; mode=block",
 		ContentTypeNosniff:    "nosniff",
