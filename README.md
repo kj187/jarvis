@@ -393,6 +393,7 @@ See [.env.example](.env.example) for all options. Key settings:
 | Variable | Default | Description |
 |---|---|---|
 | `JARVIS_AUTH_PROVIDER` | `none` | Authentication mode: `none`, `internal`, or `oidc` |
+| `JARVIS_AUTH_MODE` | `write_protect` | Protection level when provider ≠ `none`: `write_protect` or `full_protect` |
 | `JARVIS_SECRET_KEY` | — | JWT signing key, min 32 bytes (required for `internal` / `oidc`) |
 | `JARVIS_AUTH_OIDC_ISSUER` | — | OIDC provider issuer URL (required for `oidc`) |
 | `JARVIS_AUTH_OIDC_CLIENT_ID` | — | OIDC client ID (required for `oidc`) |
@@ -448,11 +449,27 @@ Jarvis ships with built-in authentication. Three modes are available, set via `J
 | `internal` | Local accounts with bcrypt passwords. First-run wizard creates the admin account. |
 | `oidc` | Delegate login to Keycloak, Authentik, Dex, or any OIDC provider. |
 
-**Quick start — internal accounts:**
+When using `internal` or `oidc`, `JARVIS_AUTH_MODE` controls the protection level:
+
+| Auth Mode | Description |
+|-----------|-------------|
+| `write_protect` | (default) Unauthenticated users can view alerts read-only; write operations require login. |
+| `full_protect` | All routes require login. Unauthenticated users see only the login page. |
+
+**Quick start — internal accounts (write_protect):**
 
 ```env
 JARVIS_AUTH_PROVIDER=internal
 JARVIS_SECRET_KEY=$(openssl rand -hex 32)
+# JARVIS_AUTH_MODE=write_protect  ← default, omit or set explicitly
+```
+
+**Quick start — internal accounts (full_protect):**
+
+```env
+JARVIS_AUTH_PROVIDER=internal
+JARVIS_SECRET_KEY=$(openssl rand -hex 32)
+JARVIS_AUTH_MODE=full_protect
 ```
 
 On first access Jarvis redirects to `/setup` where the admin account is created. Additional users are managed via the admin panel at `/admin/users`.

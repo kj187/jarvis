@@ -35,6 +35,7 @@ type ProviderInfo struct {
 	Mode          string `json:"mode"`          // "none" | "internal" | "oidc"
 	LoginURL      string `json:"loginUrl"`      // "/auth/oidc/start" for oidc; "" otherwise
 	SetupRequired bool   `json:"setupRequired"` // true when internal mode and no users exist
+	AuthMode      string `json:"authMode"`      // "none" | "write_protect" | "full_protect"
 }
 
 // ContextKey is used to store the authenticated user in Echo's context.

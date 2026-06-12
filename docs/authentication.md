@@ -53,11 +53,30 @@ JARVIS_AUTH_OIDC_SCOPES=openid,profile,email
 
 ---
 
+## Protection Level (`JARVIS_AUTH_MODE`)
+
+When `JARVIS_AUTH_PROVIDER` is `internal` or `oidc`, `JARVIS_AUTH_MODE` determines how strictly unauthenticated access is blocked.
+
+| Value | Behaviour |
+|-------|-----------|
+| `write_protect` | (default) Unauthenticated users can view alerts and silences read-only. Write operations — creating/deleting comments, claims, and silences — require a valid session. A **Login** button appears in the header. |
+| `full_protect` | All API routes and the UI require authentication. Unauthenticated users are shown a full-screen login page and cannot access any alert data until they sign in. |
+
+`JARVIS_AUTH_MODE` is **ignored** (forced to `none`) when `JARVIS_AUTH_PROVIDER=none`.
+
+**Choosing a mode:**
+
+- Use `write_protect` for internal teams where read access to alerts is acceptable without login (e.g. NOC screens, ops dashboards).
+- Use `full_protect` for public-facing deployments or any environment where alert data must not be visible to unauthenticated users.
+
+---
+
 ## Environment Variables
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `JARVIS_AUTH_PROVIDER` | no | `none` | Authentication mode: `none`, `internal`, or `oidc` |
+| `JARVIS_AUTH_MODE` | no | `write_protect` | Protection level when provider ≠ `none`: `write_protect` or `full_protect` |
 | `JARVIS_SECRET_KEY` | for `internal`/`oidc` | — | Key for signing JWT session tokens. Min 32 bytes (hex or base64). Never logged. |
 | `JARVIS_AUTH_OIDC_ISSUER` | for `oidc` | — | OIDC provider issuer URL |
 | `JARVIS_AUTH_OIDC_CLIENT_ID` | for `oidc` | — | OIDC client ID |
@@ -170,6 +189,7 @@ Sessions are stored as signed JWT cookies:
 ```yaml
 auth:
   provider: internal    # none | internal | oidc
+  mode: ""              # write_protect (default) | full_protect — ignored when provider=none
   secretKey: ""         # use existingSecret in production
   existingSecret: ""    # K8s Secret containing secret-key (and oidc-client-secret)
   existingSecretKeys:

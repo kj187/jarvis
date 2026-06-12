@@ -162,6 +162,7 @@ export interface ProviderInfo {
   mode: 'none' | 'internal' | 'oidc'
   loginUrl: string
   setupRequired?: boolean
+  authMode?: 'none' | 'write_protect' | 'full_protect'
 }
 
 export interface AdminUser {

@@ -84,6 +84,7 @@ Tests cover four suites (`deployment`, `configmap`, `secret`, `ingress`) and run
 | `database.existingSecret` | string | `""` | Use an existing Secret for the DSN instead |
 | `database.existingSecretKey` | string | `dsn` | Key in the existing Secret |
 | `auth.provider` | string | `none` | Authentication mode: `none`, `internal`, or `oidc` |
+| `auth.mode` | string | `""` | Protection level when provider ≠ `none`: `write_protect` (default) or `full_protect` |
 | `auth.secretKey` | string | `""` | JWT signing key (min 32 random bytes). Use `auth.existingSecret` in production. |
 | `auth.existingSecret` | string | `""` | Existing K8s Secret with `secret-key` (and `oidc-client-secret` for OIDC) |
 | `auth.existingSecretKeys.secretKey` | string | `secret-key` | Key in Secret for `JARVIS_SECRET_KEY` |

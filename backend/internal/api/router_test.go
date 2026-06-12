@@ -165,3 +165,70 @@ func TestSetupRoute_NotRegisteredInNoneMode(t *testing.T) {
 		t.Errorf("status = %d, want 405", resp.StatusCode)
 	}
 }
+
+func newTestRouterWithAuthMode(t *testing.T, authMode string) *httptest.Server {
+	t.Helper()
+	database, dialect, err := idb.Open(":memory:")
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	if err := idb.Migrate(database, dialect); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	t.Cleanup(func() { _ = database.Close() })
+	auth.SetSecretKey([]byte("aaaabbbbccccddddeeeeffffgggghhhh"))
+
+	userStore := users.NewStore(database, dialect)
+	provider := auth.NewInternalProvider(userStore)
+	alertStore := &history.AlertStore{}
+	store := history.NewStore(database, dialect)
+	hub := ws.NewHub(nil, nil)
+	go hub.Run()
+	registry := cluster.NewRegistry(nil)
+	cfg := &config.Config{
+		AuthProvider: "internal",
+		AuthMode:     authMode,
+		SecretKey:    []byte("aaaabbbbccccddddeeeeffffgggghhhh"),
+	}
+
+	e := NewRouter(alertStore, store, hub, registry, cfg, embed.FS{}, nil, provider, userStore)
+	return httptest.NewServer(e)
+}
+
+func TestAuthMode_ReadRoutes(t *testing.T) {
+	readRoutes := []string{
+		"/api/v1/alerts",
+		"/api/v1/alerts/groups",
+		"/api/v1/silences",
+		"/api/v1/clusters",
+		"/api/v1/status",
+	}
+
+	cases := []struct {
+		mode       string
+		wantStatus int
+	}{
+		{"full_protect", http.StatusUnauthorized},
+		{"write_protect", http.StatusOK},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.mode, func(t *testing.T) {
+			srv := newTestRouterWithAuthMode(t, tc.mode)
+			defer srv.Close()
+
+			client := &http.Client{}
+			for _, path := range readRoutes {
+				req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, srv.URL+path, nil)
+				resp, err := client.Do(req)
+				if err != nil {
+					t.Fatalf("GET %s: %v", path, err)
+				}
+				_ = resp.Body.Close()
+				if resp.StatusCode != tc.wantStatus {
+					t.Errorf("GET %s = %d, want %d (%s mode)", path, resp.StatusCode, tc.wantStatus, tc.mode)
+				}
+			}
+		})
+	}
+}

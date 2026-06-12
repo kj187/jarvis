@@ -15,6 +15,9 @@ data:
   JARVIS_ALLOWED_ORIGINS: {{ .Values.config.allowedOrigins | quote }}
   {{- end }}
   JARVIS_AUTH_PROVIDER: {{ .Values.auth.provider | quote }}
+  {{- if .Values.auth.mode }}
+  JARVIS_AUTH_MODE: {{ .Values.auth.mode | quote }}
+  {{- end }}
   {{- if .Values.auth.oidc.issuer }}
   JARVIS_AUTH_OIDC_ISSUER: {{ .Values.auth.oidc.issuer | quote }}
   JARVIS_AUTH_OIDC_CLIENT_ID: {{ .Values.auth.oidc.clientId | quote }}
