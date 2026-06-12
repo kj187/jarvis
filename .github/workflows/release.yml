@@ -63,19 +63,34 @@ jobs:
           cosign sign --yes \
             ghcr.io/kj187/jarvis@${{ steps.build.outputs.digest }}
 
-      - name: Extract release notes from CHANGELOG
-        id: changelog
+      - name: Build release body
         run: |
           VERSION=${GITHUB_REF_NAME#v}
-          NOTES=$(awk "/^## \[${VERSION}\]/{found=1; next} found && /^## \[/{exit} found{print}" CHANGELOG.md)
-          echo "notes<<EOF" >> "$GITHUB_OUTPUT"
-          echo "$NOTES" >> "$GITHUB_OUTPUT"
-          echo "EOF" >> "$GITHUB_OUTPUT"
+          DIGEST="${{ steps.build.outputs.digest }}"
+          {
+            echo "## Container Image"
+            echo ""
+            echo '```shell'
+            echo "docker pull ghcr.io/kj187/jarvis:${GITHUB_REF_NAME}"
+            echo '```'
+            echo ""
+            echo "## Verify with Cosign"
+            echo ""
+            echo '```shell'
+            echo "cosign verify ghcr.io/kj187/jarvis@${DIGEST} \\"
+            echo '  --certificate-identity-regexp="https://github.com/kj187/jarvis/.*" \'
+            echo '  --certificate-oidc-issuer="https://token.actions.githubusercontent.com"'
+            echo '```'
+            echo ""
+            echo "---"
+            echo ""
+            awk "/^## \[${VERSION}\]/{found=1; next} found && /^## \[/{exit} found{print}" CHANGELOG.md
+          } > release-body.md
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # ratchet:softprops/action-gh-release@v3
         with:
-          body: ${{ steps.changelog.outputs.notes }}
+          body_path: release-body.md
           make_latest: true
 
   helm-publish:
