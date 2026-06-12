@@ -102,6 +102,7 @@ type Comment struct {
 	ID          int64     `json:"id"`
 	Fingerprint string    `json:"fingerprint"`
 	EventID     *int64    `json:"eventId,omitempty"` // optional reference to firing episode
+	UserID      *string   `json:"userId,omitempty"`  // set when auth is enabled; nil for auth-mode "none"
 	AuthorName  string    `json:"authorName"`
 	Body        string    `json:"body"`
 	CreatedAt   time.Time `json:"createdAt"`
