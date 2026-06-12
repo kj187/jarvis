@@ -34,6 +34,57 @@ Most Alertmanager UIs are read-only dashboards. Jarvis is built for teams that n
 - **Single binary** — Go backend embeds the Vite build; one container
 - **Authentication** — optional, three modes: `none` (open), `internal` (built-in user management), `oidc` (Keycloak, Authentik, Dex, any OIDC provider)
 
+## Getting Started
+
+**No clone needed — runs entirely from the published image.**
+
+```bash
+mkdir jarvis && cd jarvis
+```
+
+Create a `compose.yml`:
+
+```yaml
+services:
+  jarvis:
+    image: ghcr.io/kj187/jarvis:1.0.0
+    ports:
+      - "8080:8080"
+    volumes:
+      - jarvis_data:/data
+    environment:
+      JARVIS_CLUSTER_1_NAME: production
+      JARVIS_CLUSTER_1_ALERTMANAGER_URL: http://alertmanager:9093
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+volumes:
+  jarvis_data:
+```
+
+```bash
+docker compose up -d
+# http://localhost:8080
+```
+
+**Kubernetes / Helm:**
+
+```bash
+helm install jarvis oci://ghcr.io/kj187/charts/jarvis \
+  --version 1.0.0 \
+  --set clusters[0].name=production \
+  --set clusters[0].alertmanagerUrl=http://alertmanager:9093 \
+  --set persistence.enabled=true
+```
+
+All configuration options → [Configuration](#configuration) · [Authentication](#authentication) · [Helm chart](#kubernetes--helm)
+
 ## Views
 
 ### Card View
