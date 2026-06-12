@@ -63,10 +63,19 @@ jobs:
           cosign sign --yes \
             ghcr.io/kj187/jarvis@${{ steps.build.outputs.digest }}
 
+      - name: Extract release notes from CHANGELOG
+        id: changelog
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          NOTES=$(awk "/^## \[${VERSION}\]/{found=1; next} found && /^## \[/{exit} found{print}" CHANGELOG.md)
+          echo "notes<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$NOTES" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # ratchet:softprops/action-gh-release@v3
         with:
-          generate_release_notes: true
+          body: ${{ steps.changelog.outputs.notes }}
           make_latest: true
 
   helm-publish:
