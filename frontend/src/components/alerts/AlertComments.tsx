@@ -17,7 +17,14 @@ interface AlertCommentsProps {
 
 // ── Single comment row (own hook scope per delete action) ─────────────────────
 
-function CommentRow({ comment, fingerprint }: { comment: Comment; fingerprint: string }) {
+interface CommentRowProps {
+  comment: Comment
+  fingerprint: string
+  user: import('@/types').AuthUser | null
+  authMode: string
+}
+
+function CommentRow({ comment, fingerprint, user, authMode }: CommentRowProps) {
   const deleteMutation = useDeleteComment(fingerprint)
 
   const deleteAction = useCallback(
@@ -25,6 +32,14 @@ function CommentRow({ comment, fingerprint }: { comment: Comment; fingerprint: s
     [deleteMutation, comment.id],
   )
   const { execute: execDelete, loginModalOpen, onLoginSuccess, onLoginClose } = useProtectedAction(deleteAction)
+
+  // Show delete only for the comment's own author.
+  // Prefer user_id comparison (robust against username changes); fall back to
+  // authorName for legacy comments that pre-date the user_id column.
+  const canDelete =
+    authMode === 'none' ||
+    (user !== null &&
+      (comment.userId != null ? comment.userId === user.id : comment.authorName === user.username))
 
   return (
     <>
@@ -35,13 +50,15 @@ function CommentRow({ comment, fingerprint }: { comment: Comment; fingerprint: s
             <span className="text-xs text-muted-foreground">
               {formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true, locale: enUS })}
             </span>
-            <button
-              onClick={execDelete}
-              className="cursor-pointer text-muted-foreground hover:text-destructive"
-              aria-label="Delete comment"
-            >
-              <Trash2 className="h-3 w-3" />
-            </button>
+            {canDelete && (
+              <button
+                onClick={execDelete}
+                className="cursor-pointer text-muted-foreground hover:text-destructive"
+                aria-label="Delete comment"
+              >
+                <Trash2 className="h-3 w-3" />
+              </button>
+            )}
           </div>
         </div>
         <p className="mt-1 text-sm whitespace-pre-wrap">{comment.body}</p>
@@ -90,7 +107,7 @@ export function AlertComments({ fingerprint }: AlertCommentsProps) {
         )}
 
         {comments.map((c) => (
-          <CommentRow key={c.id} comment={c} fingerprint={fingerprint} />
+          <CommentRow key={c.id} comment={c} fingerprint={fingerprint} user={user} authMode={authMode} />
         ))}
 
         {/* Comment form */}

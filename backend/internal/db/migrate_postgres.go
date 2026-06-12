@@ -77,6 +77,8 @@ func migratePostgres(database *sql.DB) error {
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)`,
 		`CREATE INDEX IF NOT EXISTS idx_users_oidc_sub ON users(oidc_sub)`,
+		// Add user_id column to alert_comments (nullable, for ownership checks by ID).
+		`ALTER TABLE alert_comments ADD COLUMN IF NOT EXISTS user_id TEXT REFERENCES users(id)`,
 	}
 
 	for _, stmt := range stmts {

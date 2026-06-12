@@ -83,6 +83,7 @@ export interface Comment {
   id: number
   fingerprint: string
   eventId?: number
+  userId?: string
   authorName: string
   body: string
   createdAt: string

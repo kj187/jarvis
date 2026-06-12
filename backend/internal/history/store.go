@@ -279,7 +279,7 @@ func (s *Store) GetStats(fingerprint string) (*models.AlertStats, error) {
 // GetComments returns all comments for a fingerprint (newest first).
 func (s *Store) GetComments(fingerprint string) ([]models.Comment, error) {
 	rows, err := s.query(context.Background(), `
-		SELECT id, fingerprint, event_id, author_name, body, created_at
+		SELECT id, fingerprint, event_id, user_id, author_name, body, created_at
 		FROM alert_comments WHERE fingerprint = ?
 		ORDER BY created_at DESC
 	`, fingerprint)
@@ -292,13 +292,17 @@ func (s *Store) GetComments(fingerprint string) ([]models.Comment, error) {
 	for rows.Next() {
 		var c models.Comment
 		var eventID sql.NullInt64
+		var userID sql.NullString
 		var createdAt time.Time
-		if err := rows.Scan(&c.ID, &c.Fingerprint, &eventID, &c.AuthorName, &c.Body, &createdAt); err != nil {
+		if err := rows.Scan(&c.ID, &c.Fingerprint, &eventID, &userID, &c.AuthorName, &c.Body, &createdAt); err != nil {
 			return nil, fmt.Errorf("scan comment: %w", err)
 		}
 		c.CreatedAt = createdAt.UTC()
 		if eventID.Valid {
 			c.EventID = &eventID.Int64
+		}
+		if userID.Valid {
+			c.UserID = &userID.String
 		}
 		comments = append(comments, c)
 	}
@@ -309,11 +313,12 @@ func (s *Store) GetComments(fingerprint string) ([]models.Comment, error) {
 func (s *Store) GetComment(fingerprint string, id int64) (*models.Comment, error) {
 	var c models.Comment
 	var eventID sql.NullInt64
+	var userID sql.NullString
 	var createdAt time.Time
 	err := s.queryRow(context.Background(), `
-		SELECT id, fingerprint, event_id, author_name, body, created_at
+		SELECT id, fingerprint, event_id, user_id, author_name, body, created_at
 		FROM alert_comments WHERE fingerprint = ? AND id = ?
-	`, fingerprint, id).Scan(&c.ID, &c.Fingerprint, &eventID, &c.AuthorName, &c.Body, &createdAt)
+	`, fingerprint, id).Scan(&c.ID, &c.Fingerprint, &eventID, &userID, &c.AuthorName, &c.Body, &createdAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -324,16 +329,20 @@ func (s *Store) GetComment(fingerprint string, id int64) (*models.Comment, error
 	if eventID.Valid {
 		c.EventID = &eventID.Int64
 	}
+	if userID.Valid {
+		c.UserID = &userID.String
+	}
 	return &c, nil
 }
 
 // AddComment inserts a new comment.
-func (s *Store) AddComment(fingerprint string, eventID *int64, authorName, body string) (*models.Comment, error) {
+// userID is nil when the server runs in auth-mode "none".
+func (s *Store) AddComment(fingerprint string, eventID *int64, userID *string, authorName, body string) (*models.Comment, error) {
 	now := time.Now().UTC()
 	id, err := s.insertReturningID(context.Background(), `
-		INSERT INTO alert_comments (fingerprint, event_id, author_name, body, created_at)
-		VALUES (?, ?, ?, ?, ?)
-	`, fingerprint, eventID, authorName, body, now)
+		INSERT INTO alert_comments (fingerprint, event_id, user_id, author_name, body, created_at)
+		VALUES (?, ?, ?, ?, ?, ?)
+	`, fingerprint, eventID, userID, authorName, body, now)
 	if err != nil {
 		return nil, fmt.Errorf("insert comment: %w", err)
 	}
@@ -341,6 +350,7 @@ func (s *Store) AddComment(fingerprint string, eventID *int64, authorName, body 
 		ID:          id,
 		Fingerprint: fingerprint,
 		EventID:     eventID,
+		UserID:      userID,
 		AuthorName:  authorName,
 		Body:        body,
 		CreatedAt:   now,

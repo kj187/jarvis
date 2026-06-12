@@ -316,7 +316,7 @@ func TestComments(t *testing.T) {
 
 	s.UpsertFingerprint("fp1", "A", "c", nil) //nolint:errcheck
 
-	c, err := s.AddComment("fp1", nil, "alice", "hello")
+	c, err := s.AddComment("fp1", nil, nil, "alice", "hello")
 	if err != nil {
 		t.Fatalf("AddComment: %v", err)
 	}
@@ -349,7 +349,7 @@ func TestDeleteComment_WrongFingerprint(t *testing.T) {
 	s.UpsertFingerprint("fp1", "A", "c", nil) //nolint:errcheck
 	s.UpsertFingerprint("fp2", "B", "c", nil) //nolint:errcheck
 
-	c, err := s.AddComment("fp1", nil, "alice", "hello")
+	c, err := s.AddComment("fp1", nil, nil, "alice", "hello")
 	if err != nil {
 		t.Fatalf("AddComment: %v", err)
 	}

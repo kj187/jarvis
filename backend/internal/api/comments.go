@@ -54,6 +54,7 @@ func (s *Server) addComment(c echo.Context) error {
 	}
 
 	authorName := body.AuthorName
+	var userID *string
 	if s.authProvider.Mode() == "none" {
 		if authorName == "" {
 			return echo.NewHTTPError(http.StatusBadRequest, "authorName and body are required")
@@ -64,12 +65,13 @@ func (s *Server) addComment(c echo.Context) error {
 			return echo.NewHTTPError(http.StatusUnauthorized, "unauthorized")
 		}
 		authorName = u.Username
+		userID = &u.ID
 	}
 	if len([]rune(authorName)) > maxAuthorNameLen {
 		return echo.NewHTTPError(http.StatusBadRequest, "authorName too long (max 100 characters)")
 	}
 
-	comment, err := s.store.AddComment(fp, body.EventID, authorName, body.Body)
+	comment, err := s.store.AddComment(fp, body.EventID, userID, authorName, body.Body)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to add comment")
 	}
@@ -107,7 +109,13 @@ func (s *Server) deleteComment(c echo.Context) error {
 		if comment == nil {
 			return echo.NewHTTPError(http.StatusNotFound, "comment not found")
 		}
-		if comment.AuthorName != u.Username {
+		// Prefer user_id comparison (robust against username changes).
+		// Fall back to author_name for legacy comments that pre-date the user_id column.
+		if comment.UserID != nil {
+			if *comment.UserID != u.ID {
+				return echo.NewHTTPError(http.StatusForbidden, "forbidden")
+			}
+		} else if comment.AuthorName != u.Username {
 			return echo.NewHTTPError(http.StatusForbidden, "forbidden")
 		}
 	}
