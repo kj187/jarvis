@@ -86,9 +86,9 @@ describe('Header – state filter pills', () => {
 describe('Header – label filter', () => {
   it('adds a label matcher when inputs are filled and + clicked', async () => {
     renderHeader()
-    await userEvent.type(screen.getByLabelText('Label name'), 'fstype')
-    await userEvent.type(screen.getByLabelText('Label value'), 'ext4')
-    await userEvent.click(screen.getByLabelText('Add filter'))
+    await userEvent.type(screen.getAllByLabelText('Label name')[0], 'fstype')
+    await userEvent.type(screen.getAllByLabelText('Label value')[0], 'ext4')
+    await userEvent.click(screen.getAllByLabelText('Add filter')[0])
     expect(useUIStore.getState().filters.labelMatchers).toHaveLength(1)
     expect(useUIStore.getState().filters.labelMatchers[0]).toMatchObject({
       name: 'fstype',
@@ -99,7 +99,7 @@ describe('Header – label filter', () => {
 
   it('+ button is disabled when name or value is empty', () => {
     renderHeader()
-    expect(screen.getByLabelText('Add filter')).toBeDisabled()
+    expect(screen.getAllByLabelText('Add filter')[0]).toBeDisabled()
   })
 
   it('shows active matchers row when matchers exist', () => {
@@ -111,8 +111,8 @@ describe('Header – label filter', () => {
       },
     })
     renderHeader()
-    expect(screen.getByText('job')).toBeInTheDocument()
-    expect(screen.getByDisplayValue('node')).toBeInTheDocument()
+    expect(screen.getAllByText('job')[0]).toBeInTheDocument()
+    expect(screen.getAllByDisplayValue('node')[0]).toBeInTheDocument()
   })
 
   it('removes a matcher when X is clicked', async () => {
@@ -124,7 +124,7 @@ describe('Header – label filter', () => {
       },
     })
     renderHeader()
-    await userEvent.click(screen.getByLabelText('Remove filter job=node'))
+    await userEvent.click(screen.getAllByLabelText('Remove filter job=node')[0])
     expect(useUIStore.getState().filters.labelMatchers).toHaveLength(0)
   })
 
@@ -140,8 +140,8 @@ describe('Header – label filter', () => {
       },
     })
     renderHeader()
-    expect(screen.getByDisplayValue('node')).toBeInTheDocument()
-    expect(screen.getByDisplayValue('prod')).toBeInTheDocument()
+    expect(screen.getAllByDisplayValue('node')[0]).toBeInTheDocument()
+    expect(screen.getAllByDisplayValue('prod')[0]).toBeInTheDocument()
   })
 })
 
@@ -177,14 +177,14 @@ describe('Header – cluster popover', () => {
   it('shows cluster status badge', async () => {
     renderHeader()
     await waitFor(() => {
-      expect(screen.getByLabelText('Instance 1/1')).toBeInTheDocument()
+      expect(screen.getByLabelText('Instances 1/1')).toBeInTheDocument()
     })
   })
 
   it('shows cluster popover on mouse enter', async () => {
     renderHeader()
-    await waitFor(() => screen.getByLabelText('Instance 1/1'))
-    fireEvent.mouseEnter(screen.getByLabelText('Instance 1/1').parentElement!)
+    await waitFor(() => screen.getByLabelText('Instances 1/1'))
+    fireEvent.mouseEnter(screen.getByLabelText('Instances 1/1').parentElement!)
     expect(screen.getByText('Connected Instances')).toBeInTheDocument()
     expect(screen.getByText('homelab')).toBeInTheDocument()
     expect(screen.getByText('30 Alerts')).toBeInTheDocument()
@@ -193,8 +193,8 @@ describe('Header – cluster popover', () => {
 
   it('hides cluster popover on mouse leave', async () => {
     renderHeader()
-    await waitFor(() => screen.getByLabelText('Instance 1/1'))
-    const wrapper = screen.getByLabelText('Instance 1/1').parentElement!
+    await waitFor(() => screen.getByLabelText('Instances 1/1'))
+    const wrapper = screen.getByLabelText('Instances 1/1').parentElement!
     fireEvent.mouseEnter(wrapper)
     expect(screen.getByText('Connected Instances')).toBeInTheDocument()
     fireEvent.mouseLeave(wrapper)
