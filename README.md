@@ -28,6 +28,8 @@ Most Alertmanager UIs are read-only dashboards. Jarvis is built for teams that n
 - **Card and List View** — grouped by severity, sortable
 - **Label-based filtering** — `=` / `!=` / `=~` / `!~` matcher chips, URL-serialized
 - **Silences** — create, edit, extend, delete; full Alertmanager proxy
+- **Alert search** — full-text search across alert names and label values; results update as you type
+- **Dark / Light theme** — toggle between dark and light mode; preference is persisted in localStorage
 - **Multi-cluster** — poll multiple Alertmanager instances simultaneously
 - **Grace period** — 60s ghost-resolve prevention
 - **Single binary** — Go backend embeds the Vite build; one container
@@ -322,6 +324,30 @@ When an alert is suppressed, the question "why is this not firing?" should have 
 
 **Why this matters:**
 In teams with multiple on-call engineers or frequent handoffs, it is common to find an alert suppressed by a silence that nobody on the current shift remembers creating. Surfacing the full silence metadata directly on the alert makes it immediately clear what is covered, why, and for how long — without any additional navigation.
+
+### Alert Search
+
+Full-text search across alert names and label values — results filter instantly as you type.
+
+The search bar is available in the header on all alert views (active, suppressed, resolved). Entering a search term narrows the visible alerts to those whose alert name or any label value contains the typed string (case-insensitive). Search composes with active label-filter chips — both conditions must be satisfied for an alert to appear.
+
+**What is matched:**
+- Alert name (`alertname` label)
+- All label values (e.g. instance, job, namespace, …)
+
+The search term is not persisted in `localStorage` or the URL — it resets on page reload, making it a lightweight triage tool rather than a shareable filter. For persistent, shareable filtering use the label-matcher chips instead (see [Label Filters](#label-filters)).
+
+---
+
+### Dark / Light Theme
+
+Switch between dark and light mode at any time; the preference is persisted in `localStorage`.
+
+The theme toggle is located in the top-right corner of the header. Clicking the icon switches the entire UI between dark and light mode instantly — no page reload required.
+
+The selected theme is saved in `localStorage` and restored on every subsequent visit. Dark mode is the default when no preference has been saved.
+
+---
 
 ## Supported Alertmanager Versions
 

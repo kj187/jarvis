@@ -850,10 +850,10 @@ export function SilenceForm({
           )}
         </div>
 
-        {/* Comment */}
+        {/* Reason */}
         <div>
           <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Comment <span className="text-destructive">*</span>
+            Reason <span className="text-destructive">*</span>
           </label>
           <Textarea
             value={comment}
@@ -921,7 +921,7 @@ export function SilenceForm({
             <span className="font-mono">{previewEnd} <span className="text-muted-foreground ml-1">({previewDuration})</span></span>
             <span className="text-muted-foreground">Author</span>
             <span>{effectiveCreatedBy}</span>
-            <span className="text-muted-foreground">Comment</span>
+            <span className="text-muted-foreground">Reason</span>
             <span className="break-all">{comment}</span>
           </div>
         </div>
