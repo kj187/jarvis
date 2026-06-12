@@ -38,7 +38,95 @@ Full release process: generate changelog, set tag, trigger GitHub Actions.
     ```bash
     git push origin vX.Y.Z
     ```
-12. **Inform about next steps**:
+12. **Generate GitHub Release Description** (show to user, do not post automatically):
+
+    **Rule: is this `v1.0.0` or a new major version (e.g. `v2.0.0`)?**
+    → Yes: write an **announcement-style** description (see template A below)
+    → No: write a **structured release note** derived from the CHANGELOG (see template B below)
+
+    ---
+
+    **Template A — Initial / major release (v1.0.0, v2.0.0, …)**
+
+    ```markdown
+    # 🎉 <Project Name> vX.0.0 — First Public Release
+
+    <One punchy sentence: what this is and why it exists.>
+
+    ---
+
+    ## Why <Project Name>?
+
+    <2-3 sentence problem statement: what existing tools lack, what prompted this.>
+
+    - **<Feature>** — <one-line why it matters>
+    - **<Feature>** — <one-line why it matters>
+    - *(mirror the "Why Jarvis?" section from README)*
+
+    ---
+
+    ## What's in this release
+
+    <Narrative paragraph — not a bullet dump. Highlight the 3-5 most important capabilities and what makes them interesting.>
+
+    Full feature list → [README](README.md)
+
+    ---
+
+    ## Getting started
+
+    \`\`\`bash
+    # paste the quickstart snippet from README
+    \`\`\`
+
+    Full docs → [README](README.md) · [Configuration](.env.example) · [Helm chart](charts/)
+
+    ---
+
+    ## Tech stack
+
+    <single line: languages, frameworks, key libs>
+
+    ---
+
+    > **Built with AI** — <copy the "Built with AI" note from README if applicable>
+
+    ---
+
+    *Feedback and contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md).*
+    ```
+
+    ---
+
+    **Template B — Regular patch / minor / major release**
+
+    ```markdown
+    ## What's changed
+
+    <One sentence summarising the theme of this release (e.g. "Focus on stability and PostgreSQL reliability").>
+
+    ### Added
+    - <item from CHANGELOG>
+
+    ### Fixed
+    - <item from CHANGELOG>
+
+    ### Security
+    - <item from CHANGELOG>
+
+    ### Changed
+    - <item from CHANGELOG> *(only if relevant to users — skip pure dep bumps)*
+
+    ---
+
+    **Full diff:** [vPREV...vNEW](https://github.com/kj187/jarvis/compare/vPREV...vNEW)
+    **Container image:** `ghcr.io/kj187/jarvis:vX.Y.Z`
+    ```
+
+    → Present the filled-out description to the user and ask: *"Does this look good? I'll copy it to your clipboard / you can paste it into the GitHub Release."*
+    → Do **not** post it to GitHub automatically.
+
+13. **Inform about next steps**:
     - GitHub Actions is now running: https://github.com/kj187/jarvis/actions
     - Release will be created at: https://github.com/kj187/jarvis/releases
     - Container image will be pushed to: `ghcr.io/kj187/jarvis:vX.Y.Z` + `ghcr.io/kj187/jarvis:latest`
