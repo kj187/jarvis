@@ -65,33 +65,27 @@ jobs:
 
       - name: Build release body
         run: |
-          VERSION=${GITHUB_REF_NAME#v}
+          VERSION="${GITHUB_REF_NAME#v}"
           DIGEST="${{ steps.build.outputs.digest }}"
-          {
-            echo "## Container Image"
-            echo ""
-            echo '```shell'
-            echo "docker pull ghcr.io/kj187/jarvis:${GITHUB_REF_NAME}"
-            echo '```'
-            echo ""
-            echo "## Verify with Cosign"
-            echo ""
-            echo '```shell'
-            echo "cosign verify ghcr.io/kj187/jarvis@${DIGEST} \\"
-            echo '  --certificate-identity-regexp="https://github.com/kj187/jarvis/.*" \'
-            echo '  --certificate-oidc-issuer="https://token.actions.githubusercontent.com"'
-            echo '```'
-            echo ""
-            echo "---"
-            echo ""
-            awk "/^## \[${VERSION}\]/{found=1; next} found && /^## \[/{exit} found{print}" CHANGELOG.md
-          } > release-body.md
+          printf '## Container Image\n\n```shell\n' > release-body.md
+          printf 'docker pull ghcr.io/kj187/jarvis:%s\n' "${GITHUB_REF_NAME}" >> release-body.md
+          printf '```\n\n## Verify with Cosign\n\n```shell\n' >> release-body.md
+          printf 'cosign verify ghcr.io/kj187/jarvis@%s \\\n' "${DIGEST}" >> release-body.md
+          printf '  --certificate-identity-regexp="https://github.com/kj187/jarvis/.*" \\\n' >> release-body.md
+          printf '  --certificate-oidc-issuer="https://token.actions.githubusercontent.com"\n' >> release-body.md
+          printf '```\n\n---\n\n' >> release-body.md
+          awk "/^## \[${VERSION}\]/{found=1; next} found && /^## \[/{exit} found{print}" CHANGELOG.md >> release-body.md
+          cat release-body.md
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # ratchet:softprops/action-gh-release@v3
-        with:
-          body_path: release-body.md
-          make_latest: true
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete "${{ github.ref_name }}" --yes 2>/dev/null || true
+          gh release create "${{ github.ref_name }}" \
+            --title "${{ github.ref_name }}" \
+            --notes-file release-body.md \
+            --latest
 
   helm-publish:
     name: Helm Chart
