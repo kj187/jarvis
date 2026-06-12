@@ -25,9 +25,16 @@ Full release process: generate changelog, set tag, trigger GitHub Actions.
 8. **Show release notes** for this specific version to the user:
    `git-chglog --output /dev/stdout vX.Y.Z`
    → **Wait for confirmation** before proceeding
-9. **Commit CHANGELOG**:
+9. **Bump version in README** — update the two version occurrences in the Getting Started block:
    ```bash
-   git add CHANGELOG.md
+   PREV=$(git describe --tags --abbrev=0)
+   PREV_CLEAN="${PREV#v}"
+   sed -i "s|ghcr.io/kj187/jarvis:${PREV_CLEAN}|ghcr.io/kj187/jarvis:X.Y.Z|g" README.md
+   sed -i "s|--version ${PREV_CLEAN}|--version X.Y.Z|g" README.md
+   ```
+   Verify the two occurrences changed (image tag + helm `--version`), then commit together with CHANGELOG:
+   ```bash
+   git add CHANGELOG.md README.md
    git commit -m "docs: update CHANGELOG for vX.Y.Z"
    ```
 10. **Create annotated tag**:
