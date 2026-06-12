@@ -33,10 +33,7 @@ function SegmentedControl<T extends string>({
   options: { value: T; label: string }[]
 }) {
   return (
-    <div
-      className="flex overflow-hidden rounded border border-border text-xs"
-      style={{ backgroundColor: '#18181B' }}
-    >
+    <div className="flex overflow-hidden rounded border border-border text-xs bg-input">
       {options.map((opt) => (
         <button
           key={opt.value}
@@ -129,8 +126,7 @@ function ComboInput({
         value={value}
         onChange={(e) => onChangeValue(e.target.value)}
         placeholder={placeholder}
-        className="h-7 text-xs"
-        style={{ backgroundColor: '#18181B' }}
+        className="h-7 text-xs bg-input"
         onFocus={() => setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
         onKeyDown={(e) => {
@@ -140,7 +136,7 @@ function ComboInput({
         autoComplete="off"
       />
       {open && filtered.length > 0 && (
-        <div className="absolute left-0 top-full mt-1 z-50 min-w-full max-h-48 overflow-y-auto rounded border border-border shadow-lg combo-dropdown" style={{ backgroundColor: '#18181B' }}>
+        <div className="absolute left-0 top-full mt-1 z-50 min-w-full max-h-48 overflow-y-auto rounded border border-border shadow-lg combo-dropdown bg-input">
           {filtered.map((opt) => (
             <button
               key={opt}
@@ -352,8 +348,7 @@ export function SettingsSheet({
               {settings.defaultFilters.map((f, i) => (
                 <div
                   key={i}
-                  className="flex items-center rounded border border-border h-7"
-                  style={{ backgroundColor: '#18181B' }}
+                  className="flex items-center rounded border border-border h-7 bg-input"
                 >
                   <span className="px-2 text-xs text-muted-foreground shrink-0">{f.name}</span>
                   <div className="h-3.5 w-px bg-border shrink-0" />

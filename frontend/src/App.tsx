@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useLayoutEffect } from 'react'
 import { Header } from '@/components/layout/Header'
 import { AlertsPage } from '@/components/alerts/AlertsPage'
 import { SetupPage } from '@/components/auth/SetupPage'
@@ -9,6 +9,7 @@ import { useUIStore, VIEW_MODE_KEY } from '@/store/uiStore'
 import { useAuthStore } from '@/store/authStore'
 
 export default function App() {
+  const theme = useSettingsStore((s) => s.theme)
   const defaultFilters = useSettingsStore((s) => s.defaultFilters)
   const defaultViewMode = useSettingsStore((s) => s.defaultViewMode)
   const syncLockedMatchers = useUIStore((s) => s.syncLockedMatchers)
@@ -17,6 +18,10 @@ export default function App() {
   const setupRequired = useAuthStore((s) => s.setupRequired)
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
   const isLoading = useAuthStore((s) => s.isLoading)
+
+  useLayoutEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme)
+  }, [theme])
 
   // Sync settings default filters → locked matchers in uiStore whenever they change
   useEffect(() => {

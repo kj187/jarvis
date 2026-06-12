@@ -1,6 +1,6 @@
 import { useRef, useState, useMemo, useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { Wifi, WifiOff, RefreshCw, Play, Pause, Search, X, Plus, Settings, Lock, LogIn, LogOut, User, Shield } from 'lucide-react'
+import { Wifi, WifiOff, RefreshCw, Play, Pause, Search, X, Plus, Settings, Lock, LogIn, LogOut, User, Shield, Sun, Moon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
@@ -12,6 +12,7 @@ import { LoginModal } from '@/components/auth/LoginModal'
 import { UserManagement } from '@/components/admin/UserManagement'
 import { useUIStore } from '@/store/uiStore'
 import { useAuthStore } from '@/store/authStore'
+import { useSettingsStore } from '@/store/useSettingsStore'
 import { useQuery } from '@tanstack/react-query'
 import { fetchClusters } from '@/api/client'
 import { useAlerts } from '@/hooks/useAlerts'
@@ -82,7 +83,7 @@ function ComboInput({
         autoComplete="off"
       />
       {open && filtered.length > 0 && (
-        <div className="absolute left-0 top-full mt-1 z-50 min-w-full max-h-48 overflow-y-auto rounded border border-border shadow-lg combo-dropdown" style={{ backgroundColor: '#18181B' }}>
+        <div className="absolute left-0 top-full mt-1 z-50 min-w-full max-h-48 overflow-y-auto rounded border border-border shadow-lg combo-dropdown bg-input">
           {filtered.map((opt) => (
             <button
               key={opt}
@@ -116,9 +117,8 @@ function LockedMatcherChip({
 }) {
   return (
     <div
-      className="flex items-center rounded border border-border/60 h-7 opacity-75"
+      className="flex items-center rounded border border-border/60 h-7 opacity-75 bg-input"
       title="Default filter set in Settings — open Settings (⚙) to change or remove"
-      style={{ backgroundColor: '#18181B' }}
     >
       <span className="px-2 text-xs text-muted-foreground shrink-0 select-none whitespace-nowrap overflow-hidden text-ellipsis" style={{ maxWidth: '120px' }}>
         {name}
@@ -154,7 +154,7 @@ function MatcherChip({
   const datalistId = `mc-vals-${id}`
 
   return (
-    <div className="flex items-center rounded border border-border h-7" style={{ backgroundColor: '#18181B' }}>
+    <div className="flex items-center rounded border border-border h-7 bg-input">
       <datalist id={datalistId}>
         {valueOptions.map((v) => <option key={v} value={v} />)}
       </datalist>
@@ -251,6 +251,8 @@ export function Header() {
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const [adminOpen, setAdminOpen] = useState(false)
   const { user, isAuthenticated, logout, providerInfo } = useAuthStore()
+  const theme = useSettingsStore((s) => s.theme)
+  const updateSettings = useSettingsStore((s) => s.update)
 
   const { data: allAlerts = [] } = useAlerts()
 
@@ -326,7 +328,7 @@ export function Header() {
 
   return (
     <>
-    <header className="sticky top-0 z-30 border-b border-border backdrop-blur" style={{ backgroundColor: '#172131' }}>
+    <header className="sticky top-0 z-30 border-b border-border backdrop-blur bg-header">
       {/* ── Main row ── */}
       <div className="flex items-center gap-2 px-4 py-2">
 
@@ -337,8 +339,7 @@ export function Header() {
             onChangeValue={setNewName}
             placeholder="label"
             options={availableLabelNames}
-            className="h-7 w-32 text-xs"
-            style={{ backgroundColor: '#18181B' }}
+            className="h-7 w-32 text-xs bg-input"
             onKeyDown={(e) => e.key === 'Enter' && handleAddMatcher()}
             ariaLabel="Label name"
           />
@@ -358,8 +359,7 @@ export function Header() {
             onChangeValue={setNewValue}
             placeholder="value"
             options={newValueOptions}
-            className="h-7 w-44 text-xs"
-            style={{ backgroundColor: '#18181B' }}
+            className="h-7 w-44 text-xs bg-input"
             onKeyDown={(e) => e.key === 'Enter' && handleAddMatcher()}
             ariaLabel="Label value"
           />
@@ -379,8 +379,7 @@ export function Header() {
         <>
           <div className="mx-1 h-5 w-px bg-border shrink-0" />
           <div
-            className="flex items-center gap-0.5 shrink-0 rounded-md px-1 py-0.5"
-            style={{ backgroundColor: '#18181B', border: '1px solid #3F3F46' }}
+            className="flex items-center gap-0.5 shrink-0 rounded-md px-1 py-0.5 bg-input border border-border"
             role="group"
             aria-label="State filter"
           >
@@ -524,6 +523,18 @@ export function Header() {
           {searchOpen ? <X className="h-4 w-4" /> : <Search className="h-4 w-4" />}
         </Button>
 
+        {/* Theme toggle */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 shrink-0"
+          onClick={() => updateSettings({ theme: theme === 'dark' ? 'light' : 'dark' })}
+          title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+          aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+        >
+          {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+        </Button>
+
         {/* Settings */}
         <Button
           variant="ghost"
@@ -583,7 +594,6 @@ export function Header() {
           </div>
         ) : providerInfo !== null && providerInfo.mode !== 'none' ? (
           <Button
-            variant="outline"
             size="sm"
             className="h-7 text-xs shrink-0"
             onClick={() => setLoginModalOpen(true)}
