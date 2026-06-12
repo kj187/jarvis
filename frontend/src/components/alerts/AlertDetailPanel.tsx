@@ -13,6 +13,7 @@ import { useAlerts, useAlertHistory, useAlertStats } from '@/hooks/useAlerts'
 import { useActiveClaim, useSetClaim, useReleaseClaim, useClaimHistory } from '@/hooks/useAlertClaim'
 import { useDeleteSilence, useSilenceEvents, useUpsertSilence } from '@/hooks/useSilences'
 import { useAuthStore } from '@/store/authStore'
+import { useSettingsStore } from '@/store/useSettingsStore'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import type { EnrichedAlert, LabelMatcher, Silence, SilenceMatcher } from '@/types'
@@ -76,10 +77,11 @@ function silenceMatchesAlert(silence: Silence, alert: EnrichedAlert): boolean {
 }
 
 function MatcherChip({ matcher }: { matcher: SilenceMatcher }) {
+  const theme = useSettingsStore((s) => s.theme)
   return (
     <span
       className="rounded border px-1.5 py-0.5 text-[10px] font-medium"
-      style={labelColorStyle(matcher.name)}
+      style={labelColorStyle(matcher.name, theme)}
     >
       {matcher.name}{matcherOp(matcher)}{matcher.value}
     </span>
@@ -146,6 +148,7 @@ export function AlertDetailPanel({
   const [manualClaimName, setManualClaimName] = useState(() => localStorage.getItem(USERNAME_KEY) ?? '')
   const [claimNote, setClaimNote] = useState('')
   const { user, providerInfo } = useAuthStore()
+  const theme = useSettingsStore((s) => s.theme)
   const authMode = providerInfo?.mode ?? 'none'
   const claimName = user?.username ?? manualClaimName
   const [promptCopied, setPromptCopied] = useState(false)
@@ -271,9 +274,9 @@ export function AlertDetailPanel({
           {/* Links + Claim */}
           <div className="mt-3 flex flex-wrap items-center gap-2">
             {activeClaim ? (
-              <div className="flex items-center gap-1.5 rounded border border-blue-800 bg-blue-950/40 px-2 py-1">
-                <User className="h-3 w-3 text-blue-400 shrink-0" />
-                <span className="text-xs text-blue-300 font-medium">{activeClaim.claimedBy}</span>
+              <div className={cn('flex items-center gap-1.5 rounded border px-2 py-1', theme === 'light' ? 'border-blue-300 bg-blue-50' : 'border-blue-800 bg-blue-950/40')}>
+                <User className={cn('h-3 w-3 shrink-0', theme === 'light' ? 'text-blue-600' : 'text-blue-400')} />
+                <span className={cn('text-xs font-medium', theme === 'light' ? 'text-blue-700' : 'text-blue-300')}>{activeClaim.claimedBy}</span>
                 <button
                   className="ml-1 text-[10px] text-muted-foreground hover:text-foreground cursor-pointer"
                   onClick={() => releaseMutation.mutate(user?.username ?? localStorage.getItem(USERNAME_KEY) ?? 'unknown')}
@@ -409,13 +412,19 @@ export function AlertDetailPanel({
               key={s.id}
               className={cn(
                 'border-b border-border px-5 py-4',
-                isExpiring ? 'bg-yellow-900/30' : 'bg-slate-900',
+                isExpiring
+                  ? (theme === 'light' ? 'bg-yellow-50' : 'bg-yellow-900/30')
+                  : (theme === 'light' ? 'bg-muted' : 'bg-slate-900'),
               )}
             >
               <div className="mb-3 flex items-center justify-between gap-2">
                 <div className={cn(
                   'flex items-center gap-1.5 text-xs font-semibold',
-                  isPending ? 'text-slate-300' : isExpiring ? 'text-yellow-300' : 'text-slate-200',
+                  isPending
+                    ? 'text-muted-foreground'
+                    : isExpiring
+                      ? (theme === 'light' ? 'text-yellow-700' : 'text-yellow-300')
+                      : 'text-foreground',
                 )}>
                   <BellOff className="h-3 w-3 shrink-0" />
                   {isPending ? 'Silence pending' : 'Silence active'}
@@ -474,30 +483,30 @@ export function AlertDetailPanel({
                     href={`${s.alertmanagerUrl}/#/silences/${s.id}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="font-mono text-slate-400 truncate hover:text-slate-200 underline decoration-dotted"
+                    className="font-mono text-muted-foreground truncate hover:text-foreground underline decoration-dotted"
                   >
                     {s.id}
                   </a>
 
                   <span className="text-muted-foreground">Created by</span>
-                  <span className={isExpiring ? 'text-yellow-200' : 'text-slate-200'}>{s.createdBy}</span>
+                  <span className={isExpiring ? (theme === 'light' ? 'text-yellow-800' : 'text-yellow-200') : 'text-foreground'}>{s.createdBy}</span>
 
                   <span className="text-muted-foreground">Created at</span>
-                  <span className={isExpiring ? 'text-yellow-400' : 'text-slate-400'}>
+                  <span className={isExpiring ? (theme === 'light' ? 'text-yellow-700' : 'text-yellow-400') : 'text-muted-foreground'}>
                     {format(new Date(s.updatedAt), 'yyyy-MM-dd HH:mm', { locale: enUS })}
                   </span>
 
                   {isPending ? (
                     <>
                       <span className="text-muted-foreground">Starts at</span>
-                      <span className="text-slate-400">
+                      <span className="text-muted-foreground">
                         {format(new Date(s.startsAt), 'yyyy-MM-dd HH:mm', { locale: enUS })}
                       </span>
                     </>
                   ) : (
                     <>
                       <span className="text-muted-foreground">{isExpiring ? 'Expires' : 'Ends'}</span>
-                      <span className={isExpiring ? 'text-yellow-400' : 'text-slate-400'}>
+                      <span className={isExpiring ? (theme === 'light' ? 'text-yellow-700' : 'text-yellow-400') : 'text-muted-foreground'}>
                         in {formatDuration(remaining)} ({format(new Date(s.endsAt), 'yyyy-MM-dd HH:mm', { locale: enUS })})
                       </span>
                     </>
@@ -506,7 +515,7 @@ export function AlertDetailPanel({
                   {s.comment && (
                     <>
                       <span className="text-muted-foreground">Reason</span>
-                      <span className={isExpiring ? 'text-yellow-400' : 'text-slate-400'}>{s.comment}</span>
+                      <span className={isExpiring ? (theme === 'light' ? 'text-yellow-700' : 'text-yellow-400') : 'text-muted-foreground'}>{s.comment}</span>
                     </>
                   )}
                 </div>
@@ -527,7 +536,7 @@ export function AlertDetailPanel({
                     <div className="space-y-0.5">
                       {affected.map((a) => (
                         <div key={a.fingerprint} className="flex items-center gap-2 text-xs">
-                          <span className="font-medium text-slate-300">{a.labels['alertname'] ?? a.fingerprint}</span>
+                          <span className="font-medium text-foreground">{a.labels['alertname'] ?? a.fingerprint}</span>
                           {a.labels['instance'] && (
                             <span className="text-muted-foreground">{a.labels['instance']}</span>
                           )}
@@ -546,9 +555,9 @@ export function AlertDetailPanel({
 
         {/* Expired silence banners */}
         {expiredSilences.map((s) => (
-          <div key={s.id} className="border-b border-border bg-slate-950 px-5 py-4">
+          <div key={s.id} className={cn('border-b border-border px-5 py-4', theme === 'light' ? 'bg-muted' : 'bg-slate-950')}>
             <div className="mb-3 flex items-center justify-between gap-2">
-              <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
                 <BellOff className="h-3 w-3 shrink-0" />
                 Silence expired
               </div>
@@ -568,28 +577,28 @@ export function AlertDetailPanel({
                 href={`${s.alertmanagerUrl}/#/silences/${s.id}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="font-mono text-slate-600 truncate hover:text-slate-400 underline decoration-dotted"
+                className="font-mono text-muted-foreground truncate hover:text-foreground underline decoration-dotted"
               >
                 {s.id}
               </a>
 
               <span className="text-muted-foreground">Created by</span>
-              <span className="text-slate-600">{s.createdBy}</span>
+              <span className="text-muted-foreground">{s.createdBy}</span>
 
               <span className="text-muted-foreground">Created at</span>
-              <span className="text-slate-700">
+              <span className="text-muted-foreground">
                 {format(new Date(s.updatedAt), 'yyyy-MM-dd HH:mm', { locale: enUS })}
               </span>
 
               <span className="text-muted-foreground">Expired at</span>
-              <span className="text-slate-700">
+              <span className="text-muted-foreground">
                 {format(new Date(s.endsAt), 'yyyy-MM-dd HH:mm', { locale: enUS })}
               </span>
 
               {s.comment && (
                 <>
                   <span className="text-muted-foreground">Reason</span>
-                  <span className="text-slate-700">{s.comment}</span>
+                  <span className="text-muted-foreground">{s.comment}</span>
                 </>
               )}
             </div>
@@ -652,7 +661,18 @@ export function AlertDetailPanel({
             expired: 'Silence expired',
           }
 
-          const actionColor: Record<string, string> = {
+          const actionColor: Record<string, string> = theme === 'light' ? {
+            'Alert fired': 'text-red-600',
+            'Alert resolved': 'text-green-600',
+            'Alert suppressed': 'text-muted-foreground',
+            'Silence expired': 'text-yellow-600',
+            claimed: 'text-blue-600',
+            unclaimed: 'text-muted-foreground',
+            'Silence pending': 'text-muted-foreground',
+            'Silence created': 'text-muted-foreground',
+            'Silence updated': 'text-muted-foreground',
+            'Silence deleted': 'text-orange-600',
+          } : {
             'Alert fired': 'text-red-400',
             'Alert resolved': 'text-green-400',
             'Alert suppressed': 'text-slate-400',

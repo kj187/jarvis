@@ -1,15 +1,23 @@
 import React, { useRef, useState } from 'react'
 import { useUIStore } from '@/store/uiStore'
+import { useSettingsStore } from '@/store/useSettingsStore'
 import type { LabelMatcherOperator } from '@/types'
 
 export const HIDDEN_LABEL_KEYS = new Set(['alertname', 'severity', 'receiver', '@receiver'])
 
 const OPERATORS: LabelMatcherOperator[] = ['=', '!=', '=~', '!~']
 
-export function labelColorStyle(key: string): React.CSSProperties {
+export function labelColorStyle(key: string, theme: 'dark' | 'light' = 'dark'): React.CSSProperties {
   let h = 5381
   for (let i = 0; i < key.length; i++) h = ((h << 5) + h + key.charCodeAt(i)) >>> 0
   const hue = h % 360
+  if (theme === 'light') {
+    return {
+      backgroundColor: `hsl(${hue} 50% 90%)`,
+      color: `hsl(${hue} 70% 28%)`,
+      borderColor: `hsl(${hue} 40% 70%)`,
+    }
+  }
   return {
     backgroundColor: `hsl(${hue} 40% 16%)`,
     color: `hsl(${hue} 70% 72%)`,
@@ -23,6 +31,7 @@ export function LabelChip({ labelKey, value }: { labelKey: string; value: string
   const chipRef = useRef<HTMLSpanElement | null>(null)
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const addLabelMatcher = useUIStore((s) => s.addLabelMatcher)
+  const theme = useSettingsStore((s) => s.theme)
 
   const show = () => {
     if (hideTimer.current) clearTimeout(hideTimer.current)
@@ -52,7 +61,7 @@ export function LabelChip({ labelKey, value }: { labelKey: string; value: string
       <span
         ref={chipRef}
         className="max-w-[200px] truncate rounded border px-1.5 py-0.5 text-[10px] font-medium"
-        style={labelColorStyle(labelKey)}
+        style={labelColorStyle(labelKey, theme)}
       >
         {labelKey}: {value}
       </span>
