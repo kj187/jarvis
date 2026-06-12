@@ -42,6 +42,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GitHub Actions CI pipeline (Go tests + lint + govulncheck; frontend tests + build)
 - Helm chart unit tests via helm-unittest integrated into CI and pre-commit
 
+### Changed
+- Upgraded Vite from 6.4.3 to 8.0.16
+- Upgraded TypeScript from 5.9.3 to 6.0.3; removed deprecated `baseUrl` from tsconfig (paths work standalone since TS 5.5, Vite alias is defined independently)
+- Upgraded golang.org/x/crypto from 0.50.0 to 0.53.0
+- Upgraded GitHub Actions: `actions/setup-go` 5.6.0→6.4.0, `codecov/codecov-action` 4.6.0→7.0.0, `docker/setup-qemu-action` 3.7.0→4.1.0, `github/codeql-action` 3.36.2→4.36.2, `sigstore/cosign-installer` 3.9.1→4.1.2
+
 ### Fixed
 - Fingerprint regex tightened to match Alertmanager's actual format
 - Structured request access logging via `slog`
@@ -53,6 +59,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Force list view for resolved and suppressed state tabs (card layout not useful there)
 - View toggle hidden when state filter is not active
 - Default state filter set to `active` on bare URL load
+- Release workflow: generate release notes from CHANGELOG instead of GitHub auto-notes
+- Release workflow: add container image digest, cosign verify block, and contributor list to GitHub Release body
+- Release workflow: rewrite release body assembly with `printf`; use `gh` CLI for release creation; exclude bot accounts from contributor list
+- Containerfile: include `pnpm-workspace.yaml` in COPY step to fix frontend build in container
 
 ### Security
 - Per-IP rate limiting on all mutating endpoints
