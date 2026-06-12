@@ -68,7 +68,7 @@ jobs:
           VERSION="${GITHUB_REF_NAME#v}"
           DIGEST="${{ steps.build.outputs.digest }}"
           printf '## Container Image\n\n```shell\n' > release-body.md
-          printf 'docker pull ghcr.io/kj187/jarvis:%s\n' "${GITHUB_REF_NAME}" >> release-body.md
+          printf 'docker pull ghcr.io/kj187/jarvis:%s\n' "${VERSION}" >> release-body.md
           printf '```\n\n## Verify with Cosign\n\n```shell\n' >> release-body.md
           printf 'cosign verify ghcr.io/kj187/jarvis@%s \\\n' "${DIGEST}" >> release-body.md
           printf '  --certificate-identity-regexp="https://github.com/kj187/jarvis/.*" \\\n' >> release-body.md
