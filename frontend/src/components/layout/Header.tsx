@@ -1,6 +1,6 @@
 import { useRef, useState, useMemo, useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { Wifi, WifiOff, RefreshCw, Play, Pause, Search, X, Plus, Settings, Lock, LogIn, LogOut, User, Shield, Sun, Moon } from 'lucide-react'
+import { Wifi, WifiOff, RefreshCw, Play, Pause, Search, X, Plus, Settings, Lock, CircleUser, LogOut, User, Shield, Sun, Moon, Menu } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
@@ -221,6 +221,7 @@ export function Header() {
   const [newOp, setNewOp] = useState<LabelMatcherOperator>('=')
   const [newValue, setNewValue] = useState('')
 
+  const [menuOpen, setMenuOpen] = useState(false)
   const [pollSpinning, setPollSpinning] = useState(false)
   const pollSpinTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pollingPausedRef = useRef(pollingPaused)
@@ -326,314 +327,283 @@ export function Header() {
 
   const isSpinning = refreshing || pollSpinning
 
+  // ── Shared filter input content ───────────────────────────────────────────
+  const filterInputsContent = (
+    <>
+      <ComboInput value={newName} onChangeValue={setNewName} placeholder="label" options={availableLabelNames} className="h-7 w-24 text-xs bg-input" onKeyDown={(e) => e.key === 'Enter' && handleAddMatcher()} ariaLabel="Label name" />
+      <Select value={newOp} onChange={(e) => setNewOp(e.target.value as LabelMatcherOperator)} className="h-7 w-14 shrink-0" selectClassName="text-xs font-mono" aria-label="Operator">
+        {OPERATORS.map((op) => <option key={op} value={op}>{op}</option>)}
+      </Select>
+      <ComboInput value={newValue} onChangeValue={setNewValue} placeholder="value" options={newValueOptions} className="h-7 w-32 text-xs bg-input" onKeyDown={(e) => e.key === 'Enter' && handleAddMatcher()} ariaLabel="Label value" />
+      <Button variant="outline" size="icon" className="h-7 w-7 shrink-0" onClick={handleAddMatcher} disabled={!newName || !newValue} aria-label="Add filter">
+        <Plus className="h-3 w-3" />
+      </Button>
+    </>
+  )
+
+  // ── Shared active matcher chips ───────────────────────────────────────────
+  const activeChipsContent = filters.labelMatchers.map((m) =>
+    m.locked ? (
+      <LockedMatcherChip key={m.id} name={m.name} operator={m.operator} value={m.value} />
+    ) : (
+      <MatcherChip key={m.id} id={m.id} name={m.name} operator={m.operator} value={m.value} valueOptions={Array.from(labelValueMap.get(m.name) ?? []).sort()} onUpdate={(partial) => updateLabelMatcher(m.id, partial)} onRemove={() => removeLabelMatcher(m.id)} />
+    ),
+  )
+
   return (
     <>
     <header className="sticky top-0 z-30 border-b border-border backdrop-blur bg-header">
-      {/* ── Main row ── */}
-      <div className="flex items-center gap-2 px-4 py-2">
 
-        {/* Label filter add row */}
-        <div className="flex items-center gap-1 shrink-0">
-          <ComboInput
-            value={newName}
-            onChangeValue={setNewName}
-            placeholder="label"
-            options={availableLabelNames}
-            className="h-7 w-32 text-xs bg-input"
-            onKeyDown={(e) => e.key === 'Enter' && handleAddMatcher()}
-            ariaLabel="Label name"
-          />
-          <Select
-            value={newOp}
-            onChange={(e) => setNewOp(e.target.value as LabelMatcherOperator)}
-            className="h-7 w-14 shrink-0"
-            selectClassName="text-xs font-mono"
-            aria-label="Operator"
-          >
-            {OPERATORS.map((op) => (
-              <option key={op} value={op}>{op}</option>
-            ))}
-          </Select>
-          <ComboInput
-            value={newValue}
-            onChangeValue={setNewValue}
-            placeholder="value"
-            options={newValueOptions}
-            className="h-7 w-44 text-xs bg-input"
-            onKeyDown={(e) => e.key === 'Enter' && handleAddMatcher()}
-            ariaLabel="Label value"
-          />
-          <Button
-            variant="outline"
-            size="icon"
-            className="h-7 w-7 shrink-0"
-            onClick={handleAddMatcher}
-            disabled={!newName || !newValue}
-            aria-label="Add filter"
-          >
-            <Plus className="h-3 w-3" />
-          </Button>
+      {/* ── Main row (always visible) ── */}
+      <div className="flex items-center gap-1.5 px-3 py-1.5">
+
+        {/* Filter inputs inline — xl+ (drops to row below when window narrows) */}
+        <div className="hidden xl:flex items-center gap-1 shrink-0">
+          {filterInputsContent}
         </div>
 
-        {/* Divider + STATE label + state pills */}
-        <>
-          <div className="mx-1 h-5 w-px bg-border shrink-0" />
-          <div
-            className="flex items-center gap-0.5 shrink-0 rounded-md px-1 py-0.5 bg-input border border-border"
-            role="group"
-            aria-label="State filter"
+        {/* STATE pills */}
+        <div
+          className="flex items-center gap-0.5 shrink-0 rounded-md px-1 py-0.5 bg-input border border-border"
+          role="group"
+          aria-label="State filter"
+        >
+          <span className="hidden sm:inline text-xs text-muted-foreground shrink-0 select-none px-1.5">STATE</span>
+          {STATE_OPTIONS.map(({ value, label, dot, activeBg, activeDot }) => {
+            const isActive = filters.state === value
+            const count = alertCounts.byState?.[value as StateValue] ?? 0
+            return (
+              <button
+                key={value}
+                onClick={() => toggleState(value)}
+                className={`cursor-pointer flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium transition-colors ${
+                  isActive
+                    ? `${activeBg} text-white rounded-none`
+                    : 'text-muted-foreground hover:text-foreground rounded-full'
+                }`}
+              >
+                <span className={`h-1.5 w-1.5 rounded-full ${isActive ? activeDot : dot}`} />
+                <span className="hidden sm:inline">{label}</span>
+                {value !== 'resolved' && <span className="tabular-nums opacity-75">{count}</span>}
+              </button>
+            )
+          })}
+          <button
+            onClick={() => { setFilter('state', ''); setViewMode('list') }}
+            className={`cursor-pointer rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
+              !filters.state
+                ? 'text-foreground'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
           >
-          <span className="text-xs text-muted-foreground shrink-0 select-none px-1.5">STATE</span>
-            {STATE_OPTIONS.map(({ value, label, dot, activeBg, activeDot }) => {
-              const isActive = filters.state === value
-              const count = alertCounts.byState?.[value as StateValue] ?? 0
-              return (
-                <button
-                  key={value}
-                  onClick={() => toggleState(value)}
-                  className={`cursor-pointer flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium transition-colors ${
-                    isActive
-                      ? `${activeBg} text-white rounded-none`
-                      : 'text-muted-foreground hover:text-foreground rounded-full'
-                  }`}
-                >
-                  <span className={`h-1.5 w-1.5 rounded-full ${isActive ? activeDot : dot}`} />
-                  {label}
-                  {value !== 'resolved' && <span className="tabular-nums opacity-75">{count}</span>}
-                </button>
-              )
-            })}
-            <button
-              onClick={() => { setFilter('state', ''); setViewMode('list') }}
-              className={`cursor-pointer rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
-                !filters.state
-                  ? 'text-foreground'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              All
-            </button>
-          </div>
+            All
+          </button>
+        </div>
+
+        {/* ViewToggle — desktop only */}
+        <div className="hidden md:block">
           {(!filters.state || filters.state === 'active') && (
             <ViewToggle value={viewMode} onChange={setViewMode} />
           )}
-        </>
+        </div>
 
         {/* Spacer */}
         <div className="flex-1" />
 
-        {/* Cluster status */}
-        <div
-          className="relative shrink-0"
-          onMouseEnter={() => setClusterHoverOpen(true)}
-          onMouseLeave={() => setClusterHoverOpen(false)}
-        >
+        {/* ── Desktop controls ── */}
+        <div className="hidden md:flex items-center gap-1.5">
+          {/* Cluster status */}
           <div
-            className="flex items-center gap-1.5 px-2 py-1 text-xs cursor-default select-none"
-            aria-label={`Instance ${healthyCount}/${clusters.length}`}
+            className="relative shrink-0"
+            onMouseEnter={() => setClusterHoverOpen(true)}
+            onMouseLeave={() => setClusterHoverOpen(false)}
           >
             <div
-              className={`h-2 w-2 rounded-full ${
-                healthyCount === clusters.length ? 'bg-green-500' : 'bg-red-500'
-              }`}
-            />
-            <span className="text-muted-foreground">
-              Instances {healthyCount}/{clusters.length}
-            </span>
-          </div>
-
-          {clusterHoverOpen && clusters.length > 0 && (
-            <div
-              className="absolute right-0 top-full mt-1 z-50 min-w-56 rounded-md border border-border bg-card shadow-lg"
-              role="tooltip"
+              className="flex items-center gap-1.5 px-2 py-1 text-xs cursor-default select-none"
+              aria-label={`Instances ${healthyCount}/${clusters.length}`}
+              title={`Instances ${healthyCount}/${clusters.length}`}
             >
-              <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-border">
-                Connected Instances
-              </div>
-              {clusters.map((c) => (
-                <div key={c.name} className="px-3 py-2 border-b border-border last:border-0">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-1.5">
-                      <div
-                        className={`h-1.5 w-1.5 rounded-full shrink-0 ${
-                          c.healthy ? 'bg-green-500' : 'bg-red-500'
-                        }`}
-                      />
-                      <span className="text-xs font-medium text-foreground">{c.name}</span>
-                    </div>
-                    <span className="text-xs text-muted-foreground whitespace-nowrap">
-                      {c.alertCount} Alerts
-                    </span>
-                  </div>
-                  <div className="mt-0.5 pl-3 text-[10px] text-muted-foreground/60 truncate max-w-60">
-                    {c.alertmanagerUrl}
-                  </div>
-                </div>
-              ))}
+              <div className={`h-2 w-2 rounded-full ${healthyCount === clusters.length ? 'bg-green-500' : 'bg-red-500'}`} />
+              <span className="text-muted-foreground tabular-nums">{healthyCount}/{clusters.length}</span>
             </div>
-          )}
-        </div>
-
-        {/* WS status */}
-        <div
-          className="flex items-center gap-1 shrink-0"
-          title={wsConnected ? 'WebSocket connected' : 'WebSocket disconnected'}
-        >
-          {wsConnected
-            ? <Wifi className="h-4 w-4 text-green-500" />
-            : <WifiOff className="h-4 w-4 text-red-500" />}
-          <span className={`text-xs ${wsConnected ? 'text-green-500' : 'text-red-400'}`}>
-            {wsConnected ? 'Live' : 'Offline'}
-          </span>
-        </div>
-
-
-        {/* Polling pause/resume */}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8 shrink-0"
-          onClick={() => setPollingPaused(!pollingPaused)}
-          title={pollingPaused ? 'Resume polling' : 'Pause polling'}
-        >
-          {pollingPaused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
-        </Button>
-
-        {/* Refresh */}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8 shrink-0"
-          onClick={handleRefresh}
-          title="Refresh now"
-          disabled={refreshing}
-        >
-          <RefreshCw className={`h-4 w-4 ${isSpinning ? 'animate-spin' : ''}`} />
-        </Button>
-
-        {/* Search toggle */}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8 shrink-0"
-          onClick={toggleSearch}
-          title="Search"
-          aria-pressed={searchOpen}
-        >
-          {searchOpen ? <X className="h-4 w-4" /> : <Search className="h-4 w-4" />}
-        </Button>
-
-        {/* Theme toggle */}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8 shrink-0"
-          onClick={() => updateSettings({ theme: theme === 'dark' ? 'light' : 'dark' })}
-          title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-          aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-        >
-          {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-        </Button>
-
-        {/* Settings */}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8 shrink-0"
-          onClick={() => setSettingsOpen(true)}
-          title="Settings"
-          aria-label="Open settings"
-        >
-          <Settings className="h-4 w-4" />
-        </Button>
-
-        {/* Create silence */}
-        <Button
-          size="sm"
-          onClick={() => setSilenceFormOpen(true)}
-          className="h-7 text-xs shrink-0"
-        >
-          <Plus className="mr-1 h-3.5 w-3.5" />
-          Create silence
-        </Button>
-
-        {/* Auth */}
-        {isAuthenticated && user ? (
-          <div className="relative shrink-0">
-            <button
-              className="flex items-center gap-1.5 rounded px-2 py-1 text-xs cursor-pointer text-foreground hover:bg-accent/60"
-              onClick={() => setUserMenuOpen((v) => !v)}
-              aria-label="User menu"
-            >
-              <User className="h-3.5 w-3.5" />
-              <span>{user.username}</span>
-            </button>
-            {userMenuOpen && (
-              <div
-                className="absolute right-0 top-full mt-1 z-50 min-w-36 rounded-md border border-border bg-card shadow-lg"
-                onMouseLeave={() => setUserMenuOpen(false)}
-              >
-                {user.role === 'admin' && (
-                  <button
-                    className="w-full flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-accent/60 cursor-pointer border-b border-border"
-                    onClick={() => { setUserMenuOpen(false); setAdminOpen(true) }}
-                  >
-                    <Shield className="h-3.5 w-3.5" />
-                    Admin
-                  </button>
-                )}
-                <button
-                  className="w-full flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-accent/60 cursor-pointer"
-                  onClick={() => { setUserMenuOpen(false); logout() }}
-                >
-                  <LogOut className="h-3.5 w-3.5" />
-                  Logout
-                </button>
+            {clusterHoverOpen && clusters.length > 0 && (
+              <div className="absolute right-0 top-full mt-1 z-50 min-w-56 rounded-md border border-border bg-card shadow-lg" role="tooltip">
+                <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-border">Connected Instances</div>
+                {clusters.map((c) => (
+                  <div key={c.name} className="px-3 py-2 border-b border-border last:border-0">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-1.5">
+                        <div className={`h-1.5 w-1.5 rounded-full shrink-0 ${c.healthy ? 'bg-green-500' : 'bg-red-500'}`} />
+                        <span className="text-xs font-medium text-foreground">{c.name}</span>
+                      </div>
+                      <span className="text-xs text-muted-foreground whitespace-nowrap">{c.alertCount} Alerts</span>
+                    </div>
+                    <div className="mt-0.5 pl-3 text-[10px] text-muted-foreground/60 truncate max-w-60">{c.alertmanagerUrl}</div>
+                  </div>
+                ))}
               </div>
             )}
           </div>
-        ) : providerInfo !== null && providerInfo.mode !== 'none' ? (
-          <Button
-            size="sm"
-            className="h-7 text-xs shrink-0"
-            onClick={() => setLoginModalOpen(true)}
-          >
-            <LogIn className="mr-1 h-3.5 w-3.5" />
-            Login
+
+          {/* WS status */}
+          <div className="shrink-0" title={wsConnected ? 'WebSocket connected' : 'WebSocket disconnected'}>
+            {wsConnected ? <Wifi className="h-4 w-4 text-green-500" /> : <WifiOff className="h-4 w-4 text-red-500" />}
+          </div>
+
+          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => setPollingPaused(!pollingPaused)} title={pollingPaused ? 'Resume polling' : 'Pause polling'}>
+            {pollingPaused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
           </Button>
-        ) : null}
+          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={handleRefresh} title="Refresh now" disabled={refreshing}>
+            <RefreshCw className={`h-4 w-4 ${isSpinning ? 'animate-spin' : ''}`} />
+          </Button>
+          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={toggleSearch} title="Search" aria-pressed={searchOpen}>
+            {searchOpen ? <X className="h-4 w-4" /> : <Search className="h-4 w-4" />}
+          </Button>
+          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => updateSettings({ theme: theme === 'dark' ? 'light' : 'dark' })} title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'} aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
+            {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          </Button>
+          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => setSettingsOpen(true)} title="Settings" aria-label="Open settings">
+            <Settings className="h-4 w-4" />
+          </Button>
+
+          {/* Auth — desktop */}
+          {isAuthenticated && user ? (
+            <div className="relative shrink-0">
+              <button
+                className="flex items-center justify-center h-8 w-8 rounded cursor-pointer text-foreground hover:bg-accent/60"
+                onClick={() => setUserMenuOpen((v) => !v)}
+                aria-label="User menu"
+                title={user.username}
+              >
+                <User className="h-4 w-4" />
+              </button>
+              {userMenuOpen && (
+                <div className="absolute right-0 top-full mt-1 z-50 min-w-40 rounded-md border border-border bg-card shadow-lg" onMouseLeave={() => setUserMenuOpen(false)}>
+                  <div className="px-3 py-2 text-xs font-medium text-foreground border-b border-border">{user.username}</div>
+                  {user.role === 'admin' && (
+                    <button className="w-full flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-accent/60 cursor-pointer border-b border-border" onClick={() => { setUserMenuOpen(false); setAdminOpen(true) }}>
+                      <Shield className="h-3.5 w-3.5" />Admin
+                    </button>
+                  )}
+                  <button className="w-full flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-accent/60 cursor-pointer" onClick={() => { setUserMenuOpen(false); logout() }}>
+                    <LogOut className="h-3.5 w-3.5" />Logout
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : providerInfo !== null && providerInfo.mode !== 'none' ? (
+            <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => setLoginModalOpen(true)} title="Login" aria-label="Login">
+              <CircleUser className="h-4 w-4" />
+            </Button>
+          ) : null}
+
+          <Button size="sm" onClick={() => setSilenceFormOpen(true)} className="h-7 text-xs shrink-0">
+            <Plus className="mr-1 h-3.5 w-3.5" />
+            Create silence
+          </Button>
+        </div>
+
+        {/* ── Mobile: WS status + hamburger ── */}
+        <div className="flex md:hidden items-center gap-1">
+          <div className="shrink-0" title={wsConnected ? 'WebSocket connected' : 'WebSocket disconnected'}>
+            {wsConnected ? <Wifi className="h-4 w-4 text-green-500" /> : <WifiOff className="h-4 w-4 text-red-500" />}
+          </div>
+          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => setMenuOpen((v) => !v)} aria-label="Toggle menu" aria-expanded={menuOpen}>
+            {menuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+          </Button>
+        </div>
       </div>
 
-      {/* ── Active label matchers row — locked first, then editable ── */}
+      {/* ── Filter + chips row — md to xl (single row, max 2 header rows total) ── */}
+      <div className="hidden md:flex xl:hidden items-center gap-1.5 px-3 pb-1.5 flex-wrap">
+        <div className="flex items-center gap-1 shrink-0">
+          {filterInputsContent}
+        </div>
+        {activeChipsContent}
+      </div>
+
+      {/* ── Chips row — xl+ only (filter already inline in row 1) ── */}
       {filters.labelMatchers.length > 0 && (
-        <div className="flex items-center gap-2 px-4 pb-2 flex-wrap">
-          {filters.labelMatchers.map((m) =>
-            m.locked ? (
-              <LockedMatcherChip
-                key={m.id}
-                name={m.name}
-                operator={m.operator}
-                value={m.value}
-              />
-            ) : (
-              <MatcherChip
-                key={m.id}
-                id={m.id}
-                name={m.name}
-                operator={m.operator}
-                value={m.value}
-                valueOptions={Array.from(labelValueMap.get(m.name) ?? []).sort()}
-                onUpdate={(partial) => updateLabelMatcher(m.id, partial)}
-                onRemove={() => removeLabelMatcher(m.id)}
-              />
-            ),
+        <div className="hidden xl:flex items-center gap-1.5 px-3 pb-1.5 flex-wrap">
+          {activeChipsContent}
+        </div>
+      )}
+
+      {/* ── Mobile hamburger panel ── */}
+      {menuOpen && (
+        <div className="md:hidden border-t border-border px-3 py-3 space-y-3">
+          {/* Filter inputs */}
+          <div className="flex items-center gap-1 flex-wrap">
+            {filterInputsContent}
+          </div>
+
+          {/* Active matcher chips */}
+          {filters.labelMatchers.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {activeChipsContent}
+            </div>
+          )}
+
+          {/* Controls row */}
+          <div className="flex items-center gap-1 flex-wrap">
+            {(!filters.state || filters.state === 'active') && (
+              <ViewToggle value={viewMode} onChange={setViewMode} />
+            )}
+            <div className="flex-1" />
+            {/* Cluster status */}
+            <div className="flex items-center gap-1.5 px-2 text-xs cursor-default select-none" title={`Instances ${healthyCount}/${clusters.length}`}>
+              <div className={`h-2 w-2 rounded-full ${healthyCount === clusters.length ? 'bg-green-500' : 'bg-red-500'}`} />
+              <span className="text-muted-foreground tabular-nums">{healthyCount}/{clusters.length}</span>
+            </div>
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setPollingPaused(!pollingPaused)} title={pollingPaused ? 'Resume polling' : 'Pause polling'}>
+              {pollingPaused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
+            </Button>
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleRefresh} title="Refresh now" disabled={refreshing}>
+              <RefreshCw className={`h-4 w-4 ${isSpinning ? 'animate-spin' : ''}`} />
+            </Button>
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={toggleSearch} title="Search" aria-pressed={searchOpen}>
+              {searchOpen ? <X className="h-4 w-4" /> : <Search className="h-4 w-4" />}
+            </Button>
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => updateSettings({ theme: theme === 'dark' ? 'light' : 'dark' })} title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
+              {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            </Button>
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setSettingsOpen(true); setMenuOpen(false) }} title="Settings">
+              <Settings className="h-4 w-4" />
+            </Button>
+            <Button size="sm" onClick={() => { setSilenceFormOpen(true); setMenuOpen(false) }} className="h-7 text-xs">
+              <Plus className="mr-1 h-3.5 w-3.5" />Create silence
+            </Button>
+            {isAuthenticated && user ? (
+              <button className="flex items-center justify-center h-8 w-8 rounded cursor-pointer text-foreground hover:bg-accent/60" onClick={() => setUserMenuOpen((v) => !v)} aria-label="User menu" title={user.username}>
+                <User className="h-4 w-4" />
+              </button>
+            ) : providerInfo !== null && providerInfo.mode !== 'none' ? (
+              <button className="flex items-center justify-center h-8 w-8 rounded cursor-pointer text-muted-foreground hover:text-foreground hover:bg-accent/60" onClick={() => { setLoginModalOpen(true); setMenuOpen(false) }} title="Login" aria-label="Login">
+                <CircleUser className="h-4 w-4" />
+              </button>
+            ) : null}
+          </div>
+
+          {/* User menu expanded (mobile) */}
+          {isAuthenticated && user && userMenuOpen && (
+            <div className="border border-border rounded-md bg-card">
+              <div className="px-3 py-2 text-xs font-medium text-foreground border-b border-border">{user.username}</div>
+              {user.role === 'admin' && (
+                <button className="w-full flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-accent/60 cursor-pointer border-b border-border" onClick={() => { setUserMenuOpen(false); setAdminOpen(true); setMenuOpen(false) }}>
+                  <Shield className="h-3.5 w-3.5" />Admin
+                </button>
+              )}
+              <button className="w-full flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-accent/60 cursor-pointer" onClick={() => { setUserMenuOpen(false); logout(); setMenuOpen(false) }}>
+                <LogOut className="h-3.5 w-3.5" />Logout
+              </button>
+            </div>
           )}
         </div>
       )}
 
       {/* ── Search bar ── */}
       {searchOpen && (
-        <div className="px-4 py-2">
+        <div className="px-3 pb-2">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
             <Input
@@ -646,11 +616,7 @@ export function Header() {
               aria-label="Search alerts"
             />
             {filters.search && (
-              <button
-                onClick={() => setFilter('search', '')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 cursor-pointer text-muted-foreground hover:text-foreground"
-                aria-label="Clear search"
-              >
+              <button onClick={() => setFilter('search', '')} className="absolute right-3 top-1/2 -translate-y-1/2 cursor-pointer text-muted-foreground hover:text-foreground" aria-label="Clear search">
                 <X className="h-4 w-4" />
               </button>
             )}
