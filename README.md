@@ -6,8 +6,7 @@
 [![CI](https://github.com/kj187/jarvis/actions/workflows/ci.yml/badge.svg)](https://github.com/kj187/jarvis/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/kj187/jarvis)](https://github.com/kj187/jarvis/releases/latest)
 [![Go Version](https://img.shields.io/badge/Go-1.25-00ADD8?logo=go)](backend/go.mod)
-[![Backend Coverage](https://codecov.io/gh/kj187/jarvis/branch/main/graph/badge.svg?flag=backend)](https://codecov.io/gh/kj187/jarvis)
-[![Frontend Coverage](https://codecov.io/gh/kj187/jarvis/branch/main/graph/badge.svg?flag=frontend)](https://codecov.io/gh/kj187/jarvis)
+[![Coverage](https://codecov.io/gh/kj187/jarvis/branch/main/graph/badge.svg)](https://codecov.io/gh/kj187/jarvis)
 
 **Jarvis** is an open source web frontend for Prometheus Alertmanager — interactive, realtime, and self-hosted.
 
