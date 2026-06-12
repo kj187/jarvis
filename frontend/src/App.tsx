@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { Header } from '@/components/layout/Header'
 import { AlertsPage } from '@/components/alerts/AlertsPage'
 import { SetupPage } from '@/components/auth/SetupPage'
+import { LoginPage } from '@/components/auth/LoginPage'
 import { NoAuthNotice } from '@/components/auth/NoAuthNotice'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { useUIStore, VIEW_MODE_KEY } from '@/store/uiStore'
@@ -14,6 +15,8 @@ export default function App() {
   const setViewMode = useUIStore((s) => s.setViewMode)
   const providerInfo = useAuthStore((s) => s.providerInfo)
   const setupRequired = useAuthStore((s) => s.setupRequired)
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
+  const isLoading = useAuthStore((s) => s.isLoading)
 
   // Sync settings default filters → locked matchers in uiStore whenever they change
   useEffect(() => {
@@ -30,6 +33,11 @@ export default function App() {
   // First-run setup page: backend redirects to /setup in prod; setupRequired flag handles dev mode.
   if (setupRequired || window.location.pathname === '/setup') {
     return <SetupPage />
+  }
+
+  // full_protect: block all content until authenticated.
+  if (!isLoading && providerInfo?.authMode === 'full_protect' && !isAuthenticated) {
+    return <LoginPage />
   }
 
   return (

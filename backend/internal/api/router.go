@@ -134,6 +134,11 @@ func NewRouter(
 	// ── API v1 ────────────────────────────────────────────────────────────────
 	apiV1 := e.Group("/api/v1")
 
+	// full_protect: all API routes require authentication, not just write operations.
+	if cfg.AuthMode == "full_protect" {
+		apiV1.Use(auth.RequireAuth(authProvider))
+	}
+
 	// Health
 	e.GET("/health", srv.getHealth)
 	apiV1.GET("/status", srv.getStatus)

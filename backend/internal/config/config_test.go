@@ -141,5 +141,61 @@ func TestResolveAlertmanagerLinkURL(t *testing.T) {
 	}
 }
 
+func TestLoad_AuthMode_NoneProvider(t *testing.T) {
+	t.Setenv("JARVIS_AUTH_PROVIDER", "none")
+	t.Setenv("JARVIS_AUTH_MODE", "full_protect") // ignored when provider=none
+	t.Setenv("JARVIS_CLUSTER_1_NAME", "")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	if cfg.AuthMode != "none" {
+		t.Errorf("AuthMode = %q, want none (forced when provider=none)", cfg.AuthMode)
+	}
+}
+
+func TestLoad_AuthMode_DefaultWriteProtect(t *testing.T) {
+	t.Setenv("JARVIS_AUTH_PROVIDER", "internal")
+	t.Setenv("JARVIS_AUTH_MODE", "")
+	t.Setenv("JARVIS_SECRET_KEY", "aaaabbbbccccddddeeeeffffgggghhhh")
+	t.Setenv("JARVIS_CLUSTER_1_NAME", "")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	if cfg.AuthMode != "write_protect" {
+		t.Errorf("AuthMode = %q, want write_protect (default when provider!=none)", cfg.AuthMode)
+	}
+}
+
+func TestLoad_AuthMode_FullProtect(t *testing.T) {
+	t.Setenv("JARVIS_AUTH_PROVIDER", "internal")
+	t.Setenv("JARVIS_AUTH_MODE", "full_protect")
+	t.Setenv("JARVIS_SECRET_KEY", "aaaabbbbccccddddeeeeffffgggghhhh")
+	t.Setenv("JARVIS_CLUSTER_1_NAME", "")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	if cfg.AuthMode != "full_protect" {
+		t.Errorf("AuthMode = %q, want full_protect", cfg.AuthMode)
+	}
+}
+
+func TestLoad_AuthMode_Invalid(t *testing.T) {
+	t.Setenv("JARVIS_AUTH_PROVIDER", "internal")
+	t.Setenv("JARVIS_AUTH_MODE", "read_only")
+	t.Setenv("JARVIS_SECRET_KEY", "aaaabbbbccccddddeeeeffffgggghhhh")
+	t.Setenv("JARVIS_CLUSTER_1_NAME", "")
+
+	_, err := Load()
+	if err == nil {
+		t.Error("expected error for invalid JARVIS_AUTH_MODE, got nil")
+	}
+}
+
 // Ensure test cleanup resets env properly via t.Setenv.
 var _ = os.Setenv

@@ -25,6 +25,7 @@ type Config struct {
 
 	// Auth
 	AuthProvider     string // "none" | "internal" | "oidc"
+	AuthMode         string // "none" | "write_protect" | "full_protect"
 	SecretKey        []byte // HMAC key for JWTs; required when AuthProvider != "none"
 	OIDCIssuer       string
 	OIDCClientID     string
@@ -78,6 +79,20 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("JARVIS_SECRET_KEY must be at least 32 bytes when JARVIS_AUTH_PROVIDER=%q", authProvider)
 	}
 
+	authMode := getEnv("JARVIS_AUTH_MODE", "")
+	if authProvider == "none" {
+		authMode = "none"
+	} else {
+		switch authMode {
+		case "write_protect", "full_protect":
+			// valid
+		case "":
+			authMode = "write_protect"
+		default:
+			return nil, fmt.Errorf("invalid JARVIS_AUTH_MODE=%q: must be write_protect or full_protect", authMode)
+		}
+	}
+
 	oidcScopes := []string{"openid", "profile", "email"}
 	if raw := getEnv("JARVIS_AUTH_OIDC_SCOPES", ""); raw != "" {
 		oidcScopes = strings.Split(raw, ",")
@@ -92,6 +107,7 @@ func Load() (*Config, error) {
 		AllowedOrigins:   allowedOrigins,
 		Clusters:         clusters,
 		AuthProvider:     authProvider,
+		AuthMode:         authMode,
 		SecretKey:        secretKey,
 		OIDCIssuer:       getEnv("JARVIS_AUTH_OIDC_ISSUER", ""),
 		OIDCClientID:     getEnv("JARVIS_AUTH_OIDC_CLIENT_ID", ""),

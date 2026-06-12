@@ -100,6 +100,12 @@ auth:
   # internal: local user accounts managed via the built-in admin panel
   # oidc:     delegate login to an external OIDC provider (Keycloak, Authentik, Dex, etc.)
   provider: none
+  # Protection level when provider is "internal" or "oidc" (ignored when provider=none).
+  # write_protect (default): unauthenticated users can view alerts read-only; write
+  #                           operations (claims, comments, silences) require login.
+  # full_protect:             all routes require login; unauthenticated users see only
+  #                           the login page.
+  mode: ""
   # Secret key for signing session tokens (min 32 random bytes in hex or base64).
   # Required when provider is "internal" or "oidc".
   # Use auth.existingSecret in production to avoid storing the key in values.

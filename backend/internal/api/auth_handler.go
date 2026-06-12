@@ -17,6 +17,7 @@ import (
 // GET /auth/info — returns provider mode, login URL, and whether first-run setup is needed.
 func (s *Server) getAuthInfo(c echo.Context) error {
 	info := s.authProvider.Info()
+	info.AuthMode = s.cfg.AuthMode
 	if info.Mode == "internal" {
 		n, err := s.userStore.Count(c.Request().Context())
 		if err == nil && n == 0 {
