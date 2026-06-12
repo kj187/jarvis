@@ -38,11 +38,8 @@ Most Alertmanager UIs are read-only dashboards. Jarvis is built for teams that n
 
 **No clone needed — runs entirely from the published image.**
 
-```bash
-mkdir jarvis && cd jarvis
-```
 
-Create a `compose.yml`:
+All you need is Podman or Docker — no installation, no build step. Create a `compose.yml` and adjust the Alertmanager URL to point to your instance:
 
 ```yaml
 services:
@@ -68,10 +65,14 @@ volumes:
   jarvis_data:
 ```
 
+> Works with both Podman and Docker — replace `podman` with `docker` in all commands if needed.
+
 ```bash
-docker compose up -d
-# http://localhost:8080
+podman compose up -d
 ```
+
+Now open http://localhost:8080
+
 
 **Kubernetes / Helm:**
 
