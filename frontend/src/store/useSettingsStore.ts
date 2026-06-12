@@ -10,6 +10,7 @@ export interface DefaultFilter {
 
 export interface UserSettings {
   // Display
+  theme: 'dark' | 'light'
   timeFormat: 'relative' | 'absolute'
   defaultViewMode: 'card' | 'list'
 
@@ -36,6 +37,7 @@ export type ResolvedPageSizeOption = (typeof RESOLVED_PAGE_SIZE_OPTIONS)[number]
 export const ALLOWED_SILENCE_DURATIONS = [15, 30, 60, 240, 480, 1440, 4320] as const
 
 export const DEFAULT_SETTINGS: UserSettings = {
+  theme: 'dark',
   timeFormat: 'relative',
   defaultViewMode: 'card',
   defaultFilters: [],
