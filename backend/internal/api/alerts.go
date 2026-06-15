@@ -19,18 +19,39 @@ func validateFingerprint(fp string) bool {
 
 // GET /api/v1/alerts
 func (s *Server) getAlerts(c echo.Context) error {
-	alerts := s.alertStore.Get()
-
-	// Optional filters.
 	clusterFilter := c.QueryParam("cluster")
 	severityFilter := c.QueryParam("severity")
 	stateFilter := c.QueryParam("state")
 
+	// Resolved alerts are served from the persistent DB so they survive beyond
+	// the in-memory resolved buffer's 20-minute window.
+	if stateFilter == "resolved" {
+		dbAlerts, err := s.store.GetAllResolved()
+		if err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, "failed to get resolved alerts")
+		}
+		if clusterFilter == "" && severityFilter == "" {
+			return c.JSON(http.StatusOK, dbAlerts)
+		}
+		var filtered []models.EnrichedAlert
+		for _, a := range dbAlerts {
+			if clusterFilter != "" && a.ClusterName != clusterFilter {
+				continue
+			}
+			if severityFilter != "" && a.Labels["severity"] != severityFilter {
+				continue
+			}
+			filtered = append(filtered, a)
+		}
+		return c.JSON(http.StatusOK, filtered)
+	}
+
+	// Active / suppressed alerts come from the in-memory store.
+	alerts := s.alertStore.Get()
 	if clusterFilter == "" && severityFilter == "" && stateFilter == "" {
 		return c.JSON(http.StatusOK, alerts)
 	}
-
-	filtered := alerts[:0]
+	var filtered []models.EnrichedAlert
 	for _, a := range alerts {
 		if clusterFilter != "" && a.ClusterName != clusterFilter {
 			continue
