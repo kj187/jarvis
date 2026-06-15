@@ -593,28 +593,9 @@ func (s *Store) getLastEvent(fingerprint string) (*models.AlertEvent, error) {
 	return &e, nil
 }
 
-// GetRecentResolved returns one EnrichedAlert per fingerprint for all alerts
-// that were resolved within the given window (using recorded_at of the resolved event).
-// Used to seed the in-memory AlertStore on startup so resolved alerts survive restarts.
-func (s *Store) GetRecentResolved(window time.Duration) ([]models.EnrichedAlert, error) {
-	since := time.Now().UTC().Add(-window)
-	rows, err := s.query(context.Background(), `
-		SELECT e.fingerprint, e.cluster_name, e.alertmanager_url, e.starts_at, e.recorded_at, e.annotations, f.labels
-		FROM alert_events e
-		JOIN alert_fingerprints f ON f.fingerprint = e.fingerprint
-		WHERE e.status = 'resolved'
-		  AND e.id IN (
-		    SELECT MAX(id) FROM alert_events
-		    WHERE status = 'resolved' AND recorded_at >= ?
-		    GROUP BY fingerprint
-		  )
-		ORDER BY e.recorded_at DESC
-	`, since)
-	if err != nil {
-		return nil, fmt.Errorf("get recent resolved: %w", err)
-	}
-	defer func() { _ = rows.Close() }()
-
+// scanResolvedAlerts reads all rows from a resolved-alert query into EnrichedAlert values.
+// Expected columns: fingerprint, cluster_name, alertmanager_url, starts_at, recorded_at, annotations, labels.
+func scanResolvedAlerts(rows *sql.Rows) ([]models.EnrichedAlert, error) {
 	var alerts []models.EnrichedAlert
 	for rows.Next() {
 		var fp, clusterName, amURL, annotationsJSON, labelsJSON string
@@ -648,4 +629,52 @@ func (s *Store) GetRecentResolved(window time.Duration) ([]models.EnrichedAlert,
 		})
 	}
 	return alerts, rows.Err()
+}
+
+// GetAllResolved returns one EnrichedAlert per fingerprint for every alert whose
+// most recent event is 'resolved'. Alerts that have since re-fired are excluded
+// because their latest event will be 'firing' or 'suppressed'.
+func (s *Store) GetAllResolved() ([]models.EnrichedAlert, error) {
+	rows, err := s.query(context.Background(), `
+		WITH latest AS (
+			SELECT fingerprint, MAX(id) AS max_id
+			FROM alert_events
+			GROUP BY fingerprint
+		)
+		SELECT e.fingerprint, e.cluster_name, e.alertmanager_url, e.starts_at, e.recorded_at, e.annotations, f.labels
+		FROM alert_events e
+		JOIN latest ON e.id = latest.max_id
+		JOIN alert_fingerprints f ON f.fingerprint = e.fingerprint
+		WHERE e.status = 'resolved'
+		ORDER BY e.recorded_at DESC
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("get all resolved: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	return scanResolvedAlerts(rows)
+}
+
+// GetRecentResolved returns one EnrichedAlert per fingerprint for all alerts
+// that were resolved within the given window (using recorded_at of the resolved event).
+// Used to seed the in-memory AlertStore on startup so resolved alerts survive restarts.
+func (s *Store) GetRecentResolved(window time.Duration) ([]models.EnrichedAlert, error) {
+	since := time.Now().UTC().Add(-window)
+	rows, err := s.query(context.Background(), `
+		SELECT e.fingerprint, e.cluster_name, e.alertmanager_url, e.starts_at, e.recorded_at, e.annotations, f.labels
+		FROM alert_events e
+		JOIN alert_fingerprints f ON f.fingerprint = e.fingerprint
+		WHERE e.status = 'resolved'
+		  AND e.id IN (
+		    SELECT MAX(id) FROM alert_events
+		    WHERE status = 'resolved' AND recorded_at >= ?
+		    GROUP BY fingerprint
+		  )
+		ORDER BY e.recorded_at DESC
+	`, since)
+	if err != nil {
+		return nil, fmt.Errorf("get recent resolved: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	return scanResolvedAlerts(rows)
 }
