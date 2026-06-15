@@ -147,13 +147,26 @@ export function AlertListRow({
       )}
       <td className="px-4 py-2 text-sm text-muted-foreground">
         <div className="flex flex-col gap-0.5">
-          <span title={new Date(alert.startsAt).toLocaleString('en-US')}>
-            {formatTime(alert.startsAt)}
-          </span>
-          {isResolved && stats?.lastResolvedAt && (
-            <span className="text-xs text-green-600/70" title={new Date(stats.lastResolvedAt).toLocaleString('en-US')}>
-              ✓ {formatTime(stats.lastResolvedAt)}
-            </span>
+          {isResolved ? (
+            <>
+              <span title={new Date(alert.endsAt).toLocaleString('en-US')}>
+                {formatTime(alert.endsAt)}
+              </span>
+              <span className="text-xs text-muted-foreground/60" title={new Date(alert.startsAt).toLocaleString('en-US')}>
+                ↑ {formatTime(alert.startsAt)}
+              </span>
+            </>
+          ) : (
+            <>
+              <span title={new Date(alert.startsAt).toLocaleString('en-US')}>
+                {formatTime(alert.startsAt)}
+              </span>
+              {stats?.lastResolvedAt && (
+                <span className="text-xs text-green-600/70" title={new Date(stats.lastResolvedAt).toLocaleString('en-US')}>
+                  ✓ {formatTime(stats.lastResolvedAt)}
+                </span>
+              )}
+            </>
           )}
         </div>
       </td>

@@ -7,9 +7,6 @@ import {
 } from '@/api/client'
 import { useUIStore } from '@/store/uiStore'
 import { useSettingsStore } from '@/store/useSettingsStore'
-import type { EnrichedAlert } from '@/types'
-
-const RESOLVED_MAX_AGE_MS = 90 * 24 * 60 * 60 * 1000
 
 export function useAlerts(params?: { cluster?: string; severity?: string; state?: string }) {
   const pollingPaused = useUIStore((s) => s.pollingPaused)
@@ -19,13 +16,6 @@ export function useAlerts(params?: { cluster?: string; severity?: string; state?
     queryKey: ['alerts', params],
     queryFn: () => fetchAlerts(params),
     refetchInterval: pollingPaused ? false : pollIntervalSeconds * 1000,
-    select: (data: EnrichedAlert[]) => {
-      const cutoff = Date.now() - RESOLVED_MAX_AGE_MS
-      return data.filter((alert) => {
-        if (alert.status?.state !== 'resolved') return true
-        return new Date(alert.endsAt).getTime() > cutoff
-      })
-    },
   })
 }
 

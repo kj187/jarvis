@@ -64,7 +64,15 @@ export function AlertsPage() {
   useWebSocket()
   useURLState()
 
-  const { data: alerts = [], isLoading } = useAlerts()
+  const isResolvedMode = useUIStore((s) => s.filters.state === 'resolved')
+
+  // Active/suppressed alerts come from the in-memory store via WS-patched cache.
+  // Resolved alerts are queried directly from the DB so they persist indefinitely.
+  const { data: liveAlerts = [], isLoading: liveLoading } = useAlerts()
+  const { data: resolvedAlerts = [], isLoading: resolvedLoading } = useAlerts({ state: 'resolved' })
+  const alerts = isResolvedMode ? resolvedAlerts : liveAlerts
+  const isLoading = isResolvedMode ? resolvedLoading : liveLoading
+
   const { data: silences = [] } = useSilences()
 
   const {
@@ -85,8 +93,8 @@ export function AlertsPage() {
       if (!haystack.toLowerCase().includes(needle)) return false
     }
 
-    // State filter
-    if (filters.state) {
+    // State filter — skip for resolved mode (DB already returns only resolved)
+    if (filters.state && !isResolvedMode) {
       const effectiveState = getEffectiveAlertState(alert, silences)
       if (effectiveState !== filters.state) return false
     }
@@ -105,12 +113,22 @@ export function AlertsPage() {
 
   const byState = useMemo(() => {
     const counts = { active: 0, suppressed: 0, resolved: 0 }
-    alerts.forEach((alert) => {
+    liveAlerts.forEach((alert) => {
+      // Apply search + label matchers so tab counts match the visible filtered list.
+      // State filter is intentionally excluded so all tabs show their own counts.
+      if (filters.search) {
+        const needle = filters.search.toLowerCase()
+        const haystack = (alert.labels['alertname'] ?? '') + JSON.stringify(alert.labels)
+        if (!haystack.toLowerCase().includes(needle)) return
+      }
+      if (!matchesLabelMatchers(alert, filters.labelMatchers)) return
       const s = getEffectiveAlertState(alert, silences)
       if (s in counts) counts[s as keyof typeof counts]++
     })
+    // Resolved count comes from the DB-backed query, not the short-lived memory buffer.
+    counts.resolved = resolvedAlerts.length
     return counts
-  }, [alerts, silences])
+  }, [liveAlerts, resolvedAlerts.length, silences, filters.search, filters.labelMatchers])
 
   // Keep header alert counts in sync — use primitive count values as deps
   // to avoid re-triggering when byState object reference changes on re-render
