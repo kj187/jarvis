@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-06-15
+
+### Added
+- Resolved alerts are now permanently visible in the Resolved tab — served from the database instead of the 20-minute in-memory buffer. Alerts that re-fire are automatically excluded.
+- Navigation state counts (Active / Suppressed / Resolved) now respect active search and label-matcher filters so the badge matches the visible list.
+
+### Fixed
+- Resolved tab showed 0 Active / Suppressed counts while on the Resolved tab.
+- Active count reflected all alerts instead of only those matching the current search and label-matcher filters.
+- Resolved list time column now shows resolve time as primary and fire time as secondary, consistent with the sort order.
+
 ## [1.0.0] - 2026-06-12
 
 ### Added
