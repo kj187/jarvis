@@ -17,6 +17,7 @@ import { useSettingsStore } from '@/store/useSettingsStore'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import type { EnrichedAlert, LabelMatcher, Silence, SilenceMatcher } from '@/types'
+import { renderTextWithLinks } from '@/lib/linkUtils'
 
 const USERNAME_KEY = 'jarvis-username'
 
@@ -254,25 +255,6 @@ export function AlertDetailPanel({
   const annotationEntries = Object.entries(alert.annotations).filter(
     ([k]) => k !== 'summary' && k !== 'description' && k !== 'dashboard' && k !== 'link',
   )
-
-  function renderTextWithLinks(text: string): React.ReactNode {
-    const urlPattern = /https?:\/\/[^\s)>\]"']+/g
-    const parts: React.ReactNode[] = []
-    let lastIndex = 0
-    let match: RegExpExecArray | null
-    while ((match = urlPattern.exec(text)) !== null) {
-      if (match.index > lastIndex) parts.push(text.slice(lastIndex, match.index))
-      const url = match[0]
-      parts.push(
-        <a key={match.index} href={url} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 text-blue-400 hover:text-blue-300">
-          {url}
-        </a>
-      )
-      lastIndex = match.index + url.length
-    }
-    if (lastIndex < text.length) parts.push(text.slice(lastIndex))
-    return parts.length === 0 ? text : <>{parts}</>
-  }
 
   return (
     <>

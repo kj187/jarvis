@@ -86,13 +86,13 @@ describe('AlertListView – table structure', () => {
     expect(screen.getByText('Alert Name')).toBeInTheDocument()
   })
 
-  it('renders Time column header', () => {
+  it('renders Actions column header', () => {
     const alerts = [makeAlert()]
     render(
       <AlertListView alerts={alerts} silences={silences} onSelectAlert={noop} />,
       { wrapper: makeWrapper() },
     )
-    expect(screen.getByText('Time')).toBeInTheDocument()
+    expect(screen.getByText('Actions')).toBeInTheDocument()
   })
 
   it('renders State column when no stateFilter provided', () => {
@@ -225,16 +225,20 @@ describe('AlertListView – sort toggle', () => {
     expect(screen.getByText('AAlert')).toBeInTheDocument()
   })
 
-  it('switches sort key when Time header is clicked', () => {
-    const alerts = [makeAlert({ labels: { alertname: 'DiskFull', severity: 'critical' } })]
+  it('toggles sort direction when Alert Name header clicked multiple times', () => {
+    const alerts = [
+      makeAlert({ labels: { alertname: 'Zebra', severity: 'critical' } }, 'fp1'),
+      makeAlert({ labels: { alertname: 'Alpha', severity: 'critical' } }, 'fp2'),
+    ]
     render(
       <AlertListView alerts={alerts} silences={silences} onSelectAlert={noop} />,
       { wrapper: makeWrapper() },
     )
-    const timeHeader = screen.getByText('Time').closest('th')!
-    fireEvent.click(timeHeader)
-    // Should not crash; groups still render
-    expect(screen.getByText('DiskFull')).toBeInTheDocument()
+    const nameHeader = screen.getAllByText('Alert Name')[0].closest('th')!
+    fireEvent.click(nameHeader)
+    fireEvent.click(nameHeader)
+    expect(screen.getByText('Zebra')).toBeInTheDocument()
+    expect(screen.getByText('Alpha')).toBeInTheDocument()
   })
 })
 

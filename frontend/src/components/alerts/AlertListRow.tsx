@@ -1,10 +1,11 @@
-import { Bell, BellOff, RefreshCw, User, X } from 'lucide-react'
+import { Bell, BellMinus, BellOff, RefreshCw, User, X } from 'lucide-react'
 import { useState, useRef, useEffect } from 'react'
 import { AlertBadge, StatusBadge } from './AlertBadge'
 import { HIDDEN_LABEL_KEYS, LabelChip } from './LabelChip'
 import { useAlertStats } from '@/hooks/useAlerts'
 import { useSetClaim, useReleaseClaim } from '@/hooks/useAlertClaim'
 import { getSilenceState, formatSilenceDuration } from '@/lib/alertUtils'
+import { renderTextWithLinks } from '@/lib/linkUtils'
 import { useFormatTime } from '@/hooks/useFormatTime'
 import type { EnrichedAlert, Silence } from '@/types'
 import { cn } from '@/lib/utils'
@@ -123,9 +124,53 @@ export function AlertListRow({
     >
       <td className={cn('px-4 py-2 border-l-2', indented && 'pl-10', alert.activeClaim ? 'border-blue-600/70' : 'border-transparent')}>
         <div className="flex flex-col gap-0.5">
-          <span className="font-medium">{alertname}</span>
+          <span className="font-medium">
+            {alertname}
+            <span className="font-normal text-muted-foreground">, </span>
+            <span
+              className="text-xs font-normal text-muted-foreground tabular-nums"
+              title={new Date(isResolved ? alert.endsAt : alert.startsAt).toLocaleString('en-US')}
+            >
+              {isResolved ? formatTime(alert.endsAt) : formatTime(alert.startsAt)}
+            </span>
+            {stats && stats.occurrenceCount > 1 && (
+              <>
+                <span className="font-normal text-muted-foreground">, </span>
+                <span className="text-xs font-normal text-muted-foreground" title={`${stats.occurrenceCount}× occurred`}>
+                  ↻{stats.occurrenceCount}×
+                </span>
+              </>
+            )}
+            {silenceType === 'active' && silence && remaining !== undefined && (
+              <>
+                <span className="font-normal text-muted-foreground">, </span>
+                <span className="text-xs font-normal text-slate-400" title={`Silenced, ends in ${formatSilenceDuration(remaining)}`}>
+                  <BellOff className="inline h-3 w-3 align-text-bottom" />
+                  {' '}{formatSilenceDuration(remaining)}
+                </span>
+              </>
+            )}
+            {silenceType === 'expiring' && silence && remaining !== undefined && (
+              <>
+                <span className="font-normal text-muted-foreground">, </span>
+                <span className="text-xs font-normal text-yellow-400" title={`Silence expires in ${formatSilenceDuration(remaining)}`}>
+                  <BellOff className="inline h-3 w-3 align-text-bottom" />
+                  {' '}{formatSilenceDuration(remaining)}
+                </span>
+              </>
+            )}
+            {silenceType === 'pending' && (
+              <>
+                <span className="font-normal text-muted-foreground">, </span>
+                <span className="text-xs font-normal text-slate-400">
+                  <BellOff className="inline h-3 w-3 align-text-bottom" />
+                  {' '}pending
+                </span>
+              </>
+            )}
+          </span>
           {alert.annotations['description'] && (
-            <span className="text-xs text-muted-foreground">{alert.annotations['description']}</span>
+            <span className="text-xs text-muted-foreground">{renderTextWithLinks(alert.annotations['description'])}</span>
           )}
           <div className="flex flex-wrap gap-1 pt-0.5">
             <LabelChip labelKey="@cluster" value={alert.clusterName} />
@@ -145,86 +190,29 @@ export function AlertListRow({
           <AlertBadge severity={alert.labels['severity'] ?? 'none'} />
         </td>
       )}
-      <td className="px-4 py-2 text-sm text-muted-foreground">
-        <div className="flex flex-col gap-0.5">
-          {isResolved ? (
-            <>
-              <span title={new Date(alert.endsAt).toLocaleString('en-US')}>
-                {formatTime(alert.endsAt)}
-              </span>
-              <span className="text-xs text-muted-foreground/60" title={new Date(alert.startsAt).toLocaleString('en-US')}>
-                ↑ {formatTime(alert.startsAt)}
-              </span>
-            </>
-          ) : (
-            <>
-              <span title={new Date(alert.startsAt).toLocaleString('en-US')}>
-                {formatTime(alert.startsAt)}
-              </span>
-              {stats?.lastResolvedAt && (
-                <span className="text-xs text-green-600/70" title={new Date(stats.lastResolvedAt).toLocaleString('en-US')}>
-                  ✓ {formatTime(stats.lastResolvedAt)}
-                </span>
-              )}
-            </>
-          )}
-        </div>
-      </td>
       {showActionsColumn && <td className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
-        <div className="flex flex-wrap items-center gap-1.5">
-          {stats && stats.occurrenceCount > 1 && (
-            <span
-              className="text-xs text-muted-foreground"
-              title={`${stats.occurrenceCount}× occurred`}
+        <div className="flex items-center gap-1">
+          {silenceType === 'active' && silence && (
+            <button
+              type="button"
+              onClick={() => onExpireSilence?.(silence.id, silence.clusterName)}
+              title="Expire silence"
+              className="cursor-pointer rounded border border-slate-700 p-1 text-slate-400 transition-colors hover:border-slate-500 hover:text-slate-200"
             >
-              ↻{stats.occurrenceCount}×
-            </span>
+              <BellMinus className="h-3.5 w-3.5" />
+            </button>
           )}
-          {silenceType === 'active' && silence && remaining !== undefined && (
-            <>
-              <span
-                className="flex items-center gap-1 text-xs text-slate-400"
-                title={`Silence active, ends in ${formatSilenceDuration(remaining)}`}
-              >
-                <BellOff className="h-3 w-3" />
-                {formatSilenceDuration(remaining)}
-              </span>
-              <button
-                type="button"
-                onClick={() => onExpireSilence?.(silence.id, silence.clusterName)}
-                title="Expire silence"
-                className="cursor-pointer rounded p-0.5 text-slate-400 hover:bg-slate-700 hover:text-slate-200"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </>
+          {silenceType === 'expiring' && silence && (
+            <button
+              type="button"
+              onClick={() => onCreateSilence?.([alert], silence, true)}
+              title="Extend silence"
+              className="cursor-pointer rounded border border-yellow-700/60 p-1 text-yellow-400 transition-colors hover:border-yellow-500"
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+            </button>
           )}
-          {silenceType === 'expiring' && silence && remaining !== undefined && (
-            <>
-              <span
-                className="flex items-center gap-1 text-xs text-yellow-400"
-                title={`Silence expires in ${formatSilenceDuration(remaining)}`}
-              >
-                <BellOff className="h-3 w-3" />
-                {formatSilenceDuration(remaining)}
-              </span>
-              <button
-                type="button"
-                onClick={() => onCreateSilence?.([alert], silence, true)}
-                title="Extend silence"
-                className="cursor-pointer rounded p-0.5 text-yellow-400 hover:bg-yellow-900/40"
-              >
-                <RefreshCw className="h-3 w-3" />
-              </button>
-            </>
-          )}
-          {silenceType === 'pending' && (
-            <span className="flex items-center gap-1 text-xs text-slate-400">
-              <BellOff className="h-3 w-3" />
-              pending
-            </span>
-          )}
-          {silenceType === null && (
+          {(silenceType === null || silenceType === undefined) && (
             <button
               type="button"
               onClick={() => onCreateSilence?.([alert])}

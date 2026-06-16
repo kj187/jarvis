@@ -1,7 +1,5 @@
 import { Fragment, useState, useEffect } from 'react'
-import { ArrowUpDown, Bell, BellOff, ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, RefreshCw, X } from 'lucide-react'
-import { formatDistanceToNow } from 'date-fns'
-import { enUS } from 'date-fns/locale'
+import { ArrowUpDown, Bell, BellMinus, BellOff, ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, RefreshCw } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { AlertListRow } from './AlertListRow'
 import { StatusBadge } from './AlertBadge'
@@ -10,6 +8,7 @@ import { Sheet } from '@/components/ui/sheet'
 import { SilenceForm } from '@/components/silences/SilenceForm'
 import { fetchClusters, deleteSilence } from '@/api/client'
 import { formatSilenceDuration, severityOrder } from '@/lib/alertUtils'
+import { renderTextWithLinks } from '@/lib/linkUtils'
 import { useSettingsStore, RESOLVED_PAGE_SIZE_OPTIONS } from '@/store/useSettingsStore'
 import type { EnrichedAlert, Silence } from '@/types'
 import { cn } from '@/lib/utils'
@@ -30,7 +29,7 @@ interface SilenceSheetState {
   isRecreate?: boolean
 }
 
-type SortKey = 'alertname' | 'time'
+type SortKey = 'alertname'
 
 interface AlertGroupData {
   alertname: string
@@ -50,27 +49,37 @@ function buildPageWindow(current: number, total: number): (number | '…')[] {
   return [1, '…', current - 1, current, current + 1, '…', total]
 }
 
-const SEVERITY_ORDER = ['critical', 'warning', 'info', 'none']
+const SEVERITY_ORDER = ['critical', 'error', 'warning', 'info', 'none']
 
-const severitySectionConfig: Record<string, { label: string; rowClass: string; borderClass: string }> = {
+const severitySectionConfig: Record<string, { label: string; darkRowClass: string; lightRowClass: string; borderClass: string }> = {
   critical: {
     label: 'Critical',
-    rowClass: 'text-red-400 bg-red-950/30',
+    darkRowClass: 'text-red-400 bg-red-950/30',
+    lightRowClass: 'text-red-700 bg-red-100/80',
     borderClass: 'border-l-red-600',
+  },
+  error: {
+    label: 'Error',
+    darkRowClass: 'text-orange-400 bg-orange-950/30',
+    lightRowClass: 'text-orange-700 bg-orange-100/80',
+    borderClass: 'border-l-orange-500',
   },
   warning: {
     label: 'Warning',
-    rowClass: 'text-yellow-300 bg-yellow-950/30',
+    darkRowClass: 'text-yellow-300 bg-yellow-950/30',
+    lightRowClass: 'text-yellow-700 bg-yellow-100/80',
     borderClass: 'border-l-yellow-500',
   },
   info: {
     label: 'Info',
-    rowClass: 'text-blue-400 bg-blue-950/30',
+    darkRowClass: 'text-blue-400 bg-blue-950/30',
+    lightRowClass: 'text-blue-700 bg-blue-100/80',
     borderClass: 'border-l-blue-600',
   },
   none: {
     label: 'None',
-    rowClass: 'text-slate-400 bg-slate-900/30',
+    darkRowClass: 'text-slate-400 bg-slate-900/30',
+    lightRowClass: 'text-slate-600 bg-slate-200/80',
     borderClass: 'border-l-slate-600',
   },
 }
@@ -164,6 +173,7 @@ export function AlertListView({ alerts, silences, onSelectAlert, selectedFingerp
   const [silenceSheet, setSilenceSheet] = useState<SilenceSheetState>({ open: false, alerts: [] })
   const resolvedPageSize = useSettingsStore((s) => s.resolvedPageSize)
   const updateSettings = useSettingsStore((s) => s.update)
+  const theme = useSettingsStore((s) => s.theme)
   const [resolvedPage, setResolvedPage] = useState(1)
 
   useEffect(() => {
@@ -206,15 +216,7 @@ export function AlertListView({ alerts, silences, onSelectAlert, selectedFingerp
 
   function sortGroups(groups: AlertGroupData[]): AlertGroupData[] {
     return [...groups].sort((a, b) => {
-      let cmp = 0
-      switch (sortKey) {
-        case 'alertname':
-          cmp = a.alertname.localeCompare(b.alertname)
-          break
-        case 'time':
-          cmp = a.earliestStart.getTime() - b.earliestStart.getTime()
-          break
-      }
+      const cmp = a.alertname.localeCompare(b.alertname)
       return sortAsc ? cmp : -cmp
     })
   }
@@ -351,9 +353,6 @@ export function AlertListView({ alerts, silences, onSelectAlert, selectedFingerp
                 <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   Severity
                 </th>
-                <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Resolved At
-                </th>
               </tr>
             </thead>
             <tbody>
@@ -435,7 +434,6 @@ export function AlertListView({ alerts, silences, onSelectAlert, selectedFingerp
                 State
               </th>
             )}
-            <SortHeader label="Time" sortKeyVal="time" />
             <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Actions
             </th>
@@ -449,21 +447,22 @@ export function AlertListView({ alerts, silences, onSelectAlert, selectedFingerp
             const groups = sortGroups(groupsBySeverity.get(severity)!)
             const cfg = severitySectionConfig[severity] ?? {
               label: severity,
-              rowClass: 'text-slate-400 bg-slate-900/30',
+              darkRowClass: 'text-slate-400 bg-slate-900/30',
+              lightRowClass: 'text-slate-600 bg-slate-200/80',
               borderClass: 'border-l-slate-600',
             }
             const totalAlerts = groups.reduce((sum, g) => sum + g.alerts.length, 0)
             return (
               <Fragment key={severity}>
                 <tr aria-hidden="true">
-                  <td colSpan={showStateColumn ? 5 : 4} className="h-8 bg-background p-0" />
+                  <td colSpan={showStateColumn ? 4 : 3} className="h-8 bg-background p-0" />
                 </tr>
                 <tr>
                   <td
-                    colSpan={showStateColumn ? 5 : 4}
+                    colSpan={showStateColumn ? 4 : 3}
                     className={cn(
                       'border-l-4 px-4 py-2',
-                      cfg.rowClass,
+                      theme === 'light' ? cfg.lightRowClass : cfg.darkRowClass,
                       cfg.borderClass,
                     )}
                   >
@@ -477,6 +476,8 @@ export function AlertListView({ alerts, silences, onSelectAlert, selectedFingerp
                   const groupKey = `${severity}:${group.alertname}`
                   const expanded = expandedGroups.has(groupKey)
                   const stateLabel = group.states.length === 1 ? group.states[0] : 'mixed'
+                  const { active: activeSilences, expiring: expiringSilences, expired: expiredSilences } = getGroupSilenceInfo(group.alerts, group.alertname, silences)
+                  const hasSilence = activeSilences.length > 0 || expiringSilences.length > 0
                   return (
                     <Fragment key={groupKey}>
                       <tr
@@ -485,7 +486,7 @@ export function AlertListView({ alerts, silences, onSelectAlert, selectedFingerp
                         onClick={() => toggleGroup(groupKey)}
                         onKeyDown={(e) => e.key === 'Enter' && toggleGroup(groupKey)}
                         className={cn(
-                          'cursor-pointer transition-colors hover:bg-muted/50',
+                          'cursor-pointer transition-colors hover:bg-accent/70',
                           expanded ? 'bg-muted/40' : 'bg-muted/30',
                         )}
                       >
@@ -501,9 +502,27 @@ export function AlertListView({ alerts, silences, onSelectAlert, selectedFingerp
                               <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
                                 {group.alerts.length}
                               </span>
+                              {activeSilences.length > 0 && (
+                                <span className="inline-flex items-center gap-1 text-xs font-normal text-slate-400" title={`Group silenced, ends in ${formatSilenceDuration(activeSilences[0].remaining)}`}>
+                                  <BellOff className="h-3 w-3 shrink-0" />
+                                  {formatSilenceDuration(activeSilences[0].remaining)}
+                                </span>
+                              )}
+                              {activeSilences.length === 0 && expiringSilences.length > 0 && (
+                                <span className="inline-flex items-center gap-1 text-xs font-normal text-yellow-400" title={`Group silence expires in ${formatSilenceDuration(expiringSilences[0].remaining)}`}>
+                                  <BellOff className="h-3 w-3 shrink-0" />
+                                  {formatSilenceDuration(expiringSilences[0].remaining)}
+                                </span>
+                              )}
+                              {!hasSilence && expiredSilences.length > 0 && (
+                                <span className="inline-flex items-center gap-1 text-xs font-normal text-muted-foreground/40">
+                                  <BellOff className="h-3 w-3 shrink-0" />
+                                  expired
+                                </span>
+                              )}
                             </span>
                             {group.commonSummary && (
-                              <span className="pl-6 text-xs text-muted-foreground">{group.commonSummary}</span>
+                              <span className="pl-6 text-xs text-muted-foreground">{renderTextWithLinks(group.commonSummary)}</span>
                             )}
                             <div className="flex flex-wrap gap-1 pl-6">
                               <LabelChip labelKey="alertname" value={group.alertname} />
@@ -521,70 +540,55 @@ export function AlertListView({ alerts, silences, onSelectAlert, selectedFingerp
                             <StatusBadge state={stateLabel} />
                           </td>
                         )}
-                        <td className="px-4 py-2.5 text-sm text-muted-foreground">
-                          {formatDistanceToNow(group.earliestStart, { addSuffix: true, locale: enUS })}
-                        </td>
-                        <td className="px-4 py-2.5">
-                          {(() => {
-                            const { active, expiring, expired } = getGroupSilenceInfo(group.alerts, group.alertname, silences)
-                            const hasSilence = active.length > 0 || expiring.length > 0
-                            return (
-                              <div className="flex flex-col gap-1" onClick={(e) => e.stopPropagation()}>
-                                {active.map(({ silence, remaining }) => (
-                                  <div key={silence.id} className="flex items-center gap-1 text-xs text-slate-300">
-                                    <BellOff className="h-3 w-3 shrink-0" />
-                                    <span>{formatSilenceDuration(remaining)}</span>
-                                    <button
-                                      type="button"
-                                      onClick={() => expireMutation.mutate({ id: silence.id, cluster: silence.clusterName })}
-                                      title="Expire silence"
-                                      className="cursor-pointer rounded p-0.5 hover:bg-slate-700"
-                                    >
-                                      <X className="h-3 w-3" />
-                                    </button>
-                                  </div>
-                                ))}
-                                {expiring.map(({ silence, remaining }) => (
-                                  <div key={silence.id} className="flex items-center gap-1 text-xs text-yellow-400">
-                                    <BellOff className="h-3 w-3 shrink-0" />
-                                    <span>{formatSilenceDuration(remaining)}</span>
-                                    <button
-                                      type="button"
-                                      onClick={() => openSilenceForm(group.alerts, silence, true)}
-                                      title="Extend silence"
-                                      className="cursor-pointer rounded p-0.5 hover:bg-yellow-900/40"
-                                    >
-                                      <RefreshCw className="h-3 w-3" />
-                                    </button>
-                                  </div>
-                                ))}
-                                {!hasSilence && expired.length > 0 && (
-                                  <div className="flex items-center gap-1 text-xs text-muted-foreground/50">
-                                    <BellOff className="h-3 w-3 shrink-0" />
-                                    <span>expired</span>
-                                    <button
-                                      type="button"
-                                      onClick={() => openSilenceForm(group.alerts, expired[0], true)}
-                                      title="Recreate silence"
-                                      className="cursor-pointer rounded p-0.5 hover:text-foreground"
-                                    >
-                                      <RefreshCw className="h-3 w-3" />
-                                    </button>
-                                  </div>
-                                )}
-                                {!hasSilence && expired.length === 0 && (
-                                  <button
-                                    type="button"
-                                    onClick={() => openSilenceForm(group.alerts)}
-                                    title="Create silence"
-                                    className="cursor-pointer w-fit text-muted-foreground/50 transition-colors hover:text-foreground"
-                                  >
-                                    <Bell className="h-3.5 w-3.5" />
-                                  </button>
-                                )}
-                              </div>
-                            )
-                          })()}
+                        <td className="px-4 py-2.5" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex flex-col gap-1">
+                            {activeSilences.map(({ silence }) => (
+                              <button
+                                key={silence.id}
+                                type="button"
+                                onClick={() => expireMutation.mutate({ id: silence.id, cluster: silence.clusterName })}
+                                title="Expire group silence"
+                                className="cursor-pointer flex w-fit items-center gap-1 rounded border border-slate-700 px-1.5 py-0.5 text-xs text-slate-400 transition-colors hover:border-slate-500 hover:text-slate-200"
+                              >
+                                <BellMinus className="h-3 w-3" />
+                                <span>group</span>
+                              </button>
+                            ))}
+                            {expiringSilences.map(({ silence }) => (
+                              <button
+                                key={silence.id}
+                                type="button"
+                                onClick={() => openSilenceForm(group.alerts, silence, true)}
+                                title="Extend group silence"
+                                className="cursor-pointer flex w-fit items-center gap-1 rounded border border-yellow-700/60 px-1.5 py-0.5 text-xs text-yellow-400 transition-colors hover:border-yellow-500"
+                              >
+                                <RefreshCw className="h-3 w-3" />
+                                <span>group</span>
+                              </button>
+                            ))}
+                            {!hasSilence && expiredSilences.length > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => openSilenceForm(group.alerts, expiredSilences[0], true)}
+                                title="Recreate group silence"
+                                className="cursor-pointer flex w-fit items-center gap-1 rounded border border-border/40 px-1.5 py-0.5 text-xs text-muted-foreground/50 transition-colors hover:border-border hover:text-foreground"
+                              >
+                                <RefreshCw className="h-3 w-3" />
+                                <span>group</span>
+                              </button>
+                            )}
+                            {!hasSilence && expiredSilences.length === 0 && (
+                              <button
+                                type="button"
+                                onClick={() => openSilenceForm(group.alerts)}
+                                title="Silence entire group"
+                                className="cursor-pointer flex w-fit items-center gap-1 rounded border border-border/50 px-1.5 py-0.5 text-xs text-muted-foreground/60 transition-colors hover:border-border hover:text-foreground"
+                              >
+                                <Bell className="h-3 w-3" />
+                                <span>group</span>
+                              </button>
+                            )}
+                          </div>
                         </td>
                         <td className="px-4 py-2.5 text-sm text-muted-foreground">
                           {group.claimCount > 0 ? `${group.claimCount}×` : '—'}

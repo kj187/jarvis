@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Bell, BellOff, User } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getFilterableLabels, getSilenceState, formatSilenceDuration } from '@/lib/alertUtils'
+import { renderTextWithLinks } from '@/lib/linkUtils'
 import { AlertBadge } from './AlertBadge'
 import { HIDDEN_LABEL_KEYS, LabelChip } from './LabelChip'
 import { Sheet } from '@/components/ui/sheet'
@@ -103,6 +104,9 @@ function AlertEntry({
               ? `Expires ${formatTime(alert.endsAt)}`
               : formatTime(alert.startsAt)}
           </span>
+          {stats && stats.occurrenceCount > 1 && (
+            <span title={`${stats.occurrenceCount}× occurred`}>↻{stats.occurrenceCount}×</span>
+          )}
           {maintainer && <span>{maintainer}</span>}
         </div>
         {isResolved && stats?.lastResolvedAt && (
@@ -150,12 +154,12 @@ function AlertEntry({
       {/* Summary / Description */}
       {summary && (
         <p className="text-xs text-muted-foreground">
-          <span className="text-muted-foreground/50">summary:</span> {summary}
+          <span className="text-muted-foreground/50">summary:</span> {renderTextWithLinks(summary)}
         </p>
       )}
       {description && (
         <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground/60">
-          <span className="text-muted-foreground/40">description:</span> {description}
+          <span className="text-muted-foreground/40">description:</span> {renderTextWithLinks(description)}
         </p>
       )}
     </div>
