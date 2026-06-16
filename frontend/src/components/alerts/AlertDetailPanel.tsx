@@ -177,7 +177,14 @@ export function AlertDetailPanel({
 
   const alertname = alert.labels['alertname'] ?? 'Unknown'
   const severity = alert.labels['severity'] ?? 'none'
-  const runbookLabel = alert.labels['runbook']
+  const runbookRaw = alert.labels['runbook'] ?? alert.annotations['runbook']
+  const runbookUrl = runbookRaw
+    ? runbookRaw.startsWith('http://') || runbookRaw.startsWith('https://')
+      ? runbookRaw
+      : runbookBaseUrl
+        ? `${runbookBaseUrl}${runbookRaw}`
+        : null
+    : null
   const dashboardAnnotation = alert.annotations['dashboard']
 
   const FIFTEEN_MIN = 15 * 60 * 1000
@@ -243,9 +250,29 @@ export function AlertDetailPanel({
 
   const summaryText = alert.annotations['summary']
   const descriptionText = alert.annotations['description']
+  const linkAnnotation = alert.annotations['link']
   const annotationEntries = Object.entries(alert.annotations).filter(
-    ([k]) => k !== 'summary' && k !== 'description' && k !== 'dashboard',
+    ([k]) => k !== 'summary' && k !== 'description' && k !== 'dashboard' && k !== 'link',
   )
+
+  function renderTextWithLinks(text: string): React.ReactNode {
+    const urlPattern = /https?:\/\/[^\s)>\]"']+/g
+    const parts: React.ReactNode[] = []
+    let lastIndex = 0
+    let match: RegExpExecArray | null
+    while ((match = urlPattern.exec(text)) !== null) {
+      if (match.index > lastIndex) parts.push(text.slice(lastIndex, match.index))
+      const url = match[0]
+      parts.push(
+        <a key={match.index} href={url} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 text-blue-400 hover:text-blue-300">
+          {url}
+        </a>
+      )
+      lastIndex = match.index + url.length
+    }
+    if (lastIndex < text.length) parts.push(text.slice(lastIndex))
+    return parts.length === 0 ? text : <>{parts}</>
+  }
 
   return (
     <>
@@ -271,79 +298,97 @@ export function AlertDetailPanel({
             </div>
           )}
 
-          {/* Links + Claim */}
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            {activeClaim ? (
-              <div className={cn('flex items-center gap-1.5 rounded border px-2 py-1', theme === 'light' ? 'border-blue-300 bg-blue-50' : 'border-blue-800 bg-blue-950/40')}>
-                <User className={cn('h-3 w-3 shrink-0', theme === 'light' ? 'text-blue-600' : 'text-blue-400')} />
-                <span className={cn('text-xs font-medium', theme === 'light' ? 'text-blue-700' : 'text-blue-300')}>{activeClaim.claimedBy}</span>
-                <button
-                  className="ml-1 text-[10px] text-muted-foreground hover:text-foreground cursor-pointer"
-                  onClick={() => releaseMutation.mutate(user?.username ?? localStorage.getItem(USERNAME_KEY) ?? 'unknown')}
-                  disabled={releaseMutation.isPending}
+          {/* Links (left) + Actions (right) */}
+          <div className="mt-3 flex items-center justify-between gap-2">
+            {/* Link buttons — left */}
+            <div className="flex flex-wrap items-center gap-2">
+              {alert.alertmanagerUrl && (
+                <a
+                  href={(() => {
+                    const filter = `{alertname="${alert.labels.alertname}"}`
+                    const params = new URLSearchParams({
+                      silenced: 'false',
+                      inhibited: 'false',
+                      muted: 'false',
+                      active: 'true',
+                      filter,
+                    })
+                    return `${alert.alertmanagerUrl}/#/alerts?${params.toString()}`
+                  })()}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 rounded border border-border px-2 py-1 text-xs hover:bg-accent cursor-pointer"
                 >
-                  ✕
+                  <ExternalLink className="h-3 w-3" />
+                  Alertmanager
+                </a>
+              )}
+              {dashboardAnnotation && (
+                <a
+                  href={dashboardAnnotation}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 rounded border border-border px-2 py-1 text-xs hover:bg-accent cursor-pointer"
+                >
+                  <ExternalLink className="h-3 w-3" />
+                  Dashboard
+                </a>
+              )}
+              {linkAnnotation && (
+                <a
+                  href={linkAnnotation}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 rounded border border-border px-2 py-1 text-xs hover:bg-accent cursor-pointer"
+                >
+                  <ExternalLink className="h-3 w-3" />
+                  Link
+                </a>
+              )}
+              {runbookUrl && (
+                <a
+                  href={runbookUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 rounded border border-border px-2 py-1 text-xs hover:bg-accent cursor-pointer"
+                >
+                  <BookOpen className="h-3 w-3" />
+                  Runbook
+                </a>
+              )}
+            </div>
+
+            {/* Action buttons — right */}
+            <div className="flex shrink-0 items-center gap-2">
+              {activeClaim ? (
+                <div className={cn('flex items-center gap-1.5 rounded border px-2 py-1', theme === 'light' ? 'border-blue-300 bg-blue-50' : 'border-blue-800 bg-blue-950/40')}>
+                  <User className={cn('h-3 w-3 shrink-0', theme === 'light' ? 'text-blue-600' : 'text-blue-400')} />
+                  <span className={cn('text-xs font-medium', theme === 'light' ? 'text-blue-700' : 'text-blue-300')}>{activeClaim.claimedBy}</span>
+                  <button
+                    className="ml-1 text-[10px] text-muted-foreground hover:text-foreground cursor-pointer"
+                    onClick={() => releaseMutation.mutate(user?.username ?? localStorage.getItem(USERNAME_KEY) ?? 'unknown')}
+                    disabled={releaseMutation.isPending}
+                  >
+                    ✕
+                  </button>
+                </div>
+              ) : (
+                <button
+                  className="flex items-center gap-1 rounded border border-border px-2 py-1 text-xs hover:bg-accent cursor-pointer"
+                  onClick={() => setShowClaimForm((v) => !v)}
+                >
+                  <User className="h-3 w-3" />
+                  Claim
                 </button>
-              </div>
-            ) : (
+              )}
               <button
                 className="flex items-center gap-1 rounded border border-border px-2 py-1 text-xs hover:bg-accent cursor-pointer"
-                onClick={() => setShowClaimForm((v) => !v)}
+                onClick={() => setShowNewSilenceForm(true)}
               >
-                <User className="h-3 w-3" />
-                Claim
+                <BellOff className="h-3 w-3" />
+                Silence
               </button>
-            )}
-            <button
-              className="flex items-center gap-1 rounded border border-border px-2 py-1 text-xs hover:bg-accent cursor-pointer"
-              onClick={() => setShowNewSilenceForm(true)}
-            >
-              <BellOff className="h-3 w-3" />
-              Silence
-            </button>
-            {alert.alertmanagerUrl && (
-              <a
-                href={(() => {
-                  const filter = `{alertname="${alert.labels.alertname}"}`
-                  const params = new URLSearchParams({
-                    silenced: 'false',
-                    inhibited: 'false',
-                    muted: 'false',
-                    active: 'true',
-                    filter,
-                  })
-                  return `${alert.alertmanagerUrl}/#/alerts?${params.toString()}`
-                })()}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1 rounded border border-border px-2 py-1 text-xs hover:bg-accent cursor-pointer"
-              >
-                <ExternalLink className="h-3 w-3" />
-                Alertmanager
-              </a>
-            )}
-            {dashboardAnnotation && (
-              <a
-                href={dashboardAnnotation}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1 rounded border border-border px-2 py-1 text-xs hover:bg-accent cursor-pointer"
-              >
-                <ExternalLink className="h-3 w-3" />
-                Dashboard
-              </a>
-            )}
-            {runbookLabel && runbookBaseUrl && (
-              <a
-                href={`${runbookBaseUrl}${runbookLabel}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1 rounded border border-border px-2 py-1 text-xs hover:bg-accent cursor-pointer"
-              >
-                <BookOpen className="h-3 w-3" />
-                Runbook
-              </a>
-            )}
+            </div>
           </div>
 
           {showClaimForm && !activeClaim && (
@@ -625,10 +670,10 @@ export function AlertDetailPanel({
           <Section title="Summary" defaultOpen={true}>
             <div className="space-y-2">
               {summaryText && (
-                <p className="text-sm text-foreground">{summaryText}</p>
+                <p className="text-sm text-foreground">{renderTextWithLinks(summaryText)}</p>
               )}
               {descriptionText && (
-                <p className="text-xs text-muted-foreground leading-relaxed">{descriptionText}</p>
+                <p className="text-xs text-muted-foreground leading-relaxed">{renderTextWithLinks(descriptionText)}</p>
               )}
             </div>
           </Section>
