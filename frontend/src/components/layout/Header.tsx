@@ -216,6 +216,7 @@ export function Header() {
   const [refreshing, setRefreshing] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [clusterHoverOpen, setClusterHoverOpen] = useState(false)
+  const [clusterFilterOpen, setClusterFilterOpen] = useState<string | null>(null)
   const searchRef = useRef<HTMLInputElement>(null)
   const [newName, setNewName] = useState('')
   const [newOp, setNewOp] = useState<LabelMatcherOperator>('=')
@@ -427,18 +428,66 @@ export function Header() {
               <span className="text-muted-foreground tabular-nums">{healthyCount}/{clusters.length}</span>
             </div>
             {clusterHoverOpen && clusters.length > 0 && (
-              <div className="absolute right-0 top-full mt-1 z-50 min-w-56 rounded-md border border-border bg-card shadow-lg" role="tooltip">
+              <div className="absolute right-0 top-full mt-1 z-50 min-w-[26rem] rounded-md border border-border bg-card shadow-lg" role="tooltip">
                 <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-border">Connected Instances</div>
                 {clusters.map((c) => (
-                  <div key={c.name} className="px-3 py-2 border-b border-border last:border-0">
+                  <div
+                    key={c.name}
+                    className={`px-3 py-2 border-b border-border last:border-0 ${!c.healthy ? 'bg-red-950/30' : ''}`}
+                  >
                     <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-1.5">
-                        <div className={`h-1.5 w-1.5 rounded-full shrink-0 ${c.healthy ? 'bg-green-500' : 'bg-red-500'}`} />
-                        <span className="text-xs font-medium text-foreground">{c.name}</span>
+                      <div className="relative flex items-center gap-2">
+                        {c.healthy ? (
+                          <div className="h-2 w-2 rounded-full shrink-0 bg-green-500" />
+                        ) : (
+                          <div className="relative shrink-0">
+                            <div className="h-2.5 w-2.5 rounded-full bg-red-500" />
+                            <div className="absolute inset-0 rounded-full bg-red-500 animate-ping opacity-75" />
+                          </div>
+                        )}
+                        <div className="relative">
+                          <button
+                            className="text-xs font-medium text-foreground hover:text-blue-400 cursor-pointer"
+                            onMouseEnter={() => setClusterFilterOpen(c.name)}
+                            onMouseLeave={() => setClusterFilterOpen(null)}
+                            onClick={() => {
+                              addLabelMatcher({ name: '@cluster', operator: '=', value: c.name })
+                              setClusterHoverOpen(false)
+                            }}
+                          >
+                            {c.name}
+                          </button>
+                          {clusterFilterOpen === c.name && (
+                            <div
+                              className="absolute left-0 top-full mt-0.5 z-60 rounded border border-border bg-popover shadow-md text-[11px]"
+                              onMouseEnter={() => setClusterFilterOpen(c.name)}
+                              onMouseLeave={() => setClusterFilterOpen(null)}
+                            >
+                              {(['=', '!='] as const).map((op) => (
+                                <button
+                                  key={op}
+                                  className="flex w-full items-center gap-1.5 whitespace-nowrap px-2.5 py-1.5 text-left hover:bg-accent cursor-pointer"
+                                  onClick={() => {
+                                    addLabelMatcher({ name: '@cluster', operator: op, value: c.name })
+                                    setClusterFilterOpen(null)
+                                    setClusterHoverOpen(false)
+                                  }}
+                                >
+                                  <span className="font-mono text-muted-foreground">@cluster</span>
+                                  <span className="font-mono text-blue-400">{op}</span>
+                                  <span className="font-medium text-foreground">{c.name}</span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        {!c.healthy && (
+                          <span className="rounded bg-red-500/20 px-1 py-0.5 text-[10px] font-semibold text-red-400 uppercase tracking-wide">DOWN</span>
+                        )}
                       </div>
                       <span className="text-xs text-muted-foreground whitespace-nowrap">{c.alertCount} Alerts</span>
                     </div>
-                    <div className="mt-0.5 pl-3 text-[10px] text-muted-foreground/60 truncate max-w-60">{c.alertmanagerUrl}</div>
+                    <div className="mt-1 pl-[1.375rem] text-[10px] text-muted-foreground/60 break-all">{c.alertmanagerUrl}</div>
                   </div>
                 ))}
               </div>
