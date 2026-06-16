@@ -121,7 +121,7 @@ jobs:
         run: |
           VERSION=${GITHUB_REF_NAME#v}
           sed -i "s/^version:.*/version: ${VERSION}/" charts/jarvis/Chart.yaml
-          sed -i "s/^appVersion:.*/appVersion: \"${GITHUB_REF_NAME}\"/" charts/jarvis/Chart.yaml
+          sed -i "s/^appVersion:.*/appVersion: \"${VERSION}\"/" charts/jarvis/Chart.yaml
 
       - name: Log in to GHCR (Helm)
         run: |
