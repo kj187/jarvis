@@ -1,3 +1,39 @@
+<a name="v1.0.4"></a>
+## [v1.0.4](https://github.com/kj187/jarvis/compare/v1.0.3...v1.0.4) (2026-06-16)
+
+### Features
+
+* **alerts:** inline time/silence metadata, extract link rendering to lib, fix severity header contrast
+
+### Tests
+
+* **alerts:** extend fire/resolve scripts with error severity alerts
+
+<a name="v1.0.3"></a>
+## [v1.0.3](https://github.com/kj187/jarvis/compare/v1.0.2...v1.0.3) (2026-06-16)
+
+### Bug Fixes
+
+* **alerts:** align action buttons with badge row using pr-8
+* **header:** prevent cluster popover from closing on mouse gap
+
+### Documentation
+
+* update CHANGELOG and README for v1.0.3
+
+### Features
+
+* **alerts:** relocate link buttons to summary section and fix runbook URL resolution
+* **alerts:** improve detail sheet header and link handling
+* **alerts:** add error severity level between critical and warning
+* **alerts:** inject [@receiver](https://github.com/receiver) into alert labels on fetch
+* **config:** expose RunbookBaseURL via /auth/info endpoint
+* **header:** improve cluster instance popover
+
+### Tests
+
+* **scripts:** extend fire-test-alerts with link, dashboard, and inline URL examples
+
 <a name="v1.0.2"></a>
 ## [v1.0.2](https://github.com/kj187/jarvis/compare/v1.0.1...v1.0.2) (2026-06-16)
 
