@@ -8,12 +8,15 @@ RUN pnpm build
 
 # Stage 2: Backend Build
 FROM golang:1.25-alpine AS backend
+ARG VERSION=dev
 WORKDIR /app
 COPY backend/go.mod backend/go.sum ./
 RUN go mod download
 COPY backend/ ./
 COPY --from=frontend /app/dist ./internal/static/dist
-RUN CGO_ENABLED=0 go build -tags prod -o /jarvis ./cmd/jarvis
+RUN CGO_ENABLED=0 go build -tags prod \
+    -ldflags "-X github.com/kj187/jarvis/backend/internal/version.Version=${VERSION}" \
+    -o /jarvis ./cmd/jarvis
 
 # Stage 3: Final (minimal, non-root)
 FROM gcr.io/distroless/static-debian12

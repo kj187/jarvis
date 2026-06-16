@@ -6,12 +6,18 @@ import (
 	"time"
 
 	"github.com/kj187/jarvis/backend/internal/models"
+	"github.com/kj187/jarvis/backend/internal/version"
 	"github.com/labstack/echo/v4"
 )
 
 // GET /health
 func (s *Server) getHealth(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
+}
+
+// GET /api/v1/info
+func (s *Server) getInfo(c echo.Context) error {
+	return c.JSON(http.StatusOK, map[string]string{"version": version.Version})
 }
 
 // GET /api/v1/clusters

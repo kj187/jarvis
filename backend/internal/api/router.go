@@ -142,6 +142,7 @@ func NewRouter(
 	// Health
 	e.GET("/health", srv.getHealth)
 	apiV1.GET("/status", srv.getStatus)
+	apiV1.GET("/info", srv.getInfo)
 
 	// IMPORTANT: /alerts/groups must be registered BEFORE /alerts/:fingerprint/*
 	// to prevent Echo from matching "groups" as a fingerprint parameter.
