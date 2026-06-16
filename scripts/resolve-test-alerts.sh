@@ -204,5 +204,37 @@ resolve '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=kube_statefulset_status_replicas_ready"
 }]'
 
+printf " [11/12] KubeServiceEndpointError..."
+resolve '[{
+  "labels": {
+    "alertname": "KubeServiceEndpointError",
+    "severity": "error",
+    "namespace": "prod",
+    "service": "checkout-api",
+    "cluster": "eu-west-1-prod",
+    "team": "platform",
+    "runbook": "'"${RUNBOOKS}"'/KubeServiceEndpointError",
+    "test_suite": "jarvis"
+  },
+  "annotations": {"summary": "Service checkout-api has no healthy endpoints"},
+  "generatorURL": "'"${PROM}"'/graph?g0.expr=kube_endpoint_address_available"
+}]'
+
+printf " [12/12] KubeDNSErrors..."
+resolve '[{
+  "labels": {
+    "alertname": "KubeDNSErrors",
+    "severity": "error",
+    "namespace": "kube-system",
+    "pod": "coredns-5d78c9869d-7lqvk",
+    "cluster": "eu-west-1-prod",
+    "team": "infrastructure",
+    "runbook": "'"${RUNBOOKS}"'/KubeDNSErrors",
+    "test_suite": "jarvis"
+  },
+  "annotations": {"summary": "CoreDNS error rate above 5% for 10 minutes"},
+  "generatorURL": "'"${PROM}"'/graph?g0.expr=rate(coredns_dns_responses_total%7Brcode%3D%22SERVFAIL%22%7D%5B5m%5D)"
+}]'
+
 echo ""
-echo "==> All 10 Kubernetes test alerts resolved."
+echo "==> All 12 Kubernetes test alerts resolved."

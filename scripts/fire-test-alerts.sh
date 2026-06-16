@@ -22,7 +22,7 @@ pause() {
   sleep "$s"
 }
 
-echo "==> Firing Kubernetes test alerts to ${AM} (randomized, ~1 min)"
+echo "==> Firing Kubernetes test alerts to ${AM} (randomized, ~1 min 30s)"
 
 printf "  [1/10] KubePodCrashLooping (critical, payment-api, prod)..."
 post '[{
@@ -235,7 +235,50 @@ post '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=kube_statefulset_status_replicas_ready%7Bnamespace%3D%22prod%22%7D"
 }]'
 
+pause
+printf " [11/12] KubeServiceEndpointError (error, checkout-api, prod)..."
+post '[{
+  "labels": {
+    "alertname": "KubeServiceEndpointError",
+    "severity": "error",
+    "namespace": "prod",
+    "service": "checkout-api",
+    "cluster": "eu-west-1-prod",
+    "team": "platform",
+    "runbook": "'"${RUNBOOKS}"'/KubeServiceEndpointError",
+    "test_suite": "jarvis"
+  },
+  "annotations": {
+    "summary": "Service checkout-api has no healthy endpoints",
+    "description": "All 3 endpoints for checkout-api are failing readiness checks. Last error: connection refused on port 8080. See incident runbook at https://runbooks.example.com/alerts/KubeServiceEndpointError and recent deploys at https://jira.example.com/browse/PLAT-5103.",
+    "dashboard": "'"${GRAFANA}"'/d/k8s-services?var-namespace=prod&var-service=checkout-api&orgId=1"
+  },
+  "generatorURL": "'"${PROM}"'/graph?g0.expr=kube_endpoint_address_available%7Bnamespace%3D%22prod%22%7D"
+}]'
+
+pause
+printf " [12/12] KubeDNSErrors (error, kube-dns, prod)..."
+post '[{
+  "labels": {
+    "alertname": "KubeDNSErrors",
+    "severity": "error",
+    "namespace": "kube-system",
+    "pod": "coredns-5d78c9869d-7lqvk",
+    "cluster": "eu-west-1-prod",
+    "team": "infrastructure",
+    "runbook": "'"${RUNBOOKS}"'/KubeDNSErrors",
+    "test_suite": "jarvis"
+  },
+  "annotations": {
+    "summary": "CoreDNS error rate above 5% for 10 minutes",
+    "description": "SERVFAIL responses: 6.2% over last 10 minutes. Upstream resolver 8.8.8.8 may be unreachable. DNS troubleshooting guide: https://wiki.example.com/coredns-errors",
+    "dashboard": "'"${GRAFANA}"'/d/coredns?orgId=1",
+    "link": "https://jira.example.com/browse/INFRA-2047"
+  },
+  "generatorURL": "'"${PROM}"'/graph?g0.expr=rate(coredns_dns_responses_total%7Brcode%3D%22SERVFAIL%22%7D%5B5m%5D)"
+}]'
+
 echo ""
-echo "==> Done. 10 Kubernetes test alerts active (test_suite=jarvis)."
+echo "==> Done. 12 Kubernetes test alerts active (test_suite=jarvis)."
 echo "    Alertmanager auto-expires them after ~5 minutes without refresh."
 echo "    Run 'make alerts-resolve' to resolve immediately."
