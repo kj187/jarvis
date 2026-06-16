@@ -18,6 +18,7 @@ import (
 func (s *Server) getAuthInfo(c echo.Context) error {
 	info := s.authProvider.Info()
 	info.AuthMode = s.cfg.AuthMode
+	info.RunbookBaseURL = s.cfg.RunbookBaseURL
 	if info.Mode == "internal" {
 		n, err := s.userStore.Count(c.Request().Context())
 		if err == nil && n == 0 {
