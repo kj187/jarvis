@@ -217,7 +217,16 @@ export function Header() {
   const [searchOpen, setSearchOpen] = useState(false)
   const [clusterHoverOpen, setClusterHoverOpen] = useState(false)
   const [clusterFilterOpen, setClusterFilterOpen] = useState<string | null>(null)
+  const clusterCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const searchRef = useRef<HTMLInputElement>(null)
+
+  function openClusterPopover() {
+    if (clusterCloseTimer.current) clearTimeout(clusterCloseTimer.current)
+    setClusterHoverOpen(true)
+  }
+  function closeClusterPopover() {
+    clusterCloseTimer.current = setTimeout(() => setClusterHoverOpen(false), 120)
+  }
   const [newName, setNewName] = useState('')
   const [newOp, setNewOp] = useState<LabelMatcherOperator>('=')
   const [newValue, setNewValue] = useState('')
@@ -416,8 +425,8 @@ export function Header() {
           {/* Cluster status */}
           <div
             className="relative shrink-0"
-            onMouseEnter={() => setClusterHoverOpen(true)}
-            onMouseLeave={() => setClusterHoverOpen(false)}
+            onMouseEnter={openClusterPopover}
+            onMouseLeave={closeClusterPopover}
           >
             <div
               className="flex items-center gap-1.5 px-2 py-1 text-xs cursor-default select-none"
@@ -428,7 +437,7 @@ export function Header() {
               <span className="text-muted-foreground tabular-nums">{healthyCount}/{clusters.length}</span>
             </div>
             {clusterHoverOpen && clusters.length > 0 && (
-              <div className="absolute right-0 top-full mt-1 z-50 min-w-[26rem] rounded-md border border-border bg-card shadow-lg" role="tooltip">
+              <div className="absolute right-0 top-full mt-1 z-50 min-w-[26rem] rounded-md border border-border bg-card shadow-lg" role="tooltip" onMouseEnter={openClusterPopover} onMouseLeave={closeClusterPopover}>
                 <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-border">Connected Instances</div>
                 {clusters.map((c) => (
                   <div

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Header } from './Header'
@@ -194,11 +194,14 @@ describe('Header – cluster popover', () => {
   it('hides cluster popover on mouse leave', async () => {
     renderHeader()
     await waitFor(() => screen.getByLabelText('Instances 1/1'))
+    vi.useFakeTimers()
     const wrapper = screen.getByLabelText('Instances 1/1').parentElement!
     fireEvent.mouseEnter(wrapper)
     expect(screen.getByText('Connected Instances')).toBeInTheDocument()
     fireEvent.mouseLeave(wrapper)
+    act(() => { vi.advanceTimersByTime(200) })
     expect(screen.queryByText('Connected Instances')).not.toBeInTheDocument()
+    vi.useRealTimers()
   })
 })
 
