@@ -33,7 +33,7 @@ func (s *Server) getAlerts(c echo.Context) error {
 		if clusterFilter == "" && severityFilter == "" {
 			return c.JSON(http.StatusOK, dbAlerts)
 		}
-		var filtered []models.EnrichedAlert
+		filtered := make([]models.EnrichedAlert, 0)
 		for _, a := range dbAlerts {
 			if clusterFilter != "" && a.ClusterName != clusterFilter {
 				continue
@@ -51,7 +51,7 @@ func (s *Server) getAlerts(c echo.Context) error {
 	if clusterFilter == "" && severityFilter == "" && stateFilter == "" {
 		return c.JSON(http.StatusOK, alerts)
 	}
-	var filtered []models.EnrichedAlert
+	filtered := make([]models.EnrichedAlert, 0)
 	for _, a := range alerts {
 		if clusterFilter != "" && a.ClusterName != clusterFilter {
 			continue

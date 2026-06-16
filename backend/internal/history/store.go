@@ -221,7 +221,7 @@ func (s *Store) GetHistory(fingerprint string, limit, offset int) ([]models.Aler
 	}
 	defer func() { _ = rows.Close() }()
 
-	var events []models.AlertEvent
+	events := make([]models.AlertEvent, 0)
 	for rows.Next() {
 		var e models.AlertEvent
 		var endsAt sql.NullTime
@@ -596,7 +596,7 @@ func (s *Store) getLastEvent(fingerprint string) (*models.AlertEvent, error) {
 // scanResolvedAlerts reads all rows from a resolved-alert query into EnrichedAlert values.
 // Expected columns: fingerprint, cluster_name, alertmanager_url, starts_at, recorded_at, annotations, labels.
 func scanResolvedAlerts(rows *sql.Rows) ([]models.EnrichedAlert, error) {
-	var alerts []models.EnrichedAlert
+	alerts := make([]models.EnrichedAlert, 0)
 	for rows.Next() {
 		var fp, clusterName, amURL, annotationsJSON, labelsJSON string
 		var startsAt, resolvedAt time.Time
