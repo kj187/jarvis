@@ -299,7 +299,7 @@ export function AlertDetailPanel({
           )}
 
           {/* Links (left) + Actions (right) */}
-          <div className="mt-3 flex items-center justify-between gap-2">
+          <div className="mt-3 flex items-center justify-between gap-2 pr-8">
             {/* Link buttons — left */}
             <div className="flex flex-wrap items-center gap-2">
               {alert.alertmanagerUrl && (
