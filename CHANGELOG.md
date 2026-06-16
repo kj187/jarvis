@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-06-16
+
+### Fixed
+- API endpoints returned JSON `null` instead of `[]` for empty alert lists, causing a frontend crash (`TypeError: Cannot read properties of null (reading 'length')`) when no alerts matched a filter or the database was empty.
+- Helm chart `appVersion` was set to `v1.0.x` (with `v` prefix) while the container image tag is `1.0.x` (without `v`), causing a mismatch between the chart and the published image.
+
 ## [1.0.1] - 2026-06-15
 
 ### Added
