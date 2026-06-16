@@ -289,6 +289,15 @@ func (r *Recorder) fetchCluster(ctx context.Context, cl *cluster.Cluster) ([]mod
 		for i, r := range a.Receivers {
 			receivers[i] = models.Receiver{Name: r.Name}
 		}
+
+		labels := make(map[string]string, len(a.Labels)+1)
+		for k, v := range a.Labels {
+			labels[k] = v
+		}
+		if len(a.Receivers) > 0 {
+			labels["@receiver"] = a.Receivers[0].Name
+		}
+
 		enriched = append(enriched, models.EnrichedAlert{
 			Fingerprint: a.Fingerprint,
 			Status: models.AlertStatus{
@@ -296,7 +305,7 @@ func (r *Recorder) fetchCluster(ctx context.Context, cl *cluster.Cluster) ([]mod
 				SilencedBy:  a.Status.SilencedBy,
 				State:       a.Status.State,
 			},
-			Labels:          a.Labels,
+			Labels:          labels,
 			Annotations:     a.Annotations,
 			StartsAt:        a.StartsAt,
 			EndsAt:          a.EndsAt,

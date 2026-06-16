@@ -2,11 +2,16 @@ package history
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
 	idb "github.com/kj187/jarvis/backend/internal/db"
+	"github.com/kj187/jarvis/backend/internal/alertmanager"
+	"github.com/kj187/jarvis/backend/internal/cluster"
 	"github.com/kj187/jarvis/backend/internal/models"
 )
 
@@ -269,6 +274,92 @@ func TestRecorder_ClaimReleasedAfterGenuineResolution(t *testing.T) {
 	c, _ = rec.store.GetActiveClaim("fp1")
 	if c != nil {
 		t.Error("claim should be released after genuine resolution + delay")
+	}
+}
+
+func TestFetchCluster_InjectsReceiverLabel(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v2/alerts" {
+			http.NotFound(w, r)
+			return
+		}
+		alerts := []alertmanager.GettableAlert{
+			{
+				Fingerprint: "abc123",
+				Status:      alertmanager.GettableAlertStatus{State: "active"},
+				Labels:      map[string]string{"alertname": "TestAlert"},
+				Annotations: map[string]string{},
+				StartsAt:    time.Now().UTC(),
+				EndsAt:      time.Now().UTC(),
+				UpdatedAt:   time.Now().UTC(),
+				Receivers:   []alertmanager.AMReceiver{{Name: "email-notifications"}},
+			},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(alerts)
+	}))
+	defer srv.Close()
+
+	rec, _ := newTestRecorder(t)
+	cl := &cluster.Cluster{
+		Name:                "test",
+		AlertmanagerURL:     srv.URL,
+		AlertmanagerLinkURL: srv.URL,
+		Client:              alertmanager.NewClient(srv.URL),
+	}
+
+	enriched, err := rec.fetchCluster(context.Background(), cl)
+	if err != nil {
+		t.Fatalf("fetchCluster: %v", err)
+	}
+	if len(enriched) != 1 {
+		t.Fatalf("expected 1 alert, got %d", len(enriched))
+	}
+	if got := enriched[0].Labels["@receiver"]; got != "email-notifications" {
+		t.Errorf("Labels[@receiver] = %q, want %q", got, "email-notifications")
+	}
+}
+
+func TestFetchCluster_NoReceiverLabelWhenReceiversEmpty(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v2/alerts" {
+			http.NotFound(w, r)
+			return
+		}
+		alerts := []alertmanager.GettableAlert{
+			{
+				Fingerprint: "abc123",
+				Status:      alertmanager.GettableAlertStatus{State: "active"},
+				Labels:      map[string]string{"alertname": "TestAlert"},
+				Annotations: map[string]string{},
+				StartsAt:    time.Now().UTC(),
+				EndsAt:      time.Now().UTC(),
+				UpdatedAt:   time.Now().UTC(),
+				Receivers:   []alertmanager.AMReceiver{},
+			},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(alerts)
+	}))
+	defer srv.Close()
+
+	rec, _ := newTestRecorder(t)
+	cl := &cluster.Cluster{
+		Name:                "test",
+		AlertmanagerURL:     srv.URL,
+		AlertmanagerLinkURL: srv.URL,
+		Client:              alertmanager.NewClient(srv.URL),
+	}
+
+	enriched, err := rec.fetchCluster(context.Background(), cl)
+	if err != nil {
+		t.Fatalf("fetchCluster: %v", err)
+	}
+	if len(enriched) != 1 {
+		t.Fatalf("expected 1 alert, got %d", len(enriched))
+	}
+	if _, ok := enriched[0].Labels["@receiver"]; ok {
+		t.Error("@receiver must not be present when receivers list is empty")
 	}
 }
 
