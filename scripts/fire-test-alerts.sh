@@ -39,7 +39,9 @@ post '[{
   },
   "annotations": {
     "summary": "Pod payment-api-7d9f6b8c4-xk2lp is crash looping",
-    "description": "Pod has restarted 14 times in the last 15 minutes. Exit code: 137 (OOMKilled)."
+    "description": "Pod has restarted 14 times in the last 15 minutes. Exit code: 137 (OOMKilled). See troubleshooting guide: https://wiki.example.com/oom-killed-pods for known patterns.",
+    "dashboard": "'"${GRAFANA}"'/d/k8s-pods?var-namespace=prod&var-pod=payment-api-7d9f6b8c4-xk2lp&orgId=1",
+    "link": "https://jira.example.com/browse/PLAT-4821"
   },
   "generatorURL": "'"${PROM}"'/graph?g0.expr=kube_pod_container_status_restarts_total%7Bnamespace%3D%22prod%22%7D"
 }]'
@@ -99,7 +101,9 @@ post '[{
   },
   "annotations": {
     "summary": "CronJob nightly-data-pipeline failed",
-    "description": "Job failed after 3/3 retries. Last successful run: 2 days ago. S3 export incomplete."
+    "description": "Job failed after 3/3 retries. Last successful run: 2 days ago. S3 export incomplete. Check AWS S3 status at https://status.aws.amazon.com/ and pipeline logs at https://grafana.lan.kj187.de/explore?orgId=1.",
+    "dashboard": "'"${GRAFANA}"'/d/k8s-jobs?var-namespace=prod&orgId=1",
+    "link": "https://jira.example.com/browse/DATA-1192"
   },
   "generatorURL": "'"${PROM}"'/graph?g0.expr=kube_job_status_failed%7Bnamespace%3D%22prod%22%7D"
 }]'
@@ -182,7 +186,9 @@ post '[{
   },
   "annotations": {
     "summary": "Container inference-server OOMKilled 3 times in 1h",
-    "description": "Memory limit: 4Gi, actual peak RSS: 4.8Gi. Increase memory limit or reduce batch size."
+    "description": "Memory limit: 4Gi, actual peak RSS: 4.8Gi. Increase memory limit or reduce batch size. Memory profiling guide: https://wiki.example.com/ml-inference-memory-tuning",
+    "dashboard": "'"${GRAFANA}"'/d/k8s-pods?var-namespace=prod&var-pod=ml-inference-6c8d9f7b5-p9nrq&orgId=1",
+    "link": "https://jira.example.com/browse/ML-887"
   },
   "generatorURL": "'"${PROM}"'/graph?g0.expr=kube_pod_container_status_last_terminated_reason%7Breason%3D%22OOMKilled%22%7D"
 }]'
