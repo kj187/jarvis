@@ -337,14 +337,16 @@ export function SilenceForm({
 
   const [step, setStep] = useState<Step>('form')
 
+  const rebuildFromAlerts = isRecreate && prefillSilence?.status.state === 'expired' && (prefillAlerts?.length ?? 0) > 0
+
   const [selectedClusters, setSelectedClusters] = useState<string[]>(() => {
-    if (prefillSilence) return [prefillSilence.clusterName]
+    if (prefillSilence && !rebuildFromAlerts) return [prefillSilence.clusterName]
     if (prefillAlerts?.length) return [...new Set(prefillAlerts.map((a) => a.clusterName))]
     return availableClusters.slice(0, 1)
   })
 
   const [matchers, setMatchers] = useState<SilenceMatcher[]>(() => {
-    if (prefillSilence?.matchers) {
+    if (prefillSilence?.matchers && !rebuildFromAlerts) {
       return prefillSilence.matchers.map((m) => ({
         id: nextId(),
         name: m.name,

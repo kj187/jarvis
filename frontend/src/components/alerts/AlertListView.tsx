@@ -113,9 +113,11 @@ function getGroupSilenceInfo(
     }
   }
 
+  const groupClusterNames = new Set(groupAlerts.map((a) => a.clusterName))
   const expired = silences.filter(
     (s) =>
       s.status.state === 'expired' &&
+      groupClusterNames.has(s.clusterName) &&
       s.matchers.some((m) => m.name === 'alertname' && m.isEqual && m.value === alertname),
   )
 
@@ -395,7 +397,7 @@ export function AlertListView({ alerts, silences, onSelectAlert, selectedFingerp
                   ? clusterNames
                   : [...new Set(silenceSheet.alerts.map((a) => a.clusterName))]
               }
-              prefillAlerts={silenceSheet.prefillSilence ? undefined : silenceSheet.alerts}
+              prefillAlerts={silenceSheet.alerts.length > 0 ? silenceSheet.alerts : undefined}
               prefillSilence={silenceSheet.prefillSilence}
               isRecreate={silenceSheet.isRecreate}
               onSuccess={closeSilenceForm}
@@ -630,7 +632,7 @@ export function AlertListView({ alerts, silences, onSelectAlert, selectedFingerp
                 ? clusterNames
                 : [...new Set(silenceSheet.alerts.map((a) => a.clusterName))]
             }
-            prefillAlerts={silenceSheet.prefillSilence ? undefined : silenceSheet.alerts}
+            prefillAlerts={silenceSheet.alerts.length > 0 ? silenceSheet.alerts : undefined}
             prefillSilence={silenceSheet.prefillSilence}
             isRecreate={silenceSheet.isRecreate}
             onSuccess={closeSilenceForm}
