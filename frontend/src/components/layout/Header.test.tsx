@@ -18,6 +18,7 @@ vi.mock('@/api/client', () => ({
     },
   ]),
   fetchAlerts: vi.fn().mockResolvedValue([]),
+  fetchInfo: vi.fn().mockResolvedValue({ version: 'dev' }),
 }))
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

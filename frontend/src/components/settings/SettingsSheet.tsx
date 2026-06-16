@@ -13,6 +13,7 @@ import {
 } from '@/store/useSettingsStore'
 import type { DefaultFilter } from '@/store/useSettingsStore'
 import type { LabelMatcherOperator } from '@/types'
+import { useVersion } from '@/hooks/useVersion'
 
 interface SettingsSheetProps {
   open: boolean
@@ -213,6 +214,7 @@ export function SettingsSheet({
   const settings = useSettingsStore()
   const update = useSettingsStore((s) => s.update)
   const reset = useSettingsStore((s) => s.reset)
+  const version = useVersion()
 
   // Default filter add-row state
   const [newName, setNewName] = useState('')
@@ -257,7 +259,14 @@ export function SettingsSheet({
   return (
     <Sheet open={open} onClose={onClose} className="sm:max-w-sm">
       <div className="p-5 pt-10 space-y-6">
-        <h2 className="text-base font-semibold">Settings</h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-semibold">Settings</h2>
+          {version && (
+            <span className="text-[10px] font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+              {version}
+            </span>
+          )}
+        </div>
 
         <>
 

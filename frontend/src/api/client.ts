@@ -233,3 +233,9 @@ export function fetchStatus(): Promise<{
 }> {
   return request('/status')
 }
+
+// ── Info ──────────────────────────────────────────────────────────────────────
+
+export function fetchInfo(): Promise<{ version: string }> {
+  return request('/info')
+}
