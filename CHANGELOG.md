@@ -1,5 +1,16 @@
+<a name="v1.0.5"></a>
+## [v1.0.5](https://github.com/kj187/jarvis/compare/v1.0.4...v1.0.5) (2026-06-16)
+
+### Bug Fixes
+
+* **silences:** group silence recreate prefills wrong cluster and matchers
+
 <a name="v1.0.4"></a>
 ## [v1.0.4](https://github.com/kj187/jarvis/compare/v1.0.3...v1.0.4) (2026-06-16)
+
+### Documentation
+
+* update CHANGELOG and README for v1.0.4
 
 ### Features
 
