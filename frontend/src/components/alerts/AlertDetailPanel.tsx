@@ -179,10 +179,10 @@ export function AlertDetailPanel({
   const severity = alert.labels['severity'] ?? 'none'
   const runbookRaw = alert.labels['runbook'] ?? alert.annotations['runbook']
   const runbookUrl = runbookRaw
-    ? runbookRaw.startsWith('http://') || runbookRaw.startsWith('https://')
-      ? runbookRaw
-      : runbookBaseUrl
-        ? `${runbookBaseUrl}${runbookRaw}`
+    ? runbookBaseUrl
+      ? `${runbookBaseUrl}${runbookRaw}`
+      : runbookRaw.startsWith('http://') || runbookRaw.startsWith('https://')
+        ? runbookRaw
         : null
     : null
   const dashboardAnnotation = alert.annotations['dashboard']
@@ -298,67 +298,8 @@ export function AlertDetailPanel({
             </div>
           )}
 
-          {/* Links (left) + Actions (right) */}
-          <div className="mt-3 flex items-center justify-between gap-2 pr-8">
-            {/* Link buttons — left */}
-            <div className="flex flex-wrap items-center gap-2">
-              {alert.alertmanagerUrl && (
-                <a
-                  href={(() => {
-                    const filter = `{alertname="${alert.labels.alertname}"}`
-                    const params = new URLSearchParams({
-                      silenced: 'false',
-                      inhibited: 'false',
-                      muted: 'false',
-                      active: 'true',
-                      filter,
-                    })
-                    return `${alert.alertmanagerUrl}/#/alerts?${params.toString()}`
-                  })()}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1 rounded border border-border px-2 py-1 text-xs hover:bg-accent cursor-pointer"
-                >
-                  <ExternalLink className="h-3 w-3" />
-                  Alertmanager
-                </a>
-              )}
-              {dashboardAnnotation && (
-                <a
-                  href={dashboardAnnotation}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1 rounded border border-border px-2 py-1 text-xs hover:bg-accent cursor-pointer"
-                >
-                  <ExternalLink className="h-3 w-3" />
-                  Dashboard
-                </a>
-              )}
-              {linkAnnotation && (
-                <a
-                  href={linkAnnotation}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1 rounded border border-border px-2 py-1 text-xs hover:bg-accent cursor-pointer"
-                >
-                  <ExternalLink className="h-3 w-3" />
-                  Link
-                </a>
-              )}
-              {runbookUrl && (
-                <a
-                  href={runbookUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1 rounded border border-border px-2 py-1 text-xs hover:bg-accent cursor-pointer"
-                >
-                  <BookOpen className="h-3 w-3" />
-                  Runbook
-                </a>
-              )}
-            </div>
-
-            {/* Action buttons — right */}
+          {/* Action buttons */}
+          <div className="mt-3 flex items-center justify-end gap-2 pr-8">
             <div className="flex shrink-0 items-center gap-2">
               {activeClaim ? (
                 <div className={cn('flex items-center gap-1.5 rounded border px-2 py-1', theme === 'light' ? 'border-blue-300 bg-blue-50' : 'border-blue-800 bg-blue-950/40')}>
@@ -666,7 +607,7 @@ export function AlertDetailPanel({
         )}
 
         {/* Summary / Description */}
-        {(summaryText || descriptionText) && (
+        {(summaryText || descriptionText || alert.alertmanagerUrl || dashboardAnnotation || linkAnnotation || runbookUrl) && (
           <Section title="Summary" defaultOpen={true}>
             <div className="space-y-2">
               {summaryText && (
@@ -674,6 +615,64 @@ export function AlertDetailPanel({
               )}
               {descriptionText && (
                 <p className="text-xs text-muted-foreground leading-relaxed">{renderTextWithLinks(descriptionText)}</p>
+              )}
+              {(alert.alertmanagerUrl || dashboardAnnotation || linkAnnotation || runbookUrl) && (
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {alert.alertmanagerUrl && (
+                    <a
+                      href={(() => {
+                        const filter = `{alertname="${alert.labels.alertname}"}`
+                        const params = new URLSearchParams({
+                          silenced: 'false',
+                          inhibited: 'false',
+                          muted: 'false',
+                          active: 'true',
+                          filter,
+                        })
+                        return `${alert.alertmanagerUrl}/#/alerts?${params.toString()}`
+                      })()}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1 rounded border border-border px-2 py-1 text-xs hover:bg-accent cursor-pointer"
+                    >
+                      <ExternalLink className="h-3 w-3" />
+                      Alertmanager
+                    </a>
+                  )}
+                  {dashboardAnnotation && (
+                    <a
+                      href={dashboardAnnotation}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1 rounded border border-border px-2 py-1 text-xs hover:bg-accent cursor-pointer"
+                    >
+                      <ExternalLink className="h-3 w-3" />
+                      Dashboard
+                    </a>
+                  )}
+                  {linkAnnotation && (
+                    <a
+                      href={linkAnnotation}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1 rounded border border-border px-2 py-1 text-xs hover:bg-accent cursor-pointer"
+                    >
+                      <ExternalLink className="h-3 w-3" />
+                      Link
+                    </a>
+                  )}
+                  {runbookUrl && (
+                    <a
+                      href={runbookUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1 rounded border border-border px-2 py-1 text-xs hover:bg-accent cursor-pointer"
+                    >
+                      <BookOpen className="h-3 w-3" />
+                      Runbook
+                    </a>
+                  )}
+                </div>
               )}
             </div>
           </Section>

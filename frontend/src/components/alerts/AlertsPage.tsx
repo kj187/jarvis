@@ -3,6 +3,7 @@ import { useAlerts } from '@/hooks/useAlerts'
 import { useSilences } from '@/hooks/useSilences'
 import { useWebSocket } from '@/hooks/useWebSocket'
 import { useUIStore } from '@/store/uiStore'
+import { useAuthStore } from '@/store/authStore'
 import { AlertCardGrid } from './AlertCardGrid'
 import { AlertListView } from './AlertListView'
 import { AlertDetailPanel } from './AlertDetailPanel'
@@ -65,6 +66,7 @@ export function AlertsPage() {
   useURLState()
 
   const isResolvedMode = useUIStore((s) => s.filters.state === 'resolved')
+  const providerInfo = useAuthStore((s) => s.providerInfo)
 
   // Active/suppressed alerts come from the in-memory store via WS-patched cache.
   // Resolved alerts are queried directly from the DB so they persist indefinitely.
@@ -169,6 +171,7 @@ export function AlertsPage() {
         alert={selectedAlert}
         onClose={() => setSelectedFingerprint(null)}
         onAddLabelMatcher={addLabelMatcher}
+        runbookBaseUrl={providerInfo?.runbookBaseUrl}
         silences={silences}
       />
     </div>

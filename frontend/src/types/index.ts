@@ -164,6 +164,7 @@ export interface ProviderInfo {
   loginUrl: string
   setupRequired?: boolean
   authMode?: 'none' | 'write_protect' | 'full_protect'
+  runbookBaseUrl?: string
 }
 
 export interface AdminUser {
