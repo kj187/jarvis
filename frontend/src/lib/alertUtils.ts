@@ -160,11 +160,12 @@ export function formatTime(
 
 const SEVERITY_ORDER: Record<string, number> = {
   critical: 0,
-  warning: 1,
-  info: 2,
-  none: 3,
+  error: 1,
+  warning: 2,
+  info: 3,
+  none: 4,
 }
 
 export function severityOrder(severity: string): number {
-  return SEVERITY_ORDER[severity] ?? 4
+  return SEVERITY_ORDER[severity] ?? 5
 }

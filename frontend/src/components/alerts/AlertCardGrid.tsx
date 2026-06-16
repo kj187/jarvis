@@ -19,6 +19,7 @@ interface CardGroup {
 
 const SEVERITY_LABEL: Record<string, string> = {
   critical: '🔴 Critical',
+  error: '🟠 Error',
   warning: '🟡 Warning',
   info: '🔵 Info',
   none: '⚫ None',

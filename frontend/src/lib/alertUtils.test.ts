@@ -247,13 +247,14 @@ describe('getFilterableLabels — extended', () => {
 
 describe('severityOrder', () => {
   it('critical has lowest order number', () => {
-    expect(severityOrder('critical')).toBeLessThan(severityOrder('warning'))
+    expect(severityOrder('critical')).toBeLessThan(severityOrder('error'))
+    expect(severityOrder('error')).toBeLessThan(severityOrder('warning'))
     expect(severityOrder('warning')).toBeLessThan(severityOrder('info'))
     expect(severityOrder('info')).toBeLessThan(severityOrder('none'))
   })
 
   it('unknown severity gets highest order', () => {
-    expect(severityOrder('unknown')).toBe(4)
+    expect(severityOrder('unknown')).toBe(5)
   })
 })
 
