@@ -1,0 +1,36 @@
+style: github
+template: CHANGELOG.tpl.md
+info:
+  title: CHANGELOG
+  repository_url: https://github.com/kj187/jarvis
+options:
+  commits:
+    filters:
+      Type:
+        - feat
+        - fix
+        - security
+        - perf
+        - refactor
+        - docs
+        - test
+        - chore
+  commit_groups:
+    title_maps:
+      feat: Features
+      fix: Bug Fixes
+      security: Security
+      perf: Performance Improvements
+      refactor: Code Refactoring
+      docs: Documentation
+      test: Tests
+      chore: Chores
+  header:
+    pattern: "^(\\w*)(?:\\(([\\w\\$\\.\\-\\*\\s]*)\\))?\\:?\\s(.*)$"
+    pattern_maps:
+      - Type
+      - Scope
+      - Subject
+  notes:
+    keywords:
+      - BREAKING CHANGE
