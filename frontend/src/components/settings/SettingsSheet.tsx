@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react'
-import { X, RotateCcw } from 'lucide-react'
+import { createPortal } from 'react-dom'
+import { X, RotateCcw, Info } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Sheet } from '@/components/ui/sheet'
 import { Input } from '@/components/ui/input'
@@ -171,19 +172,53 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   )
 }
 
+function InfoTooltip({ text }: { text: string }) {
+  const [rect, setRect] = useState<DOMRect | null>(null)
+  const ref = useRef<HTMLSpanElement>(null)
+
+  return (
+    <span
+      ref={ref}
+      className="inline-flex cursor-help"
+      onMouseEnter={() => setRect(ref.current?.getBoundingClientRect() ?? null)}
+      onMouseLeave={() => setRect(null)}
+    >
+      <Info className="h-3.5 w-3.5 shrink-0 text-muted-foreground/40 hover:text-muted-foreground transition-colors" />
+      {rect && createPortal(
+        <div
+          className="fixed z-[9999] max-w-[280px] rounded-md border border-border bg-popover px-2.5 py-1.5 text-xs text-popover-foreground shadow-md pointer-events-none"
+          style={{
+            left: rect.left + rect.width / 2,
+            top: rect.bottom + 6,
+            transform: 'translateX(-50%)',
+          }}
+        >
+          {text}
+        </div>,
+        document.body,
+      )}
+    </span>
+  )
+}
+
 function SettingRow({
   label,
+  info,
   hint,
   children,
 }: {
   label: string
+  info?: string
   hint?: string
   children: React.ReactNode
 }) {
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between gap-4">
-        <span className="text-sm">{label}</span>
+        <span className="flex items-center gap-1.5 text-sm">
+          {label}
+          {info && <InfoTooltip text={info} />}
+        </span>
         {children}
       </div>
       {hint && <p className="text-[10px] text-muted-foreground">{hint}</p>}
@@ -274,7 +309,10 @@ export function SettingsSheet({
         <Section title="Display">
           <div className="space-y-1.5">
             <div className="flex items-center justify-between gap-4">
-              <span className="text-sm">Time format</span>
+              <span className="flex items-center gap-1.5 text-sm">
+                Time format
+                <InfoTooltip text="Show timestamps as relative ('5 min ago') or absolute (e.g. 'Jun 17, 20:30')" />
+              </span>
               <SegmentedControl
                 value={settings.timeFormat}
                 onChange={(v) => update({ timeFormat: v })}
@@ -290,7 +328,10 @@ export function SettingsSheet({
             </p>
           </div>
 
-          <SettingRow label="Default view">
+          <SettingRow
+            label="Default view"
+            info="Which view to open on load — Card groups alerts by alertname, List groups by severity"
+          >
             <SegmentedControl
               value={settings.defaultViewMode}
               onChange={(v) => update({ defaultViewMode: v })}
@@ -301,7 +342,10 @@ export function SettingsSheet({
             />
           </SettingRow>
 
-          <SettingRow label="Claim animation">
+          <SettingRow
+            label="Claim animation"
+            info="Animated snake border on the Claim button for unclaimed alerts"
+          >
             <button
               type="button"
               role="switch"
@@ -402,7 +446,7 @@ export function SettingsSheet({
 
         {/* ── Silences ── */}
         <Section title="Silences">
-          <SettingRow label="Default duration">
+          <SettingRow label="Default duration" info="Pre-selected duration when opening the Create Silence form">
             <Select
               value={String(settings.defaultSilenceDurationMinutes)}
               onChange={(e) =>
@@ -419,7 +463,7 @@ export function SettingsSheet({
             </Select>
           </SettingRow>
 
-          <SettingRow label="Creator name">
+          <SettingRow label="Creator name" info="Pre-filled author name in the silence creator field — stored locally in your browser">
             <Input
               value={settings.defaultCreatorName}
               onChange={(e) => update({ defaultCreatorName: e.target.value.slice(0, 128) })}
@@ -436,7 +480,10 @@ export function SettingsSheet({
         <Section title="Polling">
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <span className="text-sm">Poll interval</span>
+              <span className="flex items-center gap-1.5 text-sm">
+                Poll interval
+                <InfoTooltip text="How often Jarvis fetches fresh data from Alertmanager (WebSocket delivers real-time updates between polls)" />
+              </span>
               <span className="text-sm font-medium tabular-nums">{settings.pollIntervalSeconds}s</span>
             </div>
             <PollSlider
