@@ -3,6 +3,7 @@ import { Edit, Trash2, Loader2 } from 'lucide-react'
 import { Card, CardHeader, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { SilenceExpiry } from './SilenceExpiry'
+import { useSettingsStore } from '@/store/useSettingsStore'
 import type { Silence, EnrichedAlert } from '@/types'
 import { cn } from '@/lib/utils'
 
@@ -16,6 +17,7 @@ interface SilenceCardProps {
 
 export function SilenceCard({ silence, alerts, onEdit, onDelete, isDeleting = false }: SilenceCardProps) {
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const theme = useSettingsStore((s) => s.theme)
 
   // Count affected alerts
   const affectedCount = alerts.filter((a) =>
@@ -38,9 +40,9 @@ export function SilenceCard({ silence, alerts, onEdit, onDelete, isDeleting = fa
               <span className="rounded bg-accent px-2 py-0.5 text-xs">{silence.clusterName}</span>
               <span className={cn(
                 'rounded px-2 py-0.5 text-xs font-semibold',
-                silence.status.state === 'active' && 'bg-green-900/40 text-green-400',
-                silence.status.state === 'pending' && 'bg-slate-800 text-slate-300',
-                silence.status.state === 'expired' && 'bg-slate-900 text-slate-500',
+                silence.status.state === 'active' && (theme === 'light' ? 'bg-green-100 text-green-700' : 'bg-green-900/40 text-green-400'),
+                silence.status.state === 'pending' && (theme === 'light' ? 'bg-slate-200 text-slate-600' : 'bg-slate-800 text-slate-300'),
+                silence.status.state === 'expired' && (theme === 'light' ? 'bg-slate-100 text-slate-500' : 'bg-slate-900 text-slate-500'),
               )}>
                 {silence.status.state}
               </span>

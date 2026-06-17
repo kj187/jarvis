@@ -442,7 +442,7 @@ export function Header() {
                 {clusters.map((c) => (
                   <div
                     key={c.name}
-                    className={`px-3 py-2 border-b border-border last:border-0 ${!c.healthy ? 'bg-red-950/30' : ''}`}
+                    className={`px-3 py-2 border-b border-border last:border-0 ${!c.healthy ? (theme === 'light' ? 'bg-red-50' : 'bg-red-950/30') : ''}`}
                   >
                     <div className="flex items-center justify-between gap-3">
                       <div className="relative flex items-center gap-2">

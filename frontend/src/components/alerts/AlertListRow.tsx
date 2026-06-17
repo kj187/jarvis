@@ -117,7 +117,7 @@ export function AlertListRow({
       onKeyDown={(e) => e.key === 'Enter' && onClick(alert.fingerprint)}
       className={cn(
         'cursor-pointer transition-colors hover:bg-accent/50',
-        indented && !selected && !alert.activeClaim && 'bg-background/60',
+        indented && !selected && !alert.activeClaim && (theme === 'light' ? 'bg-background' : 'bg-background/60'),
         alert.activeClaim && !selected && (theme === 'light' ? 'bg-blue-50 hover:bg-blue-100/80' : 'bg-blue-950/30 hover:bg-blue-950/50'),
         isLastInGroup && 'border-b border-border/60',
         isResolved && !noOpacity && 'opacity-50',
@@ -155,7 +155,7 @@ export function AlertListRow({
             {silenceType === 'expiring' && silence && remaining !== undefined && (
               <>
                 <span className="font-normal text-muted-foreground">, </span>
-                <span className="text-xs font-normal text-yellow-400" title={`Silence expires in ${formatSilenceDuration(remaining)}`}>
+                <span className={cn('text-xs font-normal', theme === 'light' ? 'text-amber-600' : 'text-yellow-400')} title={`Silence expires in ${formatSilenceDuration(remaining)}`}>
                   <BellOff className="inline h-3 w-3 align-text-bottom" />
                   {' '}{formatSilenceDuration(remaining)}
                 </span>

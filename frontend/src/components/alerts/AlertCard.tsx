@@ -11,6 +11,7 @@ import { useQuery } from '@tanstack/react-query'
 import { fetchClusters } from '@/api/client'
 import { useAlertStats } from '@/hooks/useAlerts'
 import { useFormatTime } from '@/hooks/useFormatTime'
+import { useSettingsStore } from '@/store/useSettingsStore'
 import type { EnrichedAlert, Silence } from '@/types'
 
 const PAGE_SIZE = 3
@@ -54,6 +55,7 @@ function AlertEntry({
   const isResolved = alert.status.state === 'resolved'
   const { data: stats } = useAlertStats(alert.fingerprint)
   const claim = alert.activeClaim ?? null
+  const theme = useSettingsStore((s) => s.theme)
   const maintainer = claim ? null : (alert.labels['maintainer'] ?? null)
   const allLabels = getFilterableLabels(alert)
   const formatTime = useFormatTime()
@@ -84,14 +86,23 @@ function AlertEntry({
     >
       {/* Claim banner */}
       {claim && (
-        <div className="mb-2 flex items-start gap-2 rounded bg-blue-900/50 px-2 py-1.5 text-xs">
-          <User className="mt-0.5 h-3 w-3 shrink-0 text-blue-300" />
+        <div className={cn(
+          'mb-2 flex items-start gap-2 rounded px-2 py-1.5 text-xs',
+          theme === 'light' ? 'bg-blue-50 border border-blue-200' : 'bg-blue-900/50',
+        )}>
+          <User className={cn('mt-0.5 h-3 w-3 shrink-0', theme === 'light' ? 'text-blue-600' : 'text-blue-300')} />
           <div className="min-w-0 flex-1">
-            <div className="font-semibold text-blue-200">In progress: {claim.claimedBy}</div>
-            <div className="text-blue-400">
+            <div className={cn('font-semibold', theme === 'light' ? 'text-blue-800' : 'text-blue-200')}>
+              In progress: {claim.claimedBy}
+            </div>
+            <div className={theme === 'light' ? 'text-blue-600' : 'text-blue-400'}>
               {formatTime(claim.claimedAt)}
             </div>
-            {claim.note && <div className="mt-0.5 text-blue-300/80">{claim.note}</div>}
+            {claim.note && (
+              <div className={cn('mt-0.5', theme === 'light' ? 'text-blue-700' : 'text-blue-300/80')}>
+                {claim.note}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -127,7 +138,10 @@ function AlertEntry({
         </div>
       )}
       {silenceType === 'expiring' && remaining !== undefined && (
-        <div className="mb-2 flex items-center gap-1.5 rounded bg-yellow-900/40 px-2 py-1.5 text-xs text-yellow-300">
+        <div className={cn(
+          'mb-2 flex items-center gap-1.5 rounded px-2 py-1.5 text-xs',
+          theme === 'light' ? 'bg-amber-50 border border-amber-200 text-amber-700' : 'bg-yellow-900/40 text-yellow-300',
+        )}>
           <BellOff className="h-3 w-3 shrink-0" />
           <span>Silence expires in {formatSilenceDuration(remaining)}</span>
         </div>

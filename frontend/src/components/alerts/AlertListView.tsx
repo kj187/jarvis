@@ -457,7 +457,7 @@ export function AlertListView({ alerts, silences, onSelectAlert, selectedFingerp
             return (
               <Fragment key={severity}>
                 <tr aria-hidden="true">
-                  <td colSpan={showStateColumn ? 4 : 3} className="h-8 bg-background p-0" />
+                  <td colSpan={showStateColumn ? 4 : 3} className={cn('h-8 p-0', theme === 'light' ? 'bg-muted' : 'bg-background')} />
                 </tr>
                 <tr>
                   <td
@@ -488,8 +488,10 @@ export function AlertListView({ alerts, silences, onSelectAlert, selectedFingerp
                         onClick={() => toggleGroup(groupKey)}
                         onKeyDown={(e) => e.key === 'Enter' && toggleGroup(groupKey)}
                         className={cn(
-                          'cursor-pointer transition-colors hover:bg-accent/70',
-                          expanded ? 'bg-muted/40' : 'bg-muted/30',
+                          'cursor-pointer transition-colors',
+                          theme === 'light'
+                            ? 'bg-card hover:bg-accent'
+                            : cn('hover:bg-accent/70', expanded ? 'bg-muted/40' : 'bg-muted/30'),
                         )}
                       >
                         <td className={cn('px-4 py-2.5 border-l-4', cfg.borderClass)}>
@@ -511,7 +513,7 @@ export function AlertListView({ alerts, silences, onSelectAlert, selectedFingerp
                                 </span>
                               )}
                               {activeSilences.length === 0 && expiringSilences.length > 0 && (
-                                <span className="inline-flex items-center gap-1 text-xs font-normal text-yellow-400" title={`Group silence expires in ${formatSilenceDuration(expiringSilences[0].remaining)}`}>
+                                <span className={cn('inline-flex items-center gap-1 text-xs font-normal', theme === 'light' ? 'text-amber-600' : 'text-yellow-400')} title={`Group silence expires in ${formatSilenceDuration(expiringSilences[0].remaining)}`}>
                                   <BellOff className="h-3 w-3 shrink-0" />
                                   {formatSilenceDuration(expiringSilences[0].remaining)}
                                 </span>
@@ -563,12 +565,20 @@ export function AlertListView({ alerts, silences, onSelectAlert, selectedFingerp
                                 type="button"
                                 onClick={() => openSilenceForm(group.alerts, expiringSilences[0].silence, true)}
                                 title={expiringSilences.length > 1 ? `Extend ${expiringSilences.length} group silences` : 'Extend group silence'}
-                                className="cursor-pointer flex w-fit items-center gap-1 rounded border border-yellow-700/60 px-1.5 py-0.5 text-xs text-yellow-400 transition-colors hover:border-yellow-500"
+                                className={cn(
+                                  'cursor-pointer flex w-fit items-center gap-1 rounded border px-1.5 py-0.5 text-xs transition-colors',
+                                  theme === 'light'
+                                    ? 'border-amber-400/70 text-amber-700 hover:border-amber-500'
+                                    : 'border-yellow-700/60 text-yellow-400 hover:border-yellow-500',
+                                )}
                               >
                                 <RefreshCw className="h-3 w-3" />
                                 <span>group</span>
                                 {expiringSilences.length > 1 && (
-                                  <span className="rounded-full bg-yellow-900/50 px-1 text-[10px] leading-tight">{expiringSilences.length}</span>
+                                  <span className={cn(
+                                    'rounded-full px-1 text-[10px] leading-tight',
+                                    theme === 'light' ? 'bg-amber-100' : 'bg-yellow-900/50',
+                                  )}>{expiringSilences.length}</span>
                                 )}
                               </button>
                             )}

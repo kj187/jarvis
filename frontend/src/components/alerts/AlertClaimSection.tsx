@@ -8,6 +8,8 @@ import { LoginModal } from '@/components/auth/LoginModal'
 import { useProtectedAction } from '@/hooks/useProtectedAction'
 import { useAuthStore } from '@/store/authStore'
 import { useState, useCallback } from 'react'
+import { useSettingsStore } from '@/store/useSettingsStore'
+import { cn } from '@/lib/utils'
 
 interface AlertClaimSectionProps {
   fingerprint: string
@@ -20,6 +22,7 @@ export function AlertClaimSection({ fingerprint }: AlertClaimSectionProps) {
   const { user, providerInfo } = useAuthStore()
   const authMode = providerInfo?.mode ?? 'none'
 
+  const theme = useSettingsStore((s) => s.theme)
   const [note, setNote] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [manualName, setManualName] = useState('')
@@ -44,9 +47,12 @@ export function AlertClaimSection({ fingerprint }: AlertClaimSectionProps) {
     <>
       <div className="space-y-3">
         {activeClaim ? (
-          <div className="rounded border border-blue-800 bg-blue-950/40 p-3">
+          <div className={cn(
+            'rounded border p-3',
+            theme === 'light' ? 'border-blue-200 bg-blue-50' : 'border-blue-800 bg-blue-950/40',
+          )}>
             <div className="flex items-center justify-between">
-              <span className="flex items-center gap-2 text-sm font-semibold text-blue-300">
+              <span className={cn('flex items-center gap-2 text-sm font-semibold', theme === 'light' ? 'text-blue-700' : 'text-blue-300')}>
                 <User className="h-4 w-4" />
                 {activeClaim.claimedBy}
               </span>

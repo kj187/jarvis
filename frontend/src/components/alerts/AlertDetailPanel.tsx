@@ -436,7 +436,12 @@ export function AlertDetailPanel({
                         <button
                           key={label}
                           disabled={isExtending}
-                          className="flex items-center gap-1 rounded border border-yellow-700 px-2 py-0.5 text-xs text-yellow-300 hover:bg-yellow-900/50 cursor-pointer disabled:opacity-40"
+                          className={cn(
+                            'flex items-center gap-1 rounded border px-2 py-0.5 text-xs cursor-pointer disabled:opacity-40',
+                            theme === 'light'
+                              ? 'border-amber-400 text-amber-700 hover:bg-amber-50'
+                              : 'border-yellow-700 text-yellow-300 hover:bg-yellow-900/50',
+                          )}
                           onClick={() => upsertSilence({
                             id: s.id,
                             cluster: s.clusterName,
@@ -463,7 +468,12 @@ export function AlertDetailPanel({
                   </button>
                   <button
                     disabled={isDeleting}
-                    className="flex items-center gap-1 rounded border border-border px-2 py-0.5 text-xs text-red-500/70 hover:text-red-400 hover:bg-red-950/40 cursor-pointer disabled:opacity-40"
+                    className={cn(
+                      'flex items-center gap-1 rounded border border-border px-2 py-0.5 text-xs cursor-pointer disabled:opacity-40',
+                      theme === 'light'
+                        ? 'text-red-600/70 hover:text-red-600 hover:bg-red-50'
+                        : 'text-red-500/70 hover:text-red-400 hover:bg-red-950/40',
+                    )}
                     onClick={() => handleDelete(s)}
                   >
                     <Trash2 className="h-3 w-3" />
