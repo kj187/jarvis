@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import type { EnrichedAlert, LabelMatcher, Silence, SilenceMatcher } from '@/types'
 import { renderTextWithLinks } from '@/lib/linkUtils'
+import { tzAbbr } from '@/lib/alertUtils'
 
 const USERNAME_KEY = 'jarvis-username'
 
@@ -461,21 +462,21 @@ export function AlertDetailPanel({
 
                   <span className="text-muted-foreground">Created at</span>
                   <span className={isExpiring ? (theme === 'light' ? 'text-yellow-700' : 'text-yellow-400') : 'text-muted-foreground'}>
-                    {format(new Date(s.updatedAt), 'yyyy-MM-dd HH:mm', { locale: enUS })}
+                    {format(new Date(s.updatedAt), 'yyyy-MM-dd HH:mm', { locale: enUS })} {tzAbbr}
                   </span>
 
                   {isPending ? (
                     <>
                       <span className="text-muted-foreground">Starts at</span>
                       <span className="text-muted-foreground">
-                        {format(new Date(s.startsAt), 'yyyy-MM-dd HH:mm', { locale: enUS })}
+                        {format(new Date(s.startsAt), 'yyyy-MM-dd HH:mm', { locale: enUS })} {tzAbbr}
                       </span>
                     </>
                   ) : (
                     <>
                       <span className="text-muted-foreground">{isExpiring ? 'Expires' : 'Ends'}</span>
                       <span className={isExpiring ? (theme === 'light' ? 'text-yellow-700' : 'text-yellow-400') : 'text-muted-foreground'}>
-                        in {formatDuration(remaining)} ({format(new Date(s.endsAt), 'yyyy-MM-dd HH:mm', { locale: enUS })})
+                        in {formatDuration(remaining)} ({format(new Date(s.endsAt), 'yyyy-MM-dd HH:mm', { locale: enUS })} {tzAbbr})
                       </span>
                     </>
                   )}
@@ -555,12 +556,12 @@ export function AlertDetailPanel({
 
               <span className="text-muted-foreground">Created at</span>
               <span className="text-muted-foreground">
-                {format(new Date(s.updatedAt), 'yyyy-MM-dd HH:mm', { locale: enUS })}
+                {format(new Date(s.updatedAt), 'yyyy-MM-dd HH:mm', { locale: enUS })} {tzAbbr}
               </span>
 
               <span className="text-muted-foreground">Expired at</span>
               <span className="text-muted-foreground">
-                {format(new Date(s.endsAt), 'yyyy-MM-dd HH:mm', { locale: enUS })}
+                {format(new Date(s.endsAt), 'yyyy-MM-dd HH:mm', { locale: enUS })} {tzAbbr}
               </span>
 
               {s.comment && (
@@ -852,7 +853,7 @@ export function AlertDetailPanel({
                         {pagedRows.map((r) => (
                           <tr key={r.key} className="border-b border-border last:border-0">
                             <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">
-                              {format(r.time, 'yyyy-MM-dd HH:mm', { locale: enUS })}
+                              {format(r.time, 'yyyy-MM-dd HH:mm', { locale: enUS })} {tzAbbr}
                             </td>
                             <td className="px-3 py-2 font-medium">{r.who}</td>
                             <td className={`px-3 py-2 font-medium ${actionColor[r.action] ?? 'text-foreground'}`}>

@@ -2,6 +2,8 @@ import { formatDistanceToNow } from 'date-fns'
 import { enUS } from 'date-fns/locale'
 import type { EnrichedAlert, LabelMatcher, Silence } from '@/types'
 
+export const tzAbbr = new Date().toLocaleTimeString('en', { timeZoneName: 'short' }).split(' ').pop() ?? ''
+
 // ── Label utilities ────────────────────────────────────────────────────────
 
 /**
@@ -152,7 +154,7 @@ export function formatTime(
 ): string {
   const d = new Date(date)
   if (format === 'absolute') {
-    return d.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })
+    return d.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }) + ' ' + tzAbbr
   }
   return formatDistanceToNow(d, { addSuffix: true, locale: enUS })
 }

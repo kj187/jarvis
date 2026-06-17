@@ -4,6 +4,7 @@ import { enUS } from 'date-fns/locale'
 import { format, parse, isValid } from 'date-fns'
 import { CalendarDays, Clock, ChevronLeft, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { tzAbbr } from '@/lib/alertUtils'
 
 interface DateTimePickerProps {
   value: string // "yyyy-MM-dd'T'HH:mm"
@@ -55,6 +56,9 @@ export function DateTimePicker({ value, onChange, className }: DateTimePickerPro
         <span className={cn('flex-1 text-left font-mono', !displayValue && 'text-muted-foreground')}>
           {displayValue || 'Pick a date…'}
         </span>
+        {displayValue && (
+          <span className="text-[10px] text-muted-foreground font-mono shrink-0">{tzAbbr}</span>
+        )}
       </button>
 
       {open && (

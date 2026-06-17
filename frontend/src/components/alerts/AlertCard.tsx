@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Bell, BellOff, User } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { getFilterableLabels, getSilenceState, formatSilenceDuration } from '@/lib/alertUtils'
+import { getFilterableLabels, getSilenceState, formatSilenceDuration, tzAbbr } from '@/lib/alertUtils'
 import { renderTextWithLinks } from '@/lib/linkUtils'
 import { AlertBadge } from './AlertBadge'
 import { HIDDEN_LABEL_KEYS, LabelChip } from './LabelChip'
@@ -138,7 +138,7 @@ function AlertEntry({
           {new Date(silence.startsAt).toLocaleTimeString('en-US', {
             hour: '2-digit',
             minute: '2-digit',
-          })}
+          })} {tzAbbr}
         </div>
       )}
 

@@ -10,7 +10,7 @@ import { Select } from '@/components/ui/select'
 import { DateTimePicker } from '@/components/ui/date-time-picker'
 import { useAlerts } from '@/hooks/useAlerts'
 import { useSilences } from '@/hooks/useSilences'
-import { matchesLabelMatchers } from '@/lib/alertUtils'
+import { matchesLabelMatchers, tzAbbr } from '@/lib/alertUtils'
 import { upsertSilence, triggerPoll } from '@/api/client'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { useAuthStore } from '@/store/authStore'
@@ -617,7 +617,7 @@ export function SilenceForm({
                       {s.id}
                     </a>
                     <span className="opacity-75">
-                      until {new Date(s.endsAt).toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'short' })}
+                      until {new Date(s.endsAt).toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'short' })} {tzAbbr}
                     </span>
                   </div>
                   {s.comment && <p className="italic opacity-75">{s.comment}</p>}
@@ -918,9 +918,9 @@ export function SilenceForm({
         <div className="rounded border border-border p-3 text-xs space-y-1.5">
           <div className="grid grid-cols-[80px_1fr] gap-y-1.5">
             <span className="text-muted-foreground">Start</span>
-            <span className="font-mono">{startsAt ? format(new Date(startsAt), 'yyyy-MM-dd HH:mm') : '—'}</span>
+            <span className="font-mono">{startsAt ? `${format(new Date(startsAt), 'yyyy-MM-dd HH:mm')} ${tzAbbr}` : '—'}</span>
             <span className="text-muted-foreground">Ende</span>
-            <span className="font-mono">{previewEnd} <span className="text-muted-foreground ml-1">({previewDuration})</span></span>
+            <span className="font-mono">{previewEnd} {tzAbbr} <span className="text-muted-foreground ml-1">({previewDuration})</span></span>
             <span className="text-muted-foreground">Author</span>
             <span>{effectiveCreatedBy}</span>
             <span className="text-muted-foreground">Reason</span>

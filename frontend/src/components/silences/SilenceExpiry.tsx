@@ -1,6 +1,7 @@
 import { formatDistanceToNow, format } from 'date-fns'
 import { enUS } from 'date-fns/locale'
 import { cn } from '@/lib/utils'
+import { tzAbbr } from '@/lib/alertUtils'
 import type { Silence } from '@/types'
 
 interface SilenceExpiryProps {
@@ -30,7 +31,7 @@ export function SilenceExpiry({ silence, className }: SilenceExpiryProps) {
       <span className={cn('text-xs', isExpiring ? 'text-yellow-400' : 'text-green-400', className)}>
         {isExpiring
           ? `⚠️ Expires in ${Math.ceil(remaining / 60_000)} min`
-          : `Until ${format(new Date(silence.endsAt), 'MMM d, HH:mm', { locale: enUS })}`}
+          : `Until ${format(new Date(silence.endsAt), 'MMM d, HH:mm', { locale: enUS })} ${tzAbbr}`}
       </span>
     )
   }
