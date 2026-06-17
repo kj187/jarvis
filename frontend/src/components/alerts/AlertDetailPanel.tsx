@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { format, formatDistanceToNow } from 'date-fns'
 import { enUS } from 'date-fns/locale'
-import { ExternalLink, BookOpen, ChevronDown, ChevronUp, BellOff, Pencil, Trash2, User, Copy, Check } from 'lucide-react'
+import { ExternalLink, BookOpen, ChevronDown, ChevronUp, BellOff, Pencil, Trash2, User, Copy, Check, Info } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Sheet } from '@/components/ui/sheet'
 import { AlertBadge, StatusBadge } from './AlertBadge'
@@ -17,7 +17,7 @@ import { useSettingsStore } from '@/store/useSettingsStore'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import type { EnrichedAlert, LabelMatcher, Silence, SilenceMatcher } from '@/types'
-import { renderTextWithLinks } from '@/lib/linkUtils'
+import { renderTextWithLinks, extractLinkButtons } from '@/lib/linkUtils'
 import { tzAbbr } from '@/lib/alertUtils'
 
 const USERNAME_KEY = 'jarvis-username'
@@ -98,7 +98,7 @@ function Section({
   defaultOpen = true,
   headerRight,
 }: {
-  title: string
+  title: React.ReactNode
   children: React.ReactNode
   defaultOpen?: boolean
   headerRight?: React.ReactNode
@@ -110,7 +110,7 @@ function Section({
         className="flex w-full items-center justify-between text-sm font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground cursor-pointer"
         onClick={() => setOpen((v) => !v)}
       >
-        {title}
+        <span className="flex items-center gap-1.5">{title}</span>
         <div className="flex items-center gap-2">
           {headerRight && (
             <span onClick={(e) => e.stopPropagation()}>{headerRight}</span>
@@ -179,15 +179,7 @@ export function AlertDetailPanel({
 
   const alertname = alert.labels['alertname'] ?? 'Unknown'
   const severity = alert.labels['severity'] ?? 'none'
-  const runbookRaw = alert.labels['runbook'] ?? alert.annotations['runbook']
-  const runbookUrl = runbookRaw
-    ? runbookBaseUrl
-      ? `${runbookBaseUrl}${runbookRaw}`
-      : runbookRaw.startsWith('http://') || runbookRaw.startsWith('https://')
-        ? runbookRaw
-        : null
-    : null
-  const dashboardAnnotation = alert.annotations['dashboard']
+  const linkButtons = extractLinkButtons(alert.labels, alert.annotations, runbookBaseUrl)
 
   const FIFTEEN_MIN = 15 * 60 * 1000
 
@@ -252,9 +244,9 @@ export function AlertDetailPanel({
 
   const summaryText = alert.annotations['summary']
   const descriptionText = alert.annotations['description']
-  const linkAnnotation = alert.annotations['link']
+  const linkButtonKeys = new Set(linkButtons.map((b) => b.label))
   const annotationEntries = Object.entries(alert.annotations).filter(
-    ([k]) => k !== 'summary' && k !== 'description' && k !== 'dashboard' && k !== 'link',
+    ([k]) => k !== 'summary' && k !== 'description' && !linkButtonKeys.has(k),
   )
 
   return (
@@ -282,8 +274,29 @@ export function AlertDetailPanel({
           )}
 
           {/* Action buttons */}
-          <div className="mt-3 flex items-center justify-end gap-2 pr-8">
-            <div className="flex shrink-0 items-center gap-2">
+          <div className="mt-3 flex items-center justify-between gap-2 pr-8">
+            {alert.alertmanagerUrl && (
+              <a
+                href={(() => {
+                  const filter = `{alertname="${alert.labels.alertname}"}`
+                  const params = new URLSearchParams({
+                    silenced: 'false',
+                    inhibited: 'false',
+                    muted: 'false',
+                    active: 'true',
+                    filter,
+                  })
+                  return `${alert.alertmanagerUrl}/#/alerts?${params.toString()}`
+                })()}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1 rounded border border-border px-2 py-1 text-xs hover:bg-accent cursor-pointer"
+              >
+                <ExternalLink className="h-3 w-3" />
+                Go to Alertmanager
+              </a>
+            )}
+            <div className="flex shrink-0 items-center gap-2 ml-auto">
               {activeClaim ? (
                 <div className={cn('flex items-center gap-1.5 rounded border px-2 py-1', theme === 'light' ? 'border-blue-300 bg-blue-50' : 'border-blue-800 bg-blue-950/40')}>
                   <User className={cn('h-3 w-3 shrink-0', theme === 'light' ? 'text-blue-600' : 'text-blue-400')} />
@@ -297,21 +310,22 @@ export function AlertDetailPanel({
                   </button>
                 </div>
               ) : (
-                <button
-                  className="flex items-center gap-1 rounded border border-border px-2 py-1 text-xs hover:bg-accent cursor-pointer"
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={() => setShowClaimForm((v) => !v)}
                 >
-                  <User className="h-3 w-3" />
+                  <User className="h-3.5 w-3.5" />
                   Claim
-                </button>
+                </Button>
               )}
-              <button
-                className="flex items-center gap-1 rounded border border-border px-2 py-1 text-xs hover:bg-accent cursor-pointer"
+              <Button
+                size="sm"
                 onClick={() => setShowNewSilenceForm(true)}
               >
-                <BellOff className="h-3 w-3" />
+                <BellOff className="h-3.5 w-3.5" />
                 Silence
-              </button>
+              </Button>
             </div>
           </div>
 
@@ -590,7 +604,7 @@ export function AlertDetailPanel({
         )}
 
         {/* Summary / Description */}
-        {(summaryText || descriptionText || alert.alertmanagerUrl || dashboardAnnotation || linkAnnotation || runbookUrl) && (
+        {(summaryText || descriptionText) && (
           <Section title="Summary" defaultOpen={true}>
             <div className="space-y-2">
               {summaryText && (
@@ -599,64 +613,45 @@ export function AlertDetailPanel({
               {descriptionText && (
                 <p className="text-xs text-muted-foreground leading-relaxed">{renderTextWithLinks(descriptionText)}</p>
               )}
-              {(alert.alertmanagerUrl || dashboardAnnotation || linkAnnotation || runbookUrl) && (
-                <div className="flex flex-wrap gap-2 pt-1">
-                  {alert.alertmanagerUrl && (
-                    <a
-                      href={(() => {
-                        const filter = `{alertname="${alert.labels.alertname}"}`
-                        const params = new URLSearchParams({
-                          silenced: 'false',
-                          inhibited: 'false',
-                          muted: 'false',
-                          active: 'true',
-                          filter,
-                        })
-                        return `${alert.alertmanagerUrl}/#/alerts?${params.toString()}`
-                      })()}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-1 rounded border border-border px-2 py-1 text-xs hover:bg-accent cursor-pointer"
-                    >
-                      <ExternalLink className="h-3 w-3" />
-                      Alertmanager
-                    </a>
-                  )}
-                  {dashboardAnnotation && (
-                    <a
-                      href={dashboardAnnotation}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-1 rounded border border-border px-2 py-1 text-xs hover:bg-accent cursor-pointer"
-                    >
-                      <ExternalLink className="h-3 w-3" />
-                      Dashboard
-                    </a>
-                  )}
-                  {linkAnnotation && (
-                    <a
-                      href={linkAnnotation}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-1 rounded border border-border px-2 py-1 text-xs hover:bg-accent cursor-pointer"
-                    >
-                      <ExternalLink className="h-3 w-3" />
-                      Link
-                    </a>
-                  )}
-                  {runbookUrl && (
-                    <a
-                      href={runbookUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-1 rounded border border-border px-2 py-1 text-xs hover:bg-accent cursor-pointer"
-                    >
-                      <BookOpen className="h-3 w-3" />
-                      Runbook
-                    </a>
-                  )}
-                </div>
-              )}
+            </div>
+          </Section>
+        )}
+
+        {/* Links */}
+        {linkButtons.length > 0 && (
+          <Section
+            title={
+              <>
+                Links
+                <span
+                  className="group relative inline-flex items-center"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <Info className="h-3.5 w-3.5 cursor-help text-muted-foreground/60 hover:text-muted-foreground" />
+                  <span className="pointer-events-none absolute left-0 top-5 z-50 w-72 rounded-md border border-border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-lg opacity-0 group-hover:opacity-100 transition-opacity normal-case tracking-normal font-normal leading-relaxed">
+                    Links are auto-generated from labels and annotations whose value is an absolute URL (http:// or https://).
+                    <br /><br />
+                    The <code className="rounded bg-accent px-0.5 font-mono">runbook</code> key also accepts a plain ID — set{' '}
+                    <code className="rounded bg-accent px-0.5 font-mono">JARVIS_RUNBOOK_BASE_URL</code> to build the full URL automatically.
+                  </span>
+                </span>
+              </>
+            }
+            defaultOpen={true}
+          >
+            <div className="flex flex-wrap items-center gap-2">
+              {linkButtons.map((btn) => (
+                <a
+                  key={btn.label}
+                  href={btn.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 rounded border border-border px-2 py-1 text-xs hover:bg-accent cursor-pointer"
+                >
+                  {btn.isRunbook ? <BookOpen className="h-3 w-3" /> : <ExternalLink className="h-3 w-3" />}
+                  {btn.label}
+                </a>
+              ))}
             </div>
           </Section>
         )}
