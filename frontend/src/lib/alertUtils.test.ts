@@ -237,6 +237,13 @@ describe('getFilterableLabels — extended', () => {
     expect(labels['receiver']).toBe('')
   })
 
+  it('falls back to @receiver label when receivers array is empty (DB-resolved alerts)', () => {
+    const alert = { ...makeAlert({ '@receiver': 'pushover' }), receivers: [] }
+    const labels = getFilterableLabels(alert)
+    expect(labels['@receiver']).toBe('pushover')
+    expect(labels['receiver']).toBe('pushover')
+  })
+
   it('preserves original alert labels', () => {
     const alert = makeAlert({ severity: 'critical', job: 'node' })
     const labels = getFilterableLabels(alert)

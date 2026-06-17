@@ -12,7 +12,8 @@ import type { EnrichedAlert, LabelMatcher, Silence } from '@/types'
  */
 export function getFilterableLabels(alert: EnrichedAlert): Record<string, string> {
   const labels: Record<string, string> = { ...alert.labels }
-  const receiver = alert.receivers?.[0]?.name ?? ''
+  // Resolved alerts from DB have receivers:[] — fall back to the @receiver label stored at index time.
+  const receiver = alert.receivers?.[0]?.name ?? labels['@receiver'] ?? ''
   labels['@receiver'] = receiver
   labels['receiver'] = receiver
   labels['@cluster'] = alert.clusterName
