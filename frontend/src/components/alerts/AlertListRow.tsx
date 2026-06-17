@@ -10,6 +10,7 @@ import { useFormatTime } from '@/hooks/useFormatTime'
 import type { EnrichedAlert, Silence } from '@/types'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/store/authStore'
+import { useSettingsStore } from '@/store/useSettingsStore'
 
 const USERNAME_KEY = 'jarvis-username'
 
@@ -48,6 +49,7 @@ export function AlertListRow({
 }: AlertListRowProps) {
   const alertname = alert.labels['alertname'] ?? '—'
   const isResolved = alert.status.state === 'resolved'
+  const theme = useSettingsStore((s) => s.theme)
 
   const [showNameInput, setShowNameInput] = useState(false)
   const [nameInput, setNameInput] = useState('')
@@ -116,7 +118,7 @@ export function AlertListRow({
       className={cn(
         'cursor-pointer transition-colors hover:bg-accent/50',
         indented && !selected && !alert.activeClaim && 'bg-background/60',
-        alert.activeClaim && !selected && 'bg-blue-950/30 hover:bg-blue-950/50',
+        alert.activeClaim && !selected && (theme === 'light' ? 'bg-blue-50 hover:bg-blue-100/80' : 'bg-blue-950/30 hover:bg-blue-950/50'),
         isLastInGroup && 'border-b border-border/60',
         isResolved && !noOpacity && 'opacity-50',
         selected && 'bg-accent',
