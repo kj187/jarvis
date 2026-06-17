@@ -544,30 +544,34 @@ export function AlertListView({ alerts, silences, onSelectAlert, selectedFingerp
                         )}
                         <td className="px-4 py-2.5" onClick={(e) => e.stopPropagation()}>
                           <div className="flex flex-col gap-1">
-                            {activeSilences.map(({ silence }) => (
+                            {activeSilences.length > 0 && (
                               <button
-                                key={silence.id}
                                 type="button"
-                                onClick={() => expireMutation.mutate({ id: silence.id, cluster: silence.clusterName })}
-                                title="Expire group silence"
+                                onClick={() => activeSilences.forEach(({ silence }) => expireMutation.mutate({ id: silence.id, cluster: silence.clusterName }))}
+                                title={activeSilences.length > 1 ? `Expire ${activeSilences.length} group silences` : 'Expire group silence'}
                                 className="cursor-pointer flex w-fit items-center gap-1 rounded border border-slate-700 px-1.5 py-0.5 text-xs text-slate-400 transition-colors hover:border-slate-500 hover:text-slate-200"
                               >
                                 <BellMinus className="h-3 w-3" />
                                 <span>group</span>
+                                {activeSilences.length > 1 && (
+                                  <span className="rounded-full bg-slate-700 px-1 text-[10px] leading-tight">{activeSilences.length}</span>
+                                )}
                               </button>
-                            ))}
-                            {expiringSilences.map(({ silence }) => (
+                            )}
+                            {activeSilences.length === 0 && expiringSilences.length > 0 && (
                               <button
-                                key={silence.id}
                                 type="button"
-                                onClick={() => openSilenceForm(group.alerts, silence, true)}
-                                title="Extend group silence"
+                                onClick={() => openSilenceForm(group.alerts, expiringSilences[0].silence, true)}
+                                title={expiringSilences.length > 1 ? `Extend ${expiringSilences.length} group silences` : 'Extend group silence'}
                                 className="cursor-pointer flex w-fit items-center gap-1 rounded border border-yellow-700/60 px-1.5 py-0.5 text-xs text-yellow-400 transition-colors hover:border-yellow-500"
                               >
                                 <RefreshCw className="h-3 w-3" />
                                 <span>group</span>
+                                {expiringSilences.length > 1 && (
+                                  <span className="rounded-full bg-yellow-900/50 px-1 text-[10px] leading-tight">{expiringSilences.length}</span>
+                                )}
                               </button>
-                            ))}
+                            )}
                             {!hasSilence && expiredSilences.length > 0 && (
                               <button
                                 type="button"
@@ -593,7 +597,7 @@ export function AlertListView({ alerts, silences, onSelectAlert, selectedFingerp
                           </div>
                         </td>
                         <td className="px-4 py-2.5 text-sm text-muted-foreground">
-                          {group.claimCount > 0 ? `${group.claimCount}×` : '—'}
+                          {group.claimCount > 0 ? `${group.claimCount}/${group.alerts.length}` : '—'}
                         </td>
                       </tr>
                       {expanded &&
