@@ -151,6 +151,7 @@ export function AlertDetailPanel({
   const [claimNote, setClaimNote] = useState('')
   const { user, providerInfo } = useAuthStore()
   const theme = useSettingsStore((s) => s.theme)
+  const claimAnimationEnabled = useSettingsStore((s) => s.claimAnimationEnabled)
   const authMode = providerInfo?.mode ?? 'none'
   const claimName = user?.username ?? manualClaimName
   const [promptCopied, setPromptCopied] = useState(false)
@@ -311,7 +312,7 @@ export function AlertDetailPanel({
                 </div>
               ) : (
                 <div className="relative p-[1px] overflow-hidden rounded-md">
-                  <div className="claim-snake-spinner absolute inset-[-150%]" />
+                  {claimAnimationEnabled && <div className="claim-snake-spinner absolute inset-[-150%]" />}
                   <Button
                     variant="outline"
                     size="sm"

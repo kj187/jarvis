@@ -26,6 +26,9 @@ export interface UserSettings {
 
   // Polling
   pollIntervalSeconds: number
+
+  // Animations
+  claimAnimationEnabled: boolean
 }
 
 export const POLL_OPTIONS = [5, 10, 15, 20, 25, 30, 60] as const
@@ -45,6 +48,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   defaultSilenceDurationMinutes: 60,
   defaultCreatorName: '',
   pollIntervalSeconds: 15,
+  claimAnimationEnabled: true,
 }
 
 interface SettingsStore extends UserSettings {

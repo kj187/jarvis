@@ -300,6 +300,26 @@ export function SettingsSheet({
               ]}
             />
           </SettingRow>
+
+          <SettingRow label="Claim animation">
+            <button
+              type="button"
+              role="switch"
+              aria-checked={settings.claimAnimationEnabled}
+              onClick={() => update({ claimAnimationEnabled: !settings.claimAnimationEnabled })}
+              className={cn(
+                'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors',
+                settings.claimAnimationEnabled ? 'bg-primary' : 'bg-input',
+              )}
+            >
+              <span
+                className={cn(
+                  'pointer-events-none inline-block h-4 w-4 rounded-full bg-background shadow-sm transition-transform',
+                  settings.claimAnimationEnabled ? 'translate-x-4' : 'translate-x-0',
+                )}
+              />
+            </button>
+          </SettingRow>
         </Section>
 
         <div className="h-px bg-border" />
