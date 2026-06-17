@@ -298,7 +298,7 @@ export function AlertDetailPanel({
             )}
             <div className="flex shrink-0 items-center gap-2 ml-auto">
               {activeClaim ? (
-                <div className={cn('flex items-center gap-1.5 rounded border px-2 py-1', theme === 'light' ? 'border-blue-300 bg-blue-50' : 'border-blue-800 bg-blue-950/40')}>
+                <div className={cn('flex items-center gap-1.5 rounded-md border px-3 h-8 text-xs', theme === 'light' ? 'border-blue-300 bg-blue-50' : 'border-blue-800 bg-blue-950/40')}>
                   <User className={cn('h-3 w-3 shrink-0', theme === 'light' ? 'text-blue-600' : 'text-blue-400')} />
                   <span className={cn('text-xs font-medium', theme === 'light' ? 'text-blue-700' : 'text-blue-300')}>{activeClaim.claimedBy}</span>
                   <button
@@ -310,13 +310,13 @@ export function AlertDetailPanel({
                   </button>
                 </div>
               ) : (
-                <div className="relative p-[2px] overflow-hidden rounded-md">
+                <div className="relative p-[1px] overflow-hidden rounded-md">
                   <div className="claim-snake-spinner absolute inset-[-150%]" />
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => setShowClaimForm((v) => !v)}
-                    className="relative z-10 bg-card border-transparent hover:bg-accent hover:border-transparent"
+                    className="relative z-10 bg-background border-transparent hover:bg-accent hover:border-transparent"
                   >
                     <User className="h-3.5 w-3.5" />
                     Claim
@@ -351,20 +351,28 @@ export function AlertDetailPanel({
                 )
               }}
             >
-              {authMode !== 'none' ? (
-                <div className="flex items-center gap-1.5 h-7 px-2 rounded border border-border bg-muted text-xs text-muted-foreground w-48">
-                  <User className="h-3 w-3 shrink-0" />
-                  <span>{user?.username ?? '…'}</span>
-                </div>
-              ) : (
-                <Input
-                  value={manualClaimName}
-                  onChange={(e) => setManualClaimName(e.target.value)}
-                  placeholder="Your name"
-                  className="h-7 w-48 text-xs"
-                  required
-                />
-              )}
+              <div className="flex items-center gap-1.5">
+                {authMode !== 'none' ? (
+                  <div className="flex items-center gap-1.5 h-7 px-2 rounded border border-border bg-muted text-xs text-muted-foreground w-48">
+                    <User className="h-3 w-3 shrink-0" />
+                    <span>{user?.username ?? '…'}</span>
+                  </div>
+                ) : (
+                  <Input
+                    value={manualClaimName}
+                    onChange={(e) => setManualClaimName(e.target.value)}
+                    placeholder="Your name"
+                    className="h-7 w-48 text-xs"
+                    required
+                  />
+                )}
+                <span className="group relative inline-flex items-center">
+                  <Info className="h-3.5 w-3.5 cursor-help text-muted-foreground/60 hover:text-muted-foreground" />
+                  <span className="pointer-events-none absolute left-5 top-0 z-50 w-64 rounded-md border border-border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-lg opacity-0 group-hover:opacity-100 transition-opacity font-normal leading-relaxed">
+                    Claiming this alert signals to your team that you're actively investigating it — others can see who's on it at a glance.
+                  </span>
+                </span>
+              </div>
               <textarea
                 value={claimNote}
                 onChange={(e) => setClaimNote(e.target.value)}

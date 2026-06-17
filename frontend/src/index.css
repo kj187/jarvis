@@ -97,10 +97,10 @@ input::-webkit-calendar-picker-indicator {
   background: conic-gradient(
     from 0deg,
     transparent 0deg,
-    transparent 210deg,
-    hsl(217 91% 55% / 0.25) 245deg,
-    hsl(221 83% 53%) 310deg,
-    hsl(210 100% 72%) 350deg,
+    transparent 285deg,
+    hsl(217 91% 55% / 0.2) 305deg,
+    hsl(221 83% 53%) 340deg,
+    hsl(210 100% 72%) 355deg,
     transparent 360deg
   );
 }
