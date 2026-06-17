@@ -146,7 +146,7 @@ export function AlertListRow({
             {silenceType === 'active' && silence && remaining !== undefined && (
               <>
                 <span className="font-normal text-muted-foreground">, </span>
-                <span className="text-xs font-normal text-slate-400" title={`Silenced, ends in ${formatSilenceDuration(remaining)}`}>
+                <span className="text-xs font-normal text-muted-foreground" title={`Silenced, ends in ${formatSilenceDuration(remaining)}`}>
                   <BellOff className="inline h-3 w-3 align-text-bottom" />
                   {' '}{formatSilenceDuration(remaining)}
                 </span>
@@ -164,7 +164,7 @@ export function AlertListRow({
             {silenceType === 'pending' && (
               <>
                 <span className="font-normal text-muted-foreground">, </span>
-                <span className="text-xs font-normal text-slate-400">
+                <span className="text-xs font-normal text-muted-foreground">
                   <BellOff className="inline h-3 w-3 align-text-bottom" />
                   {' '}pending
                 </span>
@@ -199,7 +199,7 @@ export function AlertListRow({
               type="button"
               onClick={() => onExpireSilence?.(silence.id, silence.clusterName)}
               title="Expire silence"
-              className="cursor-pointer rounded border border-slate-700 p-1 text-slate-400 transition-colors hover:border-slate-500 hover:text-slate-200"
+              className="cursor-pointer rounded border border-border p-1 text-muted-foreground transition-colors hover:border-border/80 hover:text-foreground"
             >
               <BellMinus className="h-3.5 w-3.5" />
             </button>

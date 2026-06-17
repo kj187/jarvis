@@ -54,31 +54,31 @@ const SEVERITY_ORDER = ['critical', 'error', 'warning', 'info', 'none']
 const severitySectionConfig: Record<string, { label: string; darkRowClass: string; lightRowClass: string; borderClass: string }> = {
   critical: {
     label: 'Critical',
-    darkRowClass: 'text-red-400 bg-red-950/30',
+    darkRowClass: 'text-red-400',
     lightRowClass: 'text-red-700 bg-red-100/80',
     borderClass: 'border-l-red-600',
   },
   error: {
     label: 'Error',
-    darkRowClass: 'text-orange-400 bg-orange-950/30',
+    darkRowClass: 'text-orange-400',
     lightRowClass: 'text-orange-700 bg-orange-100/80',
     borderClass: 'border-l-orange-500',
   },
   warning: {
     label: 'Warning',
-    darkRowClass: 'text-yellow-300 bg-yellow-950/30',
+    darkRowClass: 'text-yellow-400',
     lightRowClass: 'text-yellow-700 bg-yellow-100/80',
     borderClass: 'border-l-yellow-500',
   },
   info: {
     label: 'Info',
-    darkRowClass: 'text-blue-400 bg-blue-950/30',
+    darkRowClass: 'text-blue-400',
     lightRowClass: 'text-blue-700 bg-blue-100/80',
     borderClass: 'border-l-blue-600',
   },
   none: {
     label: 'None',
-    darkRowClass: 'text-slate-400 bg-slate-900/30',
+    darkRowClass: 'text-slate-400',
     lightRowClass: 'text-slate-600 bg-slate-200/80',
     borderClass: 'border-l-slate-600',
   },
@@ -449,7 +449,7 @@ export function AlertListView({ alerts, silences, onSelectAlert, selectedFingerp
             const groups = sortGroups(groupsBySeverity.get(severity)!)
             const cfg = severitySectionConfig[severity] ?? {
               label: severity,
-              darkRowClass: 'text-slate-400 bg-slate-900/30',
+              darkRowClass: 'text-slate-400',
               lightRowClass: 'text-slate-600 bg-slate-200/80',
               borderClass: 'border-l-slate-600',
             }
@@ -464,7 +464,7 @@ export function AlertListView({ alerts, silences, onSelectAlert, selectedFingerp
                     colSpan={showStateColumn ? 4 : 3}
                     className={cn(
                       'border-l-4 px-4 py-2',
-                      theme === 'light' ? cfg.lightRowClass : cfg.darkRowClass,
+                      theme === 'light' ? cfg.lightRowClass : cn(cfg.darkRowClass, 'bg-muted/30'),
                       cfg.borderClass,
                     )}
                   >
@@ -505,7 +505,7 @@ export function AlertListView({ alerts, silences, onSelectAlert, selectedFingerp
                                 {group.alerts.length}
                               </span>
                               {activeSilences.length > 0 && (
-                                <span className="inline-flex items-center gap-1 text-xs font-normal text-slate-400" title={`Group silenced, ends in ${formatSilenceDuration(activeSilences[0].remaining)}`}>
+                                <span className="inline-flex items-center gap-1 text-xs font-normal text-muted-foreground" title={`Group silenced, ends in ${formatSilenceDuration(activeSilences[0].remaining)}`}>
                                   <BellOff className="h-3 w-3 shrink-0" />
                                   {formatSilenceDuration(activeSilences[0].remaining)}
                                 </span>
@@ -549,12 +549,12 @@ export function AlertListView({ alerts, silences, onSelectAlert, selectedFingerp
                                 type="button"
                                 onClick={() => activeSilences.forEach(({ silence }) => expireMutation.mutate({ id: silence.id, cluster: silence.clusterName }))}
                                 title={activeSilences.length > 1 ? `Expire ${activeSilences.length} group silences` : 'Expire group silence'}
-                                className="cursor-pointer flex w-fit items-center gap-1 rounded border border-slate-700 px-1.5 py-0.5 text-xs text-slate-400 transition-colors hover:border-slate-500 hover:text-slate-200"
+                                className="cursor-pointer flex w-fit items-center gap-1 rounded border border-border px-1.5 py-0.5 text-xs text-muted-foreground transition-colors hover:border-border/80 hover:text-foreground"
                               >
                                 <BellMinus className="h-3 w-3" />
                                 <span>group</span>
                                 {activeSilences.length > 1 && (
-                                  <span className="rounded-full bg-slate-700 px-1 text-[10px] leading-tight">{activeSilences.length}</span>
+                                  <span className="rounded-full bg-muted px-1 text-[10px] leading-tight">{activeSilences.length}</span>
                                 )}
                               </button>
                             )}

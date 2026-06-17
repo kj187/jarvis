@@ -13,7 +13,7 @@ const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
       <div className={cn('relative inline-flex h-9 w-full', className)}>
         <select
           className={cn(
-            'appearance-none h-full w-full rounded-md border border-input bg-background px-2.5 pr-7 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer',
+            'appearance-none h-full w-full rounded-md border border-border bg-background px-2.5 pr-7 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer',
             selectClassName,
           )}
           ref={ref}

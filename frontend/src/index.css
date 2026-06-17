@@ -1,26 +1,30 @@
 @import "tailwindcss";
 
 @theme {
-  --color-background: hsl(224 71% 4%);
-  --color-foreground: hsl(213 31% 91%);
-  --color-card: hsl(224 71% 6%);
-  --color-card-foreground: hsl(213 31% 91%);
-  --color-border: hsl(216 34% 17%);
-  --color-input: hsl(216 34% 17%);
+  /* Dark mode (default)
+   * Depth chain: background(9%) → header(11%) → card(13%) → input(16%) → muted(19%) → accent(21%) → border(23%)
+   * Low saturation (12-15%) avoids the "electric navy" feeling of high-sat near-black surfaces.
+   */
+  --color-background: hsl(222 15% 9%);
+  --color-foreground: hsl(210 25% 90%);
+  --color-card: hsl(222 14% 13%);
+  --color-card-foreground: hsl(210 25% 90%);
+  --color-border: hsl(220 12% 23%);
+  --color-input: hsl(222 13% 16%);
   --color-primary: hsl(210 40% 98%);
-  --color-primary-foreground: hsl(222.2 47.4% 11.2%);
-  --color-secondary: hsl(222.2 47.4% 11.2%);
-  --color-secondary-foreground: hsl(210 40% 98%);
-  --color-muted: hsl(223 47% 11%);
-  --color-muted-foreground: hsl(215.4 16.3% 56.9%);
-  --color-accent: hsl(216 34% 17%);
-  --color-accent-foreground: hsl(210 40% 98%);
+  --color-primary-foreground: hsl(222 47% 11%);
+  --color-secondary: hsl(222 13% 16%);
+  --color-secondary-foreground: hsl(210 25% 90%);
+  --color-muted: hsl(222 12% 19%);
+  --color-muted-foreground: hsl(215 13% 55%);
+  --color-accent: hsl(220 12% 21%);
+  --color-accent-foreground: hsl(210 25% 90%);
   --color-destructive: hsl(0 63% 31%);
   --color-destructive-foreground: hsl(210 40% 98%);
-  --color-popover: hsl(224 71% 4%);
-  --color-popover-foreground: hsl(215 20.2% 65.1%);
-  --color-ring: hsl(216 34% 17%);
-  --color-header: hsl(213 36% 14%);
+  --color-popover: hsl(222 14% 13%);
+  --color-popover-foreground: hsl(215 13% 60%);
+  --color-ring: hsl(220 12% 30%);
+  --color-header: hsl(222 14% 11%);
 
   --color-severity-critical: hsl(0 84% 60%);
   --color-severity-warning: hsl(38 92% 50%);

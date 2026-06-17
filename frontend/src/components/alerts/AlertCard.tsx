@@ -118,11 +118,11 @@ function AlertEntry({
 
       {/* Silence banner */}
       {silenceType === 'active' && silence && remaining !== undefined && (
-        <div className="mb-2 flex items-center gap-1.5 rounded bg-slate-800 px-2 py-1.5 text-xs">
-          <BellOff className="h-3 w-3 shrink-0 text-slate-400" />
+        <div className="mb-2 flex items-center gap-1.5 rounded bg-muted px-2 py-1.5 text-xs">
+          <BellOff className="h-3 w-3 shrink-0 text-muted-foreground" />
           <div>
-            <div className="font-semibold text-slate-200">SILENCE ACTIVE</div>
-            <div className="text-slate-400">Ends in {formatSilenceDuration(remaining)}</div>
+            <div className="font-semibold text-foreground">SILENCE ACTIVE</div>
+            <div className="text-muted-foreground">Ends in {formatSilenceDuration(remaining)}</div>
           </div>
         </div>
       )}
@@ -133,7 +133,7 @@ function AlertEntry({
         </div>
       )}
       {silenceType === 'pending' && silence && (
-        <div className="mb-2 rounded bg-slate-800 px-2 py-1.5 text-xs text-slate-300">
+        <div className="mb-2 rounded bg-muted px-2 py-1.5 text-xs text-muted-foreground">
           ⏳ Silence from{' '}
           {new Date(silence.startsAt).toLocaleTimeString('en-US', {
             hour: '2-digit',
