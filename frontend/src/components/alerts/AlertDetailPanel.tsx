@@ -551,7 +551,7 @@ export function AlertDetailPanel({
 
         {/* Expired silence banners */}
         {expiredSilences.map((s) => (
-          <div key={s.id} className={cn('border-b border-border px-5 py-4', theme === 'light' ? 'bg-muted' : 'bg-slate-950')}>
+          <div key={s.id} className={cn('border-b border-border px-5 py-4', theme === 'light' ? 'bg-muted' : 'bg-zinc-900')}>
             <div className="mb-3 flex items-center justify-between gap-2">
               <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
                 <BellOff className="h-3 w-3 shrink-0" />
