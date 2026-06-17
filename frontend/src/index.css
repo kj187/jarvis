@@ -25,6 +25,7 @@
   --color-popover-foreground: hsl(215 13% 60%);
   --color-ring: hsl(220 12% 30%);
   --color-header: hsl(222 14% 11%);
+  --color-link: hsl(213 94% 68%);
 
   --color-severity-critical: hsl(0 84% 60%);
   --color-severity-warning: hsl(38 92% 50%);
@@ -35,26 +36,32 @@
 }
 
 [data-theme="light"] {
-  --color-background: hsl(220 14% 96%);
-  --color-foreground: hsl(222 47% 11%);
+  /*
+   * Depth chain: background(94%) → muted(92%) → accent(89%) → border(83%)
+   * Surface elevation: background(94%) → header(99%) → card(100%)
+   * Consistent hue: 220 (cool blue-gray), saturation 11-15%
+   */
+  --color-background: hsl(220 14% 94%);
+  --color-foreground: hsl(222 25% 12%);
+  --color-header: hsl(220 15% 99%);
   --color-card: hsl(0 0% 100%);
-  --color-card-foreground: hsl(222 47% 11%);
-  --color-border: hsl(214 32% 85%);
-  --color-input: hsl(0 0% 100%);
-  --color-primary: hsl(222 47% 11%);
-  --color-primary-foreground: hsl(210 40% 98%);
-  --color-secondary: hsl(210 40% 94%);
-  --color-secondary-foreground: hsl(222 47% 11%);
-  --color-muted: hsl(210 40% 94%);
-  --color-muted-foreground: hsl(215 16% 47%);
-  --color-accent: hsl(210 40% 92%);
-  --color-accent-foreground: hsl(222 47% 11%);
-  --color-destructive: hsl(0 84% 60%);
-  --color-destructive-foreground: hsl(0 0% 98%);
+  --color-card-foreground: hsl(222 25% 12%);
+  --color-border: hsl(220 13% 83%);
+  --color-input: hsl(220 12% 97%);
+  --color-primary: hsl(222 40% 20%);
+  --color-primary-foreground: hsl(0 0% 100%);
+  --color-secondary: hsl(220 12% 91%);
+  --color-secondary-foreground: hsl(222 25% 12%);
+  --color-muted: hsl(220 11% 92%);
+  --color-muted-foreground: hsl(220 9% 44%);
+  --color-accent: hsl(220 12% 89%);
+  --color-accent-foreground: hsl(222 25% 12%);
+  --color-destructive: hsl(0 72% 51%);
+  --color-destructive-foreground: hsl(0 0% 100%);
   --color-popover: hsl(0 0% 100%);
-  --color-popover-foreground: hsl(222 47% 11%);
-  --color-ring: hsl(214 32% 70%);
-  --color-header: hsl(0 0% 100%);
+  --color-popover-foreground: hsl(220 9% 44%);
+  --color-ring: hsl(221 60% 58%);
+  --color-link: hsl(221 83% 43%);
 }
 
 /* Global: all interactive elements show pointer cursor */
