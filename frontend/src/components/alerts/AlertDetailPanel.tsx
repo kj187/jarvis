@@ -267,7 +267,7 @@ export function AlertDetailPanel({
           </div>
           {stats && (
             <div className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground">
-              <span>First seen <span className="font-medium text-foreground">{formatDistanceToNow(new Date(stats.firstSeenAt), { addSuffix: true, locale: enUS })}</span></span>
+              <span>Last fired <span className="font-medium text-foreground">{formatDistanceToNow(new Date(alert.startsAt), { addSuffix: true, locale: enUS })}</span></span>
               <span>·</span>
               <span>{stats.occurrenceCount}× fired</span>
             </div>
