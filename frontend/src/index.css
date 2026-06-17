@@ -88,6 +88,23 @@ input::-webkit-calendar-picker-indicator {
   opacity: 0 !important;
 }
 
+@keyframes claim-snake {
+  to { transform: rotate(360deg); }
+}
+
+.claim-snake-spinner {
+  animation: claim-snake 2.5s linear infinite;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    transparent 210deg,
+    hsl(217 91% 55% / 0.25) 245deg,
+    hsl(221 83% 53%) 310deg,
+    hsl(210 100% 72%) 350deg,
+    transparent 360deg
+  );
+}
+
 body {
   background-color: var(--color-background);
   color: var(--color-foreground);

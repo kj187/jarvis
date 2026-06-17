@@ -310,14 +310,18 @@ export function AlertDetailPanel({
                   </button>
                 </div>
               ) : (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowClaimForm((v) => !v)}
-                >
-                  <User className="h-3.5 w-3.5" />
-                  Claim
-                </Button>
+                <div className="relative p-[2px] overflow-hidden rounded-md">
+                  <div className="claim-snake-spinner absolute inset-[-150%]" />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowClaimForm((v) => !v)}
+                    className="relative z-10 bg-card border-transparent hover:bg-accent hover:border-transparent"
+                  >
+                    <User className="h-3.5 w-3.5" />
+                    Claim
+                  </Button>
+                </div>
               )}
               <Button
                 size="sm"
