@@ -68,30 +68,16 @@ jobs:
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           DIGEST="${{ steps.build.outputs.digest }}"
-          printf '## Getting Started\n\n' > release-body.md
-          printf '**No clone needed — runs entirely from the published image.**\n' >> release-body.md
-          printf 'All configuration options → [README → Configuration](https://github.com/kj187/jarvis#configuration)\n\n' >> release-body.md
-          printf '### Local\n\n```shell\nmkdir jarvis && cd jarvis\n```\n\n' >> release-body.md
-          printf 'Create a `compose.yml`:\n\n```yaml\nservices:\n  jarvis:\n    image: ghcr.io/kj187/jarvis:%s\n' "${VERSION}" >> release-body.md
-          printf '    ports:\n      - "8080:8080"\n    volumes:\n      - jarvis_data:/data\n' >> release-body.md
-          printf '    environment:\n      JARVIS_CLUSTER_1_NAME: production\n      JARVIS_CLUSTER_1_ALERTMANAGER_URL: http://alertmanager:9093\n' >> release-body.md
-          printf '    restart: unless-stopped\n    read_only: true\n    tmpfs:\n      - /tmp\n' >> release-body.md
-          printf '    security_opt:\n      - no-new-privileges:true\n    cap_drop:\n      - ALL\n\nvolumes:\n  jarvis_data:\n```\n\n' >> release-body.md
-          printf '```bash\ndocker compose up -d\n# http://localhost:8080\n```\n\n' >> release-body.md
-          printf '### Kubernetes\n\n#### Helm chart\n\n```bash\n' >> release-body.md
-          printf 'helm install jarvis oci://ghcr.io/kj187/charts/jarvis \\\n' >> release-body.md
-          printf '  --version %s \\\n' "${VERSION}" >> release-body.md
-          printf '  --set clusters[0].name=production \\\n' >> release-body.md
-          printf '  --set clusters[0].alertmanagerUrl=http://alertmanager:9093 \\\n' >> release-body.md
-          printf '  --set persistence.enabled=true\n```\n\n---\n\n' >> release-body.md
+          printf '## Changelog\n\n' > release-body.md
+          awk "/^## \[${GITHUB_REF_NAME}\]/{found=1; next} found && /^## \[/{exit} found{print}" CHANGELOG.md >> release-body.md
+          printf '\n---\n\n' >> release-body.md
           printf '## Container Image\n\n```shell\n' >> release-body.md
           printf 'docker pull ghcr.io/kj187/jarvis:%s\n' "${VERSION}" >> release-body.md
           printf '```\n\n## Verify with Cosign\n\n```shell\n' >> release-body.md
           printf 'cosign verify ghcr.io/kj187/jarvis@%s \\\n' "${DIGEST}" >> release-body.md
           printf '  --certificate-identity-regexp="https://github.com/kj187/jarvis/.*" \\\n' >> release-body.md
           printf '  --certificate-oidc-issuer="https://token.actions.githubusercontent.com"\n' >> release-body.md
-          printf '```\n\n---\n\n' >> release-body.md
-          awk "/^## \[${VERSION}\]/{found=1; next} found && /^## \[/{exit} found{print}" CHANGELOG.md >> release-body.md
+          printf '```\n' >> release-body.md
           cat release-body.md
 
       - name: Create GitHub Release
