@@ -22,7 +22,7 @@ pause() {
   sleep "$s"
 }
 
-echo "==> Firing Kubernetes test alerts to ${AM} (randomized, ~1 min 30s)"
+echo "==> Firing Kubernetes test alerts to ${AM} (randomized, ~2 min)"
 
 printf "  [1/10] KubePodCrashLooping (critical, payment-api, prod)..."
 post '[{
@@ -278,7 +278,97 @@ post '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=rate(coredns_dns_responses_total%7Brcode%3D%22SERVFAIL%22%7D%5B5m%5D)"
 }]'
 
+pause
+printf " [13/16] LinkRichAlert — many link labels + annotations..."
+post '[{
+  "labels": {
+    "alertname": "LinkRichAlert",
+    "severity": "warning",
+    "namespace": "prod",
+    "cluster": "eu-west-1-prod",
+    "team": "platform",
+    "runbook": "'"${RUNBOOKS}"'/LinkRichAlert",
+    "wiki": "https://wiki.example.com/alerts/link-rich",
+    "docs": "https://docs.example.com/platform/alerts/link-rich",
+    "source_code": "https://github.com/example/platform/blob/main/alerts/link-rich.yml",
+    "playbook": "https://playbooks.example.com/oncall/link-rich",
+    "test_suite": "jarvis"
+  },
+  "annotations": {
+    "summary": "Alert with many link-type labels and annotations",
+    "description": "This alert tests that all URL-valued labels and annotations are rendered as link buttons.",
+    "dashboard": "'"${GRAFANA}"'/d/platform-overview?orgId=1",
+    "link": "https://jira.example.com/browse/PLAT-9000",
+    "logs": "'"${GRAFANA}"'/explore?orgId=1&left=%7B%22datasource%22%3A%22loki%22%7D",
+    "tracing": "https://jaeger.example.com/search?service=payment-api&limit=20"
+  },
+  "generatorURL": "'"${PROM}"'/graph?g0.expr=up%7Bjob%3D%22platform%22%7D"
+}]'
+
+pause
+printf " [14/16] InlineUrlsAlert — multiple URLs embedded in description prose..."
+post '[{
+  "labels": {
+    "alertname": "InlineUrlsAlert",
+    "severity": "info",
+    "namespace": "monitoring",
+    "cluster": "eu-west-1-prod",
+    "team": "observability",
+    "test_suite": "jarvis"
+  },
+  "annotations": {
+    "summary": "Alert with inline URLs scattered across description text",
+    "description": "Scrape target unreachable since 03:14 UTC. Check the target health at https://prometheus.lan.kj187.de/targets and compare against last known good state at https://grafana.lan.kj187.de/d/prometheus-targets?orgId=1. If the issue persists, follow the escalation guide at https://wiki.example.com/oncall/escalation and open a ticket at https://jira.example.com/projects/OBS.",
+    "dashboard": "'"${GRAFANA}"'/d/prometheus-overview?orgId=1"
+  },
+  "generatorURL": "'"${PROM}"'/graph?g0.expr=up%7Bjob%3D%22prometheus%22%7D"
+}]'
+
+pause
+printf " [15/16] LabelOnlyLinksAlert — all links in labels, no annotation links..."
+post '[{
+  "labels": {
+    "alertname": "LabelOnlyLinksAlert",
+    "severity": "info",
+    "namespace": "staging",
+    "cluster": "eu-west-1-staging",
+    "team": "frontend",
+    "runbook": "'"${RUNBOOKS}"'/LabelOnlyLinksAlert",
+    "wiki": "https://wiki.example.com/alerts/label-only",
+    "grafana": "'"${GRAFANA}"'/d/frontend-overview?orgId=1",
+    "github_issue": "https://github.com/example/frontend/issues/42",
+    "test_suite": "jarvis"
+  },
+  "annotations": {
+    "summary": "Alert with links exclusively in labels",
+    "description": "Checks that URL-valued labels are picked up as link buttons even when no annotation carries a URL."
+  },
+  "generatorURL": "'"${PROM}"'/graph?g0.expr=http_requests_total%7Benv%3D%22staging%22%7D"
+}]'
+
+pause
+printf " [16/16] AnnotationOnlyLinksAlert — all links in annotations, no label links..."
+post '[{
+  "labels": {
+    "alertname": "AnnotationOnlyLinksAlert",
+    "severity": "warning",
+    "namespace": "prod",
+    "cluster": "eu-west-1-prod",
+    "team": "data",
+    "test_suite": "jarvis"
+  },
+  "annotations": {
+    "summary": "Alert with links exclusively in annotations",
+    "description": "S3 export job exceeded expected duration. Raw error: RequestTimeout after 300s. Check storage quota at https://aws.amazon.com/console and pipeline status at https://grafana.lan.kj187.de/d/data-pipelines?orgId=1 before re-triggering.",
+    "dashboard": "'"${GRAFANA}"'/d/data-pipelines?var-namespace=prod&orgId=1",
+    "runbook": "'"${RUNBOOKS}"'/AnnotationOnlyLinksAlert",
+    "link": "https://jira.example.com/browse/DATA-2200",
+    "docs": "https://docs.example.com/data/s3-export-troubleshooting"
+  },
+  "generatorURL": "'"${PROM}"'/graph?g0.expr=job_duration_seconds%7Bjob%3D%22s3-export%22%7D"
+}]'
+
 echo ""
-echo "==> Done. 12 Kubernetes test alerts active (test_suite=jarvis)."
+echo "==> Done. 16 Kubernetes test alerts active (test_suite=jarvis)."
 echo "    Alertmanager auto-expires them after ~5 minutes without refresh."
 echo "    Run 'make alerts-resolve' to resolve immediately."

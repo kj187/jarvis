@@ -255,7 +255,11 @@ The detail panel is the central hub for working with a single alert. It slides i
 **Labels & Annotations**
 - Complete label set, rendered as key-value pairs
 - All annotations, including `description` and `summary`
-- Runbook link: if the alert has a `runbook` label and `JARVIS_RUNBOOK_BASE_URL` is configured, a clickable runbook button is rendered (`RUNBOOK_BASE_URL` + label value)
+- **Dynamic link buttons**: any label or annotation whose value is an absolute URL (`http://` or `https://`) automatically renders as a clickable button using the key name as the label — no configuration needed. Examples: `dashboard=https://grafana.example.com/d/abc`, `ticket=https://jira.example.com/ISSUE-1`
+- **Runbook**: the `runbook` key (label or annotation) is handled specially:
+  - If the value is an absolute URL → used directly as the link
+  - If the value is a plain string and `JARVIS_RUNBOOK_BASE_URL` is configured → the final URL is `RUNBOOK_BASE_URL` + value (e.g. `https://wiki.example.com/runbooks/my-alert`)
+  - If the value is a plain string and `JARVIS_RUNBOOK_BASE_URL` is not set → no button is shown
 
 **Stats & Timeline**
 - First seen / last seen timestamps
@@ -463,7 +467,7 @@ See [.env.example](.env.example) for all options. Key settings:
 | `JARVIS_POLL_INTERVAL` | `15s` | Alertmanager poll interval (Go duration, e.g. `30s`) |
 | `JARVIS_DB_DSN` | `/data/jarvis.db` | Database DSN — SQLite file path **or** `postgres://` URL (see below) |
 | `JARVIS_ALLOWED_ORIGINS` | _(same-origin)_ | Comma-separated allowed CORS / WebSocket origins (e.g. `https://jarvis.example.com`). Required when browser URL differs from backend host. |
-| `JARVIS_RUNBOOK_BASE_URL` | — | Base URL for runbook links (alert label `runbook` is appended) |
+| `JARVIS_RUNBOOK_BASE_URL` | — | Base URL for runbook links. Appended to the `runbook` label/annotation value when it is not already an absolute URL (e.g. `https://wiki.example.com/runbooks/`) |
 
 **Authentication** — see [docs/authentication.md](docs/authentication.md) for full details
 
