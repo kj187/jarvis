@@ -1,9 +1,43 @@
+<a name="v1.1.0"></a>
+## [v1.1.0](https://github.com/kj187/jarvis/compare/v1.0.5...v1.1.0) (2026-06-18)
+
+### Bug Fixes
+
+* **alerts:** fall back to [@receiver](https://github.com/receiver) label when receivers array is empty
+* **frontend:** replace emoji severity labels with CSS colored dots in card grid
+* **frontend:** fix hardcoded dark colors and list view hierarchy in light mode
+* **frontend:** redesign light mode color palette with proper depth chain
+* **frontend:** remove blue card background for claimed alerts and fix expired silence banner color
+* **frontend:** redesign dark mode color palette and theme consistency
+* **frontend:** use theme-aware background for claimed rows in light mode
+* **frontend:** replace 'First seen' with 'Last fired' using alert.startsAt
+* **frontend:** consolidate multiple group silences into single button with count
+* **release:** update release body to include changelog and container image verification
+
+### Features
+
+* **api:** expose build version via GET /api/v1/info
+* **frontend:** add info tooltips to settings panel
+* **frontend:** add setting to disable Claim button snake animation
+* **frontend:** add info tooltip to claim form and refine Claim button appearance
+* **frontend:** animated snake border on unclaimed Claim button
+* **frontend:** make Claim and Silence action buttons more prominent
+* **frontend:** add dynamic link buttons from URL-valued labels/annotations
+* **frontend:** show local timezone abbreviation next to all timestamps
+* **frontend:** show version badge in Settings sheet
+* **history:** track externally created silences and preserve createdBy in events
+* **screenshots:** add feature screenshots Playwright spec and overhaul tooling
+
 <a name="v1.0.5"></a>
 ## [v1.0.5](https://github.com/kj187/jarvis/compare/v1.0.4...v1.0.5) (2026-06-16)
 
 ### Bug Fixes
 
 * **silences:** group silence recreate prefills wrong cluster and matchers
+
+### Documentation
+
+* update CHANGELOG and README for v1.0.5
 
 <a name="v1.0.4"></a>
 ## [v1.0.4](https://github.com/kj187/jarvis/compare/v1.0.3...v1.0.4) (2026-06-16)
