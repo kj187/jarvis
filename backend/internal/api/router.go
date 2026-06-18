@@ -68,17 +68,25 @@ func NewRouter(
 		LogError:    true,
 		HandleError: true,
 		LogValuesFunc: func(c echo.Context, v middleware.RequestLoggerValues) error {
-			attrs := []any{
-				slog.String("method", v.Method),
-				slog.String("uri", v.URI),
-				slog.Int("status", v.Status),
-				slog.Duration("latency", v.Latency),
-				slog.String("remote_ip", v.RemoteIP),
-			}
 			if v.Error != nil {
-				slog.Error("request", append(attrs, slog.String("err", v.Error.Error()))...)
-			} else {
-				slog.Info("request", attrs...)
+				slog.Error("request",
+					slog.String("method", v.Method),
+					slog.String("uri", v.URI),
+					slog.Int("status", v.Status),
+					slog.Duration("latency", v.Latency),
+					slog.String("remote_ip", v.RemoteIP),
+					slog.String("err", v.Error.Error()),
+				)
+				return nil
+			}
+			if cfg.LogRequests {
+				slog.Info("request",
+					slog.String("method", v.Method),
+					slog.String("uri", v.URI),
+					slog.Int("status", v.Status),
+					slog.Duration("latency", v.Latency),
+					slog.String("remote_ip", v.RemoteIP),
+				)
 			}
 			return nil
 		},

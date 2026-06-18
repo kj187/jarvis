@@ -23,6 +23,8 @@ type Config struct {
 	AllowedOrigins []string
 	Clusters       []ClusterConfig
 
+	LogRequests bool
+
 	// Auth
 	AuthProvider     string // "none" | "internal" | "oidc"
 	AuthMode         string // "none" | "write_protect" | "full_protect"
@@ -101,6 +103,7 @@ func Load() (*Config, error) {
 	return &Config{
 		Port:             getEnv("JARVIS_PORT", "8080"),
 		LogLevel:         getEnv("JARVIS_LOG_LEVEL", "info"),
+		LogRequests:      getEnvBool("JARVIS_LOG_REQUESTS", false),
 		PollInterval:     pollInterval,
 		DBDSN:            getEnv("JARVIS_DB_DSN", "/data/jarvis.db"),
 		RunbookBaseURL:   getEnv("JARVIS_RUNBOOK_BASE_URL", ""),
@@ -180,4 +183,16 @@ func getEnv(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+func getEnvBool(key string, fallback bool) bool {
+	v := strings.ToLower(strings.TrimSpace(os.Getenv(key)))
+	switch v {
+	case "true", "1", "yes":
+		return true
+	case "false", "0", "no":
+		return false
+	default:
+		return fallback
+	}
 }
