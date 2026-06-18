@@ -152,3 +152,130 @@ tests:
           path: spec.template.spec.containers[0].env
           content:
             name: JARVIS_AUTH_OIDC_CLIENT_SECRET
+
+  - it: appends extraEnv entries to container env
+    set:
+      extraEnv:
+        - name: VAULT_TOKEN_FILE
+          value: /var/run/secrets/workload/token
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: VAULT_TOKEN_FILE
+            value: /var/run/secrets/workload/token
+
+  - it: does not add extra env vars when extraEnv is empty
+    asserts:
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: VAULT_TOKEN_FILE
+
+  - it: appends extraVolumeMounts to container
+    set:
+      extraVolumeMounts:
+        - name: my-secret
+          mountPath: /etc/my-secret
+          readOnly: true
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content:
+            name: my-secret
+            mountPath: /etc/my-secret
+            readOnly: true
+
+  - it: does not add extra volume mounts when extraVolumeMounts is empty
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].volumeMounts
+          value:
+            - name: data
+              mountPath: /data
+
+  - it: appends extraVolumes to pod spec
+    set:
+      extraVolumes:
+        - name: my-secret
+          secret:
+            secretName: my-secret
+    asserts:
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: my-secret
+            secret:
+              secretName: my-secret
+
+  - it: does not add projected token volume when serviceAccountTokenProjection is disabled
+    asserts:
+      - notContains:
+          path: spec.template.spec.volumes
+          content:
+            name: workload-token
+      - equal:
+          path: spec.template.spec.containers[0].volumeMounts
+          value:
+            - name: data
+              mountPath: /data
+
+  - it: adds projected token volume and mount when serviceAccountTokenProjection is enabled
+    set:
+      serviceAccountTokenProjection.enabled: true
+    asserts:
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: workload-token
+            projected:
+              sources:
+                - serviceAccountToken:
+                    path: token
+                    expirationSeconds: 3600
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content:
+            name: workload-token
+            mountPath: /var/run/secrets/workload
+            readOnly: true
+
+  - it: sets audience on projected token when configured
+    set:
+      serviceAccountTokenProjection.enabled: true
+      serviceAccountTokenProjection.audience: vault
+    asserts:
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: workload-token
+            projected:
+              sources:
+                - serviceAccountToken:
+                    path: token
+                    expirationSeconds: 3600
+                    audience: vault
+
+  - it: respects custom volumeName and mountPath for projected token
+    set:
+      serviceAccountTokenProjection.enabled: true
+      serviceAccountTokenProjection.volumeName: vault-token
+      serviceAccountTokenProjection.mountPath: /vault/secrets
+      serviceAccountTokenProjection.tokenFileName: jwt
+      serviceAccountTokenProjection.expirationSeconds: 7200
+    asserts:
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: vault-token
+            projected:
+              sources:
+                - serviceAccountToken:
+                    path: jwt
+                    expirationSeconds: 7200
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content:
+            name: vault-token
+            mountPath: /vault/secrets
+            readOnly: true

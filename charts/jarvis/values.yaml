@@ -160,3 +160,38 @@ autoscaling:
 nodeSelector: {}
 tolerations: []
 affinity: {}
+
+# Additional environment variables injected into the container.
+# Useful for passing token paths, feature flags, or provider-specific config.
+extraEnv: []
+# - name: VAULT_TOKEN_FILE
+#   value: /var/run/secrets/workload/token
+
+# Additional volumes attached to the Pod.
+extraVolumes: []
+# - name: my-config
+#   configMap:
+#     name: my-config
+
+# Additional volume mounts added to the container.
+extraVolumeMounts: []
+# - name: my-config
+#   mountPath: /etc/my-config
+#   readOnly: true
+
+# Projected ServiceAccount token — convenience helper for Vault JWT auth and
+# similar OIDC/JWT workload-identity flows.  Works independently of
+# automountServiceAccountToken: the projected volume is always mounted
+# explicitly, so automount can safely be disabled at the pod level.
+serviceAccountTokenProjection:
+  enabled: false
+  # Name used for both the Volume and the VolumeMount.
+  volumeName: workload-token
+  # Mount path inside the container.
+  mountPath: /var/run/secrets/workload
+  # File name of the token inside mountPath.
+  tokenFileName: token
+  # Audience for the token (e.g. "vault"). Leave empty for the default Kubernetes audience.
+  audience: ""
+  # Token lifetime in seconds. Kubernetes rotates the token automatically before expiry.
+  expirationSeconds: 3600

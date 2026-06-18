@@ -77,11 +77,22 @@ spec:
                   name: {{ .Values.auth.existingSecret | default (include "jarvis.fullname" .) }}
                   key: {{ .Values.auth.existingSecretKeys.oidcClientSecret }}
             {{- end }}
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
             - name: data
               mountPath: /data
+            {{- with .Values.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+            {{- if .Values.serviceAccountTokenProjection.enabled }}
+            - name: {{ .Values.serviceAccountTokenProjection.volumeName }}
+              mountPath: {{ .Values.serviceAccountTokenProjection.mountPath }}
+              readOnly: true
+            {{- end }}
       volumes:
         - name: data
           {{- if .Values.persistence.enabled }}
@@ -90,6 +101,20 @@ spec:
           {{- else }}
           emptyDir: {}
           {{- end }}
+        {{- with .Values.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        {{- if .Values.serviceAccountTokenProjection.enabled }}
+        - name: {{ .Values.serviceAccountTokenProjection.volumeName }}
+          projected:
+            sources:
+              - serviceAccountToken:
+                  path: {{ .Values.serviceAccountTokenProjection.tokenFileName }}
+                  expirationSeconds: {{ .Values.serviceAccountTokenProjection.expirationSeconds }}
+                  {{- if .Values.serviceAccountTokenProjection.audience }}
+                  audience: {{ .Values.serviceAccountTokenProjection.audience }}
+                  {{- end }}
+        {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

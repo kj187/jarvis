@@ -103,6 +103,15 @@ Tests cover four suites (`deployment`, `configmap`, `secret`, `ingress`) and run
 | `nodeSelector` | object | `{}` | Node selector |
 | `tolerations` | list | `[]` | Pod tolerations |
 | `affinity` | object | `{}` | Pod affinity rules |
+| `extraEnv` | list | `[]` | Additional environment variables for the container |
+| `extraVolumes` | list | `[]` | Additional volumes for the Pod |
+| `extraVolumeMounts` | list | `[]` | Additional volume mounts for the container |
+| `serviceAccountTokenProjection.enabled` | bool | `false` | Mount a projected ServiceAccount token |
+| `serviceAccountTokenProjection.volumeName` | string | `workload-token` | Volume and mount name |
+| `serviceAccountTokenProjection.mountPath` | string | `/var/run/secrets/workload` | Mount path inside the container |
+| `serviceAccountTokenProjection.tokenFileName` | string | `token` | Token file name inside mountPath |
+| `serviceAccountTokenProjection.audience` | string | `""` | Token audience (e.g. `vault`). Empty = default Kubernetes audience |
+| `serviceAccountTokenProjection.expirationSeconds` | int | `3600` | Token lifetime in seconds (Kubernetes auto-rotates before expiry) |
 
 ## Examples
 
@@ -231,6 +240,42 @@ ingress:
 config:
   allowedOrigins: "https://jarvis.example.com"
 ```
+
+### Vault JWT auth with projected ServiceAccount token
+
+Use `serviceAccountTokenProjection` to obtain a short-lived, audience-scoped token without relying on the pod-level `automountServiceAccountToken`. Pair it with `extraEnv` to point the app at the token file and with `automountServiceAccountToken: false` to disable the default mount.
+
+```yaml
+serviceAccount:
+  create: true
+  # Annotate with the Vault role when using the Vault Agent Injector or the
+  # Kubernetes auth backend directly.
+  annotations:
+    vault.hashicorp.com/role: jarvis
+
+# Disable the default automount — the projected volume below takes its place.
+podAnnotations:
+  # Kubernetes 1.24+: disable at pod level via spec field (set via values):
+  {}
+# If your cluster supports it, set automountServiceAccountToken: false on the
+# ServiceAccount instead and leave the pod annotation empty.
+
+serviceAccountTokenProjection:
+  enabled: true
+  volumeName: workload-token
+  mountPath: /var/run/secrets/workload
+  tokenFileName: token
+  audience: vault          # must match the Vault Kubernetes auth backend audience
+  expirationSeconds: 3600
+
+extraEnv:
+  - name: VAULT_TOKEN_FILE
+    value: /var/run/secrets/workload/token
+  - name: VAULT_ADDR
+    value: https://vault.example.com
+```
+
+The token at `/var/run/secrets/workload/token` is a standard Kubernetes `serviceAccountToken` projection — Vault's [Kubernetes auth method](https://developer.hashicorp.com/vault/docs/auth/kubernetes) accepts it directly via the `jwt` login path.
 
 #### Traefik (v2 / v3)
 
