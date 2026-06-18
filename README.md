@@ -281,6 +281,11 @@ When an alert is claimed, the owner's name appears as a chip in the detail panel
 - Create a new silence directly from the panel — the form opens pre-filled with the alert's labels
 - Extend or delete an existing silence if the alert is currently suppressed
 
+**AI Prompt**
+- Generates a ready-to-paste SRE prompt containing the full alert context: name, cluster, severity, labels, annotations, and complete event history
+- Copy it to any AI assistant (Claude, ChatGPT, etc.) to get root cause analysis and remediation suggestions without manually assembling the context
+- The section is collapsed by default and does not make any outbound network calls — the prompt is built locally from the data already in Jarvis
+
 **Comments**
 - Write freeform notes bound to the alert's fingerprint
 - Comments persist across re-fires: if the alert resolves and fires again later, the comment history is still there
@@ -296,20 +301,32 @@ Matcher builder with duration picker and a live preview of which alerts the sile
 
 The silence creation form is designed to make it fast and safe to create silences without mistakes. The most dangerous part of silencing is being too broad — silencing more than you intended. Jarvis mitigates this with an interactive matcher builder and a live preview that shows exactly what will be silenced before you commit.
 
-**Matcher builder:**
-- Select any label key from a dropdown populated with labels from your current alerts
-- Choose the operator (`=` / `!=` / `=~` / `!~`)
-- Enter the value — regex values are validated immediately
-- Add as many matchers as needed; all are ANDed
+**Cluster selector:**
+- Toggle chips to apply the silence to one or multiple clusters simultaneously
+- Defaults to all configured clusters; narrow the scope by deselecting
 
-**Duration:**
-- A days / hours / minutes spinner — set any duration you need
-- Or switch to calendar mode to pick an exact end date and time
-- Start time defaults to now but can be adjusted
+**Matcher builder:**
+- Select any label key from a searchable dropdown populated with labels from your current alerts
+- Choose the operator (`=` / `!=` / `=~` / `!~`)
+- For exact-match operators (`=` / `!=`) the value is a single string; for regex operators (`=~` / `!~`) you can enter multiple values as tags — they are joined with `|` into a single regex
+- Add as many matchers as needed; all are ANDed
+- **Existing silence warning:** if the current matchers already overlap with an active silence, a banner lists the conflicting silences and their matchers so you can decide whether to extend instead of create
+- **Zero-match warning:** if matchers are set but no current alert matches, an amber notice indicates the silence will be created but has no immediate effect
 
 **Live match count:**
-- A counter next to the matcher rows shows how many currently firing alerts match — updates as you edit matchers
-- Full affected-alert list is shown on the separate **Preview step** before submitting, so you can verify the blast radius before creating the silence
+- A badge next to the matcher header shows how many currently firing alerts match — updates in real time as you edit matchers
+- Click the badge to expand an inline panel listing the affected alert names, severities, and clusters — so you can verify the blast radius without leaving the form
+
+**Duration:**
+- Quick-preset buttons (30m / 1h / 4h / 1d / 1w) for the most common durations
+- Days / hours / minutes spinners for any custom duration — changing a spinner updates the end date/time instantly
+- An inline calendar with time spinners always visible next to the duration spinners — pick an exact end date and time; the spinners update to reflect the resulting duration
+- Start time defaults to now; a "Now" shortcut resets it. Changing the start time shifts the end time by the same gap
+- A "Reset" button restores the end time to the default silence duration from Settings
+
+**Preview step:**
+- Before submitting, a summary screen shows the full silence: matchers, clusters, time window, author, and the complete list of matching alerts
+- Confirm on the preview screen to submit; the results screen then shows per-cluster success or error status with a direct link to the created silence in Alertmanager
 
 Silences are sent directly to Alertmanager via Jarvis's API proxy and are effective immediately. No need to open the native Alertmanager UI.
 
