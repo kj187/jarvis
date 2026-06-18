@@ -1,6 +1,7 @@
 package history
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -418,5 +419,35 @@ func TestAlertStore_SeedResolved_ClearedBySet(t *testing.T) {
 	}
 	if got[0].Status.State != "active" {
 		t.Errorf("state = %q, want active", got[0].Status.State)
+	}
+}
+
+// TestGetAllResolved_NullAnnotations ensures GetAllResolved does not fail when
+// a legacy row has NULL in the annotations column (schema allows TEXT without NOT NULL).
+func TestGetAllResolved_NullAnnotations(t *testing.T) {
+	rec, _ := newTestRecorder(t)
+
+	if err := rec.store.UpsertFingerprint("fp1", "TestAlert", "homelab", map[string]string{"alertname": "TestAlert"}); err != nil {
+		t.Fatalf("UpsertFingerprint: %v", err)
+	}
+	// Insert a resolved event with NULL annotations directly, bypassing Go marshalling.
+	_, err := rec.store.exec(context.Background(),
+		`INSERT INTO alert_events (fingerprint, cluster_name, alertmanager_url, status, starts_at, annotations, recorded_at)
+		 VALUES (?, 'homelab', 'http://am:9093', 'resolved', ?, NULL, ?)`,
+		"fp1", time.Now().UTC(), time.Now().UTC(),
+	)
+	if err != nil {
+		t.Fatalf("insert with NULL annotations: %v", err)
+	}
+
+	alerts, err := rec.store.GetAllResolved()
+	if err != nil {
+		t.Fatalf("GetAllResolved with NULL annotations: %v", err)
+	}
+	if len(alerts) != 1 {
+		t.Fatalf("expected 1 alert, got %d", len(alerts))
+	}
+	if alerts[0].Annotations == nil {
+		t.Error("Annotations should be non-nil empty map, got nil")
 	}
 }

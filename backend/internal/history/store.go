@@ -225,11 +225,13 @@ func (s *Store) GetHistory(fingerprint string, limit, offset int) ([]models.Aler
 	for rows.Next() {
 		var e models.AlertEvent
 		var endsAt sql.NullTime
+		var annotationsNull sql.NullString
 		var startsAt, recordedAt time.Time
 		if err := rows.Scan(&e.ID, &e.Fingerprint, &e.ClusterName, &e.AlertmanagerURL,
-			&e.Status, &startsAt, &endsAt, &e.Annotations, &recordedAt); err != nil {
+			&e.Status, &startsAt, &endsAt, &annotationsNull, &recordedAt); err != nil {
 			return nil, 0, fmt.Errorf("scan event: %w", err)
 		}
+		e.Annotations = annotationsNull.String
 		e.StartsAt = startsAt.UTC()
 		e.RecordedAt = recordedAt.UTC()
 		if endsAt.Valid {
@@ -610,7 +612,8 @@ func (s *Store) getLastEvent(fingerprint string) (*models.AlertEvent, error) {
 func scanResolvedAlerts(rows *sql.Rows) ([]models.EnrichedAlert, error) {
 	alerts := make([]models.EnrichedAlert, 0)
 	for rows.Next() {
-		var fp, clusterName, amURL, annotationsJSON, labelsJSON string
+		var fp, clusterName, amURL, labelsJSON string
+		var annotationsJSON sql.NullString
 		var startsAt, resolvedAt time.Time
 		if err := rows.Scan(&fp, &clusterName, &amURL, &startsAt, &resolvedAt, &annotationsJSON, &labelsJSON); err != nil {
 			return nil, fmt.Errorf("scan resolved alert: %w", err)
@@ -620,7 +623,12 @@ func scanResolvedAlerts(rows *sql.Rows) ([]models.EnrichedAlert, error) {
 			labels = map[string]string{}
 		}
 		var annotations map[string]string
-		if err := json.Unmarshal([]byte(annotationsJSON), &annotations); err != nil {
+		if annotationsJSON.Valid {
+			if err := json.Unmarshal([]byte(annotationsJSON.String), &annotations); err != nil {
+				annotations = map[string]string{}
+			}
+		}
+		if annotations == nil {
 			annotations = map[string]string{}
 		}
 		alerts = append(alerts, models.EnrichedAlert{

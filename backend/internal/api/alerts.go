@@ -28,7 +28,7 @@ func (s *Server) getAlerts(c echo.Context) error {
 	if stateFilter == "resolved" {
 		dbAlerts, err := s.store.GetAllResolved()
 		if err != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, "failed to get resolved alerts")
+			return echo.NewHTTPError(http.StatusInternalServerError, "failed to get resolved alerts").SetInternal(err)
 		}
 		if clusterFilter == "" && severityFilter == "" {
 			return c.JSON(http.StatusOK, dbAlerts)
@@ -127,7 +127,7 @@ func (s *Server) getAlertHistory(c echo.Context) error {
 
 	events, total, err := s.store.GetHistory(fp, limit, offset)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get history")
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get history").SetInternal(err)
 	}
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"events": events,
@@ -144,7 +144,7 @@ func (s *Server) getSilenceEvents(c echo.Context) error {
 
 	events, err := s.store.GetSilenceEvents(fp)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get silence events")
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get silence events").SetInternal(err)
 	}
 	if events == nil {
 		events = []models.SilenceEvent{}
@@ -161,7 +161,7 @@ func (s *Server) getAlertStats(c echo.Context) error {
 
 	stats, err := s.store.GetStats(fp)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get stats")
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get stats").SetInternal(err)
 	}
 	if stats == nil {
 		return echo.NewHTTPError(http.StatusNotFound, "fingerprint not found")
