@@ -853,32 +853,6 @@ export function SilenceForm({
 
         {/* Matchers */}
         <div>
-          {/* Expandable affected alerts panel — shown ABOVE the matcher rows */}
-          {affectedOpen && liveMatchCount > 0 && (
-            <div className="mb-3 rounded border border-border bg-muted/30 p-2 space-y-1 max-h-60 overflow-y-auto combo-dropdown">
-              {matchedAlerts.map((alert) => (
-                <div key={alert.fingerprint} className="flex flex-wrap items-center gap-1.5">
-                  <span className="font-mono text-xs font-medium">
-                    {alert.labels.alertname ?? alert.fingerprint.slice(0, 8)}
-                  </span>
-                  {alert.labels.severity && (
-                    <span className={cn(
-                      'rounded px-1.5 py-0.5 text-[10px] font-medium',
-                      alert.labels.severity === 'critical' && 'bg-destructive/20 text-destructive',
-                      alert.labels.severity === 'warning' && 'bg-yellow-500/20 text-yellow-600 dark:text-yellow-400',
-                      !['critical', 'warning'].includes(alert.labels.severity) && 'bg-accent text-muted-foreground',
-                    )}>
-                      {alert.labels.severity}
-                    </span>
-                  )}
-                  {alert.clusterName && (
-                    <span className="text-[10px] text-muted-foreground">{alert.clusterName}</span>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-
           <div className="mb-2 grid items-center gap-1.5" style={{ gridTemplateColumns: '160px 72px 1fr 32px' }}>
             <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Matcher
@@ -904,6 +878,33 @@ export function SilenceForm({
             </button>
             <span />
           </div>
+
+          {/* Expandable affected alerts panel — between badge and matcher rows */}
+          {affectedOpen && liveMatchCount > 0 && (
+            <div className="mb-2 rounded border border-border bg-muted/30 p-2 space-y-1 max-h-60 overflow-y-auto combo-dropdown">
+              {matchedAlerts.map((alert) => (
+                <div key={alert.fingerprint} className="flex flex-wrap items-center gap-1.5">
+                  <span className="font-mono text-xs font-medium">
+                    {alert.labels.alertname ?? alert.fingerprint.slice(0, 8)}
+                  </span>
+                  {alert.labels.severity && (
+                    <span className={cn(
+                      'rounded px-1.5 py-0.5 text-[10px] font-medium',
+                      alert.labels.severity === 'critical' && 'bg-destructive/20 text-destructive',
+                      alert.labels.severity === 'warning' && 'bg-yellow-500/20 text-yellow-600 dark:text-yellow-400',
+                      !['critical', 'warning'].includes(alert.labels.severity) && 'bg-accent text-muted-foreground',
+                    )}>
+                      {alert.labels.severity}
+                    </span>
+                  )}
+                  {alert.clusterName && (
+                    <span className="text-[10px] text-muted-foreground">{alert.clusterName}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
           <div className="space-y-2">
             {matchers.map((m) => (
               <div
