@@ -832,14 +832,9 @@ export function SilenceForm({
 
         {/* Cluster chips */}
         <div>
-          <div className="mb-2 flex items-baseline justify-between">
-            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Cluster
-            </label>
-            {!isEdit && (
-              <span className="text-[10px] text-muted-foreground">Click to toggle</span>
-            )}
-          </div>
+          <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Cluster
+          </label>
           <div className="flex flex-wrap gap-1.5">
             {availableClusters.map((c) => {
               const active = selectedClusters.includes(c)
