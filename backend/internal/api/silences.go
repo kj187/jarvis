@@ -97,6 +97,12 @@ func (s *Server) createSilence(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadGateway, "alertmanager request failed")
 	}
 
+	// Alertmanager may return a new ID instead of updating in-place.
+	// Expire the old silence to prevent duplicates.
+	if body.ID != "" && id != body.ID {
+		_ = cl.Client.DeleteSilence(ctx, body.ID)
+	}
+
 	if body.Fingerprint != "" {
 		action := "created"
 		if body.ID != "" {

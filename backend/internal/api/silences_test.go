@@ -413,6 +413,96 @@ func TestDeleteSilence_AMError(t *testing.T) {
 	}
 }
 
+func TestCreateSilence_ExpireOldSilenceWhenAMReturnsNewID(t *testing.T) {
+	deletedIDs := make([]string, 0)
+	am := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/silences") {
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(amclient.PostSilenceResponse{SilenceID: "new-silence-id"}) //nolint:errcheck
+			return
+		}
+		if r.Method == http.MethodDelete {
+			// capture the ID being deleted
+			parts := strings.Split(r.URL.Path, "/")
+			deletedIDs = append(deletedIDs, parts[len(parts)-1])
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer am.Close()
+
+	srv := newTestServerWithAM(t, am.URL)
+	e := echo.New()
+
+	now := time.Now().UTC()
+	body := map[string]interface{}{
+		"cluster":   "testcluster",
+		"id":        "old-silence-id",
+		"matchers":  []interface{}{},
+		"startsAt":  now.Format(time.RFC3339),
+		"endsAt":    now.Add(time.Hour).Format(time.RFC3339),
+		"createdBy": "alice",
+		"comment":   "extend silence",
+	}
+	b, _ := json.Marshal(body)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/silences", bytes.NewReader(b))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	if err := srv.createSilence(c); err != nil {
+		t.Fatalf("createSilence: %v", err)
+	}
+	if rec.Code != http.StatusCreated {
+		t.Errorf("status = %d, want 201", rec.Code)
+	}
+	if !contains(rec.Body.String(), "new-silence-id") {
+		t.Errorf("expected new-silence-id in response: %s", rec.Body.String())
+	}
+	if len(deletedIDs) != 1 || deletedIDs[0] != "old-silence-id" {
+		t.Errorf("expected old-silence-id to be deleted, got: %v", deletedIDs)
+	}
+}
+
+func TestCreateSilence_NoDeleteWhenSameIDReturned(t *testing.T) {
+	deleteCallCount := 0
+	am := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodDelete {
+			deleteCallCount++
+		}
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(amclient.PostSilenceResponse{SilenceID: "same-silence-id"}) //nolint:errcheck
+	}))
+	defer am.Close()
+
+	srv := newTestServerWithAM(t, am.URL)
+	e := echo.New()
+
+	now := time.Now().UTC()
+	body := map[string]interface{}{
+		"cluster":   "testcluster",
+		"id":        "same-silence-id",
+		"matchers":  []interface{}{},
+		"startsAt":  now.Format(time.RFC3339),
+		"endsAt":    now.Add(time.Hour).Format(time.RFC3339),
+		"createdBy": "alice",
+		"comment":   "extend silence",
+	}
+	b, _ := json.Marshal(body)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/silences", bytes.NewReader(b))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	if err := srv.createSilence(c); err != nil {
+		t.Fatalf("createSilence: %v", err)
+	}
+	if deleteCallCount != 0 {
+		t.Errorf("expected no DELETE call when AM returns same ID, got %d", deleteCallCount)
+	}
+}
+
 func TestCreateSilence_AuthMode_UsesContextUserForAudit(t *testing.T) {
 	am := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
