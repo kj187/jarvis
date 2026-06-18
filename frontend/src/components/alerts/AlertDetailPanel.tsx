@@ -169,6 +169,7 @@ export function AlertDetailPanel({
   const { mutate: deleteSilence } = useDeleteSilence()
   const { mutate: upsertSilence, isPending: isExtending } = useUpsertSilence()
   const { data: allAlerts = [] } = useAlerts()
+  const allClusterNames = [...new Set(allAlerts.map((a) => a.clusterName))].sort()
   const qc = useQueryClient()
 
   useEffect(() => {
@@ -996,7 +997,7 @@ export function AlertDetailPanel({
           <div className="p-5 pt-10">
             <h2 className="mb-4 text-base font-semibold">Create new silence</h2>
             <SilenceForm
-              availableClusters={[alert.clusterName]}
+              availableClusters={allClusterNames.length > 0 ? allClusterNames : [alert.clusterName]}
               prefillAlerts={[alert]}
               fingerprint={alert.fingerprint}
               onSuccess={() => setShowNewSilenceForm(false)}
@@ -1018,7 +1019,7 @@ export function AlertDetailPanel({
               {silenceFormTarget.status.state === 'expired' ? 'Recreate silence' : 'Edit silence'}
             </h2>
             <SilenceForm
-              availableClusters={[silenceFormTarget.clusterName]}
+              availableClusters={allClusterNames.length > 0 ? allClusterNames : [silenceFormTarget.clusterName]}
               prefillSilence={silenceFormTarget}
               isRecreate={silenceFormTarget.status.state === 'expired'}
               fingerprint={alert.fingerprint}
