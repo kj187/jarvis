@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { format, formatDistanceToNow } from 'date-fns'
 import { enUS } from 'date-fns/locale'
-import { ExternalLink, BookOpen, ChevronDown, ChevronUp, BellOff, Pencil, Trash2, User, Copy, Check, Info } from 'lucide-react'
+import { ExternalLink, BookOpen, ChevronDown, ChevronUp, BellOff, Pencil, Trash2, User, Copy, Check, Info, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Sheet } from '@/components/ui/sheet'
 import { AlertBadge, StatusBadge } from './AlertBadge'
@@ -426,39 +426,37 @@ export function AlertDetailPanel({
                   {isPending ? 'Silence pending' : 'Silence active'}
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
-                  {isExpiring && (
-                    <>
-                      {([
-                        { label: '+1h', ms: 60 * 60_000 },
-                        { label: '+4h', ms: 4 * 60 * 60_000 },
-                        { label: '+1d', ms: 24 * 60 * 60_000 },
-                      ] as const).map(({ label, ms }) => (
-                        <button
-                          key={label}
-                          disabled={isExtending}
-                          className={cn(
-                            'flex items-center gap-1 rounded border px-2 py-0.5 text-xs cursor-pointer disabled:opacity-40',
-                            theme === 'light'
-                              ? 'border-amber-400 text-amber-700 hover:bg-amber-50'
-                              : 'border-yellow-700 text-yellow-300 hover:bg-yellow-900/50',
-                          )}
-                          onClick={() => upsertSilence({
-                            id: s.id,
-                            cluster: s.clusterName,
-                            matchers: s.matchers,
-                            startsAt: s.startsAt,
-                            endsAt: new Date(new Date(s.endsAt).getTime() + ms).toISOString(),
-                            createdBy: s.createdBy,
-                            comment: s.comment,
-                            fingerprint: alert.fingerprint,
-                            performedBy: user?.username ?? localStorage.getItem(USERNAME_KEY) ?? 'unknown',
-                          })}
-                        >
-                          {label}
-                        </button>
-                      ))}
-                    </>
-                  )}
+                  {!isPending && ([
+                    { label: '+1h', ms: 60 * 60_000 },
+                    { label: '+4h', ms: 4 * 60 * 60_000 },
+                    { label: '+1d', ms: 24 * 60 * 60_000 },
+                  ] as const).map(({ label, ms }) => (
+                    <button
+                      key={label}
+                      disabled={isExtending}
+                      className={cn(
+                        'flex items-center gap-1 rounded border px-2 py-0.5 text-xs cursor-pointer disabled:opacity-40',
+                        isExpiring
+                          ? theme === 'light'
+                            ? 'border-amber-400 text-amber-700 hover:bg-amber-50'
+                            : 'border-yellow-700 text-yellow-300 hover:bg-yellow-900/50'
+                          : 'border-border text-muted-foreground hover:text-foreground hover:bg-accent',
+                      )}
+                      onClick={() => upsertSilence({
+                        id: s.id,
+                        cluster: s.clusterName,
+                        matchers: s.matchers,
+                        startsAt: s.startsAt,
+                        endsAt: new Date(new Date(s.endsAt).getTime() + ms).toISOString(),
+                        createdBy: s.createdBy,
+                        comment: s.comment,
+                        fingerprint: alert.fingerprint,
+                        performedBy: user?.username ?? localStorage.getItem(USERNAME_KEY) ?? 'unknown',
+                      })}
+                    >
+                      {isExtending ? <Loader2 className="h-3 w-3 animate-spin" /> : label}
+                    </button>
+                  ))}
                   <button
                     className="flex items-center gap-1 rounded border border-border px-2 py-0.5 text-xs text-muted-foreground hover:text-foreground hover:bg-accent cursor-pointer"
                     onClick={() => setSilenceFormTarget(s)}
