@@ -564,6 +564,7 @@ export function SilenceForm({
   const [comment, setComment] = useState(prefillSilence?.comment ?? '')
 
   const [results, setResults] = useState<Map<string, ClusterResult>>(new Map())
+  const [affectedOpen, setAffectedOpen] = useState(false)
 
   const formLabelMatchers = useMemo<LabelMatcher[]>(
     () => matchers.filter((m) => m.name).map((m) => ({ id: String(m.id), name: m.name, operator: m.operator, value: m.value })),
@@ -696,7 +697,41 @@ export function SilenceForm({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allAlerts, matchers, selectedClusters])
 
-  const liveMatchCount = useMemo(() => previewMatched().length, [previewMatched])
+  const matchedAlerts = useMemo(() => previewMatched(), [previewMatched])
+  const liveMatchCount = matchedAlerts.length
+
+  const matchedGroups = useMemo(() => {
+    const groups = new Map<string, number>()
+    for (const a of matchedAlerts) {
+      const name = a.labels.alertname ?? '(unknown)'
+      groups.set(name, (groups.get(name) ?? 0) + 1)
+    }
+    return [...groups.entries()].sort((a, b) => b[1] - a[1])
+  }, [matchedAlerts])
+
+  const badgeLabel = useMemo(() => {
+    if (liveMatchCount === 0) return '0 affected'
+    const MAX_SHOWN = 2
+    const shown = matchedGroups.slice(0, MAX_SHOWN)
+    const remaining = matchedGroups.slice(MAX_SHOWN).reduce((s, [, c]) => s + c, 0)
+    const parts = shown.map(([name, count]) => count > 1 ? `${name} ×${count}` : name)
+    if (remaining > 0) parts.push(`+${remaining}`)
+    return parts.join(' · ')
+  }, [liveMatchCount, matchedGroups])
+
+  const perMatcherCounts = useMemo(
+    () =>
+      matchers.map((m) => {
+        if (!m.name || !m.value) return null
+        const lm: LabelMatcher = { id: String(m.id), name: m.name, operator: m.operator, value: m.value }
+        return allAlerts.filter(
+          (a) => selectedClusters.includes(a.clusterName) && matchesLabelMatchers(a, [lm]),
+        ).length
+      }),
+    [matchers, allAlerts, selectedClusters],
+  )
+
+  const hasActiveMatchers = matchers.some((m) => m.name && m.value)
 
   // ── Submit ──────────────────────────────────────────────────────────────────
 
@@ -849,29 +884,37 @@ export function SilenceForm({
 
         {/* Matchers */}
         <div>
-          <div className="mb-2 grid items-center gap-1.5" style={{ gridTemplateColumns: '160px 72px 1fr 32px' }}>
+          <div className="mb-2 grid items-center gap-1.5" style={{ gridTemplateColumns: '160px 72px 1fr auto 32px' }}>
             <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Matcher
             </span>
             <span />
-            <span
+            <button
+              type="button"
+              onClick={() => liveMatchCount > 0 && setAffectedOpen((o) => !o)}
               className={cn(
-                'justify-self-end rounded px-2 py-0.5 text-sm font-bold tabular-nums transition-colors',
+                'justify-self-end flex items-center gap-1 rounded px-2 py-0.5 text-xs font-bold tabular-nums transition-colors',
                 liveMatchCount > 0
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-accent text-muted-foreground',
+                  ? 'bg-primary text-primary-foreground cursor-pointer hover:bg-primary/90'
+                  : 'bg-accent text-muted-foreground cursor-default',
               )}
             >
-              {liveMatchCount} affected
-            </span>
+              {badgeLabel}
+              {liveMatchCount > 0 && (
+                affectedOpen
+                  ? <ChevronUp className="h-3 w-3 shrink-0" />
+                  : <ChevronDown className="h-3 w-3 shrink-0" />
+              )}
+            </button>
+            <span />
             <span />
           </div>
           <div className="space-y-2">
-            {matchers.map((m) => (
+            {matchers.map((m, index) => (
               <div
                 key={m.id}
                 className="grid items-start gap-1.5"
-                style={{ gridTemplateColumns: '160px 72px 1fr 32px' }}
+                style={{ gridTemplateColumns: '160px 72px 1fr auto 32px' }}
               >
                 <LabelNameInput
                   value={m.name}
@@ -889,14 +932,32 @@ export function SilenceForm({
                   <option value="=~">=~</option>
                   <option value="!~">!~</option>
                 </Select>
-                <TagValueInput
-                  value={m.value}
-                  onChange={(v) => updateMatcher(m.id, 'value', v)}
-                  suggestions={labelSuggestions.get(m.name) ?? []}
-                  placeholder="value"
-                  className="min-w-0"
-                  maxTags={m.operator === '=' || m.operator === '!=' ? 1 : undefined}
-                />
+                <div className="min-w-0">
+                  <TagValueInput
+                    value={m.value}
+                    onChange={(v) => updateMatcher(m.id, 'value', v)}
+                    suggestions={labelSuggestions.get(m.name) ?? []}
+                    placeholder="value"
+                    className="min-w-0"
+                    maxTags={m.operator === '=' || m.operator === '!=' ? 1 : undefined}
+                  />
+                  {(m.operator === '=~' || m.operator === '!~') && m.value && !m.value.includes('|') && (
+                    <button
+                      type="button"
+                      onClick={() => updateMatcher(m.id, 'operator', m.operator === '=~' ? '=' : '!=')}
+                      className="mt-0.5 text-[10px] text-amber-500 hover:text-amber-400 cursor-pointer"
+                    >
+                      Single value — switch to {m.operator === '=~' ? '=' : '!='}
+                    </button>
+                  )}
+                </div>
+                <div className="flex h-8 items-center justify-center">
+                  {perMatcherCounts[index] !== null && (
+                    <span className="text-[10px] tabular-nums text-muted-foreground" title="Alerts matching this matcher">
+                      ∩{perMatcherCounts[index]}
+                    </span>
+                  )}
+                </div>
                 <Button
                   type="button"
                   variant="ghost"
@@ -913,6 +974,45 @@ export function SilenceForm({
               <Plus className="mr-1 h-3 w-3" />
               Add matcher
             </Button>
+
+            {/* Zero-match warning */}
+            {hasActiveMatchers && liveMatchCount === 0 && (
+              <div className="flex gap-2.5 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-amber-700 dark:text-amber-400">
+                <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+                <p className="text-xs">
+                  No current alerts match these matchers — the silence will be created but has no immediate effect.
+                </p>
+              </div>
+            )}
+
+            {/* Expandable affected alerts panel */}
+            {affectedOpen && liveMatchCount > 0 && (
+              <div className="rounded border border-border bg-muted/30 p-2 space-y-1">
+                {matchedAlerts.slice(0, 8).map((alert) => (
+                  <div key={alert.fingerprint} className="flex flex-wrap items-center gap-1.5">
+                    <span className="font-mono text-xs font-medium">
+                      {alert.labels.alertname ?? alert.fingerprint.slice(0, 8)}
+                    </span>
+                    {alert.labels.severity && (
+                      <span className={cn(
+                        'rounded px-1.5 py-0.5 text-[10px] font-medium',
+                        alert.labels.severity === 'critical' && 'bg-destructive/20 text-destructive',
+                        alert.labels.severity === 'warning' && 'bg-yellow-500/20 text-yellow-600 dark:text-yellow-400',
+                        !['critical', 'warning'].includes(alert.labels.severity) && 'bg-accent text-muted-foreground',
+                      )}>
+                        {alert.labels.severity}
+                      </span>
+                    )}
+                    {alert.clusterName && (
+                      <span className="text-[10px] text-muted-foreground">{alert.clusterName}</span>
+                    )}
+                  </div>
+                ))}
+                {matchedAlerts.length > 8 && (
+                  <p className="text-[10px] text-muted-foreground">+{matchedAlerts.length - 8} more</p>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
