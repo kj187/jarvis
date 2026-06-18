@@ -43,6 +43,7 @@ type silenceInfoEntry struct {
 	state       string
 	clusterName string
 	comment     string
+	createdBy   string
 }
 
 // NewRecorder creates a new Recorder.
@@ -146,6 +147,7 @@ func (r *Recorder) poll(ctx context.Context) {
 				state:       s.Status.State,
 				clusterName: res.name,
 				comment:     s.Comment,
+				createdBy:   s.CreatedBy,
 			}
 		}
 	}
@@ -177,14 +179,40 @@ func (r *Recorder) poll(ctx context.Context) {
 	// Detect silence expiry: collect (fingerprint, silenceID, info) tuples to record.
 	expiredEntries := r.collectExpiredSilences(currSilenceInfo, currAlertSilences)
 
+	// Detect new external silences (first seen in curr, not in prev).
+	newSilenceEntries := r.collectNewExternalSilences(currSilenceInfo, currAlertSilences)
+
 	r.prevSnapshot = curr
 	r.prevSilenceInfo = currSilenceInfo
 	r.prevAlertSilences = currAlertSilences
 	r.prevMu.Unlock()
 
+	// Record new external silence "created" events (only when not already tracked by Jarvis).
+	for _, e := range newSilenceEntries {
+		exists, err := r.store.HasSilenceEventsForSilenceID(e.silenceID)
+		if err != nil {
+			r.logger.Error("check silence events for silence_id", "silence", e.silenceID, "err", err)
+			continue
+		}
+		if exists {
+			continue
+		}
+		performer := e.info.createdBy
+		if performer == "" {
+			performer = "system"
+		}
+		if _, err := r.store.RecordSilenceEvent(e.fingerprint, e.silenceID, e.info.clusterName, "created", performer, e.info.comment); err != nil {
+			r.logger.Error("record silence created event", "fp", e.fingerprint, "silence", e.silenceID, "err", err)
+		}
+	}
+
 	// Record silence expiry events outside the lock.
 	for _, e := range expiredEntries {
-		if _, err := r.store.RecordSilenceEvent(e.fingerprint, e.silenceID, e.info.clusterName, "expired", "system", e.info.comment); err != nil {
+		performer := e.info.createdBy
+		if performer == "" {
+			performer = "system"
+		}
+		if _, err := r.store.RecordSilenceEvent(e.fingerprint, e.silenceID, e.info.clusterName, "expired", performer, e.info.comment); err != nil {
 			r.logger.Error("record silence expired event", "fp", e.fingerprint, "silence", e.silenceID, "err", err)
 		}
 	}
@@ -330,10 +358,37 @@ func buildWSPayload(eventType string, payload interface{}) ([]byte, error) {
 
 var _ = buildWSPayload // suppress unused warning in non-test builds
 
-type expiredEntry struct {
+type expiredEntry = silenceEntry
+
+type silenceEntry struct {
 	fingerprint string
 	silenceID   string
 	info        silenceInfoEntry
+}
+
+// collectNewExternalSilences returns entries for silences that appeared for the
+// first time in this poll (not in prevSilenceInfo). One entry per affected alert
+// fingerprint. The caller deduplicates against the DB to skip silences already
+// tracked by the Jarvis API.
+func (r *Recorder) collectNewExternalSilences(
+	currSilenceInfo map[string]silenceInfoEntry,
+	currAlertSilences map[string][]string,
+) []silenceEntry {
+	var entries []silenceEntry
+	for silenceID, info := range currSilenceInfo {
+		if _, existed := r.prevSilenceInfo[silenceID]; existed {
+			continue
+		}
+		for fp, sids := range currAlertSilences {
+			for _, sid := range sids {
+				if sid == silenceID {
+					entries = append(entries, silenceEntry{fp, silenceID, info})
+					break
+				}
+			}
+		}
+	}
+	return entries
 }
 
 // collectExpiredSilences returns entries for silences that truly expired — i.e.

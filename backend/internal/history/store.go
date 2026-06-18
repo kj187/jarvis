@@ -540,6 +540,18 @@ func (s *Store) RecordSilenceEvent(fingerprint, silenceID, clusterName, action, 
 	}, nil
 }
 
+// HasSilenceEventsForSilenceID reports whether any silence_events row exists for the given silenceID.
+func (s *Store) HasSilenceEventsForSilenceID(silenceID string) (bool, error) {
+	var count int
+	err := s.queryRow(context.Background(), `
+		SELECT COUNT(*) FROM silence_events WHERE silence_id = ?
+	`, silenceID).Scan(&count)
+	if err != nil {
+		return false, fmt.Errorf("count silence events by silence_id: %w", err)
+	}
+	return count > 0, nil
+}
+
 // GetSilenceEvents returns all silence events for a fingerprint (newest first).
 func (s *Store) GetSilenceEvents(fingerprint string) ([]models.SilenceEvent, error) {
 	rows, err := s.query(context.Background(), `

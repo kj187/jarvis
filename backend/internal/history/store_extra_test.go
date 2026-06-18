@@ -126,6 +126,91 @@ func TestGetSilenceEvents_MultipleFPs(t *testing.T) {
 	}
 }
 
+// ── HasSilenceEventsForSilenceID ──────────────────────────────────────────────
+
+func TestHasSilenceEventsForSilenceID_NotFound(t *testing.T) {
+	rec, _ := newTestRecorder(t)
+	exists, err := rec.store.HasSilenceEventsForSilenceID("nonexistent")
+	if err != nil {
+		t.Fatalf("HasSilenceEventsForSilenceID: %v", err)
+	}
+	if exists {
+		t.Error("expected false for unknown silence_id")
+	}
+}
+
+func TestHasSilenceEventsForSilenceID_Found(t *testing.T) {
+	rec, _ := newTestRecorder(t)
+	if _, err := rec.store.RecordSilenceEvent("fp1", "s-ext", "homelab", "created", "alice", ""); err != nil {
+		t.Fatalf("RecordSilenceEvent: %v", err)
+	}
+	exists, err := rec.store.HasSilenceEventsForSilenceID("s-ext")
+	if err != nil {
+		t.Fatalf("HasSilenceEventsForSilenceID: %v", err)
+	}
+	if !exists {
+		t.Error("expected true for known silence_id")
+	}
+}
+
+// ── collectNewExternalSilences ────────────────────────────────────────────────
+
+func TestCollectNewExternalSilences_NewSilence(t *testing.T) {
+	rec, _ := newTestRecorder(t)
+	rec.prevSilenceInfo = map[string]silenceInfoEntry{}
+	rec.prevAlertSilences = map[string][]string{}
+
+	currSilenceInfo := map[string]silenceInfoEntry{
+		"s-new": {state: "active", clusterName: "homelab", comment: "ext", createdBy: "bob"},
+	}
+	currAlertSilences := map[string][]string{
+		"fp1": {"s-new"},
+	}
+
+	entries := rec.collectNewExternalSilences(currSilenceInfo, currAlertSilences)
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 entry, got %d", len(entries))
+	}
+	if entries[0].silenceID != "s-new" || entries[0].fingerprint != "fp1" || entries[0].info.createdBy != "bob" {
+		t.Errorf("unexpected entry: %+v", entries[0])
+	}
+}
+
+func TestCollectNewExternalSilences_AlreadyKnown(t *testing.T) {
+	rec, _ := newTestRecorder(t)
+	rec.prevSilenceInfo = map[string]silenceInfoEntry{
+		"s-known": {state: "active", clusterName: "homelab"},
+	}
+
+	currSilenceInfo := map[string]silenceInfoEntry{
+		"s-known": {state: "active", clusterName: "homelab", createdBy: "alice"},
+	}
+	currAlertSilences := map[string][]string{
+		"fp1": {"s-known"},
+	}
+
+	entries := rec.collectNewExternalSilences(currSilenceInfo, currAlertSilences)
+	if len(entries) != 0 {
+		t.Errorf("expected 0 entries for already-known silence, got %d", len(entries))
+	}
+}
+
+func TestCollectNewExternalSilences_NoMatchingAlert(t *testing.T) {
+	rec, _ := newTestRecorder(t)
+	rec.prevSilenceInfo = map[string]silenceInfoEntry{}
+
+	currSilenceInfo := map[string]silenceInfoEntry{
+		"s-orphan": {state: "active", clusterName: "homelab", createdBy: "carol"},
+	}
+	// No alert is silenced by s-orphan.
+	currAlertSilences := map[string][]string{}
+
+	entries := rec.collectNewExternalSilences(currSilenceInfo, currAlertSilences)
+	if len(entries) != 0 {
+		t.Errorf("expected 0 entries when no alert is silenced, got %d", len(entries))
+	}
+}
+
 // ── GetRecentResolved ─────────────────────────────────────────────────────────
 
 func TestGetRecentResolved_Empty(t *testing.T) {
