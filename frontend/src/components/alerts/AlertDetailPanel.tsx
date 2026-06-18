@@ -250,6 +250,18 @@ export function AlertDetailPanel({
     ([k]) => k !== 'summary' && k !== 'description' && !linkButtonKeys.has(k),
   )
 
+  // Some Alertmanager versions set startsAt = endsAt when endsAt is far in the future
+  // and startsAt is omitted in the POST. Fall back to the most recent 'firing' history event.
+  const lastFiredLabel = (() => {
+    const startsAt = new Date(alert.startsAt)
+    const ref = startsAt > new Date()
+      ? historyData?.events?.find(e => e.status === 'firing')
+        ? new Date(historyData.events.find(e => e.status === 'firing')!.startsAt)
+        : null
+      : startsAt
+    return ref ? formatDistanceToNow(ref, { addSuffix: true, locale: enUS }) : 'recently'
+  })()
+
   return (
     <>
       <Sheet open={!!alert} onClose={onClose}>
@@ -268,7 +280,7 @@ export function AlertDetailPanel({
           </div>
           {stats && (
             <div className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground">
-              <span>Last fired <span className="font-medium text-foreground">{formatDistanceToNow(new Date(alert.startsAt), { addSuffix: true, locale: enUS })}</span></span>
+              <span>Last fired <span className="font-medium text-foreground">{lastFiredLabel}</span></span>
               <span>·</span>
               <span>{stats.occurrenceCount}× fired</span>
             </div>

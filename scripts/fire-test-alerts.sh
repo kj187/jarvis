@@ -11,12 +11,14 @@ GRAFANA="https://grafana.lan.kj187.de"
 PROM="https://prometheus.lan.kj187.de"
 RUNBOOKS="https://runbooks.example.com/alerts"
 
-# Far-future endsAt keeps alerts alive until resolve-test-alerts.sh is run manually.
+# Explicit startsAt=now + far-future endsAt keeps alerts alive.
+# Without explicit startsAt, some Alertmanager versions copy endsAt into startsAt.
+STARTS_AT="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
 ENDS_AT="2099-12-31T23:59:59.000Z"
 
 post() {
   local payload
-  payload=$(printf '%s' "$1" | jq --arg e "$ENDS_AT" 'map(. + {endsAt: $e})')
+  payload=$(printf '%s' "$1" | jq --arg s "$STARTS_AT" --arg e "$ENDS_AT" 'map(. + {startsAt: $s, endsAt: $e})')
   curl -sf -L -X POST "${AM}/api/v2/alerts" \
     -H "Content-Type: application/json" \
     -d "$payload"
