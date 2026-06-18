@@ -425,7 +425,7 @@ export function AlertDetailPanel({
                   : (theme === 'light' ? 'bg-muted' : 'bg-slate-900'),
               )}
             >
-              <div className="mb-3 flex items-center justify-between gap-2">
+              <div className="mb-3 flex flex-col gap-2">
                 <div className={cn(
                   'flex items-center gap-1.5 text-xs font-semibold',
                   isPending
@@ -437,7 +437,7 @@ export function AlertDetailPanel({
                   <BellOff className="h-3 w-3 shrink-0" />
                   {isPending ? 'Silence pending' : 'Silence active'}
                 </div>
-                <div className="flex shrink-0 items-center gap-1">
+                <div className="flex items-center gap-1">
                   {!isPending && ([
                     { label: '+1h', ms: 60 * 60_000 },
                     { label: '+4h', ms: 4 * 60 * 60_000 },
@@ -991,7 +991,7 @@ export function AlertDetailPanel({
         <Sheet
           open={true}
           onClose={() => setShowNewSilenceForm(false)}
-          className="sm:max-w-2xl lg:max-w-3xl"
+          className="sm:max-w-[760px] lg:max-w-[760px]"
         >
           <div className="p-5 pt-10">
             <h2 className="mb-4 text-base font-semibold">Create new silence</h2>
@@ -1011,7 +1011,7 @@ export function AlertDetailPanel({
         <Sheet
           open={true}
           onClose={() => setSilenceFormTarget(null)}
-          className="sm:max-w-2xl lg:max-w-3xl"
+          className="sm:max-w-[760px] lg:max-w-[760px]"
         >
           <div className="p-5 pt-10">
             <h2 className="mb-4 text-base font-semibold">

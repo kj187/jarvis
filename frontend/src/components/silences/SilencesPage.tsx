@@ -98,7 +98,7 @@ export function SilencesPage() {
       </div>
 
       {/* Silence form sheet */}
-      <Sheet open={formOpen} onClose={() => setFormOpen(false)}>
+      <Sheet open={formOpen} onClose={() => setFormOpen(false)} className="sm:max-w-[760px] lg:max-w-[760px]">
         <div className="p-5 pt-10">
           <h2 className="mb-4 text-base font-semibold">
             {!editSilence ? 'Create silence' : editSilence.status.state === 'expired' ? 'Recreate silence' : 'Edit silence'}

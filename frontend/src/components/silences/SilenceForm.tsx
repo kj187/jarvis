@@ -1,7 +1,9 @@
 import { useState, useCallback, useMemo, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { format, addSeconds } from 'date-fns'
-import { Plus, X, ChevronUp, ChevronDown, ArrowLeft, Check, Loader2, CircleAlert } from 'lucide-react'
+import { format, addSeconds, parse, isValid } from 'date-fns'
+import { enUS } from 'date-fns/locale'
+import { DayPicker } from 'react-day-picker'
+import { Plus, X, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, ArrowLeft, Check, Loader2, CircleAlert, RotateCcw } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -17,6 +19,15 @@ import { useAuthStore } from '@/store/authStore'
 import type { EnrichedAlert, LabelMatcher, LabelMatcherOperator, Silence } from '@/types'
 
 const USERNAME_KEY = 'jarvis-username'
+const FMT = "yyyy-MM-dd'T'HH:mm"
+
+const DURATION_PRESETS = [
+  { label: '30m', days: 0, hours: 0, minutes: 30 },
+  { label: '1h',  days: 0, hours: 1, minutes: 0  },
+  { label: '4h',  days: 0, hours: 4, minutes: 0  },
+  { label: '1d',  days: 1, hours: 0, minutes: 0  },
+  { label: '1w',  days: 7, hours: 0, minutes: 0  },
+] as const
 
 type Step = 'form' | 'preview' | 'results'
 
@@ -271,14 +282,157 @@ function totalSeconds(days: number, hours: number, minutes: number): number {
   return days * 86400 + hours * 3600 + minutes * 60
 }
 
-function endsAtLabel(days: number, hours: number, minutes: number, start: Date): string {
-  const secs = totalSeconds(days, hours, minutes)
-  if (secs <= 0) return '—'
-  return format(addSeconds(start, secs), 'yyyy-MM-dd HH:mm')
-}
-
 function clamp(val: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, val))
+}
+
+// ── InlineDateTimePicker ─────────────────────────────────────────────────────
+
+interface InlineDateTimePickerProps {
+  value: string // "yyyy-MM-dd'T'HH:mm"
+  onChange: (v: string) => void
+}
+
+function InlineDateTimePicker({ value, onChange }: InlineDateTimePickerProps) {
+  const parsed = value ? parse(value, FMT, new Date()) : undefined
+  const selected = parsed && isValid(parsed) ? parsed : undefined
+
+  const hour = selected?.getHours() ?? 0
+  const minute = selected?.getMinutes() ?? 0
+
+  function handleDaySelect(day: Date | undefined) {
+    if (!day) return
+    day.setHours(hour, minute, 0, 0)
+    onChange(format(day, FMT))
+  }
+
+  function adjustHour(delta: number) {
+    const base = selected ?? new Date()
+    const updated = new Date(base)
+    updated.setHours(clamp(hour + delta, 0, 23), minute, 0, 0)
+    onChange(format(updated, FMT))
+  }
+
+  function adjustMinute(delta: number) {
+    const base = selected ?? new Date()
+    const updated = new Date(base)
+    updated.setHours(hour, clamp(minute + delta, 0, 59), 0, 0)
+    onChange(format(updated, FMT))
+  }
+
+  const timeSpinners = [
+    {
+      label: 'h',
+      val: hour,
+      max: 23,
+      inc: () => adjustHour(1),
+      dec: () => adjustHour(-1),
+      set: (n: number) => {
+        const base = selected ?? new Date()
+        const updated = new Date(base)
+        updated.setHours(clamp(n, 0, 23), minute, 0, 0)
+        onChange(format(updated, FMT))
+      },
+    },
+    {
+      label: 'm',
+      val: minute,
+      max: 59,
+      inc: () => adjustMinute(1),
+      dec: () => adjustMinute(-1),
+      set: (n: number) => {
+        const base = selected ?? new Date()
+        const updated = new Date(base)
+        updated.setHours(hour, clamp(n, 0, 59), 0, 0)
+        onChange(format(updated, FMT))
+      },
+    },
+  ]
+
+  return (
+    <div className="flex rounded border border-border bg-background">
+      <DayPicker
+        mode="single"
+        selected={selected}
+        defaultMonth={selected ?? new Date()}
+        onSelect={handleDaySelect}
+        locale={enUS}
+        components={{
+          Chevron: ({ orientation }) =>
+            orientation === 'left'
+              ? <ChevronLeft className="h-4 w-4" />
+              : <ChevronRight className="h-4 w-4" />,
+        }}
+        classNames={{
+          root: 'p-3',
+          months: 'flex flex-col relative',
+          month: 'space-y-3',
+          month_caption: 'flex items-center justify-center relative h-7',
+          caption_label: 'text-sm font-medium text-foreground',
+          nav: 'flex items-center justify-between absolute inset-x-0 top-0',
+          button_previous:
+            'inline-flex h-7 w-7 items-center justify-center rounded-md text-foreground/80 hover:bg-accent hover:text-foreground cursor-pointer transition-colors',
+          button_next:
+            'inline-flex h-7 w-7 items-center justify-center rounded-md text-foreground/80 hover:bg-accent hover:text-foreground cursor-pointer transition-colors',
+          month_grid: 'w-full border-collapse',
+          weekdays: 'flex',
+          weekday: 'w-8 text-center text-[10px] font-medium text-muted-foreground',
+          week: 'flex mt-1',
+          day: 'relative flex h-8 w-8 items-center justify-center',
+          day_button:
+            'h-8 w-8 rounded text-sm hover:bg-accent hover:text-foreground focus:outline-none cursor-pointer transition-colors',
+          today: '[&>button]:bg-accent [&>button]:text-foreground [&>button]:font-semibold',
+          selected:
+            '[&>button]:!bg-primary [&>button]:!text-primary-foreground [&>button]:hover:!bg-primary',
+          outside: '[&>button]:text-muted-foreground/40',
+          disabled: '[&>button]:opacity-30 [&>button]:cursor-not-allowed',
+        }}
+      />
+
+      {/* Time spinners — right of calendar */}
+      <div className="flex items-center gap-4 border-l border-border px-4">
+        {timeSpinners.map(({ label, val, max, inc, dec, set }) => (
+          <div key={label} className="flex flex-col items-center gap-0.5">
+            <button
+              type="button"
+              onClick={inc}
+              className="cursor-pointer text-muted-foreground hover:text-foreground"
+            >
+              <ChevronUp className="h-4 w-4" />
+            </button>
+            <input
+              type="number"
+              min={0}
+              max={max}
+              value={val}
+              onChange={(e) => {
+                const n = parseInt(e.target.value, 10)
+                if (!isNaN(n)) set(n)
+              }}
+              className="w-10 rounded border border-input bg-background text-center text-2xl font-light tabular-nums focus:outline-none focus:ring-1 focus:ring-ring [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+            />
+            <button
+              type="button"
+              onClick={dec}
+              className="cursor-pointer text-muted-foreground hover:text-foreground"
+            >
+              <ChevronDown className="h-4 w-4" />
+            </button>
+            <span className="mt-0.5 text-[10px] text-muted-foreground">{label}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function diffToSpinners(start: string, end: string): { days: number; hours: number; minutes: number } {
+  const diffSecs = Math.max(0, Math.floor((new Date(end).getTime() - new Date(start).getTime()) / 1000))
+  return {
+    days: Math.floor(diffSecs / 86400),
+    hours: Math.floor((diffSecs % 86400) / 3600),
+    minutes: Math.floor((diffSecs % 3600) / 60),
+  }
 }
 
 export interface SilenceFormProps {
@@ -360,37 +514,48 @@ export function SilenceForm({
     return [{ id: nextId(), name: '', operator: '=', value: '' }]
   })
 
-  // Duration spinners — initialize from settings when creating a new silence
+  // Duration spinners
   const [dDays, setDDays] = useState(() => {
-    if (prefillSilence && !isRecreate) return 0
+    if (prefillSilence && !isRecreate) {
+      const { days } = diffToSpinners(prefillSilence.startsAt, prefillSilence.endsAt)
+      return days
+    }
     const mins = useSettingsStore.getState().defaultSilenceDurationMinutes
     return Math.floor(mins / (24 * 60))
   })
   const [dHours, setDHours] = useState(() => {
-    if (prefillSilence && !isRecreate) return 1
+    if (prefillSilence && !isRecreate) {
+      const { hours } = diffToSpinners(prefillSilence.startsAt, prefillSilence.endsAt)
+      return hours
+    }
     const mins = useSettingsStore.getState().defaultSilenceDurationMinutes
     return Math.floor((mins % (24 * 60)) / 60)
   })
   const [dMinutes, setDMinutes] = useState(() => {
-    if (prefillSilence && !isRecreate) return 0
+    if (prefillSilence && !isRecreate) {
+      const { minutes } = diffToSpinners(prefillSilence.startsAt, prefillSilence.endsAt)
+      return minutes
+    }
     const mins = useSettingsStore.getState().defaultSilenceDurationMinutes
     return mins % 60
   })
 
-  // End-mode toggle — edit starts in calendar (has existing end date), create in duration
-  const [endMode, setEndMode] = useState<'duration' | 'calendar'>(() =>
-    prefillSilence && !isRecreate ? 'calendar' : 'duration',
-  )
-
-  // Start/End datetime (always initialized)
+  // Start/End datetime — endsAt always initialized (never empty)
   const [startsAt, setStartsAt] = useState(() =>
     prefillSilence && !isRecreate
-      ? format(new Date(prefillSilence.startsAt), "yyyy-MM-dd'T'HH:mm")
-      : format(new Date(), "yyyy-MM-dd'T'HH:mm"),
+      ? format(new Date(prefillSilence.startsAt), FMT)
+      : format(new Date(), FMT),
   )
-  const [endsAt, setEndsAt] = useState(() =>
-    prefillSilence && !isRecreate ? format(new Date(prefillSilence.endsAt), "yyyy-MM-dd'T'HH:mm") : '',
-  )
+  const [endsAt, setEndsAt] = useState(() => {
+    if (prefillSilence && !isRecreate) {
+      return format(new Date(prefillSilence.endsAt), FMT)
+    }
+    const mins = useSettingsStore.getState().defaultSilenceDurationMinutes
+    const d = Math.floor(mins / (24 * 60))
+    const h = Math.floor((mins % (24 * 60)) / 60)
+    const m = mins % 60
+    return format(addSeconds(new Date(), totalSeconds(d, h, m)), FMT)
+  })
 
   const [createdBy, setCreatedBy] = useState(
     () => localStorage.getItem(USERNAME_KEY) ?? useSettingsStore.getState().defaultCreatorName,
@@ -438,7 +603,6 @@ export function SilenceForm({
       m.map((x) => {
         if (x.id !== id) return x
         const updated = { ...x, [field]: value }
-        // Switching to exact-match: drop all but first pipe-segment
         if (field === 'operator' && (value === '=' || value === '!=') && x.value.includes('|')) {
           updated.value = x.value.split('|')[0]
         }
@@ -455,41 +619,58 @@ export function SilenceForm({
     )
   }
 
-  // ── End mode sync ────────────────────────────────────────────────────────────
+  // ── Duration + end date sync ─────────────────────────────────────────────────
 
-  function switchEndMode(mode: 'duration' | 'calendar') {
-    if (mode === endMode) return
-    if (mode === 'duration' && endsAt && startsAt) {
-      const diffSecs = Math.max(
-        0,
-        Math.floor((new Date(endsAt).getTime() - new Date(startsAt).getTime()) / 1000),
-      )
-      setDDays(Math.floor(diffSecs / 86400))
-      setDHours(Math.floor((diffSecs % 86400) / 3600))
-      setDMinutes(Math.floor((diffSecs % 3600) / 60))
+  // Spinner change → recompute endsAt
+  function updateDuration(days: number, hours: number, minutes: number) {
+    const d = clamp(days, 0, 365)
+    const h = clamp(hours, 0, 23)
+    const m = clamp(minutes, 0, 59)
+    setDDays(d)
+    setDHours(h)
+    setDMinutes(m)
+    if (startsAt) {
+      setEndsAt(format(addSeconds(new Date(startsAt), totalSeconds(d, h, m)), FMT))
     }
-    if (mode === 'calendar' && startsAt) {
-      setEndsAt(
-        format(addSeconds(new Date(startsAt), totalSeconds(dDays, dHours, dMinutes)), "yyyy-MM-dd'T'HH:mm"),
-      )
-    }
-    setEndMode(mode)
   }
 
-  // When startsAt changes in calendar mode: keep the same gap → push endsAt forward.
+  // Calendar change → update endsAt + recompute spinners
+  function handleEndsAtChange(newVal: string) {
+    setEndsAt(newVal)
+    if (startsAt && newVal) {
+      const { days, hours, minutes } = diffToSpinners(startsAt, newVal)
+      setDDays(days)
+      setDHours(hours)
+      setDMinutes(minutes)
+    }
+  }
+
+  // Reset end to default duration from now
+  function resetEnd() {
+    const mins = useSettingsStore.getState().defaultSilenceDurationMinutes
+    const d = Math.floor(mins / (24 * 60))
+    const h = Math.floor((mins % (24 * 60)) / 60)
+    const m = mins % 60
+    setDDays(d)
+    setDHours(h)
+    setDMinutes(m)
+    if (startsAt) {
+      setEndsAt(format(addSeconds(new Date(startsAt), totalSeconds(d, h, m)), FMT))
+    }
+  }
+
+  // Start change → push endsAt forward keeping the same gap
   function handleStartsAtChange(newVal: string) {
-    if (endMode === 'calendar' && endsAt && startsAt && newVal) {
+    if (endsAt && startsAt && newVal) {
       const gap = new Date(endsAt).getTime() - new Date(startsAt).getTime()
       const newEnd = new Date(new Date(newVal).getTime() + (gap > 0 ? gap : 3_600_000))
-      setEndsAt(format(newEnd, "yyyy-MM-dd'T'HH:mm"))
+      setEndsAt(format(newEnd, FMT))
     }
     setStartsAt(newVal)
   }
 
   // ── Helpers ──────────────────────────────────────────────────────────────────
 
-  // For regex operators each pipe-segment is a literal value → escape individually.
-  // Keeps chip display raw while sending correct regex to Alertmanager.
   function toRegexValue(value: string): string {
     return value.split('|').filter(Boolean).map(escapeRegex).join('|')
   }
@@ -524,10 +705,7 @@ export function SilenceForm({
 
     const startDate = new Date(startsAt)
     const computedStartsAt = startDate.toISOString()
-    const computedEndsAt =
-      endMode === 'calendar'
-        ? new Date(endsAt).toISOString()
-        : addSeconds(startDate, totalSeconds(dDays, dHours, dMinutes)).toISOString()
+    const computedEndsAt = new Date(endsAt).toISOString()
 
     const amMatchers = matchers
       .filter((m) => m.name && m.value)
@@ -573,9 +751,7 @@ export function SilenceForm({
     if (hadSuccess) triggerPoll().catch(() => {})
   }
 
-  const secs = totalSeconds(dDays, dHours, dMinutes)
-
-  const timeError = endMode === 'calendar' && endsAt && startsAt
+  const timeError = endsAt && startsAt
     ? new Date(endsAt) <= new Date(startsAt)
       ? 'End must be after start.'
       : null
@@ -587,7 +763,7 @@ export function SilenceForm({
     effectiveCreatedBy.trim() &&
     selectedClusters.length > 0 &&
     Boolean(startsAt) &&
-    (endMode === 'calendar' ? Boolean(endsAt) : secs > 0)
+    Boolean(endsAt)
 
   // ── Form step ────────────────────────────────────────────────────────────────
 
@@ -742,7 +918,7 @@ export function SilenceForm({
 
         {/* Time */}
         <div className="space-y-3">
-          {/* Start — always editable */}
+          {/* Start */}
           <div>
             <div className="mb-1.5 flex items-center justify-between">
               <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -750,7 +926,7 @@ export function SilenceForm({
               </label>
               <button
                 type="button"
-                onClick={() => setStartsAt(format(new Date(), "yyyy-MM-dd'T'HH:mm"))}
+                onClick={() => setStartsAt(format(new Date(), FMT))}
                 className="text-[10px] text-muted-foreground hover:text-foreground cursor-pointer"
               >
                 Now
@@ -759,73 +935,123 @@ export function SilenceForm({
             <DateTimePicker value={startsAt} onChange={handleStartsAtChange} />
           </div>
 
-          {/* Ende — edit: always calendar; create: toggle Dauer | Datum */}
+          {/* Ende — duration spinners and calendar side by side, always in sync */}
           <div>
             <div className="mb-2 flex items-center justify-between">
               <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Ende
-                {endMode === 'duration' && secs > 0 && startsAt && (
-                  <span className="ml-1.5 font-normal normal-case text-muted-foreground/60">
-                    · {endsAtLabel(dDays, dHours, dMinutes, new Date(startsAt))}
-                  </span>
-                )}
               </label>
-              <div className="flex overflow-hidden rounded border border-border text-[10px]">
-                {(['duration', 'calendar'] as const).map((mode) => (
-                  <button
-                    key={mode}
-                    type="button"
-                    onClick={() => switchEndMode(mode)}
-                    className={cn(
-                      'px-2 py-0.5 transition-colors',
-                      endMode === mode
-                        ? 'bg-accent text-foreground'
-                        : 'text-muted-foreground hover:bg-accent/50',
-                    )}
-                  >
-                    {mode === 'duration' ? 'Duration' : 'Date'}
-                  </button>
-                ))}
-              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={resetEnd}
+                className="h-7 gap-1.5 px-2.5 text-xs"
+              >
+                <RotateCcw className="h-3 w-3" />
+                Reset
+              </Button>
             </div>
+            <div className="flex flex-col items-center gap-8 sm:flex-row sm:items-stretch sm:justify-center">
+              {/* Left column: presets + duration spinners */}
+              <div className="flex shrink-0 flex-col items-center gap-4 self-center">
+                {/* Quick-duration presets */}
+                <div className="flex flex-wrap justify-center gap-1.5">
+                  {DURATION_PRESETS.map((p) => {
+                    const active = dDays === p.days && dHours === p.hours && dMinutes === p.minutes
+                    return (
+                      <button
+                        key={p.label}
+                        type="button"
+                        onClick={() => updateDuration(p.days, p.hours, p.minutes)}
+                        className={cn(
+                          'rounded border px-3 py-1 text-xs font-medium transition-colors cursor-pointer',
+                          active
+                            ? 'border-primary bg-primary/20 text-foreground'
+                            : 'border-border text-muted-foreground hover:border-primary/50 hover:text-foreground',
+                        )}
+                      >
+                        {p.label}
+                      </button>
+                    )
+                  })}
+                </div>
 
-            {endMode === 'calendar' ? (
-              <>
-                <DateTimePicker value={endsAt} onChange={setEndsAt} />
+                {/* Duration spinners — editable */}
+                <div className="flex gap-8">
+                  {[
+                    {
+                      label: 'days',
+                      val: dDays,
+                      max: 365,
+                      inc: () => updateDuration(dDays + 1, dHours, dMinutes),
+                      dec: () => updateDuration(dDays - 1, dHours, dMinutes),
+                      set: (n: number) => updateDuration(clamp(n, 0, 365), dHours, dMinutes),
+                    },
+                    {
+                      label: 'hours',
+                      val: dHours,
+                      max: 23,
+                      inc: () => updateDuration(dDays, dHours + 1, dMinutes),
+                      dec: () => updateDuration(dDays, dHours - 1, dMinutes),
+                      set: (n: number) => updateDuration(dDays, clamp(n, 0, 23), dMinutes),
+                    },
+                    {
+                      label: 'minutes',
+                      val: dMinutes,
+                      max: 59,
+                      inc: () => updateDuration(dDays, dHours, dMinutes + 1),
+                      dec: () => updateDuration(dDays, dHours, dMinutes - 1),
+                      set: (n: number) => updateDuration(dDays, dHours, clamp(n, 0, 59)),
+                    },
+                  ].map(({ label, val, max, inc, dec, set }) => (
+                    <div key={label} className="flex flex-col items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={inc}
+                        className="cursor-pointer text-muted-foreground hover:text-foreground"
+                      >
+                        <ChevronUp className="h-6 w-6" />
+                      </button>
+                      <input
+                        type="number"
+                        min={0}
+                        max={max}
+                        value={val}
+                        onChange={(e) => {
+                          const n = parseInt(e.target.value, 10)
+                          if (!isNaN(n)) set(n)
+                        }}
+                        className="w-16 rounded border border-input bg-background text-center text-5xl font-light tabular-nums focus:outline-none focus:ring-1 focus:ring-ring [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={dec}
+                        className="cursor-pointer text-muted-foreground hover:text-foreground"
+                      >
+                        <ChevronDown className="h-6 w-6" />
+                      </button>
+                      <span className="mt-1 text-xs text-muted-foreground">{label}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* OR divider — horizontal on small, vertical on sm+ */}
+              <div className="flex w-full flex-row items-center gap-2 sm:w-auto sm:flex-col sm:self-stretch sm:gap-0 sm:py-1">
+                <div className="h-px flex-1 bg-border sm:h-auto sm:w-px sm:flex-1" />
+                <span className="shrink-0 text-[10px] font-medium text-muted-foreground sm:py-2">or</span>
+                <div className="h-px flex-1 bg-border sm:h-auto sm:w-px sm:flex-1" />
+              </div>
+
+              {/* Inline end date/time calendar */}
+              <div className="min-w-0">
+                <InlineDateTimePicker value={endsAt} onChange={handleEndsAtChange} />
                 {timeError && (
                   <p className="mt-1 text-xs text-destructive">{timeError}</p>
                 )}
-              </>
-            ) : (
-              <div className="flex gap-6">
-                {(
-                  [
-                    { label: 'days', val: dDays, set: (v: number) => setDDays(clamp(v, 0, 365)) },
-                    { label: 'hours', val: dHours, set: (v: number) => setDHours(clamp(v, 0, 23)) },
-                    { label: 'minutes', val: dMinutes, set: (v: number) => setDMinutes(clamp(v, 0, 59)) },
-                  ] as const
-                ).map(({ label, val, set }) => (
-                  <div key={label} className="flex flex-col items-center gap-0.5">
-                    <button
-                      type="button"
-                      onClick={() => set(val + 1)}
-                      className="cursor-pointer text-muted-foreground hover:text-foreground"
-                    >
-                      <ChevronUp className="h-4 w-4" />
-                    </button>
-                    <span className="w-10 text-center text-2xl font-light tabular-nums">{val}</span>
-                    <button
-                      type="button"
-                      onClick={() => set(val - 1)}
-                      className="cursor-pointer text-muted-foreground hover:text-foreground"
-                    >
-                      <ChevronDown className="h-4 w-4" />
-                    </button>
-                    <span className="mt-0.5 text-[10px] text-muted-foreground">{label}</span>
-                  </div>
-                ))}
               </div>
-            )}
+            </div>
           </div>
         </div>
 
@@ -888,18 +1114,12 @@ export function SilenceForm({
   if (step === 'preview') {
     const matched = previewMatched()
 
-    const previewEnd = endMode === 'calendar' && endsAt
-      ? format(new Date(endsAt), 'yyyy-MM-dd HH:mm')
-      : startsAt
-        ? endsAtLabel(dDays, dHours, dMinutes, new Date(startsAt))
-        : '—'
+    const previewEnd = endsAt ? format(new Date(endsAt), 'yyyy-MM-dd HH:mm') : '—'
 
     const previewDuration = (() => {
-      const diffSecs = endMode === 'duration'
-        ? totalSeconds(dDays, dHours, dMinutes)
-        : endsAt && startsAt
-          ? Math.max(0, Math.floor((new Date(endsAt).getTime() - new Date(startsAt).getTime()) / 1000))
-          : 0
+      const diffSecs = endsAt && startsAt
+        ? Math.max(0, Math.floor((new Date(endsAt).getTime() - new Date(startsAt).getTime()) / 1000))
+        : 0
       const d = Math.floor(diffSecs / 86400)
       const h = Math.floor((diffSecs % 86400) / 3600)
       const m = Math.floor((diffSecs % 3600) / 60)

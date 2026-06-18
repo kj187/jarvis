@@ -683,7 +683,7 @@ export function Header() {
       )}
     </header>
 
-    <Sheet open={silenceFormOpen} onClose={() => setSilenceFormOpen(false)}>
+    <Sheet open={silenceFormOpen} onClose={() => setSilenceFormOpen(false)} className="sm:max-w-[760px] lg:max-w-[760px]">
       <div className="p-5 pt-10">
         <h2 className="mb-4 text-base font-semibold">Create silence</h2>
         <SilenceForm
