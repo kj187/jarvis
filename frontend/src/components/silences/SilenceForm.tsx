@@ -500,7 +500,7 @@ export function SilenceForm({
   const [selectedClusters, setSelectedClusters] = useState<string[]>(() => {
     if (prefillSilence && !rebuildFromAlerts) return [prefillSilence.clusterName]
     if (prefillAlerts?.length) return [...new Set(prefillAlerts.map((a) => a.clusterName))]
-    return availableClusters.slice(0, 1)
+    return [...availableClusters]
   })
 
   const [matchers, setMatchers] = useState<SilenceMatcher[]>(() => {
@@ -832,26 +832,35 @@ export function SilenceForm({
 
         {/* Cluster chips */}
         <div>
-          <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Cluster
-          </label>
+          <div className="mb-2 flex items-baseline justify-between">
+            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Cluster
+            </label>
+            {!isEdit && (
+              <span className="text-[10px] text-muted-foreground">Click to toggle</span>
+            )}
+          </div>
           <div className="flex flex-wrap gap-1.5">
-            {availableClusters.map((c) => (
-              <button
-                key={c}
-                type="button"
-                onClick={() => !isEdit && toggleCluster(c)}
-                className={cn(
-                  'rounded border px-2.5 py-1 text-xs font-medium transition-colors',
-                  selectedClusters.includes(c)
-                    ? 'border-primary bg-primary/20 text-foreground'
-                    : 'border-border text-muted-foreground hover:border-primary/50',
-                  isEdit && 'cursor-default opacity-70',
-                )}
-              >
-                {c}
-              </button>
-            ))}
+            {availableClusters.map((c) => {
+              const active = selectedClusters.includes(c)
+              return (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => !isEdit && toggleCluster(c)}
+                  className={cn(
+                    'flex items-center gap-1.5 rounded border px-2.5 py-1 text-xs font-medium transition-colors',
+                    active
+                      ? 'border-primary bg-primary/20 text-foreground cursor-pointer'
+                      : 'border-dashed border-border text-muted-foreground hover:border-primary/60 hover:text-foreground cursor-pointer',
+                    isEdit && 'cursor-default opacity-70',
+                  )}
+                >
+                  {active && <Check className="h-3 w-3 shrink-0" />}
+                  {c}
+                </button>
+              )
+            })}
           </div>
         </div>
 
