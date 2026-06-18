@@ -18,11 +18,19 @@ interface CardGroup {
 }
 
 const SEVERITY_LABEL: Record<string, string> = {
-  critical: '🔴 Critical',
-  error: '🟠 Error',
-  warning: '🟡 Warning',
-  info: '🔵 Info',
-  none: '⚫ None',
+  critical: 'Critical',
+  error: 'Error',
+  warning: 'Warning',
+  info: 'Info',
+  none: 'None',
+}
+
+const SEVERITY_DOT: Record<string, string> = {
+  critical: 'bg-red-500',
+  error: 'bg-orange-500',
+  warning: 'bg-yellow-500',
+  info: 'bg-blue-500',
+  none: 'bg-slate-500',
 }
 
 const PAGE_SIZE = 3
@@ -179,7 +187,8 @@ export function AlertCardGrid({
         const distributed = distributeColumns(sectionGroups, silences, numCols)
         return (
           <section key={severity}>
-            <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            <h2 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              <span className={`h-2 w-2 rounded-full shrink-0 ${SEVERITY_DOT[severity] ?? 'bg-slate-500'}`} />
               {SEVERITY_LABEL[severity] ?? severity}{' '}
               <span className="ml-1 text-muted-foreground">
                 ({sectionGroups.reduce((sum, g) => sum + g.alerts.length, 0)})
