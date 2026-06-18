@@ -16,6 +16,7 @@ import { useSettingsStore } from '@/store/useSettingsStore'
 import { useQuery } from '@tanstack/react-query'
 import { fetchClusters } from '@/api/client'
 import { useAlerts } from '@/hooks/useAlerts'
+import { getFilterableLabels } from '@/lib/alertUtils'
 import type { LabelMatcherOperator } from '@/types'
 
 const STATE_OPTIONS = [
@@ -267,11 +268,12 @@ export function Header() {
 
   const { data: allAlerts = [] } = useAlerts()
 
-  // label → sorted unique values map
+  // label → sorted unique values map (includes pseudo-labels @cluster, @receiver)
   const labelValueMap = useMemo(() => {
     const map = new Map<string, Set<string>>()
     allAlerts.forEach((a) => {
-      Object.entries(a.labels).forEach(([k, v]) => {
+      Object.entries(getFilterableLabels(a)).forEach(([k, v]) => {
+        if (!v) return
         if (!map.has(k)) map.set(k, new Set())
         map.get(k)!.add(v)
       })
