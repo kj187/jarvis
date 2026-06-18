@@ -472,16 +472,20 @@ export function SilenceForm({
     return m
   }, [allAlerts, allSilences])
 
+  const LABEL_SKIP = new Set(['receiver', '@receiver', '@cluster'])
+
   const labelSuggestions = useMemo(() => {
     const map = new Map<string, string[]>()
     for (const alert of prefillAlerts ?? allAlerts) {
       for (const [k, v] of Object.entries(alert.labels)) {
+        if (LABEL_SKIP.has(k)) continue
         const existing = map.get(k) ?? []
         if (!existing.includes(v)) existing.push(v)
         map.set(k, existing)
       }
     }
     return map
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefillAlerts, allAlerts])
 
   const labelKeys = useMemo(
@@ -968,9 +972,14 @@ export function SilenceForm({
             {hasActiveMatchers && liveMatchCount === 0 && (
               <div className="flex gap-2.5 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-amber-700 dark:text-amber-400">
                 <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
-                <p className="text-xs">
-                  No current alerts match these matchers — the silence will be created but has no immediate effect.
-                </p>
+                <div className="text-xs space-y-0.5">
+                  <p>No current alerts match these matchers — the silence will be created but has no immediate effect.</p>
+                  {selectedClusters.length < availableClusters.length && (
+                    <p className="opacity-80">
+                      Only {selectedClusters.length} of {availableClusters.length} clusters selected — matching alerts on other clusters won't be silenced.
+                    </p>
+                  )}
+                </div>
               </div>
             )}
           </div>
