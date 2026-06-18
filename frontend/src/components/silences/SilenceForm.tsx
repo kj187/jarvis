@@ -882,7 +882,8 @@ export function SilenceForm({
               )}
               title={liveMatchCount > 0 ? 'Click to show/hide affected alerts' : undefined}
             >
-              {liveMatchCount} affected alerts
+              <span className="text-base font-bold tabular-nums">{liveMatchCount}</span>
+              <span className="text-xs font-semibold">affected alerts</span>
               {liveMatchCount > 0 && (
                 affectedOpen
                   ? <ChevronUp className="h-3 w-3 shrink-0" />
