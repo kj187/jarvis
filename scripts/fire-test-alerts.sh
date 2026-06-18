@@ -4,15 +4,22 @@
 
 set -euo pipefail
 
+command -v jq >/dev/null 2>&1 || { echo "ERROR: jq is required but not installed."; exit 1; }
+
 AM="${ALERTMANAGER_URL:-https://alertmanager.lan.kj187.de}"
 GRAFANA="https://grafana.lan.kj187.de"
 PROM="https://prometheus.lan.kj187.de"
 RUNBOOKS="https://runbooks.example.com/alerts"
 
+# Far-future endsAt keeps alerts alive until resolve-test-alerts.sh is run manually.
+ENDS_AT="2099-12-31T23:59:59.000Z"
+
 post() {
+  local payload
+  payload=$(printf '%s' "$1" | jq --arg e "$ENDS_AT" 'map(. + {endsAt: $e})')
   curl -sf -L -X POST "${AM}/api/v2/alerts" \
     -H "Content-Type: application/json" \
-    -d "$1"
+    -d "$payload"
   echo " OK"
 }
 
@@ -370,5 +377,4 @@ post '[{
 
 echo ""
 echo "==> Done. 16 Kubernetes test alerts active (test_suite=jarvis)."
-echo "    Alertmanager auto-expires them after ~5 minutes without refresh."
-echo "    Run 'make alerts-resolve' to resolve immediately."
+echo "    Alerts persist until you run 'make alerts-resolve' (endsAt: ${ENDS_AT})."
