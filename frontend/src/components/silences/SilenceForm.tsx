@@ -286,6 +286,14 @@ function clamp(val: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, val))
 }
 
+function normalizeDuration(d: number, h: number, m: number): { days: number; hours: number; minutes: number } {
+  if (m >= 60) { h += Math.floor(m / 60); m = m % 60 }
+  if (m < 0) { const b = Math.ceil(-m / 60); h -= b; m += b * 60 }
+  if (h >= 24) { d += Math.floor(h / 24); h = h % 24 }
+  if (h < 0) { const b = Math.ceil(-h / 24); d -= b; h += b * 24 }
+  return { days: clamp(d, 0, 365), hours: h, minutes: m }
+}
+
 // ── InlineDateTimePicker ─────────────────────────────────────────────────────
 
 interface InlineDateTimePickerProps {
@@ -626,11 +634,9 @@ export function SilenceForm({
 
   // ── Duration + end date sync ─────────────────────────────────────────────────
 
-  // Spinner change → recompute endsAt
+  // Spinner change → recompute endsAt (with carry-over wrap)
   function updateDuration(days: number, hours: number, minutes: number) {
-    const d = clamp(days, 0, 365)
-    const h = clamp(hours, 0, 23)
-    const m = clamp(minutes, 0, 59)
+    const { days: d, hours: h, minutes: m } = normalizeDuration(days, hours, minutes)
     setDDays(d)
     setDHours(h)
     setDMinutes(m)
@@ -842,13 +848,12 @@ export function SilenceForm({
                 <button
                   key={c}
                   type="button"
-                  onClick={() => !isEdit && toggleCluster(c)}
+                  onClick={() => toggleCluster(c)}
                   className={cn(
-                    'flex items-center gap-1.5 rounded border px-2.5 py-1 text-xs font-medium transition-colors',
+                    'flex items-center gap-1.5 rounded border px-2.5 py-1 text-xs font-medium transition-colors cursor-pointer',
                     active
-                      ? 'border-primary bg-primary/20 text-foreground cursor-pointer'
-                      : 'border-dashed border-border text-muted-foreground hover:border-primary/60 hover:text-foreground cursor-pointer',
-                    isEdit && 'cursor-default opacity-70',
+                      ? 'border-primary bg-primary/20 text-foreground'
+                      : 'border-dashed border-border text-muted-foreground hover:border-primary/60 hover:text-foreground',
                   )}
                 >
                   {active && <Check className="h-3 w-3 shrink-0" />}
@@ -1057,28 +1062,25 @@ export function SilenceForm({
                     {
                       label: 'days',
                       val: dDays,
-                      max: 365,
                       inc: () => updateDuration(dDays + 1, dHours, dMinutes),
                       dec: () => updateDuration(dDays - 1, dHours, dMinutes),
-                      set: (n: number) => updateDuration(clamp(n, 0, 365), dHours, dMinutes),
+                      set: (n: number) => updateDuration(n, dHours, dMinutes),
                     },
                     {
                       label: 'hours',
                       val: dHours,
-                      max: 23,
                       inc: () => updateDuration(dDays, dHours + 1, dMinutes),
                       dec: () => updateDuration(dDays, dHours - 1, dMinutes),
-                      set: (n: number) => updateDuration(dDays, clamp(n, 0, 23), dMinutes),
+                      set: (n: number) => updateDuration(dDays, n, dMinutes),
                     },
                     {
                       label: 'minutes',
                       val: dMinutes,
-                      max: 59,
                       inc: () => updateDuration(dDays, dHours, dMinutes + 1),
                       dec: () => updateDuration(dDays, dHours, dMinutes - 1),
-                      set: (n: number) => updateDuration(dDays, dHours, clamp(n, 0, 59)),
+                      set: (n: number) => updateDuration(dDays, dHours, n),
                     },
-                  ].map(({ label, val, max, inc, dec, set }) => (
+                  ].map(({ label, val, inc, dec, set }) => (
                     <div key={label} className="flex flex-col items-center gap-1">
                       <button
                         type="button"
@@ -1090,13 +1092,12 @@ export function SilenceForm({
                       <input
                         type="number"
                         min={0}
-                        max={max}
                         value={val}
                         onChange={(e) => {
                           const n = parseInt(e.target.value, 10)
                           if (!isNaN(n)) set(n)
                         }}
-                        className="w-16 rounded border border-input bg-background text-center text-5xl font-light tabular-nums focus:outline-none focus:ring-1 focus:ring-ring [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                        className="w-16 rounded border border-input bg-background text-center text-3xl font-light tabular-nums focus:outline-none focus:ring-1 focus:ring-ring [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                       />
                       <button
                         type="button"
