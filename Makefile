@@ -13,7 +13,7 @@ FRONTEND_CONTAINER = jarvis_frontend_1
         lint gosec govulncheck audit security-all \
         scan scan-history scan-staged scan-all \
         build \
-        screenshots \
+        screenshots screenshots-local \
         fixtures-create fixtures-remove
 
 help: ## Show available targets
@@ -100,11 +100,15 @@ scan-all: scan scan-history scan-staged ## gitleaks: run all three scans (files 
 
 # ── Screenshots ───────────────────────────────────────────────────────────────
 
-screenshots: ## Regenerate auth UI screenshots into docs/assets/ (requires dev stack running)
-	podman exec -e CHROMIUM_PATH=/usr/bin/chromium $(FRONTEND_CONTAINER) \
+screenshots: ## Regenerate all UI screenshots into docs/assets/ (requires dev stack: make up)
+	podman exec $(FRONTEND_CONTAINER) apk add --no-cache chromium
+	podman exec -e PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 -e CHROMIUM_PATH=/usr/bin/chromium-browser $(FRONTEND_CONTAINER) \
 		sh -c "cd /app && pnpm exec playwright test --config playwright.screenshots.config.ts --reporter=list"
-	podman cp $(FRONTEND_CONTAINER):/app/test-results/auth-screenshots/. docs/assets/
-	rm -rf frontend/test-results/auth-screenshots
+	@echo "Screenshots written to docs/assets/"
+
+screenshots-local: ## Regenerate all UI screenshots locally (requires: pnpm dev running on :5173)
+	cd frontend && SCREENSHOTS_DIR=../docs/assets pnpm exec playwright test \
+		--config playwright.screenshots.config.ts --reporter=list
 	@echo "Screenshots written to docs/assets/"
 
 # ── Build ──────────────────────────────────────────────────────────────────────

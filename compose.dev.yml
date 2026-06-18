@@ -21,6 +21,7 @@ services:
       - "5173:5173"
     volumes:
       - ./frontend:/app:z
+      - ./docs:/docs:z
     environment:
       - VITE_API_BASE=http://localhost:8080
 
