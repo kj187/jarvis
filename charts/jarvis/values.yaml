@@ -151,6 +151,13 @@ persistence:
   size: 1Gi
   annotations: {}
 
+# Deployment update strategy.
+# When empty, auto-selects: Recreate if persistence.enabled (RWO volumes like EBS cannot be
+# mounted by two pods simultaneously — rolling updates cause forced detachment and disk I/O errors),
+# RollingUpdate otherwise. Override explicitly when needed (e.g. RollingUpdate for PostgreSQL).
+updateStrategy:
+  type: ""
+
 autoscaling:
   enabled: false
   minReplicas: 1

@@ -8,6 +8,16 @@ spec:
   {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
   {{- end }}
+  {{- $strategyType := .Values.updateStrategy.type }}
+  {{- if not $strategyType }}
+  {{-   if .Values.persistence.enabled }}
+  {{-     $strategyType = "Recreate" }}
+  {{-   else }}
+  {{-     $strategyType = "RollingUpdate" }}
+  {{-   end }}
+  {{- end }}
+  strategy:
+    type: {{ $strategyType }}
   selector:
     matchLabels:
       {{- include "jarvis.selectorLabels" . | nindent 6 }}
