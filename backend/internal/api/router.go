@@ -69,14 +69,19 @@ func NewRouter(
 		HandleError: true,
 		LogValuesFunc: func(c echo.Context, v middleware.RequestLoggerValues) error {
 			if v.Error != nil {
-				slog.Error("request",
+				attrs := []any{
 					slog.String("method", v.Method),
 					slog.String("uri", v.URI),
 					slog.Int("status", v.Status),
 					slog.Duration("latency", v.Latency),
 					slog.String("remote_ip", v.RemoteIP),
 					slog.String("err", v.Error.Error()),
-				)
+				}
+				if v.Status >= 500 {
+					slog.Error("request", attrs...)
+				} else {
+					slog.Warn("request", attrs...)
+				}
 				return nil
 			}
 			if cfg.LogRequests {
