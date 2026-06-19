@@ -1,3 +1,52 @@
+<a name="v1.3.1"></a>
+## [v1.3.1](https://github.com/kj187/jarvis/compare/v1.3.0...v1.3.1) (2026-06-19)
+
+### Bug Fixes
+
+* **helm:** use Recreate update strategy when SQLite PVC enabled
+
+### Features
+
+* **helm:** reject SQLite PVC with multiple replicas at deploy time
+
+<a name="v1.3.0"></a>
+## [v1.3.0](https://github.com/kj187/jarvis/compare/v1.2.0...v1.3.0) (2026-06-19)
+
+### Bug Fixes
+
+* **alerts:** correct "Last fired" when Alertmanager corrupts startsAt
+* **db:** handle NULL annotations column in resolved alert scans
+* **docker:** use BUILDPLATFORM for frontend/backend stages to avoid QEMU hang
+* **frontend:** improve cluster badge styling in AlertDetailPanel
+* **frontend:** use getFilterableLabels in Header for filter dropdown
+* **screenshots:** correct localStorage key for view mode in Playwright spec
+* **scripts:** keep test alerts alive until manually resolved
+* **silences:** make affected alerts count larger in matcher badge
+* **silences:** filter cluster labels from matcher suggestions, improve zero-match warning
+* **silences:** show affected alerts panel between badge and matcher rows
+* **silences:** default to all clusters selected, improve cluster chip affordance
+* **silences:** remove redundant 'Click to toggle' hint from cluster section
+* **silences:** expire old silence when Alertmanager returns a new ID
+* **silences:** cluster chips always toggleable, spinner wrap-carry, smaller font
+* **silences:** pass all available clusters to SilenceForm from AlertDetailPanel
+
+### Code Refactoring
+
+* **silences:** revert grouped badge, move affected panel above matchers
+
+### Documentation
+
+* update CHANGELOG and README for v1.3.0
+* update README for silence form overhaul and AI Prompt feature
+
+### Features
+
+* **config:** add JARVIS_LOG_REQUESTS flag, default off
+* **frontend:** show silence extend buttons for all active silences
+* **silences:** add expire confirmation modal for all silence views
+* **silences:** improve matcher UX with inline affected alert preview
+* **silences:** standardize sheet width and improve silence section layout
+
 <a name="v1.2.0"></a>
 ## [v1.2.0](https://github.com/kj187/jarvis/compare/v1.1.0...v1.2.0) (2026-06-18)
 
