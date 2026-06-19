@@ -1,6 +1,10 @@
 <a name="v1.2.0"></a>
 ## [v1.2.0](https://github.com/kj187/jarvis/compare/v1.1.0...v1.2.0) (2026-06-18)
 
+### Documentation
+
+* update CHANGELOG and README for v1.2.0
+
 ### Features
 
 * **helm:** add extraEnv, extraVolumes, extraVolumeMounts and projected SA token support
