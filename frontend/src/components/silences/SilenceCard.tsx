@@ -1,5 +1,4 @@
-import { useState } from 'react'
-import { Edit, Trash2, Loader2 } from 'lucide-react'
+import { Edit, BellMinus, Loader2 } from 'lucide-react'
 import { Card, CardHeader, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { SilenceExpiry } from './SilenceExpiry'
@@ -11,15 +10,13 @@ interface SilenceCardProps {
   silence: Silence
   alerts: EnrichedAlert[]
   onEdit: (silence: Silence) => void
-  onDelete: (silence: Silence) => void
+  onExpire: (silence: Silence) => void
   isDeleting?: boolean
 }
 
-export function SilenceCard({ silence, alerts, onEdit, onDelete, isDeleting = false }: SilenceCardProps) {
-  const [confirmDelete, setConfirmDelete] = useState(false)
+export function SilenceCard({ silence, alerts, onEdit, onExpire, isDeleting = false }: SilenceCardProps) {
   const theme = useSettingsStore((s) => s.theme)
 
-  // Count affected alerts
   const affectedCount = alerts.filter((a) =>
     a.status.silencedBy.includes(silence.id),
   ).length
@@ -55,26 +52,20 @@ export function SilenceCard({ silence, alerts, onEdit, onDelete, isDeleting = fa
                 <Edit className="h-3.5 w-3.5" />
               </Button>
             )}
-            {confirmDelete ? (
-              <div className="flex gap-1">
-                <Button variant="destructive" size="sm" className="h-7 text-xs" onClick={() => onDelete(silence)}>
-                  Delete
-                </Button>
-                <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setConfirmDelete(false)}>
-                  No
-                </Button>
-              </div>
-            ) : (
-              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setConfirmDelete(true)}>
-                <Trash2 className="h-3.5 w-3.5" />
-              </Button>
-            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={() => onExpire(silence)}
+              title="Expire silence"
+            >
+              <BellMinus className="h-3.5 w-3.5" />
+            </Button>
           </div>
         </div>
       </CardHeader>
 
       <CardContent className="space-y-2">
-        {/* Matchers */}
         <div className="flex flex-wrap gap-1">
           {silence.matchers.map((m, i) => (
             <span key={i} className="rounded bg-accent px-1.5 py-0.5 font-mono text-xs">
@@ -83,12 +74,10 @@ export function SilenceCard({ silence, alerts, onEdit, onDelete, isDeleting = fa
           ))}
         </div>
 
-        {/* Comment */}
         {silence.comment && (
           <p className="text-xs text-muted-foreground line-clamp-2">{silence.comment}</p>
         )}
 
-        {/* Meta */}
         <div className="flex items-center justify-between text-xs text-muted-foreground">
           <span>by {silence.createdBy}</span>
           <span>Affected: {affectedCount}</span>

@@ -23,7 +23,7 @@ interface AlertListRowProps {
   excludeLabels?: Record<string, string>
   silences?: Silence[]
   onCreateSilence?: (alerts: EnrichedAlert[], prefillSilence?: Silence, isRecreate?: boolean) => void
-  onExpireSilence?: (id: string, cluster: string) => void
+  onExpireSilence?: (silence: Silence) => void
   showStateColumn?: boolean
   showSeverityColumn?: boolean
   showActionsColumn?: boolean
@@ -197,7 +197,7 @@ export function AlertListRow({
           {silenceType === 'active' && silence && (
             <button
               type="button"
-              onClick={() => onExpireSilence?.(silence.id, silence.clusterName)}
+              onClick={() => onExpireSilence?.(silence)}
               title="Expire silence"
               className="cursor-pointer rounded border border-border p-1 text-muted-foreground transition-colors hover:border-border/80 hover:text-foreground"
             >

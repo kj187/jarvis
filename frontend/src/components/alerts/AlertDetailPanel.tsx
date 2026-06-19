@@ -9,6 +9,7 @@ import { AlertBadge, StatusBadge } from './AlertBadge'
 import { labelColorStyle } from './LabelChip'
 import { AlertComments } from './AlertComments'
 import { SilenceForm } from '@/components/silences/SilenceForm'
+import { SilenceExpireModal } from '@/components/silences/SilenceExpireModal'
 import { useAlerts, useAlertHistory, useAlertStats } from '@/hooks/useAlerts'
 import { useActiveClaim, useSetClaim, useReleaseClaim, useClaimHistory } from '@/hooks/useAlertClaim'
 import { useDeleteSilence, useSilenceEvents, useUpsertSilence } from '@/hooks/useSilences'
@@ -146,6 +147,7 @@ export function AlertDetailPanel({
   const [silenceFormTarget, setSilenceFormTarget] = useState<Silence | null>(null)
   const [showNewSilenceForm, setShowNewSilenceForm] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [expireTarget, setExpireTarget] = useState<Silence | null>(null)
   const [showClaimForm, setShowClaimForm] = useState(false)
   const [manualClaimName, setManualClaimName] = useState(() => localStorage.getItem(USERNAME_KEY) ?? '')
   const [claimNote, setClaimNote] = useState('')
@@ -416,7 +418,6 @@ export function AlertDetailPanel({
           const endsAt = new Date(s.endsAt).getTime()
           const remaining = endsAt - now
           const isExpiring = s.status.state === 'active' && remaining <= FIFTEEN_MIN
-          const isDeleting = deletingId === s.id
           const isPending = s.status.state === 'pending'
 
           return (
@@ -481,17 +482,16 @@ export function AlertDetailPanel({
                     Edit
                   </button>
                   <button
-                    disabled={isDeleting}
                     className={cn(
-                      'flex items-center gap-1 rounded border border-border px-2 py-0.5 text-xs cursor-pointer disabled:opacity-40',
+                      'flex items-center gap-1 rounded border border-border px-2 py-0.5 text-xs cursor-pointer',
                       theme === 'light'
                         ? 'text-red-600/70 hover:text-red-600 hover:bg-red-50'
                         : 'text-red-500/70 hover:text-red-400 hover:bg-red-950/40',
                     )}
-                    onClick={() => handleDelete(s)}
+                    onClick={() => setExpireTarget(s)}
                   >
                     <Trash2 className="h-3 w-3" />
-                    {isDeleting ? '…' : 'Expire'}
+                    Expire
                   </button>
                 </div>
               </div>
@@ -1009,6 +1009,20 @@ export function AlertDetailPanel({
           </div>
         </Sheet>
       )}
+
+      <SilenceExpireModal
+        silences={expireTarget ? [expireTarget] : []}
+        allAlerts={allAlerts}
+        open={expireTarget !== null}
+        onConfirm={() => {
+          if (expireTarget) {
+            handleDelete(expireTarget)
+            setExpireTarget(null)
+          }
+        }}
+        onCancel={() => setExpireTarget(null)}
+        isPending={deletingId !== null}
+      />
 
       {/* Silence form sheet (edit / recreate) */}
       {silenceFormTarget && (

@@ -6,6 +6,7 @@ import { StatusBadge } from './AlertBadge'
 import { HIDDEN_LABEL_KEYS, LabelChip } from './LabelChip'
 import { Sheet } from '@/components/ui/sheet'
 import { SilenceForm } from '@/components/silences/SilenceForm'
+import { SilenceExpireModal } from '@/components/silences/SilenceExpireModal'
 import { fetchClusters, deleteSilence } from '@/api/client'
 import { formatSilenceDuration, severityOrder } from '@/lib/alertUtils'
 import { renderTextWithLinks } from '@/lib/linkUtils'
@@ -173,6 +174,7 @@ export function AlertListView({ alerts, silences, onSelectAlert, selectedFingerp
   const [sortAsc, setSortAsc] = useState(true)
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
   const [silenceSheet, setSilenceSheet] = useState<SilenceSheetState>({ open: false, alerts: [] })
+  const [expireTargets, setExpireTargets] = useState<Silence[]>([])
   const resolvedPageSize = useSettingsStore((s) => s.resolvedPageSize)
   const updateSettings = useSettingsStore((s) => s.update)
   const theme = useSettingsStore((s) => s.theme)
@@ -190,6 +192,11 @@ export function AlertListView({ alerts, silences, onSelectAlert, selectedFingerp
     mutationFn: ({ id, cluster }: { id: string; cluster: string }) => deleteSilence(id, cluster),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['silences'] }),
   })
+
+  function handleExpireConfirm() {
+    Promise.all(expireTargets.map((s) => expireMutation.mutateAsync({ id: s.id, cluster: s.clusterName })))
+      .finally(() => setExpireTargets([]))
+  }
 
   function openSilenceForm(formAlerts: EnrichedAlert[], prefillSilence?: Silence, isRecreate?: boolean) {
     setSilenceSheet({ open: true, alerts: formAlerts, prefillSilence, isRecreate })
@@ -549,7 +556,7 @@ export function AlertListView({ alerts, silences, onSelectAlert, selectedFingerp
                             {activeSilences.length > 0 && (
                               <button
                                 type="button"
-                                onClick={() => activeSilences.forEach(({ silence }) => expireMutation.mutate({ id: silence.id, cluster: silence.clusterName }))}
+                                onClick={() => setExpireTargets(activeSilences.map(({ silence }) => silence))}
                                 title={activeSilences.length > 1 ? `Expire ${activeSilences.length} group silences` : 'Expire group silence'}
                                 className="cursor-pointer flex w-fit items-center gap-1 rounded border border-border px-1.5 py-0.5 text-xs text-muted-foreground transition-colors hover:border-border/80 hover:text-foreground"
                               >
@@ -622,7 +629,7 @@ export function AlertListView({ alerts, silences, onSelectAlert, selectedFingerp
                             excludeLabels={group.commonLabels}
                             silences={silences}
                             onCreateSilence={openSilenceForm}
-                            onExpireSilence={(id, cluster) => expireMutation.mutate({ id, cluster })}
+                            onExpireSilence={(silence) => setExpireTargets([silence])}
                             showStateColumn={showStateColumn}
                           />
                         ))}
@@ -634,6 +641,15 @@ export function AlertListView({ alerts, silences, onSelectAlert, selectedFingerp
           })}
         </tbody>
       </table>
+
+      <SilenceExpireModal
+        silences={expireTargets}
+        allAlerts={alerts}
+        open={expireTargets.length > 0}
+        onConfirm={handleExpireConfirm}
+        onCancel={() => setExpireTargets([])}
+        isPending={expireMutation.isPending}
+      />
 
       <Sheet open={silenceSheet.open} onClose={closeSilenceForm} className="sm:max-w-2xl lg:max-w-3xl">
         <div className="p-5 pt-10">

@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Sheet } from '@/components/ui/sheet'
 import { SilenceCard } from './SilenceCard'
 import { SilenceForm } from './SilenceForm'
+import { SilenceExpireModal } from './SilenceExpireModal'
 import { useSilences, useDeleteSilence } from '@/hooks/useSilences'
 import { useAlerts } from '@/hooks/useAlerts'
 import { useQuery } from '@tanstack/react-query'
@@ -22,6 +23,7 @@ export function SilencesPage() {
   const [showExpired, setShowExpired] = useState(false)
   const [formOpen, setFormOpen] = useState(false)
   const [editSilence, setEditSilence] = useState<Silence | null>(null)
+  const [expireTarget, setExpireTarget] = useState<Silence | null>(null)
 
   const clusterNames = clusters.map((c) => c.name)
 
@@ -34,11 +36,12 @@ export function SilencesPage() {
     return (order[a.status.state] ?? 3) - (order[b.status.state] ?? 3)
   })
 
-  function handleDelete(silence: Silence) {
-    deleteMutation.mutate({
-      id: silence.id,
-      cluster: silence.clusterName,
-    })
+  function handleExpireConfirm() {
+    if (!expireTarget) return
+    deleteMutation.mutate(
+      { id: expireTarget.id, cluster: expireTarget.clusterName },
+      { onSettled: () => setExpireTarget(null) },
+    )
   }
 
   function handleEdit(silence: Silence) {
@@ -91,11 +94,20 @@ export function SilencesPage() {
             silence={s}
             alerts={alerts}
             onEdit={handleEdit}
-            onDelete={handleDelete}
+            onExpire={setExpireTarget}
             isDeleting={deleteMutation.isPending && deleteMutation.variables?.id === s.id}
           />
         ))}
       </div>
+
+      <SilenceExpireModal
+        silences={expireTarget ? [expireTarget] : []}
+        allAlerts={alerts}
+        open={expireTarget !== null}
+        onConfirm={handleExpireConfirm}
+        onCancel={() => setExpireTarget(null)}
+        isPending={deleteMutation.isPending}
+      />
 
       {/* Silence form sheet */}
       <Sheet open={formOpen} onClose={() => setFormOpen(false)} className="sm:max-w-[760px] lg:max-w-[760px]">
