@@ -34,6 +34,8 @@ type Config struct {
 	OIDCClientSecret string
 	OIDCRedirectURL  string
 	OIDCScopes       []string
+	OIDCAdminClaim   string // claim name that controls admin role (e.g. "groups", "cognito:groups")
+	OIDCAdminValue   string // value inside that claim that grants admin (e.g. "Administrator")
 }
 
 // ClusterConfig holds configuration for a single Alertmanager cluster.
@@ -117,6 +119,8 @@ func Load() (*Config, error) {
 		OIDCClientSecret: getEnv("JARVIS_AUTH_OIDC_CLIENT_SECRET", ""),
 		OIDCRedirectURL:  getEnv("JARVIS_AUTH_OIDC_REDIRECT_URL", ""),
 		OIDCScopes:       oidcScopes,
+		OIDCAdminClaim:   getEnv("JARVIS_OIDC_ADMIN_CLAIM", ""),
+		OIDCAdminValue:   getEnv("JARVIS_OIDC_ADMIN_VALUE", ""),
 	}, nil
 }
 

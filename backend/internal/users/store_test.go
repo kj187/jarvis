@@ -81,7 +81,7 @@ func TestUpsertOIDCUser(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
 
-	u1, err := s.UpsertOIDCUser(ctx, "sub-123", "charlie", "charlie@example.com")
+	u1, err := s.UpsertOIDCUser(ctx, "sub-123", "charlie", "charlie@example.com", "user")
 	if err != nil {
 		t.Fatalf("upsert: %v", err)
 	}
@@ -90,12 +90,21 @@ func TestUpsertOIDCUser(t *testing.T) {
 	}
 
 	// Second upsert returns same record.
-	u2, err := s.UpsertOIDCUser(ctx, "sub-123", "charlie", "charlie@example.com")
+	u2, err := s.UpsertOIDCUser(ctx, "sub-123", "charlie", "charlie@example.com", "user")
 	if err != nil {
 		t.Fatalf("upsert2: %v", err)
 	}
 	if u1.ID != u2.ID {
 		t.Fatalf("expected same user, got %q vs %q", u1.ID, u2.ID)
+	}
+
+	// Role update on re-login.
+	u3, err := s.UpsertOIDCUser(ctx, "sub-123", "charlie", "charlie@example.com", "admin")
+	if err != nil {
+		t.Fatalf("upsert3: %v", err)
+	}
+	if u3.Role != "admin" {
+		t.Fatalf("role = %q, want %q", u3.Role, "admin")
 	}
 }
 
@@ -111,7 +120,7 @@ func TestUpsertOIDCUser_UsernameCollision(t *testing.T) {
 		t.Fatalf("create internal user: %v", err)
 	}
 
-	u, err := s.UpsertOIDCUser(ctx, "oidc-sub-1", "julian.kleinhans", "julian@example.com")
+	u, err := s.UpsertOIDCUser(ctx, "oidc-sub-1", "julian.kleinhans", "julian@example.com", "user")
 	if err != nil {
 		t.Fatalf("upsert oidc user: %v", err)
 	}

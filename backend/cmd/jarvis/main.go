@@ -70,7 +70,8 @@ func main() {
 	case "oidc":
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		oidcProvider, err := auth.NewOIDCProvider(ctx, cfg.OIDCIssuer, cfg.OIDCClientID,
-			cfg.OIDCClientSecret, cfg.OIDCRedirectURL, cfg.OIDCScopes, userStore)
+			cfg.OIDCClientSecret, cfg.OIDCRedirectURL, cfg.OIDCScopes, userStore,
+			cfg.OIDCAdminClaim, cfg.OIDCAdminValue)
 		cancel()
 		if err != nil {
 			logger.Error("oidc provider init", "err", err)

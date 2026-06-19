@@ -136,12 +136,20 @@ func (s *Store) GetByOIDCSub(ctx context.Context, sub string) (*User, error) {
 }
 
 // UpsertOIDCUser creates or updates an OIDC user by subject claim.
-func (s *Store) UpsertOIDCUser(ctx context.Context, sub, username, email string) (*User, error) {
+// role must be "admin" or "user"; it is applied on every login so OIDC group
+// changes are reflected without manual intervention.
+func (s *Store) UpsertOIDCUser(ctx context.Context, sub, username, email, role string) (*User, error) {
 	existing, err := s.GetByOIDCSub(ctx, sub)
 	if err != nil {
 		return nil, err
 	}
 	if existing != nil {
+		if existing.Role != role {
+			if err := s.UpdateRole(ctx, existing.ID, role); err != nil {
+				return nil, err
+			}
+			existing.Role = role
+		}
 		return existing, nil
 	}
 	candidate := username
@@ -155,7 +163,7 @@ func (s *Store) UpsertOIDCUser(ctx context.Context, sub, username, email string)
 	return s.Create(ctx, &CreateUser{
 		Username: candidate,
 		Email:    email,
-		Role:     "user",
+		Role:     role,
 		Provider: "oidc",
 		OIDCSub:  sub,
 	})
