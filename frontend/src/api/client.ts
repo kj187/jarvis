@@ -165,7 +165,10 @@ export function triggerPoll(): Promise<void> {
 
 export function fetchAuthInfo(): Promise<ProviderInfo> {
   return fetch('/auth/info', { headers: { Accept: 'application/json' } })
-    .then((r) => r.json() as Promise<ProviderInfo>)
+    .then((r) => {
+      if (!r.ok) throw new Error(`auth/info: ${r.status}`)
+      return r.json() as Promise<ProviderInfo>
+    })
 }
 
 export function fetchAuthMe(): Promise<AuthUser | null> {

@@ -13,7 +13,7 @@ interface AuthState {
   logout: () => Promise<void>
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
+export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   providerInfo: null,
   isAuthenticated: false,
@@ -32,13 +32,16 @@ export const useAuthStore = create<AuthState>((set) => ({
         set({ providerInfo, user, isAuthenticated: user !== null, isLoading: false })
       } catch {
         if (retries > 0) {
-          await new Promise((r) => setTimeout(r, 1500))
+          await new Promise((r) => setTimeout(r, 2000))
           return attempt(retries - 1)
         }
         set({ isLoading: false })
+        // Backend unreachable after all retries — schedule one final attempt so the
+        // login button appears without a manual reload once the backend comes up.
+        setTimeout(() => get().hydrate(), 5000)
       }
     }
-    await attempt(3)
+    await attempt(5)
   },
 
   setUser: (user) => {
