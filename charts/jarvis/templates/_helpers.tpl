@@ -68,3 +68,19 @@ Return true when SQLite is in use (DSN does not start with postgres://).
 {{- true }}
 {{- end }}
 {{- end }}
+
+{{/*
+Validate that SQLite + PVC is not combined with multiple replicas.
+SQLite requires a single writer; RWO volumes (e.g. EBS) cannot be mounted by more than one node.
+*/}}
+{{- define "jarvis.validateReplicas" -}}
+{{- if and .Values.persistence.enabled (include "jarvis.isSQLite" .) }}
+{{-   $replicas := int .Values.replicaCount }}
+{{-   if and (not .Values.autoscaling.enabled) (gt $replicas 1) }}
+{{-     fail "Invalid configuration: persistence.enabled=true with SQLite requires replicaCount=1. RWO volumes (e.g. EBS) support only one node mount and SQLite is single-writer. Use PostgreSQL (database.dsn=postgres://...) for multi-replica deployments." }}
+{{-   end }}
+{{-   if .Values.autoscaling.enabled }}
+{{-     fail "Invalid configuration: persistence.enabled=true with SQLite is incompatible with autoscaling. HPA may schedule multiple pods which cannot share a RWO volume or SQLite. Use PostgreSQL (database.dsn=postgres://...) for scalable deployments." }}
+{{-   end }}
+{{- end }}
+{{- end }}

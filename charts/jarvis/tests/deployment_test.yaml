@@ -67,6 +67,53 @@ tests:
       - isNotNullOrEmpty:
           path: spec.template.spec.volumes[0].persistentVolumeClaim.claimName
 
+  - it: fails when persistence enabled with SQLite and replicaCount > 1
+    set:
+      persistence.enabled: true
+      replicaCount: 2
+    asserts:
+      - failedTemplate:
+          errorMessage: "Invalid configuration: persistence.enabled=true with SQLite requires replicaCount=1. RWO volumes (e.g. EBS) support only one node mount and SQLite is single-writer. Use PostgreSQL (database.dsn=postgres://...) for multi-replica deployments."
+
+  - it: fails when persistence enabled with SQLite and autoscaling enabled
+    set:
+      persistence.enabled: true
+      autoscaling.enabled: true
+    asserts:
+      - failedTemplate:
+          errorMessage: "Invalid configuration: persistence.enabled=true with SQLite is incompatible with autoscaling. HPA may schedule multiple pods which cannot share a RWO volume or SQLite. Use PostgreSQL (database.dsn=postgres://...) for scalable deployments."
+
+  - it: allows replicaCount > 1 when persistence disabled
+    set:
+      replicaCount: 3
+    asserts:
+      - equal:
+          path: spec.replicas
+          value: 3
+
+  - it: defaults to RollingUpdate strategy when persistence disabled
+    asserts:
+      - equal:
+          path: spec.strategy.type
+          value: RollingUpdate
+
+  - it: defaults to Recreate strategy when persistence enabled
+    set:
+      persistence.enabled: true
+    asserts:
+      - equal:
+          path: spec.strategy.type
+          value: Recreate
+
+  - it: respects explicit updateStrategy override
+    set:
+      persistence.enabled: true
+      updateStrategy.type: RollingUpdate
+    asserts:
+      - equal:
+          path: spec.strategy.type
+          value: RollingUpdate
+
   - it: does not manage replica count when autoscaling enabled
     set:
       autoscaling.enabled: true
