@@ -92,8 +92,8 @@ clusters:
     # differs from what the browser can reach (e.g. via ingress).
     hostAlias: ""
 
-# Authentication configuration.
-# See docs/authentication.md for the full reference.
+# User authentication configuration (UI login).
+# See docs/authentication-user.md for the full reference.
 auth:
   # Authentication provider: none | internal | oidc
   # none:     no login required; all write actions are publicly accessible (default)

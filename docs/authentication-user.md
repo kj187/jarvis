@@ -1,4 +1,10 @@
-# Authentication
+# Authentication (User Login)
+
+This document covers how **users authenticate to the Jarvis UI** — browser login, session management, roles, and provider setup.
+
+For how Jarvis authenticates against a **protected Alertmanager** (service-to-service), see [authentication-alertmanager.md](authentication-alertmanager.md).
+
+---
 
 Jarvis supports three authentication modes, controlled by the `JARVIS_AUTH_PROVIDER` environment variable.
 

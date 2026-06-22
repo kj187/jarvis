@@ -197,5 +197,166 @@ func TestLoad_AuthMode_Invalid(t *testing.T) {
 	}
 }
 
+func TestLoad_ClusterBearerToken(t *testing.T) {
+	t.Setenv("JARVIS_CLUSTER_1_NAME", "homelab")
+	t.Setenv("JARVIS_CLUSTER_1_ALERTMANAGER_URL", "http://alertmanager:9093")
+	t.Setenv("JARVIS_CLUSTER_1_BEARER_TOKEN", "mysecrettoken")
+	t.Setenv("JARVIS_CLUSTER_2_NAME", "")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+
+	c := cfg.Clusters[0]
+	if c.Auth.BearerToken != "mysecrettoken" {
+		t.Errorf("BearerToken = %q, want mysecrettoken", c.Auth.BearerToken)
+	}
+	if c.Auth.BasicUser != "" || c.Auth.BasicPass != "" {
+		t.Errorf("unexpected basic auth: user=%q pass=%q", c.Auth.BasicUser, c.Auth.BasicPass)
+	}
+}
+
+func TestLoad_ClusterBasicAuth(t *testing.T) {
+	t.Setenv("JARVIS_CLUSTER_1_NAME", "homelab")
+	t.Setenv("JARVIS_CLUSTER_1_ALERTMANAGER_URL", "http://alertmanager:9093")
+	t.Setenv("JARVIS_CLUSTER_1_BASIC_AUTH_USER", "jarvis")
+	t.Setenv("JARVIS_CLUSTER_1_BASIC_AUTH_PASSWORD", "s3cr3t")
+	t.Setenv("JARVIS_CLUSTER_2_NAME", "")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+
+	c := cfg.Clusters[0]
+	if c.Auth.BasicUser != "jarvis" {
+		t.Errorf("BasicUser = %q, want jarvis", c.Auth.BasicUser)
+	}
+	if c.Auth.BasicPass != "s3cr3t" {
+		t.Errorf("BasicPass = %q, want s3cr3t", c.Auth.BasicPass)
+	}
+	if c.Auth.BearerToken != "" {
+		t.Errorf("unexpected BearerToken = %q", c.Auth.BearerToken)
+	}
+}
+
+func TestLoad_ClusterCustomHeaders(t *testing.T) {
+	t.Setenv("JARVIS_CLUSTER_1_NAME", "homelab")
+	t.Setenv("JARVIS_CLUSTER_1_ALERTMANAGER_URL", "http://alertmanager:9093")
+	t.Setenv("JARVIS_CLUSTER_1_HEADER_X-Scope-OrgID", "tenant1")
+	t.Setenv("JARVIS_CLUSTER_1_HEADER_X-Custom", "value")
+	t.Setenv("JARVIS_CLUSTER_2_NAME", "")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+
+	c := cfg.Clusters[0]
+	if c.Auth.Headers["X-Scope-OrgID"] != "tenant1" {
+		t.Errorf("Header X-Scope-OrgID = %q, want tenant1", c.Auth.Headers["X-Scope-OrgID"])
+	}
+	if c.Auth.Headers["X-Custom"] != "value" {
+		t.Errorf("Header X-Custom = %q, want value", c.Auth.Headers["X-Custom"])
+	}
+}
+
+func TestLoad_ClusterNoAuth(t *testing.T) {
+	t.Setenv("JARVIS_CLUSTER_1_NAME", "homelab")
+	t.Setenv("JARVIS_CLUSTER_1_ALERTMANAGER_URL", "http://alertmanager:9093")
+	t.Setenv("JARVIS_CLUSTER_1_BEARER_TOKEN", "")
+	t.Setenv("JARVIS_CLUSTER_1_BASIC_AUTH_USER", "")
+	t.Setenv("JARVIS_CLUSTER_1_BASIC_AUTH_PASSWORD", "")
+	t.Setenv("JARVIS_CLUSTER_2_NAME", "")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+
+	c := cfg.Clusters[0]
+	if c.Auth.BearerToken != "" || c.Auth.BasicUser != "" || c.Auth.BasicPass != "" || len(c.Auth.Headers) != 0 {
+		t.Errorf("expected empty auth, got %+v", c.Auth)
+	}
+}
+
+func TestLoad_ClusterOAuth2(t *testing.T) {
+	t.Setenv("JARVIS_CLUSTER_1_NAME", "homelab")
+	t.Setenv("JARVIS_CLUSTER_1_ALERTMANAGER_URL", "http://alertmanager:9093")
+	t.Setenv("JARVIS_CLUSTER_1_OAUTH2_CLIENT_ID", "jarvis-service")
+	t.Setenv("JARVIS_CLUSTER_1_OAUTH2_CLIENT_SECRET", "s3cr3t")
+	t.Setenv("JARVIS_CLUSTER_1_OAUTH2_TOKEN_URL", "https://keycloak.example.com/realms/homelab/protocol/openid-connect/token")
+	t.Setenv("JARVIS_CLUSTER_1_OAUTH2_SCOPES", "openid,profile")
+	t.Setenv("JARVIS_CLUSTER_2_NAME", "")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+
+	c := cfg.Clusters[0]
+	if c.Auth.OAuth2 == nil {
+		t.Fatal("Auth.OAuth2 is nil, want non-nil")
+	}
+	if c.Auth.OAuth2.ClientID != "jarvis-service" {
+		t.Errorf("ClientID = %q, want jarvis-service", c.Auth.OAuth2.ClientID)
+	}
+	if c.Auth.OAuth2.ClientSecret != "s3cr3t" {
+		t.Errorf("ClientSecret = %q, want s3cr3t", c.Auth.OAuth2.ClientSecret)
+	}
+	if c.Auth.OAuth2.TokenURL != "https://keycloak.example.com/realms/homelab/protocol/openid-connect/token" {
+		t.Errorf("TokenURL = %q", c.Auth.OAuth2.TokenURL)
+	}
+	if len(c.Auth.OAuth2.Scopes) != 2 || c.Auth.OAuth2.Scopes[0] != "openid" || c.Auth.OAuth2.Scopes[1] != "profile" {
+		t.Errorf("Scopes = %v, want [openid profile]", c.Auth.OAuth2.Scopes)
+	}
+}
+
+func TestLoad_ClusterOAuth2_MissingTokenURL(t *testing.T) {
+	t.Setenv("JARVIS_CLUSTER_1_NAME", "homelab")
+	t.Setenv("JARVIS_CLUSTER_1_ALERTMANAGER_URL", "http://alertmanager:9093")
+	t.Setenv("JARVIS_CLUSTER_1_OAUTH2_CLIENT_ID", "jarvis-service")
+	t.Setenv("JARVIS_CLUSTER_1_OAUTH2_TOKEN_URL", "")
+	t.Setenv("JARVIS_CLUSTER_2_NAME", "")
+
+	_, err := Load()
+	if err == nil {
+		t.Error("expected error when OAUTH2_TOKEN_URL is missing, got nil")
+	}
+}
+
+func TestLoad_ClusterOAuth2_NoScopesDefaultsToNil(t *testing.T) {
+	t.Setenv("JARVIS_CLUSTER_1_NAME", "homelab")
+	t.Setenv("JARVIS_CLUSTER_1_ALERTMANAGER_URL", "http://alertmanager:9093")
+	t.Setenv("JARVIS_CLUSTER_1_OAUTH2_CLIENT_ID", "jarvis-service")
+	t.Setenv("JARVIS_CLUSTER_1_OAUTH2_TOKEN_URL", "https://keycloak.example.com/token")
+	t.Setenv("JARVIS_CLUSTER_1_OAUTH2_SCOPES", "")
+	t.Setenv("JARVIS_CLUSTER_2_NAME", "")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	if c := cfg.Clusters[0]; c.Auth.OAuth2 != nil && len(c.Auth.OAuth2.Scopes) != 0 {
+		t.Errorf("Scopes = %v, want empty when OAUTH2_SCOPES is unset", c.Auth.OAuth2.Scopes)
+	}
+}
+
+func TestLoad_ClusterOAuth2_AbsentWhenClientIDEmpty(t *testing.T) {
+	t.Setenv("JARVIS_CLUSTER_1_NAME", "homelab")
+	t.Setenv("JARVIS_CLUSTER_1_ALERTMANAGER_URL", "http://alertmanager:9093")
+	t.Setenv("JARVIS_CLUSTER_1_OAUTH2_CLIENT_ID", "")
+	t.Setenv("JARVIS_CLUSTER_2_NAME", "")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	if cfg.Clusters[0].Auth.OAuth2 != nil {
+		t.Error("Auth.OAuth2 should be nil when OAUTH2_CLIENT_ID is not set")
+	}
+}
+
 // Ensure test cleanup resets env properly via t.Setenv.
 var _ = os.Setenv

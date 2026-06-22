@@ -2,7 +2,7 @@
 
 ## Overview
 
-Jarvis ships with built-in authentication (see [authentication.md](authentication.md)).
+Jarvis ships with built-in authentication (see [authentication-user.md](authentication-user.md)).
 It assumes deployment behind a trusted reverse proxy (e.g. Traefik, nginx) for TLS termination.
 This document describes the security measures built into the application itself.
 

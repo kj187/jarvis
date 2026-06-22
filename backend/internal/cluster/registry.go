@@ -31,12 +31,31 @@ func NewRegistry(cfgs []config.ClusterConfig) *Registry {
 			AlertmanagerURL:     c.AlertmanagerURL,
 			AlertmanagerLinkURL: c.AlertmanagerLinkURL,
 			PrometheusURL:       c.PrometheusURL,
-			Client:              alertmanager.NewClient(c.AlertmanagerURL),
+			Client: alertmanager.NewClientWithAuth(c.AlertmanagerURL, buildAuth(c.Auth)),
 		}
 		r.clusters = append(r.clusters, cl)
 		r.byName[c.Name] = cl
 	}
 	return r
+}
+
+// buildAuth maps a config.ClusterAuth to an alertmanager.Auth.
+func buildAuth(cfg config.ClusterAuth) alertmanager.Auth {
+	auth := alertmanager.Auth{
+		BearerToken: cfg.BearerToken,
+		BasicUser:   cfg.BasicUser,
+		BasicPass:   cfg.BasicPass,
+		Headers:     cfg.Headers,
+	}
+	if cfg.OAuth2 != nil {
+		auth.OAuth2 = &alertmanager.OAuth2ClientConfig{
+			ClientID:     cfg.OAuth2.ClientID,
+			ClientSecret: cfg.OAuth2.ClientSecret,
+			TokenURL:     cfg.OAuth2.TokenURL,
+			Scopes:       cfg.OAuth2.Scopes,
+		}
+	}
+	return auth
 }
 
 // All returns all clusters.

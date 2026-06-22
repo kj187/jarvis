@@ -16,12 +16,30 @@ type Client struct {
 	httpClient *http.Client
 }
 
-// NewClient creates a new Alertmanager API client.
+// NewClient creates a new Alertmanager API client without authentication.
 func NewClient(baseURL string) *Client {
+	return NewClientWithAuth(baseURL, Auth{})
+}
+
+// NewClientWithAuth creates a new Alertmanager API client with per-cluster authentication.
+// When auth is empty (zero value) the client behaves identically to NewClient.
+// Priority: OAuth2 (client_credentials) > BearerToken > BasicAuth > Headers.
+func NewClientWithAuth(baseURL string, auth Auth) *Client {
+	transport := http.DefaultTransport
+	switch {
+	case auth.OAuth2 != nil:
+		transport = &oauth2RoundTripper{
+			base:   http.DefaultTransport,
+			source: newOAuth2TokenSource(*auth.OAuth2),
+		}
+	case auth.BearerToken != "" || auth.BasicUser != "" || len(auth.Headers) > 0:
+		transport = &authRoundTripper{base: http.DefaultTransport, auth: auth}
+	}
 	return &Client{
 		baseURL: baseURL,
 		httpClient: &http.Client{
-			Timeout: 10 * time.Second,
+			Timeout:   10 * time.Second,
+			Transport: transport,
 		},
 	}
 }

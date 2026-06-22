@@ -38,6 +38,27 @@ type Config struct {
 	OIDCAdminValue   string // value inside that claim that grants admin (e.g. "Administrator")
 }
 
+// OAuth2Config holds OAuth2 client credentials for per-cluster Alertmanager authentication.
+type OAuth2Config struct {
+	ClientID     string
+	ClientSecret string
+	TokenURL     string
+	Scopes       []string
+}
+
+// ClusterAuth holds per-cluster authentication options for outgoing Alertmanager requests.
+type ClusterAuth struct {
+	BearerToken string
+	BasicUser   string
+	BasicPass   string
+	// Headers contains arbitrary HTTP headers sent with every request.
+	// Key is the header name, value is the header value.
+	Headers map[string]string
+	// OAuth2 enables dynamic token fetching via client_credentials grant.
+	// When set, it takes priority over BearerToken, BasicUser/BasicPass and Headers.
+	OAuth2 *OAuth2Config
+}
+
 // ClusterConfig holds configuration for a single Alertmanager cluster.
 type ClusterConfig struct {
 	Name            string
@@ -46,6 +67,7 @@ type ClusterConfig struct {
 	// when HOST_ALIAS is set).
 	AlertmanagerLinkURL string
 	PrometheusURL       string
+	Auth                ClusterAuth
 }
 
 // Load reads configuration from environment variables, optionally loading a
@@ -153,14 +175,64 @@ func parseClusters() ([]ClusterConfig, error) {
 		hostAlias := os.Getenv(prefix + "HOST_ALIAS")
 		linkURL := resolveAlertmanagerLinkURL(amURL, hostAlias)
 
+		auth := ClusterAuth{
+			BearerToken: os.Getenv(prefix + "BEARER_TOKEN"),
+			BasicUser:   os.Getenv(prefix + "BASIC_AUTH_USER"),
+			BasicPass:   os.Getenv(prefix + "BASIC_AUTH_PASSWORD"),
+			Headers:     parseClusterHeaders(prefix),
+		}
+		if clientID := os.Getenv(prefix + "OAUTH2_CLIENT_ID"); clientID != "" {
+			tokenURL := os.Getenv(prefix + "OAUTH2_TOKEN_URL")
+			if tokenURL == "" {
+				return nil, fmt.Errorf("JARVIS_CLUSTER_%d_OAUTH2_TOKEN_URL is required when OAUTH2_CLIENT_ID is set", i)
+			}
+			var scopes []string
+			if raw := os.Getenv(prefix + "OAUTH2_SCOPES"); raw != "" {
+				for _, s := range strings.Split(raw, ",") {
+					if t := strings.TrimSpace(s); t != "" {
+						scopes = append(scopes, t)
+					}
+				}
+			}
+			auth.OAuth2 = &OAuth2Config{
+				ClientID:     clientID,
+				ClientSecret: os.Getenv(prefix + "OAUTH2_CLIENT_SECRET"),
+				TokenURL:     tokenURL,
+				Scopes:       scopes,
+			}
+		}
+
 		clusters = append(clusters, ClusterConfig{
 			Name:                name,
 			AlertmanagerURL:     amURL,
 			AlertmanagerLinkURL: linkURL,
 			PrometheusURL:       os.Getenv(prefix + "PROMETHEUS_URL"),
+			Auth:                auth,
 		})
 	}
 	return clusters, nil
+}
+
+// parseClusterHeaders scans os.Environ for JARVIS_CLUSTER_N_HEADER_<name>=<value> entries
+// and returns them as a map. The substring after HEADER_ is used as the header name verbatim.
+func parseClusterHeaders(prefix string) map[string]string {
+	headerPrefix := prefix + "HEADER_"
+	headers := make(map[string]string)
+	for _, env := range os.Environ() {
+		if !strings.HasPrefix(env, headerPrefix) {
+			continue
+		}
+		rest := strings.TrimPrefix(env, headerPrefix)
+		idx := strings.Index(rest, "=")
+		if idx < 1 {
+			continue
+		}
+		headers[rest[:idx]] = rest[idx+1:]
+	}
+	if len(headers) == 0 {
+		return nil
+	}
+	return headers
 }
 
 // resolveAlertmanagerLinkURL returns the browser-visible Alertmanager URL.

@@ -193,7 +193,7 @@ auth:
     redirectUrl: https://jarvis.example.com/auth/oidc/callback
 ```
 
-For provider-specific setup (Keycloak, Authentik) see [docs/authentication.md](../../docs/authentication.md).
+For provider-specific setup (Keycloak, Authentik) see [docs/authentication-user.md](../../docs/authentication-user.md).
 
 ### Multiple clusters
 

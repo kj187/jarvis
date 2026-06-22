@@ -31,9 +31,10 @@ Most Alertmanager UIs are read-only dashboards. Jarvis is built for teams that n
 - **Alert search** — full-text search across alert names and label values; results update as you type
 - **Dark / Light theme** — toggle between dark and light mode; preference is persisted in localStorage
 - **Multi-cluster** — poll multiple Alertmanager instances simultaneously
+- **Per-cluster upstream auth** — authenticate against protected Alertmanagers via OAuth2 client credentials (auto-refresh), bearer token, basic auth or custom headers
 - **Grace period** — 60s ghost-resolve prevention
 - **Single binary** — Go backend embeds the Vite build; one container
-- **Authentication** — optional, three modes: `none` (open), `internal` (built-in user management), `oidc` (Keycloak, Authentik, Dex, any OIDC provider)
+- **User authentication** — optional UI login, three modes: `none` (open), `internal` (built-in user management), `oidc` (Keycloak, Authentik, Dex, any OIDC provider)
 
 ## Getting Started
 
@@ -85,7 +86,7 @@ helm install jarvis oci://ghcr.io/kj187/charts/jarvis \
   --set persistence.enabled=true
 ```
 
-All configuration options → [Configuration](#configuration) · [Authentication](#authentication) · [Helm chart](#kubernetes--helm)
+All configuration options → [Configuration](#configuration) · [User Authentication](#user-authentication) · [Helm chart](#kubernetes--helm)
 
 ## Views
 
@@ -520,7 +521,7 @@ See [.env.example](.env.example) for all options. Key settings:
 | `JARVIS_ALLOWED_ORIGINS` | _(same-origin)_ | Comma-separated allowed CORS / WebSocket origins (e.g. `https://jarvis.example.com`). Required when browser URL differs from backend host. |
 | `JARVIS_RUNBOOK_BASE_URL` | — | Base URL for runbook links. Appended to the `runbook` label/annotation value when it is not already an absolute URL (e.g. `https://wiki.example.com/runbooks/`) |
 
-**Authentication** — see [docs/authentication.md](docs/authentication.md) for full details
+**User authentication** — see [docs/authentication-user.md](docs/authentication-user.md) for full details
 
 | Variable | Default | Description |
 |---|---|---|
@@ -541,8 +542,18 @@ See [.env.example](.env.example) for all options. Key settings:
 | `JARVIS_CLUSTER_1_ALERTMANAGER_URL` | — | Internal Alertmanager URL (**required**) |
 | `JARVIS_CLUSTER_1_PROMETHEUS_URL` | — | Internal Prometheus URL (optional) |
 | `JARVIS_CLUSTER_1_HOST_ALIAS` | — | Browser-visible AM URL when different from internal (optional) |
+| `JARVIS_CLUSTER_1_OAUTH2_CLIENT_ID` | — | OAuth2 client ID (client_credentials grant — auto token refresh, optional) |
+| `JARVIS_CLUSTER_1_OAUTH2_CLIENT_SECRET` | — | OAuth2 client secret (never logged, required with `OAUTH2_CLIENT_ID`) |
+| `JARVIS_CLUSTER_1_OAUTH2_TOKEN_URL` | — | OAuth2 token endpoint URL (required with `OAUTH2_CLIENT_ID`) |
+| `JARVIS_CLUSTER_1_OAUTH2_SCOPES` | — | Comma-separated OAuth2 scopes (optional, e.g. `openid,profile`) |
+| `JARVIS_CLUSTER_1_BEARER_TOKEN` | — | Static bearer token sent as `Authorization: Bearer <token>` (optional) |
+| `JARVIS_CLUSTER_1_BASIC_AUTH_USER` | — | HTTP Basic Auth username (optional) |
+| `JARVIS_CLUSTER_1_BASIC_AUTH_PASSWORD` | — | HTTP Basic Auth password (optional, never logged) |
+| `JARVIS_CLUSTER_1_HEADER_<name>` | — | Custom request header `<name>` sent to Alertmanager (optional, repeat for multiple) |
 
 Add additional clusters with `JARVIS_CLUSTER_2_*`, `JARVIS_CLUSTER_3_*`, etc.
+
+When Alertmanager sits behind an authentication proxy (e.g. oauth2-proxy), use `OAUTH2_*` for dynamic token management (recommended) or `BEARER_TOKEN` / `BASIC_AUTH_*` for static credentials. Priority: `OAuth2 > BEARER_TOKEN > BASIC_AUTH > HEADER_*`. For full details and Keycloak setup see [docs/authentication-alertmanager.md](docs/authentication-alertmanager.md).
 
 ### Database
 
@@ -571,9 +582,9 @@ The dialect is detected automatically from the DSN prefix. Schema migrations run
 > # JARVIS_DB_DSN=postgres://jarvis:jarvis@test-postgres:5432/jarvis?sslmode=disable
 > ```
 
-## Authentication
+## User Authentication
 
-Jarvis ships with built-in authentication. Three modes are available, set via `JARVIS_AUTH_PROVIDER`:
+Jarvis ships with built-in user authentication (UI login). Three modes are available, set via `JARVIS_AUTH_PROVIDER`:
 
 | Mode | Description |
 |------|-------------|
@@ -617,7 +628,9 @@ JARVIS_AUTH_OIDC_CLIENT_SECRET=<client-secret>
 JARVIS_AUTH_OIDC_REDIRECT_URL=https://jarvis.example.com/auth/oidc/callback
 ```
 
-For the full reference — provider setup, OIDC flow, role mapping, Kubernetes secrets, session details — see **[docs/authentication.md](docs/authentication.md)**.
+For the full reference — provider setup, OIDC flow, role mapping, Kubernetes secrets, session details — see **[docs/authentication-user.md](docs/authentication-user.md)**.
+
+For Alertmanager upstream auth (OAuth2 client credentials, bearer token, basic auth) see **[docs/authentication-alertmanager.md](docs/authentication-alertmanager.md)**.
 
 For a threat model and full security discussion see [docs/security.md](docs/security.md).
 
@@ -646,7 +659,8 @@ For a full values reference, installation examples (SQLite with PVC, PostgreSQL,
 
 ## Documentation
 
-- [docs/authentication.md](docs/authentication.md) — authentication providers, first-run wizard, OIDC setup, Helm
+- [docs/authentication-user.md](docs/authentication-user.md) — user login: providers (none / internal / OIDC), first-run wizard, roles, sessions, Helm
+- [docs/authentication-alertmanager.md](docs/authentication-alertmanager.md) — Alertmanager upstream auth: OAuth2 client credentials, bearer token, basic auth, custom headers
 - [docs/testing.md](docs/testing.md) — how to run tests
 - [docs/security.md](docs/security.md) — security measures
 - [CONTRIBUTING.md](CONTRIBUTING.md) — contribution guidelines
