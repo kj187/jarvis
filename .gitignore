@@ -1,6 +1,8 @@
 # Go
 backend/bin/
 backend/tmp/
+backend/jarvis
+backend/jarvis-*
 *.exe
 *.test
 *.out
@@ -20,6 +22,7 @@ frontend/.vite/
 frontend/.npm/
 frontend/coverage/
 frontend/test-results/
+frontend/package-lock.json
 *.tsbuildinfo
 node_modules/
 dist/
