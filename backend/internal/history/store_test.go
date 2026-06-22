@@ -425,3 +425,85 @@ func TestReleaseClaimsForResolved(t *testing.T) {
 		t.Error("expected all claims released")
 	}
 }
+
+func TestCreateSilenceTemplate(t *testing.T) {
+	s := newTestStore(t)
+
+	matchers := []models.SilenceMatcher{
+		{Name: "alertname", Value: "HighMemory", IsEqual: true, IsRegex: false},
+		{Name: "severity", Value: "critical", IsEqual: true, IsRegex: false},
+	}
+	template, err := s.CreateSilenceTemplate("tpl1", "Prod Maintenance", matchers, "Scheduled maintenance window")
+	if err != nil {
+		t.Fatalf("CreateSilenceTemplate: %v", err)
+	}
+	if template.ID != "tpl1" || template.Name != "Prod Maintenance" {
+		t.Errorf("unexpected template: %+v", template)
+	}
+	if len(template.Matchers) != 2 {
+		t.Errorf("expected 2 matchers, got %d", len(template.Matchers))
+	}
+}
+
+func TestGetAllSilenceTemplates(t *testing.T) {
+	s := newTestStore(t)
+
+	matchers1 := []models.SilenceMatcher{
+		{Name: "alertname", Value: "HighMemory", IsEqual: true, IsRegex: false},
+	}
+	matchers2 := []models.SilenceMatcher{
+		{Name: "alertname", Value: "HighCPU", IsEqual: true, IsRegex: false},
+	}
+
+	s.CreateSilenceTemplate("tpl1", "Template 1", matchers1, "First template") //nolint:errcheck
+	s.CreateSilenceTemplate("tpl2", "Template 2", matchers2, "Second template") //nolint:errcheck
+
+	templates, err := s.GetAllSilenceTemplates()
+	if err != nil {
+		t.Fatalf("GetAllSilenceTemplates: %v", err)
+	}
+	if len(templates) != 2 {
+		t.Errorf("expected 2 templates, got %d", len(templates))
+	}
+}
+
+func TestDeleteSilenceTemplate(t *testing.T) {
+	s := newTestStore(t)
+
+	matchers := []models.SilenceMatcher{
+		{Name: "alertname", Value: "Test", IsEqual: true, IsRegex: false},
+	}
+	s.CreateSilenceTemplate("tpl1", "Template to Delete", matchers, "Delete me") //nolint:errcheck
+
+	if err := s.DeleteSilenceTemplate("tpl1"); err != nil {
+		t.Fatalf("DeleteSilenceTemplate: %v", err)
+	}
+
+	templates, _ := s.GetAllSilenceTemplates()
+	if len(templates) != 0 {
+		t.Errorf("expected 0 templates after delete, got %d", len(templates))
+	}
+}
+
+func TestUpdateSilenceTemplate(t *testing.T) {
+	s := newTestStore(t)
+
+	matchers := []models.SilenceMatcher{
+		{Name: "alertname", Value: "OldValue", IsEqual: true, IsRegex: false},
+	}
+	s.CreateSilenceTemplate("tpl1", "Original", matchers, "Original reason") //nolint:errcheck
+
+	newMatchers := []models.SilenceMatcher{
+		{Name: "alertname", Value: "NewValue", IsEqual: true, IsRegex: false},
+	}
+	updated, err := s.UpdateSilenceTemplate("tpl1", "Updated", newMatchers, "Updated reason")
+	if err != nil {
+		t.Fatalf("UpdateSilenceTemplate: %v", err)
+	}
+	if updated.Name != "Updated" || len(updated.Matchers) != 1 {
+		t.Errorf("unexpected updated template: %+v", updated)
+	}
+	if updated.Matchers[0].Value != "NewValue" {
+		t.Errorf("expected NewValue, got %s", updated.Matchers[0].Value)
+	}
+}

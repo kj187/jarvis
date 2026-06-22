@@ -708,3 +708,90 @@ func (s *Store) GetRecentResolved(window time.Duration) ([]models.EnrichedAlert,
 	defer func() { _ = rows.Close() }()
 	return scanResolvedAlerts(rows)
 }
+
+// ── Silence Templates ─────────────────────────────────────────────────────────
+
+// CreateSilenceTemplate inserts a new silence template.
+func (s *Store) CreateSilenceTemplate(id, name string, matchers []models.SilenceMatcher, reason string) (*models.SilenceTemplate, error) {
+	matchersJSON, err := json.Marshal(matchers)
+	if err != nil {
+		return nil, fmt.Errorf("marshal matchers: %w", err)
+	}
+	now := time.Now().UTC()
+	_, err = s.exec(context.Background(), `
+		INSERT INTO silence_templates (id, name, matchers, reason, created_at)
+		VALUES (?, ?, ?, ?, ?)
+	`, id, name, string(matchersJSON), reason, now)
+	if err != nil {
+		return nil, fmt.Errorf("insert silence template: %w", err)
+	}
+	return &models.SilenceTemplate{
+		ID:        id,
+		Name:      name,
+		Matchers:  matchers,
+		Reason:    reason,
+		CreatedAt: now,
+	}, nil
+}
+
+// GetAllSilenceTemplates returns all silence templates, ordered by creation time (newest first).
+func (s *Store) GetAllSilenceTemplates() ([]models.SilenceTemplate, error) {
+	rows, err := s.query(context.Background(), `
+		SELECT id, name, matchers, reason, created_at
+		FROM silence_templates
+		ORDER BY created_at DESC
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("query silence templates: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var templates []models.SilenceTemplate
+	for rows.Next() {
+		var t models.SilenceTemplate
+		var matchersJSON string
+		var createdAt time.Time
+		if err := rows.Scan(&t.ID, &t.Name, &matchersJSON, &t.Reason, &createdAt); err != nil {
+			return nil, fmt.Errorf("scan silence template: %w", err)
+		}
+		if err := json.Unmarshal([]byte(matchersJSON), &t.Matchers); err != nil {
+			t.Matchers = []models.SilenceMatcher{}
+		}
+		t.CreatedAt = createdAt.UTC()
+		templates = append(templates, t)
+	}
+	return templates, rows.Err()
+}
+
+// DeleteSilenceTemplate deletes a silence template by ID.
+func (s *Store) DeleteSilenceTemplate(id string) error {
+	_, err := s.exec(context.Background(), `
+		DELETE FROM silence_templates WHERE id = ?
+	`, id)
+	if err != nil {
+		return fmt.Errorf("delete silence template: %w", err)
+	}
+	return nil
+}
+
+// UpdateSilenceTemplate updates a silence template.
+func (s *Store) UpdateSilenceTemplate(id, name string, matchers []models.SilenceMatcher, reason string) (*models.SilenceTemplate, error) {
+	matchersJSON, err := json.Marshal(matchers)
+	if err != nil {
+		return nil, fmt.Errorf("marshal matchers: %w", err)
+	}
+	_, err = s.exec(context.Background(), `
+		UPDATE silence_templates
+		SET name = ?, matchers = ?, reason = ?
+		WHERE id = ?
+	`, name, string(matchersJSON), reason, id)
+	if err != nil {
+		return nil, fmt.Errorf("update silence template: %w", err)
+	}
+	return &models.SilenceTemplate{
+		ID:       id,
+		Name:     name,
+		Matchers: matchers,
+		Reason:   reason,
+	}, nil
+}
