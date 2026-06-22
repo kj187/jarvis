@@ -51,6 +51,14 @@ export interface Silence {
   alertmanagerUrl: string
 }
 
+export interface SilenceTemplate {
+  id: string
+  name: string
+  matchers: SilenceMatcher[]
+  reason: string
+  createdAt: string
+}
+
 // ── History ──────────────────────────────────────────────────────────────────
 
 export type AlertEventStatus = 'firing' | 'suppressed' | 'expired' | 'resolved'

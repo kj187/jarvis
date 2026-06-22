@@ -6,6 +6,7 @@ import type {
   Comment,
   Claim,
   Silence,
+  SilenceTemplate,
   SilenceEvent,
   ClusterInfo,
   AuthUser,
@@ -238,4 +239,37 @@ export function fetchStatus(): Promise<{
 
 export function fetchInfo(): Promise<{ version: string }> {
   return request('/info')
+}
+
+// ── Silence Templates ─────────────────────────────────────────────────────────
+
+export function fetchSilenceTemplates(): Promise<SilenceTemplate[]> {
+  return request<SilenceTemplate[]>('/silence-templates')
+}
+
+export function createSilenceTemplate(body: {
+  name: string
+  matchers: SilenceTemplate['matchers']
+  reason: string
+}): Promise<SilenceTemplate> {
+  return request<SilenceTemplate>('/silence-templates', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export function updateSilenceTemplate(
+  id: string,
+  body: { name: string; matchers: SilenceTemplate['matchers']; reason: string },
+): Promise<SilenceTemplate> {
+  return request<SilenceTemplate>(`/silence-templates/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  })
+}
+
+export function deleteSilenceTemplate(id: string): Promise<void> {
+  return request<void>(`/silence-templates/${id}`, {
+    method: 'DELETE',
+  })
 }
