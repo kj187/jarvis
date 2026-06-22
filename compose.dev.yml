@@ -26,6 +26,7 @@ services:
     environment:
       - VITE_API_BASE=http://localhost:8080
       - CHOKIDAR_USEPOLLING=true
+      - CI=true
 
 volumes:
   jarvis_gomodcache:
