@@ -359,76 +359,76 @@ function InlineDateTimePicker({ value, onChange }: InlineDateTimePickerProps) {
 
   return (
     <div className="flex rounded border border-border bg-background">
-      <DayPicker
-        mode="single"
-        selected={selected}
-        defaultMonth={selected ?? new Date()}
-        onSelect={handleDaySelect}
-        locale={enUS}
-        components={{
-          Chevron: ({ orientation }) =>
-            orientation === 'left'
-              ? <ChevronLeft className="h-4 w-4" />
-              : <ChevronRight className="h-4 w-4" />,
-        }}
-        classNames={{
-          root: 'p-3',
-          months: 'flex flex-col relative',
-          month: 'space-y-3',
-          month_caption: 'flex items-center justify-center relative h-7',
-          caption_label: 'text-sm font-medium text-foreground',
-          nav: 'flex items-center justify-between absolute inset-x-0 top-0',
-          button_previous:
-            'inline-flex h-7 w-7 items-center justify-center rounded-md text-foreground/80 hover:bg-accent hover:text-foreground cursor-pointer transition-colors',
-          button_next:
-            'inline-flex h-7 w-7 items-center justify-center rounded-md text-foreground/80 hover:bg-accent hover:text-foreground cursor-pointer transition-colors',
-          month_grid: 'w-full border-collapse',
-          weekdays: 'flex',
-          weekday: 'w-8 text-center text-[10px] font-medium text-muted-foreground',
-          week: 'flex mt-1',
-          day: 'relative flex h-8 w-8 items-center justify-center',
-          day_button:
-            'h-8 w-8 rounded text-sm hover:bg-accent hover:text-foreground focus:outline-none cursor-pointer transition-colors',
-          today: '[&>button]:bg-accent [&>button]:text-foreground [&>button]:font-semibold',
-          selected:
-            '[&>button]:!bg-primary [&>button]:!text-primary-foreground [&>button]:hover:!bg-primary',
-          outside: '[&>button]:text-muted-foreground/40',
-          disabled: '[&>button]:opacity-30 [&>button]:cursor-not-allowed',
-        }}
-      />
+        <DayPicker
+          mode="single"
+          selected={selected}
+          defaultMonth={selected ?? new Date()}
+          onSelect={handleDaySelect}
+          locale={enUS}
+          components={{
+            Chevron: ({ orientation }) =>
+              orientation === 'left'
+                ? <ChevronLeft className="h-4 w-4" />
+                : <ChevronRight className="h-4 w-4" />,
+          }}
+          classNames={{
+            root: 'p-3',
+            months: 'flex flex-col relative',
+            month: 'space-y-3',
+            month_caption: 'flex items-center justify-center relative h-7',
+            caption_label: 'text-sm font-medium text-foreground pointer-events-none select-none',
+            nav: 'flex items-center justify-between absolute inset-x-0 top-0 z-10 pointer-events-none',
+            button_previous:
+              'inline-flex h-7 w-7 items-center justify-center rounded-md text-foreground/80 hover:bg-accent hover:text-foreground cursor-pointer transition-colors pointer-events-auto',
+            button_next:
+              'inline-flex h-7 w-7 items-center justify-center rounded-md text-foreground/80 hover:bg-accent hover:text-foreground cursor-pointer transition-colors pointer-events-auto',
+            month_grid: 'w-full border-collapse',
+            weekdays: 'flex',
+            weekday: 'w-8 text-center text-[10px] font-medium text-muted-foreground',
+            week: 'flex mt-1',
+            day: 'relative flex h-8 w-8 items-center justify-center',
+            day_button:
+              'h-8 w-8 rounded text-sm hover:bg-accent hover:text-foreground focus:outline-none cursor-pointer transition-colors',
+            today: '[&>button]:bg-accent [&>button]:text-foreground [&>button]:font-semibold',
+            selected:
+              '[&>button]:!bg-primary [&>button]:!text-primary-foreground [&>button]:hover:!bg-primary',
+            outside: '[&>button]:text-muted-foreground/40',
+            disabled: '[&>button]:opacity-30 [&>button]:cursor-not-allowed',
+          }}
+        />
 
-      {/* Time spinners — right of calendar */}
-      <div className="flex items-center gap-4 border-l border-border px-4">
-        {timeSpinners.map(({ label, val, max, inc, dec, set }) => (
-          <div key={label} className="flex flex-col items-center gap-0.5">
-            <button
-              type="button"
-              onClick={inc}
-              className="cursor-pointer text-muted-foreground hover:text-foreground"
-            >
-              <ChevronUp className="h-4 w-4" />
-            </button>
-            <input
-              type="number"
-              min={0}
-              max={max}
-              value={val}
-              onChange={(e) => {
-                const n = parseInt(e.target.value, 10)
-                if (!isNaN(n)) set(n)
-              }}
-              className="w-10 rounded border border-input bg-background text-center text-2xl font-light tabular-nums focus:outline-none focus:ring-1 focus:ring-ring [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-            />
-            <button
-              type="button"
-              onClick={dec}
-              className="cursor-pointer text-muted-foreground hover:text-foreground"
-            >
-              <ChevronDown className="h-4 w-4" />
-            </button>
-            <span className="mt-0.5 text-[10px] text-muted-foreground">{label}</span>
-          </div>
-        ))}
+        {/* Time spinners — right of calendar */}
+        <div className="flex items-center gap-4 border-l border-border px-4">
+          {timeSpinners.map(({ label, val, max, inc, dec, set }) => (
+            <div key={label} className="flex flex-col items-center gap-0.5">
+              <button
+                type="button"
+                onClick={inc}
+                className="cursor-pointer text-muted-foreground hover:text-foreground"
+              >
+                <ChevronUp className="h-4 w-4" />
+              </button>
+              <input
+                type="number"
+                min={0}
+                max={max}
+                value={val}
+                onChange={(e) => {
+                  const n = parseInt(e.target.value, 10)
+                  if (!isNaN(n)) set(n)
+                }}
+                className="w-10 rounded border border-input bg-background text-center text-2xl font-light tabular-nums focus:outline-none focus:ring-1 focus:ring-ring [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+              />
+              <button
+                type="button"
+                onClick={dec}
+                className="cursor-pointer text-muted-foreground hover:text-foreground"
+              >
+                <ChevronDown className="h-4 w-4" />
+              </button>
+              <span className="mt-0.5 text-[10px] text-muted-foreground">{label}</span>
+            </div>
+          ))}
       </div>
     </div>
   )

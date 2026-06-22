@@ -82,12 +82,12 @@ export function DateTimePicker({ value, onChange, className }: DateTimePickerPro
                 months: 'flex flex-col',
                 month: 'space-y-3',
                 month_caption: 'flex items-center justify-center relative h-7',
-                caption_label: 'text-sm font-medium text-foreground',
-                nav: 'flex items-center justify-between absolute inset-x-0 top-0',
+                caption_label: 'text-sm font-medium text-foreground pointer-events-none select-none',
+                nav: 'flex items-center justify-between absolute inset-x-0 top-0 z-10 pointer-events-none',
                 button_previous:
-                  'inline-flex h-7 w-7 items-center justify-center rounded-md text-foreground/80 hover:bg-accent hover:text-foreground cursor-pointer transition-colors',
+                  'inline-flex h-7 w-7 items-center justify-center rounded-md text-foreground/80 hover:bg-accent hover:text-foreground cursor-pointer transition-colors pointer-events-auto',
                 button_next:
-                  'inline-flex h-7 w-7 items-center justify-center rounded-md text-foreground/80 hover:bg-accent hover:text-foreground cursor-pointer transition-colors',
+                  'inline-flex h-7 w-7 items-center justify-center rounded-md text-foreground/80 hover:bg-accent hover:text-foreground cursor-pointer transition-colors pointer-events-auto',
                 month_grid: 'w-full border-collapse',
                 weekdays: 'flex',
                 weekday: 'w-8 text-center text-[10px] font-medium text-muted-foreground',
