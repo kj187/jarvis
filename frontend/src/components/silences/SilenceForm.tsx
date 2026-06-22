@@ -358,7 +358,8 @@ function InlineDateTimePicker({ value, onChange }: InlineDateTimePickerProps) {
   ]
 
   return (
-    <div className="flex rounded border border-border bg-background">
+    <div className="space-y-1.5">
+      <div className="flex rounded border border-border bg-background">
         <DayPicker
           mode="single"
           selected={selected}
@@ -429,6 +430,10 @@ function InlineDateTimePicker({ value, onChange }: InlineDateTimePickerProps) {
               <span className="mt-0.5 text-[10px] text-muted-foreground">{label}</span>
             </div>
           ))}
+        </div>
+      </div>
+      <div className="text-center text-[10px] text-muted-foreground font-mono">
+        Local timezone: {tzAbbr}
       </div>
     </div>
   )

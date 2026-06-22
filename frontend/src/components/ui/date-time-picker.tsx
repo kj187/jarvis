@@ -128,6 +128,9 @@ export function DateTimePicker({ value, onChange, className }: DateTimePickerPro
                 {hh}:{mm}
               </span>
             </div>
+            <div className="pb-2 text-center text-[10px] text-muted-foreground font-mono">
+              Local timezone: {tzAbbr}
+            </div>
           </div>
         </>
       )}
