@@ -7,6 +7,7 @@ import { Select } from '@/components/ui/select'
 import { Sheet } from '@/components/ui/sheet'
 import { ViewToggle } from '@/components/alerts/ViewToggle'
 import { SilenceForm } from '@/components/silences/SilenceForm'
+import { SilenceTemplateTab } from '@/components/silences/SilenceTemplateTab'
 import { SettingsSheet } from '@/components/settings/SettingsSheet'
 import { LoginModal } from '@/components/auth/LoginModal'
 import { UserManagement } from '@/components/admin/UserManagement'
@@ -258,6 +259,7 @@ export function Header() {
   })
 
   const [silenceFormOpen, setSilenceFormOpen] = useState(false)
+  const [silenceActiveTab, setSilenceActiveTab] = useState<'silence' | 'templates'>('silence')
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [loginModalOpen, setLoginModalOpen] = useState(false)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
@@ -686,14 +688,40 @@ export function Header() {
     </header>
 
     <Sheet open={silenceFormOpen} onClose={() => setSilenceFormOpen(false)} className="sm:max-w-[760px] lg:max-w-[760px]">
-      <div className="p-5 pt-10">
-        <h2 className="mb-4 text-base font-semibold">Create silence</h2>
-        <SilenceForm
-          availableClusters={clusters.map((c) => c.name).length > 0 ? clusters.map((c) => c.name) : ['default']}
-          onSuccess={() => setSilenceFormOpen(false)}
-          onCancel={() => setSilenceFormOpen(false)}
-        />
+      <div className="border-b border-border px-5 pt-10 pb-0">
+        <div className="flex gap-1 -mb-px">
+          <button
+            onClick={() => setSilenceActiveTab('silence')}
+            className={`px-3 py-2 text-sm font-medium transition-colors cursor-pointer ${
+              silenceActiveTab === 'silence'
+                ? 'border-b-2 border-primary text-foreground'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            Create Silence
+          </button>
+          <button
+            onClick={() => setSilenceActiveTab('templates')}
+            className={`px-3 py-2 text-sm font-medium transition-colors cursor-pointer ${
+              silenceActiveTab === 'templates'
+                ? 'border-b-2 border-primary text-foreground'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            Templates
+          </button>
+        </div>
       </div>
+      {silenceActiveTab === 'silence' && (
+        <div className="p-5">
+          <SilenceForm
+            availableClusters={clusters.map((c) => c.name).length > 0 ? clusters.map((c) => c.name) : ['default']}
+            onSuccess={() => setSilenceFormOpen(false)}
+            onCancel={() => setSilenceFormOpen(false)}
+          />
+        </div>
+      )}
+      {silenceActiveTab === 'templates' && <SilenceTemplateTab />}
     </Sheet>
 
     <SettingsSheet

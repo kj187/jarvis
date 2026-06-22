@@ -12,6 +12,7 @@ import { Select } from '@/components/ui/select'
 import { DateTimePicker } from '@/components/ui/date-time-picker'
 import { useAlerts } from '@/hooks/useAlerts'
 import { useSilences } from '@/hooks/useSilences'
+import { useSilenceTemplates } from '@/hooks/useSilenceTemplates'
 import { matchesLabelMatchers, tzAbbr } from '@/lib/alertUtils'
 import { upsertSilence, triggerPoll } from '@/api/client'
 import { useSettingsStore } from '@/store/useSettingsStore'
@@ -579,6 +580,10 @@ export function SilenceForm({
   )
   const effectiveCreatedBy = user?.username ?? createdBy
   const [comment, setComment] = useState(prefillSilence?.comment ?? '')
+  
+  // Template support
+  const { data: templates = [] } = useSilenceTemplates()
+  const [selectedTemplate, setSelectedTemplate] = useState<string>('')
 
   const [results, setResults] = useState<Map<string, ClusterResult>>(new Map())
   const [affectedOpen, setAffectedOpen] = useState(false)
@@ -685,6 +690,34 @@ export function SilenceForm({
     setStartsAt(newVal)
   }
 
+  // Apply template — fill matchers and reason from template
+  function handleApplyTemplate(templateId: string) {
+    if (!templateId) {
+      setSelectedTemplate('')
+      return
+    }
+    const template = templates.find((t) => t.id === templateId)
+    if (!template) return
+
+    setSelectedTemplate(templateId)
+    
+    // Replace matchers with template matchers
+    const newMatchers = template.matchers.map((m) => ({
+      id: nextId(),
+      name: m.name,
+      operator: (
+        m.isRegex ? (m.isEqual ? '=~' : '!~') : m.isEqual ? '=' : '!='
+      ) as LabelMatcherOperator,
+      value: m.value,
+    }))
+    setMatchers(newMatchers)
+    
+    // Pre-fill comment with template reason if reason is not empty
+    if (template.reason) {
+      setComment(template.reason)
+    }
+  }
+
   // ── Helpers ──────────────────────────────────────────────────────────────────
 
   function toRegexValue(value: string): string {
@@ -716,6 +749,10 @@ export function SilenceForm({
   const liveMatchCount = matchedAlerts.length
 
   const hasActiveMatchers = matchers.some((m) => m.name && m.value)
+  const parsedStartsAt = startsAt ? parse(startsAt, FMT, new Date()) : null
+  const startsInFuture = Boolean(
+    parsedStartsAt && isValid(parsedStartsAt) && parsedStartsAt.getTime() > Date.now(),
+  )
 
   // ── Submit ──────────────────────────────────────────────────────────────────
 
@@ -841,6 +878,32 @@ export function SilenceForm({
           </div>
         )}
 
+        {/* Template selector */}
+        {templates.length > 0 && (
+          <div>
+            <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Template (optional)
+            </label>
+            <select
+              value={selectedTemplate}
+              onChange={(e) => handleApplyTemplate(e.target.value)}
+              className="w-full h-8 px-2 py-1 text-xs border rounded bg-background border-input"
+            >
+              <option value="">— None —</option>
+              {templates.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+            {selectedTemplate && (
+              <p className="mt-1 text-[10px] text-muted-foreground">
+                {matchers.length} matcher{matchers.length !== 1 ? 's' : ''} loaded from template
+              </p>
+            )}
+          </div>
+        )}
+
         {/* Cluster chips */}
         <div>
           <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -956,15 +1019,6 @@ export function SilenceForm({
                     className="min-w-0"
                     maxTags={m.operator === '=' || m.operator === '!=' ? 1 : undefined}
                   />
-                  {(m.operator === '=~' || m.operator === '!~') && m.value && !m.value.includes('|') && (
-                    <button
-                      type="button"
-                      onClick={() => updateMatcher(m.id, 'operator', m.operator === '=~' ? '=' : '!=')}
-                      className="mt-0.5 text-[10px] text-amber-500 hover:text-amber-400 cursor-pointer"
-                    >
-                      Single value — switch to {m.operator === '=~' ? '=' : '!='}
-                    </button>
-                  )}
                 </div>
                 <Button
                   type="button"
@@ -989,6 +1043,15 @@ export function SilenceForm({
                 <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
                 <div className="text-xs space-y-0.5">
                   <p>No current alerts match these matchers — the silence will be created but has no immediate effect.</p>
+                  {startsInFuture ? (
+                    <p className="opacity-80">
+                      Start time is in the future, so this can be expected for planned maintenance windows.
+                    </p>
+                  ) : (
+                    <p className="opacity-80">
+                      Tip: For planned maintenance, set the start time to when the work begins.
+                    </p>
+                  )}
                   {selectedClusters.length < availableClusters.length && (
                     <p className="opacity-80">
                       Only {selectedClusters.length} of {availableClusters.length} clusters selected — matching alerts on other clusters won't be silenced.
