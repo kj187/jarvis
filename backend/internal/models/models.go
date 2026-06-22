@@ -144,6 +144,16 @@ type SilenceEvent struct {
 	RecordedAt  time.Time `json:"recordedAt"`
 }
 
+// ── Silence Templates ────────────────────────────────────────────────────────
+
+type SilenceTemplate struct {
+	ID        string           `json:"id"`
+	Name      string           `json:"name"`
+	Matchers  []SilenceMatcher `json:"matchers"`
+	Reason    string           `json:"reason"`
+	CreatedAt time.Time        `json:"createdAt"`
+}
+
 // ── WebSocket Events ─────────────────────────────────────────────────────────
 
 type WSEvent struct {
