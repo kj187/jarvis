@@ -58,7 +58,8 @@ describe('Header – silence button', () => {
   it('opens silence form when "Create silence" is clicked', async () => {
     renderHeader()
     await userEvent.click(screen.getByText('Create silence'))
-    expect(screen.getByRole('heading', { name: 'Create silence' })).toBeInTheDocument()
+    // Sheet opens with tabs; "Templates" tab is only visible when the sheet is open
+    expect(screen.getByRole('button', { name: 'Templates' })).toBeInTheDocument()
   })
 })
 

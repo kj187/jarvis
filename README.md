@@ -27,6 +27,7 @@ Most Alertmanager UIs are read-only dashboards. Jarvis is built for teams that n
 - **Card and List View** — grouped by severity, sortable
 - **Label-based filtering** — `=` / `!=` / `=~` / `!~` matcher chips, URL-serialized
 - **Silences** — create, edit, extend, delete; full Alertmanager proxy
+- **Silence templates** — reusable matcher sets for recurring maintenance windows
 - **Alert search** — full-text search across alert names and label values; results update as you type
 - **Dark / Light theme** — toggle between dark and light mode; preference is persisted in localStorage
 - **Multi-cluster** — poll multiple Alertmanager instances simultaneously
@@ -329,6 +330,39 @@ The silence creation form is designed to make it fast and safe to create silence
 - Confirm on the preview screen to submit; the results screen then shows per-cluster success or error status with a direct link to the created silence in Alertmanager
 
 Silences are sent directly to Alertmanager via Jarvis's API proxy and are effective immediately. No need to open the native Alertmanager UI.
+
+---
+
+### Silence Templates
+
+Reusable silence blueprints — define matcher sets once and apply them repeatedly without re-typing matchers every time.
+
+![Silence Templates](docs/assets/feature-silence-templates.png)
+
+During recurring maintenance windows or known-noisy alert patterns, you often create the same silence over and over. Silence templates save a named set of matchers and a reason so you can apply them with a few clicks instead of rebuilding the matchers from scratch each time.
+
+**How it works:**
+
+Templates are managed inside the **Templates** tab of the silence creation sheet. Open it by clicking **Create silence** in the header, then switching to the **Templates** tab.
+
+**Creating a template:**
+1. Click **+ New Template**
+2. Give it a descriptive name (e.g., "Production Maintenance")
+3. Add matchers — same matcher editor as the regular silence form (`=` / `!=` / `=~` / `!~`)
+4. Optionally add a reason/comment that will explain the template's purpose
+5. Click **Save Template**
+
+![New Template Form](docs/assets/feature-silence-templates-form.png)
+
+**Using a template:**
+- Click the edit icon on any saved template to load its name, matchers, and reason back into the form
+- Adjust the loaded matchers if needed (e.g., narrow the scope for a specific incident), then create the silence as normal
+
+**Managing templates:**
+- Edit a template at any time — changes take effect immediately for future uses
+- Delete templates that are no longer needed via the trash icon
+
+Templates are stored in Jarvis's database and are shared across all users. They are not sent to Alertmanager; they are local helpers for building silences faster.
 
 ---
 

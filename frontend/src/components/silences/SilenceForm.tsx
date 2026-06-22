@@ -580,7 +580,7 @@ export function SilenceForm({
   )
   const effectiveCreatedBy = user?.username ?? createdBy
   const [comment, setComment] = useState(prefillSilence?.comment ?? '')
-  
+
   // Template support
   const { data: templates = [] } = useSilenceTemplates()
   const [selectedTemplate, setSelectedTemplate] = useState<string>('')
@@ -700,7 +700,7 @@ export function SilenceForm({
     if (!template) return
 
     setSelectedTemplate(templateId)
-    
+
     // Replace matchers with template matchers
     const newMatchers = template.matchers.map((m) => ({
       id: nextId(),
@@ -711,7 +711,7 @@ export function SilenceForm({
       value: m.value,
     }))
     setMatchers(newMatchers)
-    
+
     // Pre-fill comment with template reason if reason is not empty
     if (template.reason) {
       setComment(template.reason)

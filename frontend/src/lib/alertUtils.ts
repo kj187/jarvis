@@ -59,7 +59,7 @@ export function matchesLabelMatchers(
         case '=':
           return receivers.includes(m.value)
         case '!=':
-          return !receivers.includes(m.value)
+          return receivers.some((r) => r !== m.value)
         case '=~': {
           const re = safeRegex(m.value)
           return re ? receivers.some((r) => re.test(r)) : false

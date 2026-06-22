@@ -300,6 +300,38 @@ const MOCK_SILENCE_EVENTS = [
   { id: 1, fingerprint: 'fp-001', silenceId: 'sil-xyz', clusterName: 'homelab', action: 'created', performedBy: 'alice', comment: 'Silenced during initial triage', recordedAt: ago(30) },
 ]
 
+const MOCK_SILENCE_TEMPLATES = [
+  {
+    id: 'tpl-001',
+    name: 'Production Maintenance',
+    matchers: [
+      { isEqual: true, isRegex: false, name: 'env', value: 'production' },
+      { isEqual: true, isRegex: false, name: 'namespace', value: 'production' },
+    ],
+    reason: 'Scheduled maintenance window — silence all production alerts',
+    createdAt: ago(2880),
+  },
+  {
+    id: 'tpl-002',
+    name: 'Node Exporter Flap',
+    matchers: [
+      { isEqual: true, isRegex: false, name: 'alertname', value: 'TargetDown' },
+      { isEqual: true, isRegex: false, name: 'job', value: 'node-exporter' },
+    ],
+    reason: 'Known flapping on rolling node restarts — use during cluster upgrades',
+    createdAt: ago(1440),
+  },
+  {
+    id: 'tpl-003',
+    name: 'Staging Noise',
+    matchers: [
+      { isEqual: true, isRegex: false, name: 'env', value: 'staging' },
+    ],
+    reason: 'Suppress all staging alerts during off-hours',
+    createdAt: ago(720),
+  },
+]
+
 const AUTH_NONE = { mode: 'none', loginUrl: '', setupRequired: false }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -314,6 +346,9 @@ async function mockBaseAPIs(page: Page, alerts: typeof ALERTS_ACTIVE = ALERTS_AC
   // Non-alert APIs
   await page.route('**/api/v1/silences**', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([SILENCE_ACTIVE, SILENCE_EXPIRING]) }),
+  )
+  await page.route('**/api/v1/silence-templates**', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_SILENCE_TEMPLATES) }),
   )
   await page.route('**/api/v1/clusters**', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_CLUSTERS) }),
@@ -623,5 +658,49 @@ test.describe('Feature screenshots', () => {
     await page.goto('/?state=suppressed')
     await waitForAlerts(page)
     await page.screenshot({ path: `${ASSETS_DIR}/feature-alert-active-silence.png`, fullPage: false })
+  })
+
+  // ── Silence templates — list ─────────────────────────────────────────────
+
+  test('silence templates list', async ({ page }) => {
+    await dismissNoAuthNotice(page)
+    await mockBaseAPIs(page)
+    await page.route('**/api/v1/alerts/groups**', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) }),
+    )
+    await page.goto('/?state=active')
+    await waitForAlerts(page)
+    // Open the silence sheet via the "Create silence" button in the header
+    await page.click('button:has-text("Create silence")')
+    await page.waitForTimeout(500)
+    // Switch to the Templates tab
+    await page.click('button:has-text("Templates")')
+    await page.waitForTimeout(600)
+    await page.screenshot({ path: `${ASSETS_DIR}/feature-silence-templates.png`, fullPage: false })
+  })
+
+  // ── Silence templates — new template form ────────────────────────────────
+
+  test('silence templates new form', async ({ page }) => {
+    await dismissNoAuthNotice(page)
+    await mockBaseAPIs(page)
+    await page.route('**/api/v1/alerts/groups**', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) }),
+    )
+    await page.goto('/?state=active')
+    await waitForAlerts(page)
+    await page.click('button:has-text("Create silence")')
+    await page.waitForTimeout(500)
+    await page.click('button:has-text("Templates")')
+    await page.waitForTimeout(400)
+    // Open the new template form
+    await page.click('button:has-text("+ New Template")')
+    await page.waitForTimeout(400)
+    // Fill in example data to show the form in a useful state
+    await page.fill('input[placeholder="e.g., Prod Maintenance"]', 'Staging Freeze')
+    await page.fill('textarea[placeholder="e.g., Scheduled maintenance window"]', 'Suppress staging during sprint freeze — no pages needed')
+    await page.click('button:has-text("+ Add Matcher")')
+    await page.waitForTimeout(200)
+    await page.screenshot({ path: `${ASSETS_DIR}/feature-silence-templates-form.png`, fullPage: false })
   })
 })
