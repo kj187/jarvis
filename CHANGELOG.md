@@ -1,9 +1,45 @@
+<a name="v1.4.0"></a>
+## [v1.4.0](https://github.com/kj187/jarvis/compare/v1.3.1...v1.4.0) (2026-06-22)
+
+### Bug Fixes
+
+* **api:** log 4xx as WARN, 5xx as ERROR in request middleware
+* **auth:** improve hydrate resilience on slow backend startup
+* **frontend:** ensure CI environment variable is set in docker-compose
+* **frontend:** make silence calendar month arrows clickable
+
+### Chores
+
+* **dev:** improve docker-compose for file watching with polling support
+* **git:** ignore build artifacts and npm lock file
+
+### Documentation
+
+* **frontend:** add silence templates docs, screenshots, and fix test suite
+
+### Features
+
+* **alerts:** store and filter all receivers in alert history
+* **api:** add REST endpoints for silence template management (CRUD)
+* **auth:** map OIDC claim value to admin role
+* **config:** add per-cluster Alertmanager upstream authentication
+* **frontend:** add silence template management UI with tab interface
+* **frontend:** add React Query hooks for silence templates
+* **frontend:** add silence template types and API client
+* **frontend:** show local timezone below silence time inputs
+* **silences:** implement silence template CRUD store operations
+* **silences:** add silence template data model and database schema
+
 <a name="v1.3.1"></a>
 ## [v1.3.1](https://github.com/kj187/jarvis/compare/v1.3.0...v1.3.1) (2026-06-19)
 
 ### Bug Fixes
 
 * **helm:** use Recreate update strategy when SQLite PVC enabled
+
+### Documentation
+
+* update CHANGELOG and README for v1.3.1
 
 ### Features
 
