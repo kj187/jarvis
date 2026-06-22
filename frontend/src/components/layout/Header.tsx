@@ -202,7 +202,9 @@ function MatcherChip({
 export function Header() {
   const {
     viewMode,
+    activeViewMode,
     setViewMode,
+    setActiveViewMode,
     wsConnected,
     pollingPaused,
     setPollingPaused,
@@ -336,7 +338,12 @@ export function Header() {
   function toggleState(value: string) {
     const next = filters.state === value ? '' : value
     setFilter('state', next)
-    if (next !== 'active') setViewMode('list')
+    if (next === 'active') {
+      setViewMode(activeViewMode)
+    } else {
+      if (filters.state === 'active') setActiveViewMode(viewMode)
+      setViewMode('list')
+    }
   }
 
   const isSpinning = refreshing || pollSpinning
@@ -417,7 +424,7 @@ export function Header() {
         {/* ViewToggle — desktop only */}
         <div className="hidden md:block">
           {(!filters.state || filters.state === 'active') && (
-            <ViewToggle value={viewMode} onChange={setViewMode} />
+            <ViewToggle value={viewMode} onChange={(mode) => { setViewMode(mode); setActiveViewMode(mode) }} />
           )}
         </div>
 
@@ -609,7 +616,7 @@ export function Header() {
           {/* Controls row */}
           <div className="flex items-center gap-1 flex-wrap">
             {(!filters.state || filters.state === 'active') && (
-              <ViewToggle value={viewMode} onChange={setViewMode} />
+              <ViewToggle value={viewMode} onChange={(mode) => { setViewMode(mode); setActiveViewMode(mode) }} />
             )}
             <div className="flex-1" />
             {/* Cluster status */}

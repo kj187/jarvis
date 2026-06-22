@@ -19,6 +19,7 @@ interface AlertCounts {
 
 interface UIStore {
   viewMode: ViewMode
+  activeViewMode: ViewMode
   selectedFingerprint: string | null
   filters: Filters
   wsConnected: boolean
@@ -27,6 +28,7 @@ interface UIStore {
 
   // Actions
   setViewMode: (mode: ViewMode) => void
+  setActiveViewMode: (mode: ViewMode) => void
   setSelectedFingerprint: (fp: string | null) => void
   setFilter: (key: keyof Omit<Filters, 'labelMatchers'>, value: string) => void
   addLabelMatcher: (matcher: Omit<LabelMatcher, 'id'>) => void
@@ -48,6 +50,7 @@ const defaultFilters: Filters = {
 }
 
 export const VIEW_MODE_KEY = 'jarvis-viewMode'
+export const ACTIVE_VIEW_MODE_KEY = 'jarvis-activeViewMode'
 
 function loadViewMode(): ViewMode {
   try {
@@ -55,6 +58,14 @@ function loadViewMode(): ViewMode {
     if (v === 'list' || v === 'card') return v
   } catch { /* ignore */ }
   return useSettingsStore.getState().defaultViewMode
+}
+
+function loadActiveViewMode(): ViewMode {
+  try {
+    const v = localStorage.getItem(ACTIVE_VIEW_MODE_KEY)
+    if (v === 'list' || v === 'card') return v
+  } catch { /* ignore */ }
+  return loadViewMode()
 }
 
 let _nextId = 1
@@ -66,6 +77,7 @@ export const useUIStore = create<UIStore>()(
   persist(
     (set) => ({
       viewMode: loadViewMode(),
+      activeViewMode: loadActiveViewMode(),
       selectedFingerprint: null,
       filters: defaultFilters,
       wsConnected: false,
@@ -75,6 +87,10 @@ export const useUIStore = create<UIStore>()(
       setViewMode: (mode) => {
         try { localStorage.setItem(VIEW_MODE_KEY, mode) } catch { /* ignore */ }
         set({ viewMode: mode })
+      },
+      setActiveViewMode: (mode) => {
+        try { localStorage.setItem(ACTIVE_VIEW_MODE_KEY, mode) } catch { /* ignore */ }
+        set({ activeViewMode: mode })
       },
       setSelectedFingerprint: (fp) => set({ selectedFingerprint: fp }),
       setFilter: (key, value) =>
