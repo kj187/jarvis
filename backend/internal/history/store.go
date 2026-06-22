@@ -631,6 +631,16 @@ func scanResolvedAlerts(rows *sql.Rows) ([]models.EnrichedAlert, error) {
 		if annotations == nil {
 			annotations = map[string]string{}
 		}
+		// Restore receivers from the @receiver label that was saved at index time.
+		// @receiver is stored as comma-separated list of receiver names.
+		receivers := []models.Receiver{}
+		if receiverNames := labels["@receiver"]; receiverNames != "" {
+			for _, name := range strings.Split(receiverNames, ",") {
+				if trimmed := strings.TrimSpace(name); trimmed != "" {
+					receivers = append(receivers, models.Receiver{Name: trimmed})
+				}
+			}
+		}
 		alerts = append(alerts, models.EnrichedAlert{
 			Fingerprint: fp,
 			Status: models.AlertStatus{
@@ -643,7 +653,7 @@ func scanResolvedAlerts(rows *sql.Rows) ([]models.EnrichedAlert, error) {
 			StartsAt:        startsAt.UTC(),
 			EndsAt:          resolvedAt.UTC(),
 			UpdatedAt:       resolvedAt.UTC(),
-			Receivers:       []models.Receiver{},
+			Receivers:       receivers,
 			ClusterName:     clusterName,
 			AlertmanagerURL: amURL,
 		})

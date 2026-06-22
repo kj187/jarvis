@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -322,8 +323,14 @@ func (r *Recorder) fetchCluster(ctx context.Context, cl *cluster.Cluster) ([]mod
 		for k, v := range a.Labels {
 			labels[k] = v
 		}
+		// Store all receivers as comma-separated list for filtering.
+		// This allows filters to match any receiver that handles this alert.
 		if len(a.Receivers) > 0 {
-			labels["@receiver"] = a.Receivers[0].Name
+			receiverNames := make([]string, len(a.Receivers))
+			for i, r := range a.Receivers {
+				receiverNames[i] = r.Name
+			}
+			labels["@receiver"] = strings.Join(receiverNames, ",")
 		}
 
 		enriched = append(enriched, models.EnrichedAlert{

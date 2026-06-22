@@ -242,7 +242,24 @@ export function AlertDetailPanel({
         >
           {k}
         </span>
-        <span className="break-all text-xs">{v}</span>
+        {(() => {
+          const isReceiverLabel = k === 'receiver' || k === '@receiver'
+          const receivers = isReceiverLabel
+            ? v.split(',').map((receiver) => receiver.trim()).filter(Boolean)
+            : []
+
+          if (isReceiverLabel && receivers.length > 1) {
+            return (
+              <ul className="list-disc pl-4 text-xs">
+                {receivers.map((receiver, idx) => (
+                  <li key={`${receiver}-${idx}`} className="break-all">{receiver}</li>
+                ))}
+              </ul>
+            )
+          }
+
+          return <span className="break-all text-xs">{v}</span>
+        })()}
       </div>
     ))
 

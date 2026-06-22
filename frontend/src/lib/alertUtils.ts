@@ -8,16 +8,21 @@ export const tzAbbr = new Date().toLocaleTimeString('en', { timeZoneName: 'short
 
 /**
  * Returns an alert's labels augmented with pseudo-labels:
- * - @receiver  (first receiver name)
+ * - @receiver  (comma-separated list of all receiver names)
  * - receiver   (alias for @receiver)
  * - @cluster   (cluster name)
  */
 export function getFilterableLabels(alert: EnrichedAlert): Record<string, string> {
   const labels: Record<string, string> = { ...alert.labels }
-  // Resolved alerts from DB have receivers:[] — fall back to the @receiver label stored at index time.
-  const receiver = alert.receivers?.[0]?.name ?? labels['@receiver'] ?? ''
-  labels['@receiver'] = receiver
-  labels['receiver'] = receiver
+  // Get receiver names from the receivers array or fall back to @receiver label.
+  let receiverList: string
+  if (alert.receivers && alert.receivers.length > 0) {
+    receiverList = alert.receivers.map((r) => r.name).join(',')
+  } else {
+    receiverList = labels['@receiver'] ?? ''
+  }
+  labels['@receiver'] = receiverList
+  labels['receiver'] = receiverList
   labels['@cluster'] = alert.clusterName
   return labels
 }
@@ -36,6 +41,7 @@ export function safeRegex(pattern: string): RegExp | null {
 
 /**
  * Returns true if the alert matches ALL of the given label matchers.
+ * Special handling: receiver/@receiver labels are comma-separated and support partial matching.
  */
 export function matchesLabelMatchers(
   alert: EnrichedAlert,
@@ -45,6 +51,26 @@ export function matchesLabelMatchers(
   const labels = getFilterableLabels(alert)
   return matchers.every((m) => {
     const value = labels[m.name] ?? ''
+    // Special handling for receiver/@receiver: they are comma-separated lists.
+    // For equality operators, check if any receiver matches.
+    if ((m.name === 'receiver' || m.name === '@receiver') && value.includes(',')) {
+      const receivers = value.split(',').map((r) => r.trim())
+      switch (m.operator) {
+        case '=':
+          return receivers.includes(m.value)
+        case '!=':
+          return !receivers.includes(m.value)
+        case '=~': {
+          const re = safeRegex(m.value)
+          return re ? receivers.some((r) => re.test(r)) : false
+        }
+        case '!~': {
+          const re = safeRegex(m.value)
+          return re ? receivers.every((r) => !re.test(r)) : true
+        }
+      }
+    }
+    // Standard matching for other labels
     switch (m.operator) {
       case '=':
         return value === m.value

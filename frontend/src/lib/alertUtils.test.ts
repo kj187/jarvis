@@ -244,6 +244,16 @@ describe('getFilterableLabels — extended', () => {
     expect(labels['receiver']).toBe('pushover')
   })
 
+  it('joins multiple receivers with comma', () => {
+    const alert = {
+      ...makeAlert(),
+      receivers: [{ name: 'email' }, { name: 'slack' }, { name: 'pagerduty' }],
+    }
+    const labels = getFilterableLabels(alert)
+    expect(labels['@receiver']).toBe('email,slack,pagerduty')
+    expect(labels['receiver']).toBe('email,slack,pagerduty')
+  })
+
   it('preserves original alert labels', () => {
     const alert = makeAlert({ severity: 'critical', job: 'node' })
     const labels = getFilterableLabels(alert)
@@ -293,5 +303,62 @@ describe('matchesLabelMatchers — extended', () => {
       { id: '2', name: 'alertname', operator: '=', value: 'OtherAlert' },
     ]
     expect(matchesLabelMatchers(makeAlert(), matchers)).toBe(false)
+  })
+
+  describe('multiple receivers (comma-separated)', () => {
+    const multiReceiverAlert = {
+      ...makeAlert(),
+      receivers: [{ name: 'email' }, { name: 'slack' }, { name: 'pagerduty' }],
+    }
+
+    it('matches receiver with = operator when any receiver matches', () => {
+      const matchers: LabelMatcher[] = [
+        { id: '1', name: 'receiver', operator: '=', value: 'slack' },
+      ]
+      expect(matchesLabelMatchers(multiReceiverAlert, matchers)).toBe(true)
+    })
+
+    it('does not match receiver with = operator when no receiver matches', () => {
+      const matchers: LabelMatcher[] = [
+        { id: '1', name: 'receiver', operator: '=', value: 'telegram' },
+      ]
+      expect(matchesLabelMatchers(multiReceiverAlert, matchers)).toBe(false)
+    })
+
+    it('matches @receiver with != operator when not all receivers match', () => {
+      const matchers: LabelMatcher[] = [
+        { id: '1', name: '@receiver', operator: '!=', value: 'slack' },
+      ]
+      expect(matchesLabelMatchers(multiReceiverAlert, matchers)).toBe(true)
+    })
+
+    it('does not match @receiver with != operator when all receivers match exclusion', () => {
+      const singleAlert = { ...makeAlert(), receivers: [{ name: 'slack' }] }
+      const matchers: LabelMatcher[] = [
+        { id: '1', name: '@receiver', operator: '!=', value: 'slack' },
+      ]
+      expect(matchesLabelMatchers(singleAlert, matchers)).toBe(false)
+    })
+
+    it('matches receiver with =~ regex when any receiver matches', () => {
+      const matchers: LabelMatcher[] = [
+        { id: '1', name: 'receiver', operator: '=~', value: '^(slack|teams)$' },
+      ]
+      expect(matchesLabelMatchers(multiReceiverAlert, matchers)).toBe(true)
+    })
+
+    it('does not match receiver with =~ regex when no receiver matches', () => {
+      const matchers: LabelMatcher[] = [
+        { id: '1', name: 'receiver', operator: '=~', value: '^telegram$' },
+      ]
+      expect(matchesLabelMatchers(multiReceiverAlert, matchers)).toBe(false)
+    })
+
+    it('matches receiver with !~ when not all receivers match the pattern', () => {
+      const matchers: LabelMatcher[] = [
+        { id: '1', name: 'receiver', operator: '!~', value: '^telegram$' },
+      ]
+      expect(matchesLabelMatchers(multiReceiverAlert, matchers)).toBe(true)
+    })
   })
 })
