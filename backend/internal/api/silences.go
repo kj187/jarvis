@@ -3,8 +3,10 @@ package api
 import (
 	"context"
 	"net/http"
+	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	amclient "github.com/kj187/jarvis/backend/internal/alertmanager"
 	"github.com/kj187/jarvis/backend/internal/auth"
 	"github.com/kj187/jarvis/backend/internal/models"
@@ -184,4 +186,116 @@ func convertSilence(rs amclient.GettableSilence, clusterName, amLinkURL string) 
 		ClusterName:     clusterName,
 		AlertmanagerURL: amLinkURL,
 	}
+}
+
+// ── Silence Templates ────────────────────────────────────────────────────────
+
+// GET /api/v1/silence-templates
+func (s *Server) getSilenceTemplates(c echo.Context) error {
+	templates, err := s.store.GetAllSilenceTemplates()
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to load templates")
+	}
+	if templates == nil {
+		templates = []models.SilenceTemplate{}
+	}
+	return c.JSON(http.StatusOK, templates)
+}
+
+// POST /api/v1/silence-templates
+func (s *Server) createSilenceTemplate(c echo.Context) error {
+	var body struct {
+		Name    string                  `json:"name"`
+		Matchers []models.SilenceMatcher `json:"matchers"`
+		Reason  string                  `json:"reason"`
+	}
+	if err := c.Bind(&body); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
+	}
+	if body.Name == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "name is required")
+	}
+	if len([]rune(body.Name)) > 255 {
+		return echo.NewHTTPError(http.StatusBadRequest, "name too long (max 255 characters)")
+	}
+	if len([]rune(body.Reason)) > 2_000 {
+		return echo.NewHTTPError(http.StatusBadRequest, "reason too long (max 2000 characters)")
+	}
+	if len(body.Matchers) == 0 {
+		return echo.NewHTTPError(http.StatusBadRequest, "at least one matcher is required")
+	}
+
+	// Generate a unique ID for the template.
+	id := generateID()
+
+	template, err := s.store.CreateSilenceTemplate(id, body.Name, body.Matchers, body.Reason)
+	if err != nil {
+		// Check for unique constraint violation (name already exists).
+		if err.Error() == "insert silence template: UNIQUE constraint failed: silence_templates.name" ||
+			err.Error() == "insert silence template: duplicate key value violates unique constraint \"silence_templates_name_key\"" {
+			return echo.NewHTTPError(http.StatusConflict, "template name already exists")
+		}
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to create template")
+	}
+
+	return c.JSON(http.StatusCreated, template)
+}
+
+// DELETE /api/v1/silence-templates/:id
+func (s *Server) deleteSilenceTemplate(c echo.Context) error {
+	id := c.Param("id")
+	if id == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "template id is required")
+	}
+
+	if err := s.store.DeleteSilenceTemplate(id); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to delete template")
+	}
+
+	return c.NoContent(http.StatusNoContent)
+}
+
+// PUT /api/v1/silence-templates/:id
+func (s *Server) updateSilenceTemplate(c echo.Context) error {
+	id := c.Param("id")
+	if id == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "template id is required")
+	}
+
+	var body struct {
+		Name    string                  `json:"name"`
+		Matchers []models.SilenceMatcher `json:"matchers"`
+		Reason  string                  `json:"reason"`
+	}
+	if err := c.Bind(&body); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
+	}
+	if body.Name == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "name is required")
+	}
+	if len([]rune(body.Name)) > 255 {
+		return echo.NewHTTPError(http.StatusBadRequest, "name too long (max 255 characters)")
+	}
+	if len([]rune(body.Reason)) > 2_000 {
+		return echo.NewHTTPError(http.StatusBadRequest, "reason too long (max 2000 characters)")
+	}
+	if len(body.Matchers) == 0 {
+		return echo.NewHTTPError(http.StatusBadRequest, "at least one matcher is required")
+	}
+
+	template, err := s.store.UpdateSilenceTemplate(id, body.Name, body.Matchers, body.Reason)
+	if err != nil {
+		// Check for unique constraint violation (name already exists for different template).
+		if strings.Contains(err.Error(), "UNIQUE constraint failed") || strings.Contains(err.Error(), "duplicate key value violates unique constraint") {
+			return echo.NewHTTPError(http.StatusConflict, "template name already exists")
+		}
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to update template")
+	}
+
+	return c.JSON(http.StatusOK, template)
+}
+
+// Helper function to generate a unique ID.
+func generateID() string {
+	return uuid.New().String()
 }

@@ -180,6 +180,12 @@ func NewRouter(
 	apiV1.GET("/silences", srv.getSilences)
 	apiV1.POST("/silences", srv.createSilence, requireAuth, writeRL)
 	apiV1.DELETE("/silences/:id", srv.deleteSilence, requireAuth, writeRL)
+
+	apiV1.GET("/silence-templates", srv.getSilenceTemplates)
+	apiV1.POST("/silence-templates", srv.createSilenceTemplate, requireAuth, writeRL)
+	apiV1.PUT("/silence-templates/:id", srv.updateSilenceTemplate, requireAuth, writeRL)
+	apiV1.DELETE("/silence-templates/:id", srv.deleteSilenceTemplate, requireAuth, writeRL)
+
 	apiV1.POST("/poll", srv.triggerPoll, pollRL)
 
 	apiV1.GET("/clusters", srv.getClusters)
