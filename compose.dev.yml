@@ -16,14 +16,17 @@ services:
   frontend:
     image: node:22-alpine
     working_dir: /app
-    command: sh -c "npm install -g pnpm --prefix /usr/local && pnpm install --ignore-scripts && pnpm dev --host"
+    command: sh -c "npm install -g pnpm --prefix /usr/local && pnpm config set store-dir /pnpm-store && pnpm install --ignore-scripts && pnpm dev --host"
     ports:
       - "5173:5173"
     volumes:
       - ./frontend:/app:z
       - ./docs:/docs:z
+      - jarvis_pnpmstore:/pnpm-store
     environment:
       - VITE_API_BASE=http://localhost:8080
+      - CHOKIDAR_USEPOLLING=true
 
 volumes:
   jarvis_gomodcache:
+  jarvis_pnpmstore:

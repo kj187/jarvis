@@ -14,6 +14,11 @@ export default defineConfig({
     },
   },
   server: {
+    watch: {
+      ignored: ['**/.pnpm-store/**'],
+      usePolling: process.env.CHOKIDAR_USEPOLLING === 'true',
+      interval: 250,
+    },
     proxy: {
       '/api': {
         target: 'http://backend:8080',
