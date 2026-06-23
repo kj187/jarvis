@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Bell, BellOff, User } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { getFilterableLabels, getSilenceState, formatSilenceDuration, tzAbbr } from '@/lib/alertUtils'
+import { getFilterableLabels, getSilenceState, getExpiredSilence, formatSilenceDuration, tzAbbr } from '@/lib/alertUtils'
 import { renderTextWithLinks } from '@/lib/linkUtils'
 import { AlertBadge } from './AlertBadge'
 import { HIDDEN_LABEL_KEYS, LabelChip } from './LabelChip'
@@ -49,6 +49,7 @@ function AlertEntry({
   commonLabelKeys: Set<string>
 }) {
   const { type: silenceType, silence, remaining } = getSilenceState(alert, silences)
+  const expiredSilence = silenceType === null ? getExpiredSilence(alert, silences) : null
   const isResolved = alert.status.state === 'resolved'
   const { data: stats } = useAlertStats(alert.fingerprint)
   const claim = alert.activeClaim ?? null
@@ -150,6 +151,14 @@ function AlertEntry({
             hour: '2-digit',
             minute: '2-digit',
           })} {tzAbbr}
+        </div>
+      )}
+      {expiredSilence && (
+        <div className="mb-2 flex items-center gap-1.5 rounded border border-border bg-muted/50 px-2 py-1.5 text-xs text-muted-foreground">
+          <BellOff className="h-3 w-3 shrink-0" />
+          <span title={new Date(expiredSilence.endsAt).toLocaleString('en-US')}>
+            Silence expired {formatTime(expiredSilence.endsAt)}
+          </span>
         </div>
       )}
 

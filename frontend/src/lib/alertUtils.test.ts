@@ -4,6 +4,8 @@ import {
   matchesLabelMatchers,
   getEffectiveAlertState,
   getSilenceState,
+  silenceMatchesAlert,
+  getExpiredSilence,
   formatSilenceDuration,
   severityOrder,
   safeRegex,
@@ -188,6 +190,79 @@ describe('getSilenceState', () => {
     const alert = { ...makeAlert(), status: { state: 'suppressed' as const, inhibitedBy: [], silencedBy: ['nonexistent'] } }
     const result = getSilenceState(alert, [makeSilence('other', 'active')])
     expect(result.type).toBeNull()
+  })
+})
+
+describe('silenceMatchesAlert', () => {
+  it('matches when all equality matchers match the alert labels', () => {
+    const alert = makeAlert({ severity: 'critical' })
+    const silence = { ...makeSilence('s1', 'expired'), matchers: [{ name: 'alertname', value: 'TestAlert', isRegex: false, isEqual: true }] }
+    expect(silenceMatchesAlert(silence, alert)).toBe(true)
+  })
+
+  it('does not match when an equality matcher differs', () => {
+    const alert = makeAlert({ severity: 'critical' })
+    const silence = { ...makeSilence('s1', 'expired'), matchers: [{ name: 'severity', value: 'warning', isRegex: false, isEqual: true }] }
+    expect(silenceMatchesAlert(silence, alert)).toBe(false)
+  })
+
+  it('matches the @cluster pseudo-label', () => {
+    const alert = makeAlert()
+    const silence = { ...makeSilence('s1', 'expired'), matchers: [{ name: '@cluster', value: 'homelab', isRegex: false, isEqual: true }] }
+    expect(silenceMatchesAlert(silence, alert)).toBe(true)
+  })
+
+  it('supports regex matchers', () => {
+    const alert = makeAlert({ alertname: 'KubePodCrashLooping' })
+    const silence = { ...makeSilence('s1', 'expired'), matchers: [{ name: 'alertname', value: 'KubePod.*', isRegex: true, isEqual: true }] }
+    expect(silenceMatchesAlert(silence, alert)).toBe(true)
+  })
+
+  it('supports negative (isEqual=false) matchers', () => {
+    const alert = makeAlert({ severity: 'critical' })
+    const silence = { ...makeSilence('s1', 'expired'), matchers: [{ name: 'severity', value: 'warning', isRegex: false, isEqual: false }] }
+    expect(silenceMatchesAlert(silence, alert)).toBe(true)
+  })
+})
+
+describe('getExpiredSilence', () => {
+  it('returns null when there is no expired silence', () => {
+    const alert = makeAlert()
+    expect(getExpiredSilence(alert, [])).toBeNull()
+  })
+
+  it('returns a matching expired silence for the alert', () => {
+    const alert = makeAlert()
+    const silence = { ...makeSilence('s1', 'expired', -60 * 1000), matchers: [{ name: 'alertname', value: 'TestAlert', isRegex: false, isEqual: true }] }
+    const result = getExpiredSilence(alert, [silence])
+    expect(result?.id).toBe('s1')
+  })
+
+  it('ignores expired silences from a different cluster', () => {
+    const alert = makeAlert()
+    const silence = { ...makeSilence('s1', 'expired'), clusterName: 'other', matchers: [{ name: 'alertname', value: 'TestAlert', isRegex: false, isEqual: true }] }
+    expect(getExpiredSilence(alert, [silence])).toBeNull()
+  })
+
+  it('ignores expired silences whose matchers do not match', () => {
+    const alert = makeAlert()
+    const silence = { ...makeSilence('s1', 'expired'), matchers: [{ name: 'alertname', value: 'Other', isRegex: false, isEqual: true }] }
+    expect(getExpiredSilence(alert, [silence])).toBeNull()
+  })
+
+  it('returns null when an active silence covers the alert', () => {
+    const alert = { ...makeAlert(), status: { state: 'suppressed' as const, inhibitedBy: [], silencedBy: ['active1'] } }
+    const active = makeSilence('active1', 'active')
+    const expired = { ...makeSilence('s1', 'expired'), matchers: [{ name: 'alertname', value: 'TestAlert', isRegex: false, isEqual: true }] }
+    expect(getExpiredSilence(alert, [active, expired])).toBeNull()
+  })
+
+  it('returns the most recently expired silence when several match', () => {
+    const alert = makeAlert()
+    const older = { ...makeSilence('older', 'expired', -2 * 60 * 60 * 1000), matchers: [{ name: 'alertname', value: 'TestAlert', isRegex: false, isEqual: true }] }
+    const newer = { ...makeSilence('newer', 'expired', -60 * 1000), matchers: [{ name: 'alertname', value: 'TestAlert', isRegex: false, isEqual: true }] }
+    const result = getExpiredSilence(alert, [older, newer])
+    expect(result?.id).toBe('newer')
   })
 })
 

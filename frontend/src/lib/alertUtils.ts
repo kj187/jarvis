@@ -187,6 +187,45 @@ export function getSilenceState(alert: EnrichedAlert, silences: Silence[]): Sile
   return { type: null, silence: null }
 }
 
+/**
+ * Returns true if the silence's matchers all match the given alert's labels
+ * (including the @cluster pseudo-label).
+ */
+export function silenceMatchesAlert(silence: Silence, alert: EnrichedAlert): boolean {
+  const labels: Record<string, string> = { ...alert.labels, '@cluster': alert.clusterName }
+  return silence.matchers.every((m) => {
+    const value = labels[m.name] ?? ''
+    if (m.isRegex) {
+      try {
+        const re = new RegExp(m.value)
+        return m.isEqual ? re.test(value) : !re.test(value)
+      } catch {
+        return false
+      }
+    }
+    return m.isEqual ? value === m.value : value !== m.value
+  })
+}
+
+/**
+ * Returns the most recently expired silence that matched the alert, but only
+ * when no active/pending silence currently covers it. Alertmanager creates a
+ * new ID on every edit (expiring the old one), so showing an expired entry
+ * alongside an active one would always surface the predecessor.
+ */
+export function getExpiredSilence(alert: EnrichedAlert, silences: Silence[]): Silence | null {
+  if (alert.status.silencedBy.some((id) => silences.some((s) => s.id === id))) return null
+  const candidates = silences
+    .filter(
+      (s) =>
+        s.status.state === 'expired' &&
+        s.clusterName === alert.clusterName &&
+        silenceMatchesAlert(s, alert),
+    )
+    .sort((a, b) => new Date(b.endsAt).getTime() - new Date(a.endsAt).getTime())
+  return candidates[0] ?? null
+}
+
 export function formatSilenceDuration(ms: number): string {
   const totalSeconds = Math.floor(ms / 1000)
   const minutes = Math.floor(totalSeconds / 60)

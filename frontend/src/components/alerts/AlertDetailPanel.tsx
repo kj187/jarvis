@@ -19,7 +19,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import type { EnrichedAlert, LabelMatcher, Silence, SilenceMatcher } from '@/types'
 import { renderTextWithLinks, extractLinkButtons } from '@/lib/linkUtils'
-import { tzAbbr } from '@/lib/alertUtils'
+import { tzAbbr, silenceMatchesAlert } from '@/lib/alertUtils'
 
 const USERNAME_KEY = 'jarvis-username'
 
@@ -61,22 +61,6 @@ function formatDuration(ms: number): string {
   }
   if (minutes >= 1) return `${minutes}m`
   return 'a few seconds'
-}
-
-function silenceMatchesAlert(silence: Silence, alert: EnrichedAlert): boolean {
-  const labels: Record<string, string> = { ...alert.labels, '@cluster': alert.clusterName }
-  return silence.matchers.every((m) => {
-    const value = labels[m.name] ?? ''
-    if (m.isRegex) {
-      try {
-        const re = new RegExp(m.value)
-        return m.isEqual ? re.test(value) : !re.test(value)
-      } catch {
-        return false
-      }
-    }
-    return m.isEqual ? value === m.value : value !== m.value
-  })
 }
 
 function MatcherChip({ matcher }: { matcher: SilenceMatcher }) {
