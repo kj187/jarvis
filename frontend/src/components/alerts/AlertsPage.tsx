@@ -1,8 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { Maximize2, Search, X, Plus } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { useEffect, useRef, useState } from 'react'
+import { Maximize2, Search, X } from 'lucide-react'
 import { Input } from '@/components/ui/input'
-import { Select } from '@/components/ui/select'
 import { ViewToggle } from './ViewToggle'
 import { MatcherChipsBar } from '@/components/layout/MatcherChipsBar'
 import { useAlerts } from '@/hooks/useAlerts'
@@ -12,86 +10,8 @@ import { useAuthStore } from '@/store/authStore'
 import { AlertCardGrid } from './AlertCardGrid'
 import { AlertListView } from './AlertListView'
 import { AlertDetailPanel } from './AlertDetailPanel'
-import { matchesLabelMatchers, getEffectiveAlertState, getFilterableLabels } from '@/lib/alertUtils'
-import type { EnrichedAlert, LabelMatcherOperator } from '@/types'
-
-const OPERATORS: LabelMatcherOperator[] = ['=', '!=', '=~', '!~']
-
-// ── Custom autocomplete input ─────────────────────────────────────────────────
-
-function ComboInput({
-  value,
-  onChangeValue,
-  placeholder,
-  options,
-  className,
-  style,
-  onKeyDown,
-  ariaLabel,
-}: {
-  value: string
-  onChangeValue: (v: string) => void
-  placeholder?: string
-  options: string[]
-  className?: string
-  style?: React.CSSProperties
-  onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void
-  ariaLabel?: string
-}) {
-  const [open, setOpen] = useState(false)
-  const containerRef = useRef<HTMLDivElement>(null)
-
-  const filtered = options.filter(
-    (o) => !value || o.toLowerCase().includes(value.toLowerCase()),
-  )
-
-  useEffect(() => {
-    function onDown(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', onDown)
-    return () => document.removeEventListener('mousedown', onDown)
-  }, [])
-
-  return (
-    <div ref={containerRef} className="relative">
-      <Input
-        value={value}
-        onChange={(e) => onChangeValue(e.target.value)}
-        placeholder={placeholder}
-        className={className}
-        style={style}
-        onFocus={() => setOpen(true)}
-        onKeyDown={(e) => {
-          if (e.key === 'Escape') setOpen(false)
-          onKeyDown?.(e)
-        }}
-        aria-label={ariaLabel}
-        autoComplete="off"
-      />
-      {open && filtered.length > 0 && (
-        <div className="absolute left-0 top-full mt-1 z-50 min-w-full max-h-48 overflow-y-auto rounded border border-border shadow-lg combo-dropdown bg-input">
-          {filtered.map((opt) => (
-            <button
-              key={opt}
-              type="button"
-              onMouseDown={(e) => {
-                e.preventDefault()
-                onChangeValue(opt)
-                setOpen(false)
-              }}
-              className="w-full px-3 py-1.5 text-left text-xs text-foreground hover:bg-accent/60 cursor-pointer whitespace-nowrap"
-            >
-              {opt}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
+import { matchesLabelMatchers, getEffectiveAlertState } from '@/lib/alertUtils'
+import type { EnrichedAlert } from '@/types'
 
 // ── URL state sync ────────────────────────────────────────────────────────────
 
@@ -174,11 +94,6 @@ export function AlertsPage() {
     setIsFullscreen,
   } = useUIStore()
 
-  // Filter inputs state
-  const [newName, setNewName] = useState('')
-  const [newOp, setNewOp] = useState<LabelMatcherOperator>('=')
-  const [newValue, setNewValue] = useState('')
-
   // Search panel — auto-open when URL contains a search param
   const [searchOpen, setSearchOpen] = useState(() => Boolean(filters.search))
   const searchInputRef = useRef<HTMLInputElement>(null)
@@ -187,40 +102,6 @@ export function AlertsPage() {
     if (searchOpen) searchInputRef.current?.focus()
   }, [searchOpen])
 
-  // Label autocomplete map built from live alerts
-  const labelValueMap = useMemo(() => {
-    const map = new Map<string, Set<string>>()
-    liveAlerts.forEach((a) => {
-      Object.entries(getFilterableLabels(a)).forEach(([k, v]) => {
-        if (!v) return
-        if (!map.has(k)) map.set(k, new Set())
-        map.get(k)!.add(v)
-      })
-    })
-    return map
-  }, [liveAlerts])
-
-  const availableLabelNames = useMemo(
-    () => Array.from(labelValueMap.keys()).sort(),
-    [labelValueMap],
-  )
-
-  const newValueOptions = useMemo(() => {
-    if (newName && labelValueMap.has(newName)) {
-      return Array.from(labelValueMap.get(newName)!).sort()
-    }
-    const all = new Set<string>()
-    labelValueMap.forEach((vals) => vals.forEach((v) => all.add(v)))
-    return Array.from(all).sort()
-  }, [labelValueMap, newName])
-
-  function handleAddMatcher() {
-    if (!newName || !newValue) return
-    addLabelMatcher({ name: newName, operator: newOp, value: newValue })
-    setNewName('')
-    setNewOp('=')
-    setNewValue('')
-  }
 
   function toggleSearch() {
     if (searchOpen) {
@@ -278,20 +159,8 @@ export function AlertsPage() {
       {/* Sub-header: filter inputs + active chips + view controls */}
       {!isFullscreen && (
           <div className="flex items-center gap-2 px-4 flex-wrap">
-            {/* Filter inputs — left of active matcher chips */}
-            <div className="flex items-center gap-1 shrink-0">
-              <ComboInput value={newName} onChangeValue={setNewName} placeholder="label" options={availableLabelNames} className="h-7 w-24 text-xs bg-input" onKeyDown={(e) => e.key === 'Enter' && handleAddMatcher()} ariaLabel="Label name" />
-              <Select value={newOp} onChange={(e) => setNewOp(e.target.value as LabelMatcherOperator)} className="h-7 w-14 shrink-0" selectClassName="text-xs font-mono" aria-label="Operator">
-                {OPERATORS.map((op) => <option key={op} value={op}>{op}</option>)}
-              </Select>
-              <ComboInput value={newValue} onChangeValue={setNewValue} placeholder="value" options={newValueOptions} className="h-7 w-32 text-xs bg-input" onKeyDown={(e) => e.key === 'Enter' && handleAddMatcher()} ariaLabel="Label value" />
-              <Button variant="outline" size="icon" className="h-7 w-7 shrink-0" onClick={handleAddMatcher} disabled={!newName || !newValue} aria-label="Add filter">
-                <Plus className="h-3 w-3" />
-              </Button>
-            </div>
-
-            {/* Active matcher chips */}
-            <MatcherChipsBar />
+            {/* Active matcher chips + inline add */}
+            <MatcherChipsBar allowAdd />
 
             {/* Right controls */}
             <div className="flex items-center gap-2 shrink-0 ml-auto">

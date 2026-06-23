@@ -73,26 +73,6 @@ beforeEach(() => {
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
-describe('AlertsPage – label filter', () => {
-  it('adds a label matcher when inputs are filled and + clicked', async () => {
-    renderPage()
-    await userEvent.type(screen.getByLabelText('Label name'), 'fstype')
-    await userEvent.type(screen.getByLabelText('Label value'), 'ext4')
-    await userEvent.click(screen.getByLabelText('Add filter'))
-    expect(useUIStore.getState().filters.labelMatchers).toHaveLength(1)
-    expect(useUIStore.getState().filters.labelMatchers[0]).toMatchObject({
-      name: 'fstype',
-      operator: '=',
-      value: 'ext4',
-    })
-  })
-
-  it('+ button is disabled when name or value is empty', () => {
-    renderPage()
-    expect(screen.getByLabelText('Add filter')).toBeDisabled()
-  })
-})
-
 describe('AlertsPage – search', () => {
   it('search bar is not visible initially', () => {
     renderPage()
