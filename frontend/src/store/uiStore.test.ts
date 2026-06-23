@@ -7,7 +7,7 @@ const defaultState = {
   filters: { state: 'active', search: '', labelMatchers: [] },
   wsConnected: false,
   pollingPaused: false,
-  alertCounts: { filtered: 0, total: 0, byState: { active: 0, suppressed: 0, resolved: 0 } },
+  alertCounts: { filtered: 0, total: 0, byState: { active: 0, suppressed: 0, resolved: 0 }, silenceCount: 0 },
 }
 
 beforeEach(() => {
@@ -163,7 +163,7 @@ describe('setPollingPaused', () => {
 
 describe('setAlertCounts', () => {
   it('updates all count fields', () => {
-    const counts = { filtered: 3, total: 10, byState: { active: 5, suppressed: 2, resolved: 3 } }
+    const counts = { filtered: 3, total: 10, byState: { active: 5, suppressed: 2, resolved: 3 }, silenceCount: 2 }
     useUIStore.getState().setAlertCounts(counts)
     expect(useUIStore.getState().alertCounts).toEqual(counts)
   })

@@ -30,7 +30,7 @@ beforeEach(() => {
     filters: { state: 'active', search: '', labelMatchers: [] },
     wsConnected: false,
     pollingPaused: false,
-    alertCounts: { filtered: 0, total: 0, byState: { active: 0, suppressed: 0, resolved: 0 } },
+    alertCounts: { filtered: 0, total: 0, byState: { active: 0, suppressed: 0, resolved: 0 }, silenceCount: 0 },
   })
   useAuthStore.setState({
     user: null,

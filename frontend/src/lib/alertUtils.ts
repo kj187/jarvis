@@ -88,6 +88,52 @@ export function matchesLabelMatchers(
   })
 }
 
+// ── Silence filtering ─────────────────────────────────────────────────────
+
+export function filterSilences(
+  silences: Silence[],
+  search: string,
+  labelMatchers: LabelMatcher[],
+): Silence[] {
+  let result = silences
+
+  if (search) {
+    const q = search.toLowerCase()
+    result = result.filter((s) =>
+      s.comment?.toLowerCase().includes(q) ||
+      s.createdBy?.toLowerCase().includes(q) ||
+      s.matchers.some((m) => m.name.toLowerCase().includes(q) || m.value.toLowerCase().includes(q))
+    )
+  }
+
+  if (labelMatchers.length > 0) {
+    result = result.filter((s) =>
+      labelMatchers.every((fm) => {
+        if (fm.name === '@cluster') {
+          const v = s.clusterName
+          switch (fm.operator) {
+            case '=':  return v === fm.value
+            case '!=': return v !== fm.value
+            case '=~': return safeRegex(fm.value)?.test(v) ?? false
+            case '!~': return !(safeRegex(fm.value)?.test(v) ?? false)
+          }
+        }
+        return s.matchers.some((m) => {
+          if (m.name !== fm.name) return false
+          switch (fm.operator) {
+            case '=':  return m.value === fm.value
+            case '!=': return m.value !== fm.value
+            case '=~': return safeRegex(fm.value)?.test(m.value) ?? false
+            case '!~': return !(safeRegex(fm.value)?.test(m.value) ?? false)
+          }
+        })
+      })
+    )
+  }
+
+  return result
+}
+
 // ── Effective alert state ─────────────────────────────────────────────────
 
 /**

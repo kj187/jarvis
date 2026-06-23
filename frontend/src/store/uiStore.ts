@@ -4,6 +4,7 @@ import type { LabelMatcher } from '@/types'
 import { useSettingsStore } from '@/store/useSettingsStore'
 
 export type ViewMode = 'card' | 'list'
+export type ActivePage = 'alerts' | 'silences'
 
 interface Filters {
   state: string
@@ -15,20 +16,28 @@ interface AlertCounts {
   filtered: number
   total: number
   byState: { active: number; suppressed: number; resolved: number }
+  silenceCount: number
 }
 
 interface UIStore {
   viewMode: ViewMode
   activeViewMode: ViewMode
+  activePage: ActivePage
   selectedFingerprint: string | null
   filters: Filters
   wsConnected: boolean
   pollingPaused: boolean
   alertCounts: AlertCounts
 
+  silencesViewMode: ViewMode
+  isFullscreen: boolean
+
   // Actions
   setViewMode: (mode: ViewMode) => void
+  setActivePage: (page: ActivePage) => void
   setActiveViewMode: (mode: ViewMode) => void
+  setSilencesViewMode: (mode: ViewMode) => void
+  setIsFullscreen: (v: boolean) => void
   setSelectedFingerprint: (fp: string | null) => void
   setFilter: (key: keyof Omit<Filters, 'labelMatchers'>, value: string) => void
   addLabelMatcher: (matcher: Omit<LabelMatcher, 'id'>) => void
@@ -51,6 +60,7 @@ const defaultFilters: Filters = {
 
 export const VIEW_MODE_KEY = 'jarvis-viewMode'
 export const ACTIVE_VIEW_MODE_KEY = 'jarvis-activeViewMode'
+export const SILENCES_VIEW_MODE_KEY = 'jarvis-silencesViewMode'
 
 function loadViewMode(): ViewMode {
   try {
@@ -68,6 +78,14 @@ function loadActiveViewMode(): ViewMode {
   return loadViewMode()
 }
 
+function loadSilencesViewMode(): ViewMode {
+  try {
+    const v = localStorage.getItem(SILENCES_VIEW_MODE_KEY)
+    if (v === 'list' || v === 'card') return v
+  } catch { /* ignore */ }
+  return 'card'
+}
+
 let _nextId = 1
 function nextId(): string {
   return String(_nextId++)
@@ -78,11 +96,14 @@ export const useUIStore = create<UIStore>()(
     (set) => ({
       viewMode: loadViewMode(),
       activeViewMode: loadActiveViewMode(),
+      silencesViewMode: loadSilencesViewMode(),
+      isFullscreen: false,
+      activePage: 'alerts',
       selectedFingerprint: null,
       filters: defaultFilters,
       wsConnected: false,
       pollingPaused: false,
-      alertCounts: { filtered: 0, total: 0, byState: { active: 0, suppressed: 0, resolved: 0 } },
+      alertCounts: { filtered: 0, total: 0, byState: { active: 0, suppressed: 0, resolved: 0 }, silenceCount: 0 },
 
       setViewMode: (mode) => {
         try { localStorage.setItem(VIEW_MODE_KEY, mode) } catch { /* ignore */ }
@@ -92,6 +113,12 @@ export const useUIStore = create<UIStore>()(
         try { localStorage.setItem(ACTIVE_VIEW_MODE_KEY, mode) } catch { /* ignore */ }
         set({ activeViewMode: mode })
       },
+      setSilencesViewMode: (mode) => {
+        try { localStorage.setItem(SILENCES_VIEW_MODE_KEY, mode) } catch { /* ignore */ }
+        set({ silencesViewMode: mode })
+      },
+      setIsFullscreen: (v) => set({ isFullscreen: v }),
+      setActivePage: (page) => set({ activePage: page, selectedFingerprint: null }),
       setSelectedFingerprint: (fp) => set({ selectedFingerprint: fp }),
       setFilter: (key, value) =>
         set((s) => ({ filters: { ...s.filters, [key]: value } })),
@@ -176,6 +203,7 @@ export const useUIStore = create<UIStore>()(
     {
       name: 'jarvis-ui',
       partialize: (s) => ({
+        activePage: s.activePage,
         filters: {
           ...s.filters,
           // Locked matchers are derived from Settings on every mount — never persist them.
