@@ -162,10 +162,11 @@ function TagField({
             placeholder={values.length === 0 ? placeholder : undefined}
             size={1}
             style={{
+              minWidth: values.length === 0 ? '7rem' : undefined,
               width: inputVal
                 ? `${inputVal.length + 1}ch`
                 : values.length === 0
-                  ? `${placeholder.length + 1}ch`
+                  ? '7rem'
                   : '2ch',
             }}
             className="bg-transparent text-xs text-foreground placeholder:text-muted-foreground outline-none"
