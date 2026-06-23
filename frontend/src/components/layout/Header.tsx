@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { Wifi, WifiOff, RefreshCw, Play, Pause, Plus, Settings, CircleUser, LogOut, User, Shield, Sun, Moon, Menu, X } from 'lucide-react'
+import { Wifi, WifiOff, RefreshCw, Play, Pause, Plus, Settings, LogIn, LogOut, UserCheck, Shield, Sun, Moon, Menu, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Sheet } from '@/components/ui/sheet'
 import { SilenceForm } from '@/components/silences/SilenceForm'
@@ -240,7 +240,7 @@ export function Header() {
                 aria-label="User menu"
                 title={user.username}
               >
-                <User className="h-4 w-4" />
+                <UserCheck className="h-4 w-4" />
               </button>
               {userMenuOpen && (
                 <div className="absolute right-0 top-full mt-1 z-50 min-w-40 rounded-md border border-border bg-card shadow-lg" onMouseLeave={() => setUserMenuOpen(false)}>
@@ -258,7 +258,7 @@ export function Header() {
             </div>
           ) : providerInfo !== null && providerInfo.mode !== 'none' ? (
             <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => setLoginModalOpen(true)} title="Login" aria-label="Login">
-              <CircleUser className="h-4 w-4" />
+              <LogIn className="h-4 w-4" />
             </Button>
           ) : null}
 
@@ -305,11 +305,11 @@ export function Header() {
             </Button>
             {isAuthenticated && user ? (
               <button className="flex items-center justify-center h-8 w-8 rounded cursor-pointer text-foreground hover:bg-accent/60" onClick={() => setUserMenuOpen((v) => !v)} aria-label="User menu" title={user.username}>
-                <User className="h-4 w-4" />
+                <UserCheck className="h-4 w-4" />
               </button>
             ) : providerInfo !== null && providerInfo.mode !== 'none' ? (
               <button className="flex items-center justify-center h-8 w-8 rounded cursor-pointer text-muted-foreground hover:text-foreground hover:bg-accent/60" onClick={() => { setLoginModalOpen(true); setMenuOpen(false) }} title="Login" aria-label="Login">
-                <CircleUser className="h-4 w-4" />
+                <LogIn className="h-4 w-4" />
               </button>
             ) : null}
           </div>
