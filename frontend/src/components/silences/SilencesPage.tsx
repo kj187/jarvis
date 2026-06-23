@@ -117,7 +117,7 @@ export function SilencesPage() {
       {/* Toolbar */}
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-3">
-          <MatcherChipsBar />
+          <MatcherChipsBar allowAdd />
           {isFetching && !isLoading && (
             <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
           )}
