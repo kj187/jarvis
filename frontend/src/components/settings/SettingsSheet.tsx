@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { X, RotateCcw, Info } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -15,12 +15,12 @@ import {
 import type { DefaultFilter } from '@/store/useSettingsStore'
 import type { LabelMatcherOperator } from '@/types'
 import { useVersion } from '@/hooks/useVersion'
+import { useAlerts } from '@/hooks/useAlerts'
+import { getFilterableLabels } from '@/lib/alertUtils'
 
 interface SettingsSheetProps {
   open: boolean
   onClose: () => void
-  availableLabelNames: string[]
-  labelValueMap: Map<string, Set<string>>
 }
 
 // ── Segmented control ─────────────────────────────────────────────────────────
@@ -240,16 +240,25 @@ const SILENCE_DURATION_LABELS: Record<number, string> = {
 
 // ── Main SettingsSheet ─────────────────────────────────────────────────────────
 
-export function SettingsSheet({
-  open,
-  onClose,
-  availableLabelNames,
-  labelValueMap,
-}: SettingsSheetProps) {
+export function SettingsSheet({ open, onClose }: SettingsSheetProps) {
   const settings = useSettingsStore()
   const update = useSettingsStore((s) => s.update)
   const reset = useSettingsStore((s) => s.reset)
   const version = useVersion()
+
+  const { data: allAlerts = [] } = useAlerts()
+  const labelValueMap = useMemo(() => {
+    const map = new Map<string, Set<string>>()
+    allAlerts.forEach((a) => {
+      Object.entries(getFilterableLabels(a)).forEach(([k, v]) => {
+        if (!v) return
+        if (!map.has(k)) map.set(k, new Set())
+        map.get(k)!.add(v)
+      })
+    })
+    return map
+  }, [allAlerts])
+  const availableLabelNames = useMemo(() => Array.from(labelValueMap.keys()).sort(), [labelValueMap])
 
   // Default filter add-row state
   const [newName, setNewName] = useState('')

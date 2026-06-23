@@ -42,10 +42,11 @@ function renderHeader() {
 
 beforeEach(() => {
   useUIStore.setState({
+    activePage: 'alerts',
     filters: { state: '', search: '', labelMatchers: [] },
     wsConnected: false,
     pollingPaused: false,
-    alertCounts: { filtered: 0, total: 0, byState: { active: 0, suppressed: 0, resolved: 0 } },
+    alertCounts: { filtered: 0, total: 0, byState: { active: 0, suppressed: 0, resolved: 0 }, silenceCount: 0 },
   })
 })
 
@@ -63,117 +64,30 @@ describe('Header – silence button', () => {
   })
 })
 
-describe('Header – state filter pills', () => {
-  it('renders state pills', () => {
+describe('Header – nav pills', () => {
+  it('renders nav pills', () => {
     renderHeader()
-    expect(screen.getByText('Active')).toBeInTheDocument()
-    expect(screen.getByText('Suppressed')).toBeInTheDocument()
-    expect(screen.getByText('Resolved')).toBeInTheDocument()
+    expect(screen.getByText('Alerts')).toBeInTheDocument()
+    expect(screen.getByText('Silences')).toBeInTheDocument()
+    expect(screen.queryByText('Resolved')).not.toBeInTheDocument()
+    expect(screen.queryByText('Suppressed')).not.toBeInTheDocument()
+    expect(screen.queryByText('All')).not.toBeInTheDocument()
   })
 
-  it('toggles state filter on pill click', async () => {
+  it('navigates to alerts page on Alerts pill click', async () => {
+    useUIStore.setState({ activePage: 'silences', filters: { state: 'active', search: '', labelMatchers: [] } })
     renderHeader()
-    await userEvent.click(screen.getByText('Active'))
-    expect(useUIStore.getState().filters.state).toBe('active')
+    await userEvent.click(screen.getByText('Alerts'))
+    expect(useUIStore.getState().activePage).toBe('alerts')
   })
 
-  it('deselects state filter when clicking active pill again', async () => {
-    useUIStore.setState({ filters: { state: 'active', search: '', labelMatchers: [] } })
+  it('navigates to silences page on Silences pill click', async () => {
     renderHeader()
-    await userEvent.click(screen.getByText('Active'))
-    expect(useUIStore.getState().filters.state).toBe('')
+    await userEvent.click(screen.getByText('Silences'))
+    expect(useUIStore.getState().activePage).toBe('silences')
   })
 })
 
-describe('Header – label filter', () => {
-  it('adds a label matcher when inputs are filled and + clicked', async () => {
-    renderHeader()
-    await userEvent.type(screen.getAllByLabelText('Label name')[0], 'fstype')
-    await userEvent.type(screen.getAllByLabelText('Label value')[0], 'ext4')
-    await userEvent.click(screen.getAllByLabelText('Add filter')[0])
-    expect(useUIStore.getState().filters.labelMatchers).toHaveLength(1)
-    expect(useUIStore.getState().filters.labelMatchers[0]).toMatchObject({
-      name: 'fstype',
-      operator: '=',
-      value: 'ext4',
-    })
-  })
-
-  it('+ button is disabled when name or value is empty', () => {
-    renderHeader()
-    expect(screen.getAllByLabelText('Add filter')[0]).toBeDisabled()
-  })
-
-  it('shows active matchers row when matchers exist', () => {
-    useUIStore.setState({
-      filters: {
-        state: '',
-        search: '',
-        labelMatchers: [{ id: '1', name: 'job', operator: '=', value: 'node' }],
-      },
-    })
-    renderHeader()
-    expect(screen.getAllByText('job')[0]).toBeInTheDocument()
-    expect(screen.getAllByDisplayValue('node')[0]).toBeInTheDocument()
-  })
-
-  it('removes a matcher when X is clicked', async () => {
-    useUIStore.setState({
-      filters: {
-        state: '',
-        search: '',
-        labelMatchers: [{ id: '1', name: 'job', operator: '=', value: 'node' }],
-      },
-    })
-    renderHeader()
-    await userEvent.click(screen.getAllByLabelText('Remove filter job=node')[0])
-    expect(useUIStore.getState().filters.labelMatchers).toHaveLength(0)
-  })
-
-  it('shows multiple matchers when they exist', () => {
-    useUIStore.setState({
-      filters: {
-        state: '',
-        search: '',
-        labelMatchers: [
-          { id: '1', name: 'job', operator: '=', value: 'node' },
-          { id: '2', name: 'env', operator: '=', value: 'prod' },
-        ],
-      },
-    })
-    renderHeader()
-    expect(screen.getAllByDisplayValue('node')[0]).toBeInTheDocument()
-    expect(screen.getAllByDisplayValue('prod')[0]).toBeInTheDocument()
-  })
-})
-
-describe('Header – search', () => {
-  it('search bar is not visible initially', () => {
-    renderHeader()
-    expect(screen.queryByLabelText('Search alerts')).not.toBeInTheDocument()
-  })
-
-  it('shows full-width search bar when search icon is clicked', async () => {
-    renderHeader()
-    await userEvent.click(screen.getByTitle('Search'))
-    expect(screen.getByLabelText('Search alerts')).toBeInTheDocument()
-  })
-
-  it('closes search bar on Escape key', async () => {
-    renderHeader()
-    await userEvent.click(screen.getByTitle('Search'))
-    const input = screen.getByLabelText('Search alerts')
-    fireEvent.keyDown(input, { key: 'Escape' })
-    expect(screen.queryByLabelText('Search alerts')).not.toBeInTheDocument()
-  })
-
-  it('updates search filter on typing', async () => {
-    renderHeader()
-    await userEvent.click(screen.getByTitle('Search'))
-    await userEvent.type(screen.getByLabelText('Search alerts'), 'disk')
-    expect(useUIStore.getState().filters.search).toBe('disk')
-  })
-})
 
 describe('Header – cluster popover', () => {
   it('shows cluster status badge', async () => {
@@ -215,11 +129,11 @@ describe('Header – refresh button', () => {
 })
 
 describe('Header – alert count', () => {
-  it('shows active and suppressed counts, not resolved count', () => {
-    useUIStore.setState({ alertCounts: { filtered: 3, total: 30, byState: { active: 5, suppressed: 2, resolved: 10 } } })
+  it('shows active count in Alerts pill, not suppressed or resolved', () => {
+    useUIStore.setState({ alertCounts: { filtered: 3, total: 30, byState: { active: 5, suppressed: 2, resolved: 10 }, silenceCount: 3 } })
     renderHeader()
     expect(screen.getByText('5')).toBeInTheDocument()
-    expect(screen.getByText('2')).toBeInTheDocument()
+    expect(screen.queryByText('2')).not.toBeInTheDocument()
     expect(screen.queryByText('10')).not.toBeInTheDocument()
   })
 })
