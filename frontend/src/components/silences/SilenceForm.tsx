@@ -453,6 +453,7 @@ export interface SilenceFormProps {
   availableClusters: string[]
   prefillAlerts?: EnrichedAlert[]
   prefillSilence?: Silence
+  prefillGroup?: Silence[]
   isRecreate?: boolean
   fingerprint?: string
   onSuccess: () => void
@@ -463,6 +464,7 @@ export function SilenceForm({
   availableClusters,
   prefillAlerts,
   prefillSilence,
+  prefillGroup,
   isRecreate = false,
   fingerprint,
   onSuccess,
@@ -473,7 +475,8 @@ export function SilenceForm({
   const qc = useQueryClient()
   const { user, providerInfo } = useAuthStore()
   const authMode = providerInfo?.mode ?? 'none'
-  const isEdit = Boolean(prefillSilence) && !isRecreate
+  const isEdit = (Boolean(prefillSilence) || Boolean(prefillGroup?.length)) && !isRecreate
+  const prefillSource = prefillGroup?.[0] ?? prefillSilence
 
   const clusterUrlMap = useMemo(() => {
     const m = new Map<string, string>()
@@ -512,14 +515,15 @@ export function SilenceForm({
   const rebuildFromAlerts = isRecreate && prefillSilence?.status.state === 'expired' && (prefillAlerts?.length ?? 0) > 0
 
   const [selectedClusters, setSelectedClusters] = useState<string[]>(() => {
+    if (prefillGroup?.length && !rebuildFromAlerts) return prefillGroup.map((s) => s.clusterName)
     if (prefillSilence && !rebuildFromAlerts) return [prefillSilence.clusterName]
     if (prefillAlerts?.length) return [...new Set(prefillAlerts.map((a) => a.clusterName))]
     return [...availableClusters]
   })
 
   const [matchers, setMatchers] = useState<SilenceMatcher[]>(() => {
-    if (prefillSilence?.matchers && !rebuildFromAlerts) {
-      return prefillSilence.matchers.map((m) => ({
+    if (prefillSource?.matchers && !rebuildFromAlerts) {
+      return prefillSource.matchers.map((m) => ({
         id: nextId(),
         name: m.name,
         operator: (
@@ -534,24 +538,24 @@ export function SilenceForm({
 
   // Duration spinners
   const [dDays, setDDays] = useState(() => {
-    if (prefillSilence && !isRecreate) {
-      const { days } = diffToSpinners(prefillSilence.startsAt, prefillSilence.endsAt)
+    if (prefillSource && !isRecreate) {
+      const { days } = diffToSpinners(prefillSource.startsAt, prefillSource.endsAt)
       return days
     }
     const mins = useSettingsStore.getState().defaultSilenceDurationMinutes
     return Math.floor(mins / (24 * 60))
   })
   const [dHours, setDHours] = useState(() => {
-    if (prefillSilence && !isRecreate) {
-      const { hours } = diffToSpinners(prefillSilence.startsAt, prefillSilence.endsAt)
+    if (prefillSource && !isRecreate) {
+      const { hours } = diffToSpinners(prefillSource.startsAt, prefillSource.endsAt)
       return hours
     }
     const mins = useSettingsStore.getState().defaultSilenceDurationMinutes
     return Math.floor((mins % (24 * 60)) / 60)
   })
   const [dMinutes, setDMinutes] = useState(() => {
-    if (prefillSilence && !isRecreate) {
-      const { minutes } = diffToSpinners(prefillSilence.startsAt, prefillSilence.endsAt)
+    if (prefillSource && !isRecreate) {
+      const { minutes } = diffToSpinners(prefillSource.startsAt, prefillSource.endsAt)
       return minutes
     }
     const mins = useSettingsStore.getState().defaultSilenceDurationMinutes
@@ -560,13 +564,13 @@ export function SilenceForm({
 
   // Start/End datetime — endsAt always initialized (never empty)
   const [startsAt, setStartsAt] = useState(() =>
-    prefillSilence && !isRecreate
-      ? format(new Date(prefillSilence.startsAt), FMT)
+    prefillSource && !isRecreate
+      ? format(new Date(prefillSource.startsAt), FMT)
       : format(new Date(), FMT),
   )
   const [endsAt, setEndsAt] = useState(() => {
-    if (prefillSilence && !isRecreate) {
-      return format(new Date(prefillSilence.endsAt), FMT)
+    if (prefillSource && !isRecreate) {
+      return format(new Date(prefillSource.endsAt), FMT)
     }
     const mins = useSettingsStore.getState().defaultSilenceDurationMinutes
     const d = Math.floor(mins / (24 * 60))
@@ -579,7 +583,7 @@ export function SilenceForm({
     () => localStorage.getItem(USERNAME_KEY) ?? useSettingsStore.getState().defaultCreatorName,
   )
   const effectiveCreatedBy = user?.username ?? createdBy
-  const [comment, setComment] = useState(prefillSilence?.comment ?? '')
+  const [comment, setComment] = useState(prefillSource?.comment ?? '')
 
   // Template support
   const { data: templates = [] } = useSilenceTemplates()
@@ -789,7 +793,11 @@ export function SilenceForm({
             endsAt: computedEndsAt,
             createdBy: effectiveCreatedBy.trim(),
             comment: comment.trim(),
-            id: prefillSilence?.clusterName === cluster ? prefillSilence?.id : undefined,
+            id: prefillGroup
+              ? prefillGroup.find((s) => s.clusterName === cluster)?.id
+              : prefillSilence?.clusterName === cluster
+              ? prefillSilence?.id
+              : undefined,
             fingerprint: fingerprint ?? prefillAlerts?.[0]?.fingerprint,
             performedBy: effectiveCreatedBy.trim(),
           })

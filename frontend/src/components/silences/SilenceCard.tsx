@@ -1,4 +1,4 @@
-import { Edit, BellMinus, Loader2 } from 'lucide-react'
+import { BellMinus, Loader2 } from 'lucide-react'
 import { Card, CardHeader, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { SilenceExpiry } from './SilenceExpiry'
@@ -24,48 +24,41 @@ export function SilenceCard({ silence, alerts, onEdit, onExpire, isDeleting = fa
   const isExpired = silence.status.state === 'expired'
 
   return (
-    <Card className={cn('relative transition-opacity', isExpired && 'opacity-60', isDeleting && 'opacity-50')}>
+    <Card
+      className={cn(
+        'relative border-border/40 transition-colors',
+        isExpired && 'opacity-60',
+        isDeleting && 'opacity-50',
+        !isExpired && 'cursor-pointer hover:bg-muted/50',
+      )}
+      onClick={!isExpired ? () => onEdit(silence) : undefined}
+    >
       {isDeleting && (
         <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-background/60">
           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
         </div>
       )}
-      <CardHeader className="pb-2">
-        <div className="flex items-start justify-between gap-2">
-          <div className="space-y-1 flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="rounded bg-accent px-2 py-0.5 text-xs">{silence.clusterName}</span>
-              <span className={cn(
-                'rounded px-2 py-0.5 text-xs font-semibold',
-                silence.status.state === 'active' && (theme === 'light' ? 'bg-green-100 text-green-700' : 'bg-green-900/40 text-green-400'),
-                silence.status.state === 'pending' && (theme === 'light' ? 'bg-slate-200 text-slate-600' : 'bg-slate-800 text-slate-300'),
-                silence.status.state === 'expired' && (theme === 'light' ? 'bg-slate-100 text-slate-500' : 'bg-slate-900 text-slate-500'),
-              )}>
-                {silence.status.state}
-              </span>
-            </div>
-            <SilenceExpiry silence={silence} />
+
+      {/* Status badge — top-right */}
+      <span className={cn(
+        'absolute top-2 right-2 rounded px-2 py-0.5 text-xs font-semibold',
+        silence.status.state === 'active' && (theme === 'light' ? 'bg-green-100 text-green-700' : 'bg-green-900/40 text-green-400'),
+        silence.status.state === 'pending' && (theme === 'light' ? 'bg-slate-200 text-slate-600' : 'bg-slate-800 text-slate-300'),
+        silence.status.state === 'expired' && (theme === 'light' ? 'bg-slate-100 text-slate-500' : 'bg-slate-900 text-slate-500'),
+      )}>
+        {silence.status.state}
+      </span>
+
+      <CardHeader className="pb-2 pr-20">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="rounded bg-accent px-2 py-0.5 text-xs">{silence.clusterName}</span>
           </div>
-          <div className="flex items-center gap-1 shrink-0">
-            {!isExpired && (
-              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onEdit(silence)}>
-                <Edit className="h-3.5 w-3.5" />
-              </Button>
-            )}
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              onClick={() => onExpire(silence)}
-              title="Expire silence"
-            >
-              <BellMinus className="h-3.5 w-3.5" />
-            </Button>
-          </div>
+          <SilenceExpiry silence={silence} />
         </div>
       </CardHeader>
 
-      <CardContent className="space-y-2">
+      <CardContent className="space-y-2 pb-10">
         <div className="flex flex-wrap gap-1">
           {silence.matchers.map((m, i) => (
             <span key={i} className="rounded bg-accent px-1.5 py-0.5 font-mono text-xs">
@@ -78,11 +71,28 @@ export function SilenceCard({ silence, alerts, onEdit, onExpire, isDeleting = fa
           <p className="text-xs text-muted-foreground line-clamp-2">{silence.comment}</p>
         )}
 
-        <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span>by {silence.createdBy}</span>
-          <span>Affected: {affectedCount}</span>
-        </div>
       </CardContent>
+
+      {/* Bottom-left badges */}
+      <div className="absolute bottom-3 left-4 flex gap-1">
+        <span className="rounded bg-accent px-1.5 py-0.5 text-xs text-muted-foreground">
+          by {silence.createdBy}
+        </span>
+        <span className="rounded bg-accent px-1.5 py-0.5 text-xs text-muted-foreground">
+          Affected: {affectedCount}
+        </span>
+      </div>
+
+      {/* Expire button — bottom-right */}
+      <Button
+        variant="ghost"
+        size="icon"
+        className="absolute bottom-2 right-2 h-7 w-7"
+        onClick={(e) => { e.stopPropagation(); onExpire(silence) }}
+        title="Expire silence"
+      >
+        <BellMinus className="h-3.5 w-3.5" />
+      </Button>
     </Card>
   )
 }
