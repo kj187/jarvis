@@ -793,7 +793,9 @@ export function SilenceForm({
             endsAt: computedEndsAt,
             createdBy: effectiveCreatedBy.trim(),
             comment: comment.trim(),
-            id: prefillGroup
+            id: isRecreate
+              ? undefined
+              : prefillGroup
               ? prefillGroup.find((s) => s.clusterName === cluster)?.id
               : prefillSilence?.clusterName === cluster
               ? prefillSilence?.id

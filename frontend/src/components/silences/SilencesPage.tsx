@@ -112,6 +112,10 @@ export function SilencesPage() {
     setFormOpen(true)
   }
 
+  const isRecreate = editSilence
+    ? editSilence.status.state === 'expired'
+    : editGroup.length > 0 && editGroup.every((s) => s.status.state === 'expired')
+
   return (
     <div className="px-4 space-y-4">
       {/* Toolbar */}
@@ -223,7 +227,7 @@ export function SilencesPage() {
                   activeTab === 'silence' ? 'border-b-2 border-primary text-foreground' : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
-                {(editSilence || editGroup.length > 0) ? 'Edit Silence' : 'Create Silence'}
+                {isRecreate ? 'Re-create Silence' : (editSilence || editGroup.length > 0) ? 'Edit Silence' : 'Create Silence'}
               </button>
               {!(editSilence || editGroup.length > 0) && (
                 <button
@@ -244,7 +248,7 @@ export function SilencesPage() {
                   availableClusters={clusterNames.length > 0 ? clusterNames : ['default']}
                   prefillSilence={editSilence ?? undefined}
                   prefillGroup={editGroup.length > 0 ? editGroup : undefined}
-                  isRecreate={editSilence?.status.state === 'expired'}
+                  isRecreate={isRecreate}
                   onSuccess={() => { setFormOpen(false); setEditGroup([]) }}
                   onCancel={() => { setFormOpen(false); setEditGroup([]) }}
                 />

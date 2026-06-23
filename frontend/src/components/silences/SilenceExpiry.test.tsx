@@ -25,14 +25,15 @@ describe('SilenceExpiry', () => {
     expect(screen.getByText(/⏳ Starts/)).toBeInTheDocument()
   })
 
-  it('renders "Until" for active silence with >15 min remaining', () => {
+  it('renders exact date and "In ..." for active silence with >15 min remaining', () => {
     render(<SilenceExpiry silence={makeSilence('active', 60 * 60_000)} />)
-    expect(screen.getByText(/Until /)).toBeInTheDocument()
+    expect(screen.getByText(/^In /)).toBeInTheDocument()
+    expect(screen.queryByText(/Until /)).not.toBeInTheDocument()
   })
 
-  it('renders "Expires in N min" for active silence with ≤15 min remaining', () => {
+  it('renders warning prefix for active silence with ≤15 min remaining', () => {
     render(<SilenceExpiry silence={makeSilence('active', 5 * 60_000)} />)
-    expect(screen.getByText(/⚠️ Expires in \d+ min/)).toBeInTheDocument()
+    expect(screen.getByText(/⚠️ In \d+m/)).toBeInTheDocument()
   })
 
   it('renders "Expired" for expired silence', () => {

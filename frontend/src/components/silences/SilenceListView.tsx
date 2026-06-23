@@ -1,6 +1,7 @@
-import { BellMinus, Loader2 } from 'lucide-react'
+import { BellMinus, Loader2, RotateCcw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { SilenceExpiry } from './SilenceExpiry'
+import { labelColorStyle } from '@/components/alerts/LabelChip'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import type { Silence, EnrichedAlert } from '@/types'
 import { cn } from '@/lib/utils'
@@ -49,12 +50,11 @@ export function SilenceListView({ groups, alerts, onEditGroup, onExpireGroup, de
           <div
             key={group.key}
             className={cn(
-              'grid grid-cols-1 md:grid-cols-[1fr_160px_80px_40px] gap-x-3 gap-y-1 px-3 py-2.5 border-b border-border last:border-0 text-xs transition-colors relative',
-              allExpired && 'opacity-60',
+              'grid grid-cols-1 md:grid-cols-[1fr_160px_80px_40px] gap-x-3 gap-y-1 px-3 py-2.5 border-b border-border last:border-0 text-xs transition-colors relative cursor-pointer hover:bg-muted/50',
+              allExpired && 'opacity-60 hover:opacity-100',
               isDeleting && 'opacity-50',
-              !allExpired && 'cursor-pointer hover:bg-muted/50',
             )}
-            onClick={!allExpired ? () => onEditGroup(group.silences) : undefined}
+            onClick={() => onEditGroup(group.silences)}
           >
             {isDeleting && (
               <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/60">
@@ -66,7 +66,7 @@ export function SilenceListView({ groups, alerts, onEditGroup, onExpireGroup, de
             <div className="flex flex-col gap-1.5 min-w-0">
               <div className="flex flex-wrap gap-1">
                 {rep.matchers.map((m, i) => (
-                  <span key={i} className="rounded bg-accent px-1.5 py-0.5 font-mono text-xs">
+                  <span key={i} className="rounded border px-1.5 py-0.5 font-mono text-xs" style={labelColorStyle(m.name, theme)}>
                     {m.name}{m.isRegex ? (m.isEqual ? '=~' : '!~') : m.isEqual ? '=' : '!='}{m.value}
                   </span>
                 ))}
@@ -96,9 +96,7 @@ export function SilenceListView({ groups, alerts, onEditGroup, onExpireGroup, de
 
             {/* Expiry */}
             <div className="flex items-center">
-              <span className="whitespace-nowrap">
-                <SilenceExpiry silence={rep} />
-              </span>
+              <SilenceExpiry silence={rep} />
             </div>
 
             {/* Affected */}
@@ -111,15 +109,27 @@ export function SilenceListView({ groups, alerts, onEditGroup, onExpireGroup, de
 
             {/* Actions */}
             <div className="flex items-center md:justify-end">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6"
-                onClick={(e) => { e.stopPropagation(); onExpireGroup(group.silences) }}
-                title={group.silences.length > 1 ? `Expire ${group.silences.length} silences` : 'Expire silence'}
-              >
-                <BellMinus className="h-3 w-3" />
-              </Button>
+              {allExpired ? (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6"
+                  onClick={(e) => { e.stopPropagation(); onEditGroup(group.silences) }}
+                  title={group.silences.length > 1 ? `Re-create ${group.silences.length} silences` : 'Re-create silence'}
+                >
+                  <RotateCcw className="h-3 w-3" />
+                </Button>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6"
+                  onClick={(e) => { e.stopPropagation(); onExpireGroup(group.silences) }}
+                  title={group.silences.length > 1 ? `Expire ${group.silences.length} silences` : 'Expire silence'}
+                >
+                  <BellMinus className="h-3 w-3" />
+                </Button>
+              )}
             </div>
           </div>
         )

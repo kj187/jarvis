@@ -1,7 +1,8 @@
-import { BellMinus, Loader2 } from 'lucide-react'
+import { BellMinus, Loader2, RotateCcw } from 'lucide-react'
 import { Card, CardHeader, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { SilenceExpiry } from './SilenceExpiry'
+import { labelColorStyle } from '@/components/alerts/LabelChip'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import type { Silence, EnrichedAlert } from '@/types'
 import { cn } from '@/lib/utils'
@@ -26,12 +27,12 @@ export function SilenceCard({ silence, alerts, onEdit, onExpire, isDeleting = fa
   return (
     <Card
       className={cn(
-        'relative border-border/40 transition-colors',
-        isExpired && 'opacity-60',
+        'relative border-border/40 transition-colors cursor-pointer hover:bg-muted/50',
+        isExpired && 'opacity-60 hover:opacity-100',
         isDeleting && 'opacity-50',
-        !isExpired && 'cursor-pointer hover:bg-muted/50',
       )}
-      onClick={!isExpired ? () => onEdit(silence) : undefined}
+      onClick={() => onEdit(silence)}
+      title={isExpired ? 'Expired — click to re-create' : 'Edit silence'}
     >
       {isDeleting && (
         <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-background/60">
@@ -61,7 +62,7 @@ export function SilenceCard({ silence, alerts, onEdit, onExpire, isDeleting = fa
       <CardContent className="space-y-2 pb-10">
         <div className="flex flex-wrap gap-1">
           {silence.matchers.map((m, i) => (
-            <span key={i} className="rounded bg-accent px-1.5 py-0.5 font-mono text-xs">
+            <span key={i} className="rounded border px-1.5 py-0.5 font-mono text-xs" style={labelColorStyle(m.name, theme)}>
               {m.name}{m.isRegex ? (m.isEqual ? '=~' : '!~') : m.isEqual ? '=' : '!='}{m.value}
             </span>
           ))}
@@ -83,16 +84,28 @@ export function SilenceCard({ silence, alerts, onEdit, onExpire, isDeleting = fa
         </span>
       </div>
 
-      {/* Expire button — bottom-right */}
-      <Button
-        variant="ghost"
-        size="icon"
-        className="absolute bottom-2 right-2 h-7 w-7"
-        onClick={(e) => { e.stopPropagation(); onExpire(silence) }}
-        title="Expire silence"
-      >
-        <BellMinus className="h-3.5 w-3.5" />
-      </Button>
+      {/* Action button — bottom-right */}
+      {isExpired ? (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="absolute bottom-2 right-2 h-7 w-7"
+          onClick={(e) => { e.stopPropagation(); onEdit(silence) }}
+          title="Re-create silence"
+        >
+          <RotateCcw className="h-3.5 w-3.5" />
+        </Button>
+      ) : (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="absolute bottom-2 right-2 h-7 w-7"
+          onClick={(e) => { e.stopPropagation(); onExpire(silence) }}
+          title="Expire silence"
+        >
+          <BellMinus className="h-3.5 w-3.5" />
+        </Button>
+      )}
     </Card>
   )
 }

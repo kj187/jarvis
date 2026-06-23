@@ -1,7 +1,8 @@
-import { BellMinus, Loader2 } from 'lucide-react'
+import { BellMinus, Loader2, RotateCcw } from 'lucide-react'
 import { Card, CardHeader, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { SilenceExpiry } from './SilenceExpiry'
+import { labelColorStyle } from '@/components/alerts/LabelChip'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import type { Silence, EnrichedAlert } from '@/types'
 import { cn } from '@/lib/utils'
@@ -40,12 +41,12 @@ export function SilenceGroupCard({ group, alerts, onEditGroup, onExpireGroup, de
   return (
     <Card
       className={cn(
-        'relative border-border/40 transition-colors',
-        allExpired && 'opacity-60',
+        'relative border-border/40 transition-colors cursor-pointer hover:bg-muted/50',
+        allExpired && 'opacity-60 hover:opacity-100',
         isDeleting && 'opacity-50',
-        !allExpired && 'cursor-pointer hover:bg-muted/50',
       )}
-      onClick={!allExpired ? () => onEditGroup(group.silences) : undefined}
+      onClick={() => onEditGroup(group.silences)}
+      title={allExpired ? 'Expired — click to re-create' : 'Edit silences'}
     >
       {isDeleting && (
         <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-background/60">
@@ -81,7 +82,7 @@ export function SilenceGroupCard({ group, alerts, onEditGroup, onExpireGroup, de
       <CardContent className="space-y-2 pb-10">
         <div className="flex flex-wrap gap-1">
           {rep.matchers.map((m, i) => (
-            <span key={i} className="rounded bg-accent px-1.5 py-0.5 font-mono text-xs">
+            <span key={i} className="rounded border px-1.5 py-0.5 font-mono text-xs" style={labelColorStyle(m.name, theme)}>
               {m.name}{m.isRegex ? (m.isEqual ? '=~' : '!~') : m.isEqual ? '=' : '!='}{m.value}
             </span>
           ))}
@@ -103,16 +104,28 @@ export function SilenceGroupCard({ group, alerts, onEditGroup, onExpireGroup, de
         </span>
       </div>
 
-      {/* Expire button — bottom-right */}
-      <Button
-        variant="ghost"
-        size="icon"
-        className="absolute bottom-2 right-2 h-7 w-7"
-        onClick={(e) => { e.stopPropagation(); onExpireGroup(group.silences) }}
-        title={`Expire ${group.silences.length} silences`}
-      >
-        <BellMinus className="h-3.5 w-3.5" />
-      </Button>
+      {/* Action button — bottom-right */}
+      {allExpired ? (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="absolute bottom-2 right-2 h-7 w-7"
+          onClick={(e) => { e.stopPropagation(); onEditGroup(group.silences) }}
+          title={`Re-create ${group.silences.length} silences`}
+        >
+          <RotateCcw className="h-3.5 w-3.5" />
+        </Button>
+      ) : (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="absolute bottom-2 right-2 h-7 w-7"
+          onClick={(e) => { e.stopPropagation(); onExpireGroup(group.silences) }}
+          title={`Expire ${group.silences.length} silences`}
+        >
+          <BellMinus className="h-3.5 w-3.5" />
+        </Button>
+      )}
     </Card>
   )
 }

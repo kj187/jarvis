@@ -105,7 +105,7 @@ describe('SilenceCard – actions', () => {
     expect(onEdit).toHaveBeenCalledWith(silence)
   })
 
-  it('does not call onEdit when an expired silence card is clicked', async () => {
+  it('calls onEdit (re-create) when an expired silence card is clicked', async () => {
     const onEdit = vi.fn()
     const expired: Silence = {
       ...makeSilence('expired'),
@@ -113,16 +113,21 @@ describe('SilenceCard – actions', () => {
     }
     render(<SilenceCard silence={expired} alerts={[]} onEdit={onEdit} onExpire={noop} />)
     await userEvent.click(screen.getByText('disk is full'))
-    expect(onEdit).not.toHaveBeenCalled()
+    expect(onEdit).toHaveBeenCalledWith(expired)
   })
 
-  it('does not show edit button for expired silence', () => {
+  it('shows a re-create button (not expire) for expired silence', async () => {
+    const onEdit = vi.fn()
+    const onExpire = vi.fn()
     const expired: Silence = {
       ...makeSilence('expired'),
       endsAt: new Date(Date.now() - 3600_000).toISOString(),
     }
-    render(<SilenceCard silence={expired} alerts={[]} onEdit={noop} onExpire={noop} />)
-    expect(screen.getAllByRole('button')).toHaveLength(1)
+    render(<SilenceCard silence={expired} alerts={[]} onEdit={onEdit} onExpire={onExpire} />)
+    const btn = screen.getByTitle('Re-create silence')
+    await userEvent.click(btn)
+    expect(onEdit).toHaveBeenCalledWith(expired)
+    expect(onExpire).not.toHaveBeenCalled()
   })
 
   it('calls onExpire directly when expire button clicked', async () => {
