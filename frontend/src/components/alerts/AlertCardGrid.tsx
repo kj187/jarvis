@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { AlertCard } from './AlertCard'
+import { EmptyState } from './EmptyState'
 import { Sheet } from '@/components/ui/sheet'
 import { SilenceForm } from '@/components/silences/SilenceForm'
 import { useQuery } from '@tanstack/react-query'
@@ -144,11 +145,7 @@ export function AlertCardGrid({
       (a, b) => new Date(b.endsAt).getTime() - new Date(a.endsAt).getTime(),
     )
     if (sorted.length === 0) {
-      return (
-        <div className="flex flex-col items-center justify-center py-24 text-muted-foreground">
-          <p className="text-lg">No alerts</p>
-        </div>
-      )
+      return <EmptyState />
     }
     const cols: EnrichedAlert[][] = Array.from({ length: numCols }, () => [])
     sorted.forEach((alert, i) => cols[i % numCols].push(alert))
@@ -211,9 +208,7 @@ export function AlertCardGrid({
   if (groups.length === 0) {
     return (
       <>
-        <div className="flex flex-col items-center justify-center py-24 text-muted-foreground">
-          <p className="text-lg">No alerts</p>
-        </div>
+        <EmptyState />
         {silenceSheet}
       </>
     )

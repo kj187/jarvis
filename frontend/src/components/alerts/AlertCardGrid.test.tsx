@@ -36,9 +36,9 @@ const noop = () => {}
 const silences: Silence[] = []
 
 describe('AlertCardGrid – empty state', () => {
-  it('renders "No alerts" when alerts array is empty', () => {
+  it('renders empty state when alerts array is empty', () => {
     renderGrid(<AlertCardGrid alerts={[]} silences={silences} onSelectAlert={noop} />)
-    expect(screen.getByText('No alerts')).toBeInTheDocument()
+    expect(screen.getByLabelText('No alerts')).toBeInTheDocument()
   })
 
   it('does not render severity sections when empty', () => {

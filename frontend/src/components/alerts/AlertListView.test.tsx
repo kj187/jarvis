@@ -59,12 +59,12 @@ beforeEach(() => {
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('AlertListView – empty state', () => {
-  it('renders "No alerts" when alerts array is empty', () => {
+  it('renders empty state when alerts array is empty', () => {
     render(
       <AlertListView alerts={[]} silences={silences} onSelectAlert={noop} />,
       { wrapper: makeWrapper() },
     )
-    expect(screen.getByText('No alerts')).toBeInTheDocument()
+    expect(screen.getByLabelText('No alerts')).toBeInTheDocument()
   })
 
   it('does not render table when empty', () => {

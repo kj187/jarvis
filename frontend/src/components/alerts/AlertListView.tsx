@@ -2,6 +2,7 @@ import { Fragment, useState, useEffect } from 'react'
 import { ArrowUpDown, Bell, BellMinus, BellOff, ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, RefreshCw } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { AlertListRow } from './AlertListRow'
+import { EmptyState } from './EmptyState'
 import { StatusBadge } from './AlertBadge'
 import { HIDDEN_LABEL_KEYS, LabelChip } from './LabelChip'
 import { Sheet } from '@/components/ui/sheet'
@@ -237,11 +238,7 @@ export function AlertListView({ alerts, silences, onSelectAlert, selectedFingerp
   ]
 
   if (alerts.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-24 text-muted-foreground">
-        <p className="text-lg">No alerts</p>
-      </div>
-    )
+    return <EmptyState />
   }
 
   // ── Resolved mode: flat paginated list sorted by endsAt desc ───────────────
