@@ -102,10 +102,10 @@ export function Header() {
         <div className="flex self-stretch shrink-0" role="group" aria-label="Navigation">
           <button
             onClick={() => { setActivePage('alerts'); if (!filters.state) setFilter('state', 'active') }}
-            className={`cursor-pointer self-end h-9 flex items-center pb-2 gap-1.5 px-4 text-xs font-medium transition-colors ${
+            className={`cursor-pointer self-end h-9 flex items-center pb-1.5 gap-1.5 px-4 text-xs font-medium transition-colors translate-y-px border border-b-0 rounded-t-sm ${
               activePage === 'alerts'
-                ? 'border border-border border-b-0 rounded-t-sm bg-background text-foreground translate-y-px'
-                : 'text-muted-foreground hover:text-foreground hover:bg-accent/20'
+                ? 'border-border bg-background text-foreground'
+                : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-accent/20'
             }`}
           >
             <span className={`h-1.5 w-1.5 rounded-full ${activePage === 'alerts' ? 'bg-orange-500' : 'bg-orange-400'}`} />
@@ -114,10 +114,10 @@ export function Header() {
           </button>
           <button
             onClick={() => setActivePage(activePage === 'silences' ? 'alerts' : 'silences')}
-            className={`cursor-pointer self-end h-9 flex items-center pb-2 gap-1.5 px-4 text-xs font-medium transition-colors ${
+            className={`cursor-pointer self-end h-9 flex items-center pb-1.5 gap-1.5 px-4 text-xs font-medium transition-colors translate-y-px border border-b-0 rounded-t-sm ${
               activePage === 'silences'
-                ? 'border border-border border-b-0 rounded-t-sm bg-background text-foreground translate-y-px'
-                : 'text-muted-foreground hover:text-foreground hover:bg-accent/20'
+                ? 'border-border bg-background text-foreground'
+                : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-accent/20'
             }`}
           >
             <span className={`h-1.5 w-1.5 rounded-full ${activePage === 'silences' ? 'bg-blue-500' : 'bg-blue-400'}`} />
