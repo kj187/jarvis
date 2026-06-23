@@ -97,17 +97,23 @@ describe('SilenceCard – rendering', () => {
 })
 
 describe('SilenceCard – actions', () => {
-  it('calls onEdit when edit button clicked for active silence', async () => {
+  it('calls onEdit when an active silence card is clicked', async () => {
     const onEdit = vi.fn()
-    render(<SilenceCard silence={makeSilence('active')} alerts={[]} onEdit={onEdit} onExpire={noop} />)
-    const buttons = screen.getAllByRole('button')
-    await userEvent.click(buttons[0])
-    expect(onEdit).toHaveBeenCalledOnce()
+    const silence = makeSilence('active')
+    render(<SilenceCard silence={silence} alerts={[]} onEdit={onEdit} onExpire={noop} />)
+    await userEvent.click(screen.getByText('disk is full'))
+    expect(onEdit).toHaveBeenCalledWith(silence)
   })
 
-  it('shows edit button for active silence', () => {
-    render(<SilenceCard silence={makeSilence('active')} alerts={[]} onEdit={noop} onExpire={noop} />)
-    expect(screen.getAllByRole('button').length).toBeGreaterThanOrEqual(2)
+  it('does not call onEdit when an expired silence card is clicked', async () => {
+    const onEdit = vi.fn()
+    const expired: Silence = {
+      ...makeSilence('expired'),
+      endsAt: new Date(Date.now() - 3600_000).toISOString(),
+    }
+    render(<SilenceCard silence={expired} alerts={[]} onEdit={onEdit} onExpire={noop} />)
+    await userEvent.click(screen.getByText('disk is full'))
+    expect(onEdit).not.toHaveBeenCalled()
   })
 
   it('does not show edit button for expired silence', () => {

@@ -1,9 +1,19 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, waitFor } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import App from './App'
 import { useUIStore, VIEW_MODE_KEY } from '@/store/uiStore'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { useAuthStore } from '@/store/authStore'
+
+function renderApp() {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  return render(
+    <QueryClientProvider client={client}>
+      <App />
+    </QueryClientProvider>,
+  )
+}
 
 vi.mock('@/components/layout/Header', () => ({
   Header: () => <div>Header</div>,
@@ -47,7 +57,7 @@ describe('App default view initialization', () => {
     useUIStore.setState({ viewMode: 'list' })
     useSettingsStore.setState({ defaultViewMode: 'card' })
 
-    render(<App />)
+    renderApp()
 
     await waitFor(() => {
       expect(useUIStore.getState().viewMode).toBe('list')
@@ -58,7 +68,7 @@ describe('App default view initialization', () => {
     useUIStore.setState({ viewMode: 'card' })
     useSettingsStore.setState({ defaultViewMode: 'list' })
 
-    render(<App />)
+    renderApp()
 
     await waitFor(() => {
       expect(useUIStore.getState().viewMode).toBe('list')
