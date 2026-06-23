@@ -1,5 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { createElement, type ReactElement } from 'react'
 import { AlertCardGrid } from './AlertCardGrid'
 import type { EnrichedAlert, Silence } from '@/types'
 
@@ -8,6 +10,11 @@ vi.mock('./AlertCard', () => ({
     <div data-testid="alert-card">{alerts.map((a) => a.labels['alertname']).join(',')}</div>
   ),
 }))
+
+function renderGrid(ui: ReactElement) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  return render(createElement(QueryClientProvider, { client: qc }, ui))
+}
 
 function makeAlert(labels: Record<string, string> = {}, fp = 'fp1'): EnrichedAlert {
   return {
@@ -30,12 +37,12 @@ const silences: Silence[] = []
 
 describe('AlertCardGrid – empty state', () => {
   it('renders "No alerts" when alerts array is empty', () => {
-    render(<AlertCardGrid alerts={[]} silences={silences} onSelectAlert={noop} />)
+    renderGrid(<AlertCardGrid alerts={[]} silences={silences} onSelectAlert={noop} />)
     expect(screen.getByText('No alerts')).toBeInTheDocument()
   })
 
   it('does not render severity sections when empty', () => {
-    render(<AlertCardGrid alerts={[]} silences={silences} onSelectAlert={noop} />)
+    renderGrid(<AlertCardGrid alerts={[]} silences={silences} onSelectAlert={noop} />)
     expect(screen.queryByText(/Critical/i)).not.toBeInTheDocument()
   })
 })
@@ -43,19 +50,19 @@ describe('AlertCardGrid – empty state', () => {
 describe('AlertCardGrid – severity sections', () => {
   it('renders Critical section for critical alerts', () => {
     const alerts = [makeAlert({ alertname: 'DiskFull', severity: 'critical' })]
-    render(<AlertCardGrid alerts={alerts} silences={silences} onSelectAlert={noop} />)
+    renderGrid(<AlertCardGrid alerts={alerts} silences={silences} onSelectAlert={noop} />)
     expect(screen.getByText(/Critical/i)).toBeInTheDocument()
   })
 
   it('renders Warning section for warning alerts', () => {
     const alerts = [makeAlert({ alertname: 'HighCPU', severity: 'warning' })]
-    render(<AlertCardGrid alerts={alerts} silences={silences} onSelectAlert={noop} />)
+    renderGrid(<AlertCardGrid alerts={alerts} silences={silences} onSelectAlert={noop} />)
     expect(screen.getByText(/Warning/i)).toBeInTheDocument()
   })
 
   it('renders Info section for info alerts', () => {
     const alerts = [makeAlert({ alertname: 'DiskFull', severity: 'info' })]
-    render(<AlertCardGrid alerts={alerts} silences={silences} onSelectAlert={noop} />)
+    renderGrid(<AlertCardGrid alerts={alerts} silences={silences} onSelectAlert={noop} />)
     expect(screen.getByRole('heading', { level: 2, name: /Info/i })).toBeInTheDocument()
   })
 
@@ -64,7 +71,7 @@ describe('AlertCardGrid – severity sections', () => {
       makeAlert({ alertname: 'CritAlert', severity: 'critical' }, 'fp1'),
       makeAlert({ alertname: 'WarnAlert', severity: 'warning' }, 'fp2'),
     ]
-    render(<AlertCardGrid alerts={alerts} silences={silences} onSelectAlert={noop} />)
+    renderGrid(<AlertCardGrid alerts={alerts} silences={silences} onSelectAlert={noop} />)
     const sections = screen.getAllByRole('heading', { level: 2 })
     expect(sections[0].textContent).toMatch(/Critical/i)
     expect(sections[1].textContent).toMatch(/Warning/i)
@@ -75,7 +82,7 @@ describe('AlertCardGrid – severity sections', () => {
       makeAlert({ alertname: 'A', severity: 'critical' }, 'fp1'),
       makeAlert({ alertname: 'B', severity: 'critical' }, 'fp2'),
     ]
-    render(<AlertCardGrid alerts={alerts} silences={silences} onSelectAlert={noop} />)
+    renderGrid(<AlertCardGrid alerts={alerts} silences={silences} onSelectAlert={noop} />)
     // 2 alerts → count shown in heading
     expect(screen.getByText(/\(2\)/)).toBeInTheDocument()
   })
@@ -87,7 +94,7 @@ describe('AlertCardGrid – grouping', () => {
       makeAlert({ alertname: 'DiskFull', severity: 'critical' }, 'fp1'),
       makeAlert({ alertname: 'DiskFull', severity: 'critical' }, 'fp2'),
     ]
-    render(<AlertCardGrid alerts={alerts} silences={silences} onSelectAlert={noop} />)
+    renderGrid(<AlertCardGrid alerts={alerts} silences={silences} onSelectAlert={noop} />)
     // Both alerts merged into one card
     const cards = screen.getAllByTestId('alert-card')
     expect(cards).toHaveLength(1)
@@ -99,7 +106,7 @@ describe('AlertCardGrid – grouping', () => {
       makeAlert({ alertname: 'DiskFull', severity: 'critical' }, 'fp1'),
       makeAlert({ alertname: 'CPUHigh', severity: 'critical' }, 'fp2'),
     ]
-    render(<AlertCardGrid alerts={alerts} silences={silences} onSelectAlert={noop} />)
+    renderGrid(<AlertCardGrid alerts={alerts} silences={silences} onSelectAlert={noop} />)
     expect(screen.getAllByTestId('alert-card')).toHaveLength(2)
   })
 
@@ -108,7 +115,7 @@ describe('AlertCardGrid – grouping', () => {
       makeAlert({ alertname: 'DiskFull', severity: 'critical' }, 'fp1'),
       makeAlert({ alertname: 'DiskFull', severity: 'warning' }, 'fp2'),
     ]
-    render(<AlertCardGrid alerts={alerts} silences={silences} onSelectAlert={noop} />)
+    renderGrid(<AlertCardGrid alerts={alerts} silences={silences} onSelectAlert={noop} />)
     expect(screen.getAllByTestId('alert-card')).toHaveLength(2)
   })
 })

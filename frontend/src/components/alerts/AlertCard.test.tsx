@@ -131,13 +131,15 @@ describe('AlertCard – interaction', () => {
     expect(screen.getByTitle('Create silence')).toBeInTheDocument()
   })
 
-  it('opens silence sheet when create silence button clicked', () => {
+  it('invokes onCreateSilence when create silence button clicked', () => {
+    const onCreateSilence = vi.fn()
+    const alert = makeAlert()
     render(
-      <AlertCard alerts={[makeAlert()]} silences={silences} onClick={noop} />,
+      <AlertCard alerts={[alert]} silences={silences} onClick={noop} onCreateSilence={onCreateSilence} />,
       { wrapper: makeWrapper() },
     )
     fireEvent.click(screen.getByTitle('Create silence'))
-    expect(screen.getByTestId('silence-form')).toBeInTheDocument()
+    expect(onCreateSilence).toHaveBeenCalledWith([alert])
   })
 })
 

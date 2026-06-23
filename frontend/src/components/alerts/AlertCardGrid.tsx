@@ -1,5 +1,9 @@
 import { useEffect, useState } from 'react'
 import { AlertCard } from './AlertCard'
+import { Sheet } from '@/components/ui/sheet'
+import { SilenceForm } from '@/components/silences/SilenceForm'
+import { useQuery } from '@tanstack/react-query'
+import { fetchClusters } from '@/api/client'
 import type { EnrichedAlert, Silence } from '@/types'
 import { severityOrder } from '@/lib/alertUtils'
 
@@ -106,6 +110,34 @@ export function AlertCardGrid({
 }: AlertCardGridProps) {
   const numCols = useColumns()
 
+  const [silenceAlerts, setSilenceAlerts] = useState<EnrichedAlert[] | null>(null)
+  const { data: clusters = [] } = useQuery({ queryKey: ['clusters'], queryFn: fetchClusters })
+  const clusterNames = clusters.map((c) => c.name)
+
+  const silenceSheet = (
+    <Sheet
+      open={silenceAlerts !== null}
+      onClose={() => setSilenceAlerts(null)}
+      className="sm:max-w-2xl lg:max-w-3xl"
+    >
+      {silenceAlerts && (
+        <div className="p-5 pt-10">
+          <h2 className="mb-4 text-base font-semibold">Create silence</h2>
+          <SilenceForm
+            availableClusters={
+              clusterNames.length > 0
+                ? clusterNames
+                : [...new Set(silenceAlerts.map((a) => a.clusterName))]
+            }
+            prefillAlerts={silenceAlerts}
+            onSuccess={() => setSilenceAlerts(null)}
+            onCancel={() => setSilenceAlerts(null)}
+          />
+        </div>
+      )}
+    </Sheet>
+  )
+
   // Resolved mode: flat grid sorted by endsAt desc, each alert is its own card
   if (resolvedMode) {
     const sorted = [...alerts].sort(
@@ -121,21 +153,25 @@ export function AlertCardGrid({
     const cols: EnrichedAlert[][] = Array.from({ length: numCols }, () => [])
     sorted.forEach((alert, i) => cols[i % numCols].push(alert))
     return (
-      <div className="flex gap-3">
-        {cols.map((colAlerts, colIdx) => (
-          <div key={colIdx} className="flex min-w-0 flex-1 flex-col gap-3">
-            {colAlerts.map((alert) => (
-              <AlertCard
-                key={alert.fingerprint}
-                alerts={[alert]}
-                silences={silences}
-                onClick={onSelectAlert}
-                selectedFingerprint={selectedFingerprint}
-              />
-            ))}
-          </div>
-        ))}
-      </div>
+      <>
+        <div className="flex gap-3">
+          {cols.map((colAlerts, colIdx) => (
+            <div key={colIdx} className="flex min-w-0 flex-1 flex-col gap-3">
+              {colAlerts.map((alert) => (
+                <AlertCard
+                  key={alert.fingerprint}
+                  alerts={[alert]}
+                  silences={silences}
+                  onClick={onSelectAlert}
+                  selectedFingerprint={selectedFingerprint}
+                  onCreateSilence={setSilenceAlerts}
+                />
+              ))}
+            </div>
+          ))}
+        </div>
+        {silenceSheet}
+      </>
     )
   }
 
@@ -174,13 +210,17 @@ export function AlertCardGrid({
 
   if (groups.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-24 text-muted-foreground">
-        <p className="text-lg">No alerts</p>
-      </div>
+      <>
+        <div className="flex flex-col items-center justify-center py-24 text-muted-foreground">
+          <p className="text-lg">No alerts</p>
+        </div>
+        {silenceSheet}
+      </>
     )
   }
 
   return (
+    <>
     <div className="space-y-4">
       {severities.map((severity) => {
         const sectionGroups = bySeverity.get(severity) ?? []
@@ -204,6 +244,7 @@ export function AlertCardGrid({
                       silences={silences}
                       onClick={onSelectAlert}
                       selectedFingerprint={selectedFingerprint}
+                      onCreateSilence={setSilenceAlerts}
                     />
                   ))}
                 </div>
@@ -213,5 +254,7 @@ export function AlertCardGrid({
         )
       })}
     </div>
+    {silenceSheet}
+    </>
   )
 }

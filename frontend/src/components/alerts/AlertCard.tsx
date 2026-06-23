@@ -5,10 +5,6 @@ import { getFilterableLabels, getSilenceState, formatSilenceDuration, tzAbbr } f
 import { renderTextWithLinks } from '@/lib/linkUtils'
 import { AlertBadge } from './AlertBadge'
 import { HIDDEN_LABEL_KEYS, LabelChip } from './LabelChip'
-import { Sheet } from '@/components/ui/sheet'
-import { SilenceForm } from '@/components/silences/SilenceForm'
-import { useQuery } from '@tanstack/react-query'
-import { fetchClusters } from '@/api/client'
 import { useAlertStats } from '@/hooks/useAlerts'
 import { useFormatTime } from '@/hooks/useFormatTime'
 import { useSettingsStore } from '@/store/useSettingsStore'
@@ -22,6 +18,7 @@ interface AlertCardProps {
   silences: Silence[]
   onClick: (fingerprint: string) => void
   selectedFingerprint?: string | null
+  onCreateSilence?: (alerts: EnrichedAlert[]) => void
 }
 
 
@@ -180,15 +177,8 @@ function AlertEntry({
   )
 }
 
-export function AlertCard({ alerts, silences, onClick, selectedFingerprint }: AlertCardProps) {
+export function AlertCard({ alerts, silences, onClick, selectedFingerprint, onCreateSilence }: AlertCardProps) {
   const [page, setPage] = useState(0)
-  const [silenceOpen, setSilenceOpen] = useState(false)
-
-  const { data: clusters = [] } = useQuery({
-    queryKey: ['clusters'],
-    queryFn: fetchClusters,
-  })
-  const clusterNames = clusters.map((c) => c.name)
 
   const primary = alerts[0]
   const count = alerts.length
@@ -237,7 +227,7 @@ export function AlertCard({ alerts, silences, onClick, selectedFingerprint }: Al
             type="button"
             onClick={(e) => {
               e.stopPropagation()
-              setSilenceOpen(true)
+              onCreateSilence?.(alerts)
             }}
             className="text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
             title="Create silence"
@@ -246,19 +236,6 @@ export function AlertCard({ alerts, silences, onClick, selectedFingerprint }: Al
           </button>
         </div>
       </div>
-
-      {/* Silence sheet */}
-      <Sheet open={silenceOpen} onClose={() => setSilenceOpen(false)} className="sm:max-w-2xl lg:max-w-3xl">
-        <div className="p-5 pt-10">
-          <h2 className="mb-4 text-base font-semibold">Create silence</h2>
-          <SilenceForm
-            availableClusters={clusterNames.length > 0 ? clusterNames : [...new Set(alerts.map((a) => a.clusterName))]}
-            prefillAlerts={alerts}
-            onSuccess={() => setSilenceOpen(false)}
-            onCancel={() => setSilenceOpen(false)}
-          />
-        </div>
-      </Sheet>
 
       {/* Common labels (shared by all alerts in group) */}
       {sortedCommonLabels.length > 0 && (
