@@ -99,8 +99,7 @@ go test ./internal/history/...   # Single package
 
 # Frontend
 cd frontend
-pnpm test                        # Vitest unit tests
-pnpm test:coverage               # With coverage
+pnpm test                        # Playwright E2E (alias for test:e2e)
 pnpm test:e2e                    # Playwright E2E
 
 # Helm (no cluster needed — helm-unittest plugin required)
@@ -137,4 +136,3 @@ podman compose -f compose.dev.yml up
 # Frontend: http://localhost:5173 (Vite HMR)
 # Backend:  http://localhost:8080 (air auto-rebuild)
 ```
-

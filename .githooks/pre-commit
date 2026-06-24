@@ -24,8 +24,6 @@ if git diff --cached --name-only | grep -q "^frontend/"; then
   if podman exec "$FRONTEND_CONTAINER" true 2>/dev/null; then
     echo "  [Frontend] Running pnpm audit..."
     podman exec -e CI=true "$FRONTEND_CONTAINER" sh -c "cd /app && pnpm audit --audit-level=high"
-    echo "  [Frontend] Running pnpm test..."
-    podman exec -e CI=true "$FRONTEND_CONTAINER" sh -c "cd /app && pnpm test"
     echo "  [Frontend] Running jscpd (code duplication)..."
     podman exec -e CI=true "$FRONTEND_CONTAINER" sh -c "cd /app && pnpm duplication"
   else

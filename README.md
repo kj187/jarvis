@@ -134,9 +134,9 @@ podman compose up --build -d
 Quick reference — for the full test strategy, matrix, utilities, and CI pipeline, see `/project:testing`.
 
 ```bash
-make test-all        # backend (go test -race) + frontend (vitest) + helm lint + helm unittest
+make test-all        # backend (go test -race) + frontend functional E2E + helm lint + helm unittest
 make test-backend    # go test -race ./...
-make test-frontend   # pnpm test (requires dev container running)
+make test-frontend   # functional E2E (none + internal + oidc)
 make helm-lint       # helm lint charts/jarvis/
 make helm-test       # helm unittest charts/jarvis/
 ```

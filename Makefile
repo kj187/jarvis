@@ -61,8 +61,10 @@ test-all: test-backend test-frontend helm-lint helm-test ## Run all tests (backe
 test-backend: ## Backend: go test -race ./...
 	cd backend && go test -v -race ./...
 
-test-frontend: ## Frontend: pnpm test (requires dev container running)
-	podman exec -e CI=true $(FRONTEND_CONTAINER) sh -c "cd /app && pnpm test"
+test-frontend: ## Frontend: functional E2E tests across all auth modes
+	$(E2E_RUN) test none
+	$(E2E_RUN) test internal
+	$(E2E_RUN) test oidc
 
 helm-lint: ## Helm: lint chart
 	helm lint charts/jarvis/

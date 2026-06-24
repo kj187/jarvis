@@ -29,10 +29,7 @@ go test -run TestGracePeriod ./internal/history/...  # Single test
 # ── Frontend ─────────────────────────────────────────────────
 cd frontend
 
-pnpm test                          # Vitest unit tests (single run)
-pnpm test:watch                    # Vitest watch mode
-pnpm test:coverage                 # Vitest with coverage
-pnpm test:ci                       # CI mode: JUnit XML + coverage (used in CI)
+pnpm test                          # Playwright E2E (alias for test:e2e)
 pnpm test:e2e                      # Playwright E2E (browser must be installed)
 pnpm exec playwright install       # Install Playwright browsers (once)
 pnpm duplication                   # jscpd code duplication check
@@ -247,12 +244,11 @@ backend:
 
 frontend:
   - pnpm audit --audit-level=high
-  - pnpm test:ci   # JUnit XML → test-results/junit.xml + lcov/json-summary coverage
-  - Coverage summary → GITHUB_STEP_SUMMARY (Statements/Branches/Functions/Lines)
-  - dorny/test-reporter@v1 uploads junit.xml as "Frontend Tests"
-  - upload-artifact: coverage/
   - pnpm build
   - pnpm duplication  # jscpd code duplication check
+
+e2e:
+  - make e2e          # Functional suite across none + internal + oidc
 ```
 
 ---

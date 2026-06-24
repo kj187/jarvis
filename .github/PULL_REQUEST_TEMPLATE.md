@@ -18,7 +18,7 @@ Closes #
 ## Testing
 
 - [ ] `go test ./...` passes
-- [ ] `pnpm test` passes
+- [ ] `make test-frontend` passes
 - [ ] Manually tested in browser (for frontend changes)
 - [ ] No `console.log` in code
 - [ ] `cursor: pointer` set on new clickable elements
