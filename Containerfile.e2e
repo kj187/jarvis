@@ -1,0 +1,30 @@
+# E2E image: production frontend embedded + e2e-only seed/reset endpoints.
+# Built with -tags "prod e2e". NEVER deploy this image — it exposes /api/v1/test/*.
+
+# Stage 1: Frontend Build
+FROM --platform=$BUILDPLATFORM node:22-alpine AS frontend
+WORKDIR /app
+COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml ./
+RUN npm install -g pnpm && pnpm install --frozen-lockfile
+COPY frontend/ ./
+RUN pnpm build
+
+# Stage 2: Backend Build (prod + e2e tags)
+FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS backend
+ARG VERSION=e2e
+ARG TARGETOS
+ARG TARGETARCH
+WORKDIR /app
+COPY backend/go.mod backend/go.sum ./
+RUN go mod download
+COPY backend/ ./
+COPY --from=frontend /app/dist ./internal/static/dist
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -tags "prod e2e" \
+    -ldflags "-X github.com/kj187/jarvis/backend/internal/version.Version=${VERSION}" \
+    -o /jarvis ./cmd/jarvis
+
+# Stage 3: Final
+FROM gcr.io/distroless/static-debian12
+USER nonroot:nonroot
+COPY --from=backend /jarvis /jarvis
+ENTRYPOINT ["/jarvis"]

@@ -1,0 +1,23 @@
+{
+  "interactiveLogin": false,
+  "httpServer": "NettyWrapper",
+  "tokenCallbacks": [
+    {
+      "issuerId": "default",
+      "tokenExpiry": 3600,
+      "requestMappings": [
+        {
+          "requestParam": "grant_type",
+          "match": "authorization_code",
+          "claims": {
+            "sub": "e2e-admin",
+            "preferred_username": "e2e-admin",
+            "email": "admin@e2e.local",
+            "name": "E2E Admin",
+            "groups": ["Administrator"]
+          }
+        }
+      ]
+    }
+  ]
+}

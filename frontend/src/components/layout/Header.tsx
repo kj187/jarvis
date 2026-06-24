@@ -238,6 +238,7 @@ export function Header() {
                 className="flex items-center justify-center h-8 w-8 rounded cursor-pointer text-foreground hover:bg-accent/60"
                 onClick={() => setUserMenuOpen((v) => !v)}
                 aria-label="User menu"
+                data-testid="user-menu"
                 title={user.username}
               >
                 <UserCheck className="h-4 w-4" />
@@ -257,7 +258,7 @@ export function Header() {
               )}
             </div>
           ) : providerInfo !== null && providerInfo.mode !== 'none' ? (
-            <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => setLoginModalOpen(true)} title="Login" aria-label="Login">
+            <Button variant="ghost" size="icon" data-testid="login-button" className="h-8 w-8 shrink-0" onClick={() => setLoginModalOpen(true)} title="Login" aria-label="Login">
               <LogIn className="h-4 w-4" />
             </Button>
           ) : null}

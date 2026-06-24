@@ -1,0 +1,11 @@
+# Keep build context small and avoid copying host-installed deps/artifacts
+# into images (which breaks pnpm's deps-status check inside the build).
+**/node_modules
+frontend/dist
+backend/internal/static/dist
+**/*.test.ts
+**/*.test.tsx
+playwright-report
+test-results
+.git
+tmp

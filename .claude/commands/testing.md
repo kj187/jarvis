@@ -52,12 +52,18 @@ pnpm duplication                   # jscpd code duplication check
 | `internal/history` | `alert_store_test.go` | `Set`/`Get`/`MarkResolved`/`RemoveByFingerprint` (thread safety via goroutines) |
 | `internal/history` | `lifecycle_test.go` | Integration: FiringToResolved, SuppressedExpired, GracePeriod, ReoccurrenceAfterResolution, FullCycle |
 | `internal/history` | `recorder_test.go` | Diff logic: firing/resolved/suppressed/expired transitions |
+| `internal/history` | `store_extra_test.go` | Claim history, silence events, silence templates, recent resolved, seed |
 | `internal/alertmanager` | `client_test.go` | HTTP client against `httptest.NewServer` |
+| `internal/alertmanager` | `auth_test.go` `oauth2_test.go` | Per-cluster upstream auth (basic/bearer/OAuth2) |
 | `internal/api` | `alerts_test.go` | Alert list/detail handler |
 | `internal/api` | `claims_test.go` | Claim set/release handler |
-| `internal/api` | `comments_test.go` | Comment create/delete handler |
-| `internal/api` | `silences_test.go` | Silence list/create handler |
-| `internal/api` | `router_test.go` | Route registration, `/groups` before `/:fingerprint/*` |
+| `internal/api` | `comments_test.go` | Comment create/delete handler (author-gated) |
+| `internal/api` | `silences_test.go` | Silence list/create handler + silence templates CRUD |
+| `internal/api` | `auth_handler_test.go` | login/logout/me/info, setup, OIDC handlers |
+| `internal/api` | `admin_handler_test.go` | admin user CRUD + role/self guards |
+| `internal/api` | `router_test.go` | Route registration, `/groups` before `/:fingerprint/*`, protection modes |
+| `internal/auth` | `jwt_test.go` `internal_provider_test.go` `middleware_test.go` | JWT sign/verify, RequireAuth/RequireAdmin |
+| `internal/users` | `store_test.go` | User CRUD, OIDC upsert, bcrypt |
 | `internal/ws` | `hub_test.go` | Broadcast, client register/unregister, slow client drop |
 
 ---
@@ -147,21 +153,71 @@ suppressed → resolved: directly resolved, no expired event
 - Especially: edge cases for regex matchers, `@cluster`/`@receiver` pseudo-labels
 - Store tests: Zustand actions, filter state
 
-### Playwright E2E Golden Paths
+### Playwright E2E — Functional Golden Paths
 
+E2E runs against an **isolated container stack** (own Alertmanager + Jarvis + mock-OIDC), with
+fixtures created per test (alerts via AM API v2; silences/claims/comments/templates via Jarvis API;
+history/resolved via a build-tag-gated seed endpoint). Browser clock is frozen for determinism.
+
+**Alerts**
 | Scenario | What is verified |
 |---|---|
-| Load alert list | Alerts visible, card view is default |
-| Card ↔ list view toggle | ViewToggle works, localStorage persistent |
-| Add label filter | Alert list filters correctly |
-| URL state: filter in URL | After reload filters are restored |
-| Open detail panel via click | Sheet opens, `?alert=<fp>` in URL |
-| Set claim | Claim visible, WS update received |
-| Release claim | Claim disappears |
-| Add comment | Comment visible in list |
-| Delete comment | Comment removed |
-| Create silence (form) | Silence visible in silences page |
-| WS reconnect indicator | Connection drop → icon changes |
+| Load alert list | Alerts visible, card view default, severity grouping |
+| Card ↔ list view toggle | ViewToggle works, persisted (`jarvis-activeViewMode`) |
+| Card pagination | Per-group "1–3 of N" paging within a severity section |
+| Fullscreen mode | Enter/exit, ESC hint overlay |
+| Add label filter (chip) | `=`/`!=`/`=~`/`!~`, list filters, regex validated |
+| Locked default-filter chip | From Settings, cannot be removed in header |
+| URL state | filter/search/view/alert in URL; reload restores |
+| Search | filters by alertname + label values; ESC clears; not persisted |
+| Open detail panel | `?alert=<fp>` in URL; labels, link buttons, runbook logic |
+| Stats & timeline | first/last seen, occurrence count, merged event timeline |
+| Set / release claim | claim visible + WS update; release removes it |
+| Add / delete comment | comment appears; author-gated delete |
+| AI-prompt section | collapsed by default, copy works, no network call |
+| Resolved view | pagination + per-page size persisted |
+| Empty state | large empty-state icon when no alerts |
+
+**Silences**
+| Scenario | What is verified |
+|---|---|
+| Silences page card/list/fullscreen | view toggle persisted (`jarvis-silencesViewMode`) |
+| Grouping | identical silences collapse into one group card |
+| Show/hide expired · sort (expires/created) | toggles + ordering |
+| Create silence (3 steps) | matchers → preview → per-cluster results |
+| Multi-cluster selector | ≥1 required; results per cluster |
+| Live match count + affected list | updates as matchers change |
+| Overlap warning · zero-match warning | shown for conflicting / empty matchers |
+| Duration presets/spinners/calendar | Now/Reset, start↔end sync, end>start validation |
+| Silence from alert | matchers pre-filled from alert labels |
+| Expire / extend (single + group) | SilenceExpireModal, +1h/+4h/+1d |
+| Re-create expired silence | reopens form with matchers |
+| Templates | CRUD + apply-to-form |
+
+**Settings / Theme**
+| Scenario | What is verified |
+|---|---|
+| Time format relative/absolute | live preview + timestamps update |
+| Default view / resolved page size / poll interval | applied + persisted |
+| Default filters | become locked header chips |
+| Theme toggle | `data-theme` switch, persisted |
+
+**Auth**
+| Scenario | What is verified |
+|---|---|
+| Mode none | NoAuthNotice shown + dismiss persisted |
+| write_protect | reads public; write opens LoginModal; succeeds after login |
+| full_protect | LoginPage gates whole app |
+| Internal setup | first-run `/setup` creates admin |
+| Login / logout | session cookie set/cleared; user menu |
+| OIDC flow | start → callback → session; admin-claim → admin role |
+| Admin user management | list, add, change role, delete (confirm); self-guards |
+
+**WebSocket**
+| Scenario | What is verified |
+|---|---|
+| Reconnect indicator | drop → red icon → reconnect |
+| Live patches | alerts_update / claim_set / claim_released / comment_added |
 
 ---
 

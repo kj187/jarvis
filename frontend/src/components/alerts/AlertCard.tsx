@@ -71,6 +71,8 @@ function AlertEntry({
     <div
       role="button"
       tabIndex={0}
+      data-testid="alert-card"
+      data-fingerprint={alert.fingerprint}
       onClick={() => onClick(alert.fingerprint)}
       onKeyDown={(e) => e.key === 'Enter' && onClick(alert.fingerprint)}
       className={cn(

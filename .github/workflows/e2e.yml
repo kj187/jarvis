@@ -1,0 +1,32 @@
+name: E2E
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# Functional E2E across all three auth modes (none / internal / oidc) against
+# the isolated stack (compose.e2e.yml). Screenshots are NOT generated in CI —
+# they are a documentation artifact regenerated manually (see docs/testing-e2e.md).
+jobs:
+  e2e:
+    name: Functional E2E (all auth modes)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # ratchet:actions/checkout@v6.0.3
+
+      - name: Run functional E2E (none + internal + oidc)
+        env:
+          COMPOSE_CMD: docker compose
+        run: make e2e
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # ratchet:actions/upload-artifact@v7.0.1
+        with:
+          name: playwright-report
+          path: frontend/playwright-report/
+          retention-days: 7

@@ -20,13 +20,14 @@ It was inspired by [Karma](https://github.com/prymitive/karma), which is a great
 Most Alertmanager UIs are read-only dashboards. Jarvis is built for teams that need to *act* on alerts, not just observe them:
 
 - **Realtime alerts** via WebSocket — no page reload required
-- **Persistent history** — full alert lifecycle stored in SQLite (firing → suppressed → resolved)
+- **Persistent history** — full alert lifecycle stored in SQLite or PostgreSQL (firing → suppressed → resolved)
 - **Claiming** — assign an alert to yourself so the team sees who is on it
 - **Comments** — fingerprint-bound notes that survive restarts and re-fires
-- **Alert Detail Panel** — labels, annotations, firing history, stats
+- **Alert Detail Panel** — labels, annotations, link buttons, firing history, stats, claim, comments, AI-prompt
+- **Alerts & Silences pages** — dedicated nav tabs, each with card / list view and a distraction-free fullscreen mode
 - **Card and List View** — grouped by severity, sortable
 - **Label-based filtering** — `=` / `!=` / `=~` / `!~` matcher chips, URL-serialized
-- **Silences** — create, edit, extend, delete; full Alertmanager proxy
+- **Silences** — dedicated management page: grouping, show/hide expired, sort, create, edit, extend, delete, re-create; full Alertmanager proxy
 - **Silence templates** — reusable matcher sets for recurring maintenance windows
 - **Alert search** — full-text search across alert names and label values; results update as you type
 - **Dark / Light theme** — toggle between dark and light mode; preference is persisted in localStorage
@@ -34,7 +35,7 @@ Most Alertmanager UIs are read-only dashboards. Jarvis is built for teams that n
 - **Per-cluster upstream auth** — authenticate against protected Alertmanagers via OAuth2 client credentials (auto-refresh), bearer token, basic auth or custom headers
 - **Grace period** — 60s ghost-resolve prevention
 - **Single binary** — Go backend embeds the Vite build; one container
-- **User authentication** — optional UI login, three modes: `none` (open), `internal` (built-in user management), `oidc` (Keycloak, Authentik, Dex, any OIDC provider)
+- **User authentication** — optional UI login, three modes: `none` (open), `internal` (built-in user management with admin panel), `oidc` (Keycloak, Authentik, Dex, any OIDC provider)
 
 ## Getting Started
 
@@ -89,6 +90,11 @@ helm install jarvis oci://ghcr.io/kj187/charts/jarvis \
 All configuration options → [Configuration](#configuration) · [User Authentication](#user-authentication) · [Helm chart](#kubernetes--helm)
 
 ## Views
+
+Jarvis is organized into two top-level pages, switchable via the nav tabs in the header:
+**Alerts** (the default landing page) and **Silences**. Each page offers a card and a list view,
+a fullscreen mode for wall-mounted dashboards, and shares the same chip-based label filter and search.
+Your active page and view preferences are persisted in `localStorage`.
 
 ### Card View
 
@@ -295,6 +301,39 @@ When an alert is claimed, the owner's name appears as a chip in the detail panel
 
 ---
 
+### Silences Page
+
+A dedicated management page for all silences across your clusters — open it via the **Silences** nav tab.
+
+![Silences Page](docs/assets/silences-list.png)
+
+The Silences page gives you a complete overview of every silence Jarvis knows about, independent of the
+alerts they cover. Like the Alerts page, it offers both a **card** and a **list** view, a **fullscreen**
+mode, and the same chip-based label filter to narrow down large silence sets.
+
+**Grouping:**
+Silences that share the same matchers, comment, creator, and end time are collapsed into a single
+**group card** — common during multi-cluster maintenance where the same silence is applied to several
+Alertmanagers at once. The group shows the number of underlying silences and the combined count of
+affected alerts; editing the group edits all of them together.
+
+![Grouped Silences](docs/assets/silences-grouped.png)
+
+**State at a glance:**
+Each silence shows its lifecycle state — **pending** ("starts in X"), **active** ("expires in X", turning
+amber within the last 15 minutes), or **expired** ("expired X ago"). Expired silences are hidden by
+default; a **Show expired** toggle reveals them dimmed for auditing.
+
+![Expired Silences](docs/assets/silences-expired.png)
+
+**Actions:**
+- **Sort** by expiry or creation time (active silences always first)
+- **Expire** an active silence immediately, or **extend** it (+1h / +4h / +1d) — individually or for a whole group
+- **Re-create** an expired silence with one click — the form reopens pre-filled with its matchers
+- Every silence ID links directly to its detail page in the native Alertmanager UI
+
+---
+
 ### Create Silence
 
 Matcher builder with duration picker and a live preview of which alerts the silence will affect.
@@ -456,6 +495,41 @@ The selected theme is saved in `localStorage` and restored on every subsequent v
 
 ---
 
+### Fullscreen Mode
+
+Both the Alerts and Silences pages offer a distraction-free fullscreen mode — ideal for wall-mounted
+NOC dashboards and incident war rooms.
+
+![Fullscreen Mode](docs/assets/fullscreen.png)
+
+Toggle fullscreen from the header. The chrome collapses to maximize the visible alert/silence area, and
+a brief "Press ESC to exit fullscreen" hint fades in. Press **ESC** at any time to return to the normal
+layout. The view continues to update in real time via WebSocket while in fullscreen.
+
+---
+
+### Admin / User Management
+
+When running with `internal` authentication, admins manage user accounts directly in the UI — no
+database access or config changes required.
+
+![Admin Panel](docs/assets/auth-admin-panel.png)
+
+Open the admin panel from the user menu in the header (visible only to users with the `admin` role). From
+here you can:
+
+- **List all users** — username, role, auth provider (internal / OIDC), creation and last-login times
+- **Add a user** — set username, password (min 12 chars), and role
+- **Change a role** — promote a user to admin or demote back to user
+- **Delete a user** — with an inline confirmation step
+
+For safety, admins **cannot change their own role or delete their own account** (preventing accidental
+self-lockout), and the current user is marked with a "(you)" badge. OIDC users are created automatically
+on first login and can have their role mapped from an OIDC claim — see
+[docs/authentication-user.md](docs/authentication-user.md).
+
+---
+
 ## Supported Alertmanager Versions
 
 Jarvis uses the **Alertmanager HTTP API v2** exclusively (`/api/v2/alerts`, `/api/v2/silences`, `/api/v2/status`). API v2 was introduced in Alertmanager **0.16.0**.
@@ -491,14 +565,17 @@ podman compose up --build -d
 
 ### Running tests
 
+Quick reference — for the full test strategy, matrix, utilities, and CI pipeline, see `/project:testing`.
+
 ```bash
 make test-all        # backend (go test -race) + frontend (vitest) + helm lint + helm unittest
-
 make test-backend    # go test -race ./...
 make test-frontend   # pnpm test (requires dev container running)
 make helm-lint       # helm lint charts/jarvis/
-make helm-test       # helm unittest charts/jarvis/ (requires helm-unittest plugin)
+make helm-test       # helm unittest charts/jarvis/
 ```
+
+**E2E & screenshots:** See [docs/testing-e2e.md](docs/testing-e2e.md) for the isolated Podman stack, fixture setup, and screenshot generation.
 
 Helm unit tests run without a Kubernetes cluster. Install the plugin once:
 
@@ -661,7 +738,7 @@ For a full values reference, installation examples (SQLite with PVC, PostgreSQL,
 
 - [docs/authentication-user.md](docs/authentication-user.md) — user login: providers (none / internal / OIDC), first-run wizard, roles, sessions, Helm
 - [docs/authentication-alertmanager.md](docs/authentication-alertmanager.md) — Alertmanager upstream auth: OAuth2 client credentials, bearer token, basic auth, custom headers
-- [docs/testing.md](docs/testing.md) — how to run tests
+- [.claude/commands/testing.md](.claude/commands/testing.md) — slash command `/project:testing` for full test strategy, matrix, and CI pipeline
 - [docs/security.md](docs/security.md) — security measures
 - [CONTRIBUTING.md](CONTRIBUTING.md) — contribution guidelines
 - [SECURITY.md](SECURITY.md) — responsible disclosure

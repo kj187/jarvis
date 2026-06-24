@@ -11,7 +11,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:ci": "vitest run --reporter=default --reporter=junit --outputFile.junit=test-results/junit.xml --coverage --coverage.reporter=text --coverage.reporter=lcov --coverage.reporter=json-summary",
-    "test:e2e": "playwright test",
+    "test:e2e": "playwright test --config playwright.e2e.config.ts",
     "lint": "eslint src --ext ts,tsx",
     "duplication": "jscpd"
   },

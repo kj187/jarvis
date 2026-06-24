@@ -1,0 +1,97 @@
+# Isolated E2E + screenshot stack — fully self-contained, own network (jarvis_e2e).
+# No coupling to the dev stack. Everything is ephemeral (tmpfs).
+#
+# Driven by scripts/e2e-run.sh (via the Makefile), which sets the E2E_* vars
+# below to switch between the three auth modes (none / internal / oidc) and
+# brings the stack up/down once per mode.
+#
+#   make e2e                 # functional suite, all 3 modes
+#   make e2e-screenshots     # regenerate all screenshots, all 3 modes
+#   make e2e-screenshot NAME=card-view [MODE=none]
+#
+# The e2e Jarvis image exposes the e2e-only /api/v1/test/* seed + reset
+# endpoints (built with -tags e2e). NEVER run this image in production.
+
+services:
+  e2e-alertmanager:
+    image: docker.io/prom/alertmanager:latest
+    container_name: jarvis_e2e_alertmanager
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+      - '--web.listen-address=0.0.0.0:9093'
+    volumes:
+      - ./scripts/test-alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro,z
+    tmpfs:
+      - /alertmanager
+    networks:
+      - jarvis_e2e
+
+  # Mock OIDC provider (only used in MODE=oidc). interactiveLogin=false means the
+  # authorize endpoint auto-approves and the token carries groups=[Administrator]
+  # so Jarvis maps the user to the admin role.
+  e2e-mock-oidc:
+    image: ghcr.io/navikt/mock-oauth2-server:2.1.10
+    container_name: jarvis_e2e_mock_oidc
+    environment:
+      JSON_CONFIG_PATH: "/config/mock-oidc-config.json"
+    volumes:
+      - ./scripts/mock-oidc-config.json:/config/mock-oidc-config.json:ro,z
+    ports:
+      - "8086:8080"
+    networks:
+      - jarvis_e2e
+
+  e2e-jarvis:
+    build:
+      context: .
+      dockerfile: Containerfile.e2e
+    image: jarvis-e2e:local
+    container_name: jarvis_e2e_jarvis
+    depends_on:
+      - e2e-alertmanager
+    environment:
+      JARVIS_PORT: "8080"
+      JARVIS_LOG_LEVEL: "info"
+      JARVIS_POLL_INTERVAL: "1s"
+      JARVIS_DB_DSN: "/data/jarvis.db"
+      JARVIS_ALLOWED_ORIGINS: "http://e2e-jarvis:8080,http://localhost:8085"
+      JARVIS_CLUSTER_1_NAME: "e2e"
+      JARVIS_CLUSTER_1_ALERTMANAGER_URL: "http://e2e-alertmanager:9093"
+      # ── Auth (switched per mode by scripts/e2e-run.sh) ──────────────────────
+      JARVIS_AUTH_PROVIDER: "${E2E_AUTH_PROVIDER:-none}"
+      JARVIS_AUTH_MODE: "${E2E_AUTH_MODE:-none}"
+      JARVIS_SECRET_KEY: "${E2E_SECRET_KEY:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}"
+      JARVIS_AUTH_OIDC_ISSUER: "${E2E_OIDC_ISSUER:-}"
+      JARVIS_AUTH_OIDC_CLIENT_ID: "${E2E_OIDC_CLIENT_ID:-}"
+      JARVIS_AUTH_OIDC_CLIENT_SECRET: "${E2E_OIDC_CLIENT_SECRET:-}"
+      JARVIS_AUTH_OIDC_REDIRECT_URL: "${E2E_OIDC_REDIRECT_URL:-}"
+      JARVIS_OIDC_ADMIN_CLAIM: "${E2E_OIDC_ADMIN_CLAIM:-}"
+      JARVIS_OIDC_ADMIN_VALUE: "${E2E_OIDC_ADMIN_VALUE:-}"
+    tmpfs:
+      - /data
+    ports:
+      - "8085:8080"
+    networks:
+      - jarvis_e2e
+
+  e2e-playwright:
+    image: mcr.microsoft.com/playwright:v1.60.0-noble
+    container_name: jarvis_e2e_playwright
+    working_dir: /work/frontend
+    environment:
+      E2E_BASE_URL: "http://e2e-jarvis:8080"
+      E2E_ALERTMANAGER_URL: "http://e2e-alertmanager:9093"
+      E2E_TEST_DIR: "${E2E_TEST_DIR:-./e2e/functional/none}"
+      E2E_SCREENSHOT_DIR: "${E2E_SCREENSHOT_DIR:-./e2e/screenshots/none}"
+      SCREENSHOTS_DIR: "../docs/assets"
+      CI: "true"
+    volumes:
+      - ./frontend:/work/frontend:z
+      - ./docs/assets:/work/docs/assets:z
+    networks:
+      - jarvis_e2e
+
+networks:
+  jarvis_e2e:
+    name: jarvis_e2e

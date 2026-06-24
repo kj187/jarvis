@@ -195,6 +195,9 @@ func NewRouter(
 
 	apiV1.GET("/clusters", srv.getClusters)
 
+	// ── E2E test routes (only when built with -tags e2e; no-op otherwise) ─────
+	srv.registerTestRoutes(apiV1)
+
 	// ── Admin (requires auth + admin role) ───────────────────────────────────
 	admin := apiV1.Group("/admin", auth.RequireAdmin(authProvider))
 	admin.GET("/users", srv.listUsers)

@@ -1,5 +1,6 @@
 COMPOSE_DEV        = podman compose -f compose.dev.yml
 COMPOSE_TEST_DEPS  = podman compose -f compose.test-dependencies.yml
+COMPOSE_E2E        = podman compose -f compose.e2e.yml
 GITLEAKS           = podman run --rm -v "$(CURDIR):/repo:ro,z" zricethezav/gitleaks:latest
 FRONTEND_CONTAINER = jarvis_frontend_1
 
@@ -13,7 +14,7 @@ FRONTEND_CONTAINER = jarvis_frontend_1
         lint gosec govulncheck audit security-all \
         scan scan-history scan-staged scan-all \
         build \
-        screenshots screenshots-local \
+        e2e-build e2e-down e2e e2e-mode e2e-screenshots e2e-screenshot \
         fixtures-create fixtures-remove
 
 help: ## Show available targets
@@ -98,23 +99,43 @@ scan-staged: ## gitleaks: scan staged changes only (mirrors pre-commit behavior)
 
 scan-all: scan scan-history scan-staged ## gitleaks: run all three scans (files + history + staged)
 
-# ── Screenshots ───────────────────────────────────────────────────────────────
-
-screenshots: ## Regenerate all UI screenshots into docs/assets/ (requires dev stack: make up)
-	podman exec $(FRONTEND_CONTAINER) apk add --no-cache chromium
-	podman exec -e PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 -e CHROMIUM_PATH=/usr/bin/chromium-browser $(FRONTEND_CONTAINER) \
-		sh -c "cd /app && pnpm exec playwright test --config playwright.screenshots.config.ts --reporter=list"
-	@echo "Screenshots written to docs/assets/"
-
-screenshots-local: ## Regenerate all UI screenshots locally (requires: pnpm dev running on :5173)
-	cd frontend && SCREENSHOTS_DIR=../docs/assets pnpm exec playwright test \
-		--config playwright.screenshots.config.ts --reporter=list
-	@echo "Screenshots written to docs/assets/"
-
 # ── Build ──────────────────────────────────────────────────────────────────────
 
 build: ## Build production container image locally
 	podman build -f Containerfile -t jarvis:local .
+
+# ── E2E + Screenshots (isolated Playwright stack: compose.e2e.yml) ───────────────
+# All targets bring the stack up fresh, run, then tear it down. The auth mode
+# (none / internal / oidc) is handled by scripts/e2e-run.sh, which boots the
+# stack once per mode. See docs/testing-e2e.md for the full guide.
+
+E2E_RUN = bash scripts/e2e-run.sh
+MODE   ?= none
+
+e2e-build: ## Build the isolated e2e Jarvis image (prod frontend + e2e seed endpoints)
+	$(COMPOSE_E2E) build e2e-jarvis
+
+e2e-down: ## Force-stop and remove the e2e stack (ephemeral — all data lost)
+	$(COMPOSE_E2E) down -v
+
+e2e: ## Run the functional suite across ALL auth modes (none + internal + oidc)
+	$(E2E_RUN) test none
+	$(E2E_RUN) test internal
+	$(E2E_RUN) test oidc
+
+e2e-mode: ## Run the functional suite for ONE mode: make e2e-mode MODE=oidc
+	$(E2E_RUN) test $(MODE)
+
+e2e-screenshots: ## Regenerate ALL screenshots across all modes into docs/assets/
+	$(E2E_RUN) screenshots none
+	$(E2E_RUN) screenshots internal
+	$(E2E_RUN) screenshots oidc
+	@echo "Screenshots written to docs/assets/"
+
+e2e-screenshot: ## Regenerate ONE screenshot: make e2e-screenshot NAME=card-view [MODE=none]
+	@test -n "$(NAME)" || { echo "usage: make e2e-screenshot NAME=<test-name> [MODE=none]"; exit 1; }
+	$(E2E_RUN) screenshot $(MODE) "$(NAME)"
+	@echo "Screenshot '$(NAME)' written to docs/assets/"
 
 # ── Fixtures ───────────────────────────────────────────────────────────────────
 

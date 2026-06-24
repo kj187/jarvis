@@ -19,7 +19,7 @@ jobs:
           go install github.com/sethvargo/ratchet@latest
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
       - name: Verify all Actions are SHA-pinned
-        run: ratchet check .github/workflows/ci.yml .github/workflows/release.yml .github/workflows/codeql.yml
+        run: ratchet check .github/workflows/ci.yml .github/workflows/release.yml .github/workflows/codeql.yml .github/workflows/e2e.yml
 
   secrets:
     name: Secret Scan

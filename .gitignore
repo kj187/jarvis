@@ -22,6 +22,7 @@ frontend/.vite/
 frontend/.npm/
 frontend/coverage/
 frontend/test-results/
+frontend/playwright-report/
 frontend/package-lock.json
 *.tsbuildinfo
 node_modules/
