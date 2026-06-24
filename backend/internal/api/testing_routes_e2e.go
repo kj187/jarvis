@@ -188,10 +188,17 @@ func (s *Server) testSetClaim(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "claimedBy is required")
 	}
 
-	_, err := s.store.SetClaim(req.Fingerprint, nil, req.ClaimedBy, req.Note)
+	claim, err := s.store.SetClaim(req.Fingerprint, nil, req.ClaimedBy, req.Note)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
+
+	// Mirror the production claim handler so WS-driven UI updates work in e2e.
+	s.alertStore.SetActiveClaim(req.Fingerprint, claim)
+	s.hub.BroadcastJSON(models.WSTypeClaimSet, map[string]interface{}{
+		"fingerprint": req.Fingerprint,
+		"claim":       claim,
+	})
 
 	return c.NoContent(http.StatusNoContent)
 }
