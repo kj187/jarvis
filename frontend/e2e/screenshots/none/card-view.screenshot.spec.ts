@@ -19,5 +19,4 @@ test('card-view', async ({ page, am, jarvis }) => {
   await page.waitForTimeout(300)
 
   await page.screenshot({ path: `${DIR}/feature-card-view.png`, fullPage: true })
-  await page.screenshot({ path: `${DIR}/screenshot.png`, fullPage: true })
 })
