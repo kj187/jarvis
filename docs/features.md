@@ -107,27 +107,6 @@ To remove or modify a default filter, open Settings → Default Filter → click
 
 ---
 
-## Suppressed View
-
-Silenced alerts displayed with active silence duration and expiry time.
-
-![Suppressed View](assets/feature-suppressed.png)
-
-Suppressed alerts are the ones currently covered by an active Alertmanager silence. Rather than hiding them entirely, Jarvis keeps them visible in a dedicated tab so the on-call engineer always has a complete picture of what is happening — including what is being intentionally ignored and why.
-
-**Each suppressed alert shows:**
-- The alert name, labels, and severity — same as the active view
-- The silence that is covering it: matcher set, creator, comment, and creation time
-- A countdown to silence expiry
-- A direct link to edit or extend the silence
-
-**Why this matters in practice:**
-During an incident it is common to silence a group of alerts to avoid noise while working on a fix. Without a dedicated suppressed view, those alerts become invisible. If the silence expires while the underlying issue is still present, alerts suddenly re-fire and the on-call engineer may not realize they were silenced at all. Jarvis keeps this state visible and transparent at all times.
-
-> Silences approaching expiry (≤ 15 minutes) are automatically reclassified as active — see [Expiring Silence](#expiring-silence) below.
-
----
-
 ## Resolved View
 
 Full alert history persisted in SQLite — survives container restarts and Alertmanager reconnects.
@@ -250,6 +229,37 @@ The live preview updates as you modify matchers, so you always know exactly whic
 
 ---
 
+## Silence Templates
+
+Reusable matcher sets that pre-fill the silence form in one click — no manual re-entry for recurring silences.
+
+![Silence Templates](assets/feature-silence-templates.png)
+
+When the same silence patterns come up repeatedly — scheduled maintenance windows, known flaky checks, team-specific noise — it is tedious to re-enter matchers every time. Silence templates let you save a named set of matchers and a reason once, then apply them in a single click.
+
+**How to use templates:**
+1. Open the silence creation form via "Create silence" in the header
+2. Switch to the **Templates** tab
+3. Click any template to instantly load its matchers into the form
+4. Adjust the duration and creator if needed, then submit as normal
+
+**Creating and managing templates:**
+
+![New template form](assets/feature-silence-templates-form.png)
+
+In the Templates tab, click **+ New Template** to define a new one:
+- Give it a name (e.g. "Prod Maintenance", "Node Reboot")
+- Add matchers exactly like in the silence form
+- Optionally add a reason / note for context
+- Save — the template is stored in Jarvis and available to all users immediately
+
+Templates can be edited or deleted from the same tab. They are stored server-side in the Jarvis database and shared across all users of the instance.
+
+**Why this matters:**
+During an incident the last thing you want to do is look up which label combination to silence. Having a "Node Reboot" template means the matcher for `alertname = KubeNodeNotReady` is one click away, with the right scope already set.
+
+---
+
 ## Expiring Silence
 
 Alerts with a silence that expires within 15 minutes are surfaced as active so they don't catch the team off guard.
@@ -279,7 +289,9 @@ Suppressed alerts show the exact silence that covers them, including remaining d
 
 ![Active Silence](assets/feature-alert-active-silence.png)
 
-When an alert is suppressed, the question "why is this not firing?" should have an immediate, visible answer. Jarvis surfaces the complete context of the covering silence directly on the alert — no need to navigate to a separate silences page or open the native Alertmanager UI.
+When an alert is suppressed, the question "why is this not firing?" should have an immediate, visible answer. Jarvis surfaces the complete context of the covering silence directly on the alert.
+
+Suppressed alerts (covered by a silence with more than 15 minutes remaining) are accessible via the URL parameter `?state=suppressed`. Alerts whose silence expires within 15 minutes are automatically surfaced in the Active view — see [Expiring Silence](#expiring-silence).
 
 **What is shown for each suppressed alert:**
 - **Silence ID** — with a direct link to edit it

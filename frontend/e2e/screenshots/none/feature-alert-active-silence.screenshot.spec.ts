@@ -18,8 +18,9 @@ async function waitForSuppressedAlerts(baseURL: string, timeoutMs = 10_000): Pro
 }
 
 /**
- * Screenshot: suppressed alert card showing the covering silence details (creator,
- * matchers, remaining duration). Navigates to the suppressed state tab.
+ * Screenshot: suppressed alert list showing the covering silence per row
+ * (silence ID, matchers, creator, comment, remaining time).
+ * Accessed via ?state=suppressed URL param — shows the full silence context.
  * Regenerate: make e2e-screenshot NAME=feature-alert-active-silence
  */
 test('feature-alert-active-silence', async ({ page, am, jarvis }) => {
@@ -30,13 +31,13 @@ test('feature-alert-active-silence', async ({ page, am, jarvis }) => {
 
   await jarvis.createSilence('e2e', [
     { name: 'alertname', value: 'KubePodCrashLooping', isRegex: false, isEqual: true },
-  ], { durationMinutes: 120, comment: 'Maintenance window — rolling restart', createdBy: 'sre-team' })
+  ], { endsAt: new Date(Date.now() + 2 * 60 * 60 * 1000), comment: 'Maintenance window — rolling restart', createdBy: 'sre-team' })
 
   await jarvis.poll()
   await waitForSuppressedAlerts(JARVIS_BASE_URL)
 
   await page.goto('/?state=suppressed')
-  await expect(page.getByRole('columnheader', { name: 'Alert Name' })).toBeVisible()
+  await expect(page.getByTestId('alert-list-row').first()).toBeVisible()
   await page.waitForTimeout(300)
 
   await page.screenshot({ path: `${DIR}/feature-alert-active-silence.png`, fullPage: true })

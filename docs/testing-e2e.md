@@ -11,8 +11,8 @@
 make e2e                              # functional tests, ALL 3 auth modes (CI runs this)
 make e2e-mode MODE=oidc               # functional tests, ONE mode
 make e2e-screenshots                  # regenerate ALL doc screenshots (all modes)
-make e2e-screenshot NAME=card-view    # regenerate ONE screenshot (MODE=none default)
-make e2e-screenshot NAME=setup-page MODE=internal
+make e2e-screenshot NAME=feature-card-view    # regenerate ONE screenshot (MODE=none default)
+make e2e-screenshot NAME=auth-setup MODE=internal
 make e2e-down                         # force-clean the stack if something is stuck
 ```
 
@@ -114,9 +114,9 @@ frontend/
       internal/         # setup + login
       oidc/             # oidc login + admin-claim mapping
     screenshots/
-      none/             # card-view, no-auth-notice
-      internal/         # setup-page, login-modal
-      oidc/             # oidc-authenticated
+      none/             # feature-*, auth-noauth-notice, screenshot
+      internal/         # auth-setup, auth-login-internal, auth-user-menu, auth-admin-panel, auth-login-page
+      oidc/             # oidc-authenticated, auth-login-oidc, screenshot (README hero)
 ```
 
 ### Conventions

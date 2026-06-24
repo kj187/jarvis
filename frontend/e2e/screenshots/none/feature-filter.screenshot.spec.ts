@@ -5,7 +5,9 @@ import { manyAlerts } from '../../fixtures/alerts'
 const DIR = process.env.SCREENSHOTS_DIR ?? '../docs/assets'
 
 /**
- * Screenshot: filter bar open with a search term, showing narrowed results.
+ * Screenshot: label-matcher chip filter active in the header.
+ * Navigates with URL matchers so the chip bar is pre-populated with a
+ * severity=critical filter — showing a subset of alert cards beneath it.
  * Regenerate: make e2e-screenshot NAME=feature-filter
  */
 test('feature-filter', async ({ page, am, jarvis }) => {
@@ -14,12 +16,11 @@ test('feature-filter', async ({ page, am, jarvis }) => {
   await am.fire(manyAlerts)
   await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, manyAlerts.length)
 
-  await page.goto('/?state=active')
+  const matchers = JSON.stringify([
+    { name: 'severity', operator: '=', value: 'critical' },
+  ])
+  await page.goto(`/?state=active&matchers=${encodeURIComponent(matchers)}`)
   await expect(page.getByTestId('alert-card').first()).toBeVisible()
-
-  await page.getByRole('button', { name: 'Toggle search' }).click()
-  await expect(page.getByPlaceholder('Search alerts…')).toBeVisible()
-  await page.getByPlaceholder('Search alerts…').fill('OOM')
   await page.waitForTimeout(300)
 
   await page.screenshot({ path: `${DIR}/feature-filter.png`, fullPage: true })
