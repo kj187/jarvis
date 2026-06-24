@@ -93,28 +93,41 @@ test.describe('D2: Labels & annotations rendered', () => {
     expect(labelTexts.join('').toLowerCase()).toContain('alertname')
   })
 
-  test('detail panel shows all annotations', async ({ page, am, jarvis }) => {
+  test('detail panel shows summary and extra annotations', async ({ page, am, jarvis }) => {
     await dismissNoAuthNotice(page)
-    await am.fire(kubernetesAlerts)
-    await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, kubernetesAlerts.length)
+    // summary/description render in their own "Summary" section; only extra
+    // annotations (not summary/description/links) appear in the annotations section.
+    await am.fire([
+      {
+        labels: { alertname: 'AnnotatedAlert', severity: 'warning', cluster: 'e2e' },
+        annotations: {
+          summary: 'A concise summary of the alert',
+          description: 'A longer description of the alert',
+          impact: 'Customer-facing latency increase',
+        },
+      },
+    ])
+    await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, 1)
 
     await page.goto('/?state=active')
-    
+
     // Open detail
     const firstCard = page.getByTestId('alert-card').first()
     await firstCard.click()
     await page.waitForTimeout(500)
-    
-    // Verify annotations section
+
+    // Summary section renders the summary text
+    await expect(page.getByTestId('detail-panel').getByText('A concise summary of the alert')).toBeVisible()
+
+    // Extra (non-summary/description) annotations appear in the annotations section
     const annotationsSection = page.getByTestId('detail-annotations-section')
     await expect(annotationsSection).toBeVisible()
-    
-    // Verify annotation items
+
     const annotationItems = page.getByTestId('detail-annotation-item')
     const annotationTexts = await annotationItems.allTextContents()
-    
+
     expect(annotationTexts.length).toBeGreaterThan(0)
-    expect(annotationTexts.join('').toLowerCase()).toContain('summary')
+    expect(annotationTexts.join('').toLowerCase()).toContain('impact')
   })
 
   test('annotation links are clickable (dashboard, runbook)', async ({ page, am, jarvis }) => {
@@ -215,7 +228,7 @@ test.describe('D5: Stats & timeline', () => {
   test('detail panel shows duration (when resolved)', async ({ page, jarvis }) => {
     await dismissNoAuthNotice(page)
     
-    // Seed a resolved alert
+    // Seed a resolved alert (labels required, else backend returns labels:null and the row fails to render)
     await jarvis.seedResolved([
       {
         fingerprint: 'resolved-alert',
@@ -223,6 +236,7 @@ test.describe('D5: Stats & timeline', () => {
         cluster: 'e2e',
         startsAt: '2025-01-15T10:00:00Z',
         resolvedAt: '2025-01-15T10:30:00Z',
+        labels: { alertname: 'ResolvedAlert', severity: 'warning', cluster: 'e2e' },
       },
     ])
     
@@ -485,13 +499,15 @@ test.describe('D9: Add comment', () => {
     // Find comment input
     const commentInput = page.getByTestId('detail-comment-input')
     if (await commentInput.isVisible()) {
+      // In 'none' auth mode an author name is required before the submit enables.
+      await page.getByPlaceholder('Your name').fill('e2e-tester')
       await commentInput.fill('New comment from form')
-      
+
       const submitButton = page.getByTestId('detail-comment-submit')
       await submitButton.click()
-      
+
       await page.waitForTimeout(500)
-      
+
       // Verify comment appears
       const commentTexts = await page.getByTestId('detail-comment-item').allTextContents()
       expect(commentTexts.join('\n')).toContain('New comment from form')
@@ -530,33 +546,12 @@ test.describe('D10: Delete comment (author only)', () => {
     }
   })
 
-  test('different user cannot delete others comments', async ({ page, am, jarvis }) => {
-    await dismissNoAuthNotice(page)
-    await am.fire(kubernetesAlerts)
-    await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, kubernetesAlerts.length)
-
-    // Get a fingerprint
-    const res = await fetch(`${JARVIS_BASE_URL}/api/v1/alerts`)
-    const alerts: any[] = await res.json()
-    const fingerprint = alerts[0].fingerprint
-    
-    // Add comment from user1
-    await jarvis.addComment(fingerprint, 'User1 comment', 'user-one')
-    
-    // Open detail (as user2)
-    await page.goto(`/?state=active&alert=${fingerprint}`)
-    await page.waitForTimeout(500)
-    
-    // Verify delete button NOT visible for other users comment
-    const deleteButtons = page.getByTestId('detail-comment-delete')
-    const count = await deleteButtons.count()
-    
-    // Either 0 delete buttons or none match this comment
-    if (count > 0) {
-      const firstDeleteParent = await deleteButtons.first().locator('xpath=ancestor::*[@data-testid="detail-comment-item"]')
-      const commentText = await firstDeleteParent.textContent()
-      expect(commentText).not.toContain('User1 comment')
-    }
+  test('different user cannot delete others comments', async () => {
+    // Author-only delete enforcement requires a user identity. In 'none' auth
+    // mode there is no current user, so every comment is deletable by design
+    // (AlertComments: canDelete === true when authMode === 'none'). This case is
+    // only meaningful with auth enabled — covered in the internal/oidc suites.
+    test.skip()
   })
 
   test('admin/mod can delete any comment', async ({ page, am, jarvis }) => {
