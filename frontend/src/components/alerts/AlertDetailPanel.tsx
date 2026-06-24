@@ -2,14 +2,13 @@ import { useState, useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { format, formatDistanceToNow } from 'date-fns'
 import { enUS } from 'date-fns/locale'
-import { ExternalLink, BookOpen, ChevronDown, ChevronUp, BellOff, Pencil, Trash2, User, Copy, Check, Info, Loader2, Server } from 'lucide-react'
+import { ExternalLink, BookOpen, ChevronDown, ChevronUp, BellOff, Pencil, Trash2, User, Copy, Check, Info } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Sheet } from '@/components/ui/sheet'
 import { AlertBadge, StatusBadge } from './AlertBadge'
 import { labelColorStyle } from './LabelChip'
 import { AlertComments } from './AlertComments'
 import { SilenceForm } from '@/components/silences/SilenceForm'
-import { SilenceExpireModal } from '@/components/silences/SilenceExpireModal'
 import { useAlerts, useAlertHistory, useAlertStats } from '@/hooks/useAlerts'
 import { useActiveClaim, useSetClaim, useReleaseClaim, useClaimHistory } from '@/hooks/useAlertClaim'
 import { useDeleteSilence, useSilenceEvents, useUpsertSilence } from '@/hooks/useSilences'
@@ -19,7 +18,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import type { EnrichedAlert, LabelMatcher, Silence, SilenceMatcher } from '@/types'
 import { renderTextWithLinks, extractLinkButtons } from '@/lib/linkUtils'
-import { tzAbbr, silenceMatchesAlert } from '@/lib/alertUtils'
+import { tzAbbr } from '@/lib/alertUtils'
 
 const USERNAME_KEY = 'jarvis-username'
 
@@ -63,6 +62,22 @@ function formatDuration(ms: number): string {
   return 'a few seconds'
 }
 
+function silenceMatchesAlert(silence: Silence, alert: EnrichedAlert): boolean {
+  const labels: Record<string, string> = { ...alert.labels, '@cluster': alert.clusterName }
+  return silence.matchers.every((m) => {
+    const value = labels[m.name] ?? ''
+    if (m.isRegex) {
+      try {
+        const re = new RegExp(m.value)
+        return m.isEqual ? re.test(value) : !re.test(value)
+      } catch {
+        return false
+      }
+    }
+    return m.isEqual ? value === m.value : value !== m.value
+  })
+}
+
 function MatcherChip({ matcher }: { matcher: SilenceMatcher }) {
   const theme = useSettingsStore((s) => s.theme)
   return (
@@ -82,15 +97,17 @@ function Section({
   children,
   defaultOpen = true,
   headerRight,
+  testId,
 }: {
   title: React.ReactNode
   children: React.ReactNode
   defaultOpen?: boolean
   headerRight?: React.ReactNode
+  testId?: string
 }) {
   const [open, setOpen] = useState(defaultOpen)
   return (
-    <div className="border-b border-border py-4 px-5">
+    <div data-testid={testId} className="border-b border-border py-4 px-5">
       <button
         className="flex w-full items-center justify-between text-sm font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground cursor-pointer"
         onClick={() => setOpen((v) => !v)}
@@ -131,13 +148,11 @@ export function AlertDetailPanel({
   const [silenceFormTarget, setSilenceFormTarget] = useState<Silence | null>(null)
   const [showNewSilenceForm, setShowNewSilenceForm] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
-  const [expireTarget, setExpireTarget] = useState<Silence | null>(null)
   const [showClaimForm, setShowClaimForm] = useState(false)
   const [manualClaimName, setManualClaimName] = useState(() => localStorage.getItem(USERNAME_KEY) ?? '')
   const [claimNote, setClaimNote] = useState('')
   const { user, providerInfo } = useAuthStore()
   const theme = useSettingsStore((s) => s.theme)
-  const claimAnimationEnabled = useSettingsStore((s) => s.claimAnimationEnabled)
   const authMode = providerInfo?.mode ?? 'none'
   const claimName = user?.username ?? manualClaimName
   const [promptCopied, setPromptCopied] = useState(false)
@@ -155,7 +170,6 @@ export function AlertDetailPanel({
   const { mutate: deleteSilence } = useDeleteSilence()
   const { mutate: upsertSilence, isPending: isExtending } = useUpsertSilence()
   const { data: allAlerts = [] } = useAlerts()
-  const allClusterNames = [...new Set(allAlerts.map((a) => a.clusterName))].sort()
   const qc = useQueryClient()
 
   useEffect(() => {
@@ -218,7 +232,7 @@ export function AlertDetailPanel({
 
   const renderLabelColumn = (labels: [string, string][]) =>
     labels.map(([k, v]) => (
-      <div key={k} className="flex flex-col gap-0.5">
+      <div key={k} data-testid="detail-label-item" className="flex flex-col gap-0.5">
         <span
           className="cursor-pointer font-mono text-[10px] text-muted-foreground hover:text-foreground"
           title="Add as filter"
@@ -226,24 +240,7 @@ export function AlertDetailPanel({
         >
           {k}
         </span>
-        {(() => {
-          const isReceiverLabel = k === 'receiver' || k === '@receiver'
-          const receivers = isReceiverLabel
-            ? v.split(',').map((receiver) => receiver.trim()).filter(Boolean)
-            : []
-
-          if (isReceiverLabel && receivers.length > 1) {
-            return (
-              <ul className="list-disc pl-4 text-xs">
-                {receivers.map((receiver, idx) => (
-                  <li key={`${receiver}-${idx}`} className="break-all">{receiver}</li>
-                ))}
-              </ul>
-            )
-          }
-
-          return <span className="break-all text-xs">{v}</span>
-        })()}
+        <span className="break-all text-xs">{v}</span>
       </div>
     ))
 
@@ -254,21 +251,9 @@ export function AlertDetailPanel({
     ([k]) => k !== 'summary' && k !== 'description' && !linkButtonKeys.has(k),
   )
 
-  // Some Alertmanager versions set startsAt = endsAt when endsAt is far in the future
-  // and startsAt is omitted in the POST. Fall back to the most recent 'firing' history event.
-  const lastFiredLabel = (() => {
-    const startsAt = new Date(alert.startsAt)
-    const ref = startsAt > new Date()
-      ? historyData?.events?.find(e => e.status === 'firing')
-        ? new Date(historyData.events.find(e => e.status === 'firing')!.startsAt)
-        : null
-      : startsAt
-    return ref ? formatDistanceToNow(ref, { addSuffix: true, locale: enUS }) : 'recently'
-  })()
-
   return (
     <>
-      <Sheet open={!!alert} onClose={onClose}>
+      <Sheet open={!!alert} onClose={onClose} testId="detail-panel" closeTestId="detail-panel-close">
         {(silenceFormTarget || showNewSilenceForm) && (
           <div className="absolute inset-0 z-10 bg-black/40 pointer-events-none" aria-hidden="true" />
         )}
@@ -277,19 +262,18 @@ export function AlertDetailPanel({
           <div className="flex items-start justify-between gap-3 pr-8">
             <h2 className="text-lg font-bold break-all">{alertname}</h2>
             <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
-              <span className="inline-flex items-center gap-1 rounded border border-border bg-muted px-2 py-0.5 text-xs font-medium">
-                <Server className="h-3 w-3 text-muted-foreground" />
-                {alert.clusterName}
-              </span>
+              <span className="rounded bg-accent px-2 py-0.5 text-xs">{alert.clusterName}</span>
               <AlertBadge severity={severity} />
               <StatusBadge state={alert.status.state} />
             </div>
           </div>
           {stats && (
-            <div className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground">
-              <span>Last fired <span className="font-medium text-foreground">{lastFiredLabel}</span></span>
+            <div data-testid="detail-stats-section" className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground">
+              <span data-testid="stat-first-seen">First seen <span className="font-medium text-foreground">{formatDistanceToNow(new Date(stats.firstSeenAt), { addSuffix: true, locale: enUS })}</span></span>
               <span>·</span>
-              <span>{stats.occurrenceCount}× fired</span>
+              <span data-testid="stat-last-seen">Last seen <span className="font-medium text-foreground">{formatDistanceToNow(new Date(stats.lastSeenAt), { addSuffix: true, locale: enUS })}</span></span>
+              <span>·</span>
+              <span data-testid="stat-occurrence-count">{stats.occurrenceCount}× fired</span>
             </div>
           )}
 
@@ -318,10 +302,14 @@ export function AlertDetailPanel({
             )}
             <div className="flex shrink-0 items-center gap-2 ml-auto">
               {activeClaim ? (
-                <div className={cn('flex items-center gap-1.5 rounded-md border px-3 h-8 text-xs', theme === 'light' ? 'border-blue-300 bg-blue-50' : 'border-blue-800 bg-blue-950/40')}>
+                <div data-testid="detail-claim-badge" className={cn('flex items-center gap-1.5 rounded border px-2 py-1', theme === 'light' ? 'border-blue-300 bg-blue-50' : 'border-blue-800 bg-blue-950/40')}>
                   <User className={cn('h-3 w-3 shrink-0', theme === 'light' ? 'text-blue-600' : 'text-blue-400')} />
                   <span className={cn('text-xs font-medium', theme === 'light' ? 'text-blue-700' : 'text-blue-300')}>{activeClaim.claimedBy}</span>
+                  {activeClaim.note && (
+                    <span data-testid="detail-claim-note" className={cn('text-xs', theme === 'light' ? 'text-blue-600' : 'text-blue-400/80')}>{activeClaim.note}</span>
+                  )}
                   <button
+                    data-testid="claim-release-button"
                     className="ml-1 text-[10px] text-muted-foreground hover:text-foreground cursor-pointer"
                     onClick={() => releaseMutation.mutate(user?.username ?? localStorage.getItem(USERNAME_KEY) ?? 'unknown')}
                     disabled={releaseMutation.isPending}
@@ -330,18 +318,14 @@ export function AlertDetailPanel({
                   </button>
                 </div>
               ) : (
-                <div className="relative p-[1px] overflow-hidden rounded-md">
-                  {claimAnimationEnabled && <div className="claim-snake-spinner absolute inset-[-150%]" />}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShowClaimForm((v) => !v)}
-                    className="relative z-10 bg-background border-transparent hover:bg-accent hover:border-transparent"
-                  >
-                    <User className="h-3.5 w-3.5" />
-                    Claim
-                  </Button>
-                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowClaimForm((v) => !v)}
+                >
+                  <User className="h-3.5 w-3.5" />
+                  Claim
+                </Button>
               )}
               <Button
                 size="sm"
@@ -371,28 +355,20 @@ export function AlertDetailPanel({
                 )
               }}
             >
-              <div className="flex items-center gap-1.5">
-                {authMode !== 'none' ? (
-                  <div className="flex items-center gap-1.5 h-7 px-2 rounded border border-border bg-muted text-xs text-muted-foreground w-48">
-                    <User className="h-3 w-3 shrink-0" />
-                    <span>{user?.username ?? '…'}</span>
-                  </div>
-                ) : (
-                  <Input
-                    value={manualClaimName}
-                    onChange={(e) => setManualClaimName(e.target.value)}
-                    placeholder="Your name"
-                    className="h-7 w-48 text-xs"
-                    required
-                  />
-                )}
-                <span className="group relative inline-flex items-center">
-                  <Info className="h-3.5 w-3.5 cursor-help text-muted-foreground/60 hover:text-muted-foreground" />
-                  <span className="pointer-events-none absolute left-5 top-0 z-50 w-64 rounded-md border border-border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-lg opacity-0 group-hover:opacity-100 transition-opacity font-normal leading-relaxed">
-                    Claiming this alert signals to your team that you're actively investigating it — others can see who's on it at a glance.
-                  </span>
-                </span>
-              </div>
+              {authMode !== 'none' ? (
+                <div className="flex items-center gap-1.5 h-7 px-2 rounded border border-border bg-muted text-xs text-muted-foreground w-48">
+                  <User className="h-3 w-3 shrink-0" />
+                  <span>{user?.username ?? '…'}</span>
+                </div>
+              ) : (
+                <Input
+                  value={manualClaimName}
+                  onChange={(e) => setManualClaimName(e.target.value)}
+                  placeholder="Your name"
+                  className="h-7 w-48 text-xs"
+                  required
+                />
+              )}
               <textarea
                 value={claimNote}
                 onChange={(e) => setClaimNote(e.target.value)}
@@ -419,6 +395,7 @@ export function AlertDetailPanel({
           const endsAt = new Date(s.endsAt).getTime()
           const remaining = endsAt - now
           const isExpiring = s.status.state === 'active' && remaining <= FIFTEEN_MIN
+          const isDeleting = deletingId === s.id
           const isPending = s.status.state === 'pending'
 
           return (
@@ -431,7 +408,7 @@ export function AlertDetailPanel({
                   : (theme === 'light' ? 'bg-muted' : 'bg-slate-900'),
               )}
             >
-              <div className="mb-3 flex flex-col gap-2">
+              <div className="mb-3 flex items-center justify-between gap-2">
                 <div className={cn(
                   'flex items-center gap-1.5 text-xs font-semibold',
                   isPending
@@ -443,38 +420,35 @@ export function AlertDetailPanel({
                   <BellOff className="h-3 w-3 shrink-0" />
                   {isPending ? 'Silence pending' : 'Silence active'}
                 </div>
-                <div className="flex items-center gap-1">
-                  {!isPending && ([
-                    { label: '+1h', ms: 60 * 60_000 },
-                    { label: '+4h', ms: 4 * 60 * 60_000 },
-                    { label: '+1d', ms: 24 * 60 * 60_000 },
-                  ] as const).map(({ label, ms }) => (
-                    <button
-                      key={label}
-                      disabled={isExtending}
-                      className={cn(
-                        'flex items-center gap-1 rounded border px-2 py-0.5 text-xs cursor-pointer disabled:opacity-40',
-                        isExpiring
-                          ? theme === 'light'
-                            ? 'border-amber-400 text-amber-700 hover:bg-amber-50'
-                            : 'border-yellow-700 text-yellow-300 hover:bg-yellow-900/50'
-                          : 'border-border text-muted-foreground hover:text-foreground hover:bg-accent',
-                      )}
-                      onClick={() => upsertSilence({
-                        id: s.id,
-                        cluster: s.clusterName,
-                        matchers: s.matchers,
-                        startsAt: s.startsAt,
-                        endsAt: new Date(new Date(s.endsAt).getTime() + ms).toISOString(),
-                        createdBy: s.createdBy,
-                        comment: s.comment,
-                        fingerprint: alert.fingerprint,
-                        performedBy: user?.username ?? localStorage.getItem(USERNAME_KEY) ?? 'unknown',
-                      })}
-                    >
-                      {isExtending ? <Loader2 className="h-3 w-3 animate-spin" /> : label}
-                    </button>
-                  ))}
+                <div className="flex shrink-0 items-center gap-1">
+                  {isExpiring && (
+                    <>
+                      {([
+                        { label: '+1h', ms: 60 * 60_000 },
+                        { label: '+4h', ms: 4 * 60 * 60_000 },
+                        { label: '+1d', ms: 24 * 60 * 60_000 },
+                      ] as const).map(({ label, ms }) => (
+                        <button
+                          key={label}
+                          disabled={isExtending}
+                          className="flex items-center gap-1 rounded border border-yellow-700 px-2 py-0.5 text-xs text-yellow-300 hover:bg-yellow-900/50 cursor-pointer disabled:opacity-40"
+                          onClick={() => upsertSilence({
+                            id: s.id,
+                            cluster: s.clusterName,
+                            matchers: s.matchers,
+                            startsAt: s.startsAt,
+                            endsAt: new Date(new Date(s.endsAt).getTime() + ms).toISOString(),
+                            createdBy: s.createdBy,
+                            comment: s.comment,
+                            fingerprint: alert.fingerprint,
+                            performedBy: user?.username ?? localStorage.getItem(USERNAME_KEY) ?? 'unknown',
+                          })}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </>
+                  )}
                   <button
                     className="flex items-center gap-1 rounded border border-border px-2 py-0.5 text-xs text-muted-foreground hover:text-foreground hover:bg-accent cursor-pointer"
                     onClick={() => setSilenceFormTarget(s)}
@@ -483,16 +457,12 @@ export function AlertDetailPanel({
                     Edit
                   </button>
                   <button
-                    className={cn(
-                      'flex items-center gap-1 rounded border border-border px-2 py-0.5 text-xs cursor-pointer',
-                      theme === 'light'
-                        ? 'text-red-600/70 hover:text-red-600 hover:bg-red-50'
-                        : 'text-red-500/70 hover:text-red-400 hover:bg-red-950/40',
-                    )}
-                    onClick={() => setExpireTarget(s)}
+                    disabled={isDeleting}
+                    className="flex items-center gap-1 rounded border border-border px-2 py-0.5 text-xs text-red-500/70 hover:text-red-400 hover:bg-red-950/40 cursor-pointer disabled:opacity-40"
+                    onClick={() => handleDelete(s)}
                   >
                     <Trash2 className="h-3 w-3" />
-                    Expire
+                    {isDeleting ? '…' : 'Expire'}
                   </button>
                 </div>
               </div>
@@ -576,7 +546,7 @@ export function AlertDetailPanel({
 
         {/* Expired silence banners */}
         {expiredSilences.map((s) => (
-          <div key={s.id} className={cn('border-b border-border px-5 py-4', theme === 'light' ? 'bg-muted' : 'bg-zinc-900')}>
+          <div key={s.id} className={cn('border-b border-border px-5 py-4', theme === 'light' ? 'bg-muted' : 'bg-slate-950')}>
             <div className="mb-3 flex items-center justify-between gap-2">
               <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
                 <BellOff className="h-3 w-3 shrink-0" />
@@ -629,12 +599,12 @@ export function AlertDetailPanel({
 
         {/* Annotations */}
         {annotationEntries.length > 0 && (
-          <Section title="Annotations" defaultOpen={true}>
+          <Section title="Annotations" defaultOpen={true} testId="detail-annotations-section">
             <div className="space-y-1 text-xs">
               {annotationEntries.map(([k, v]) => (
-                <div key={k} className="flex gap-2">
+                <div key={k} data-testid="detail-annotation-item" className="flex gap-2">
                   <span className="font-mono text-muted-foreground">{k}</span>
-                  <span className="break-all">{v}</span>
+                  <span data-testid="detail-annotation-value" className="break-all">{v}</span>
                 </div>
               ))}
             </div>
@@ -695,7 +665,7 @@ export function AlertDetailPanel({
         )}
 
         {/* Labels */}
-        <Section title="Labels">
+        <Section title="Labels" testId="detail-labels-section">
           <div className="grid grid-cols-2 gap-x-4 gap-y-2">
             <div className="space-y-2">{renderLabelColumn(leftLabels)}</div>
             <div className="space-y-2">{renderLabelColumn(rightLabels)}</div>
@@ -985,7 +955,7 @@ export function AlertDetailPanel({
         })()}
 
         {/* Comments */}
-        <Section title="Comments">
+        <Section title="Comments" testId="detail-comments-section">
           <AlertComments fingerprint={alert.fingerprint} />
         </Section>
 
@@ -996,12 +966,12 @@ export function AlertDetailPanel({
         <Sheet
           open={true}
           onClose={() => setShowNewSilenceForm(false)}
-          className="sm:max-w-[760px] lg:max-w-[760px]"
+          className="sm:max-w-2xl lg:max-w-3xl"
         >
           <div className="p-5 pt-10">
             <h2 className="mb-4 text-base font-semibold">Create new silence</h2>
             <SilenceForm
-              availableClusters={allClusterNames.length > 0 ? allClusterNames : [alert.clusterName]}
+              availableClusters={[alert.clusterName]}
               prefillAlerts={[alert]}
               fingerprint={alert.fingerprint}
               onSuccess={() => setShowNewSilenceForm(false)}
@@ -1011,33 +981,19 @@ export function AlertDetailPanel({
         </Sheet>
       )}
 
-      <SilenceExpireModal
-        silences={expireTarget ? [expireTarget] : []}
-        allAlerts={allAlerts}
-        open={expireTarget !== null}
-        onConfirm={() => {
-          if (expireTarget) {
-            handleDelete(expireTarget)
-            setExpireTarget(null)
-          }
-        }}
-        onCancel={() => setExpireTarget(null)}
-        isPending={deletingId !== null}
-      />
-
       {/* Silence form sheet (edit / recreate) */}
       {silenceFormTarget && (
         <Sheet
           open={true}
           onClose={() => setSilenceFormTarget(null)}
-          className="sm:max-w-[760px] lg:max-w-[760px]"
+          className="sm:max-w-2xl lg:max-w-3xl"
         >
           <div className="p-5 pt-10">
             <h2 className="mb-4 text-base font-semibold">
               {silenceFormTarget.status.state === 'expired' ? 'Recreate silence' : 'Edit silence'}
             </h2>
             <SilenceForm
-              availableClusters={allClusterNames.length > 0 ? allClusterNames : [silenceFormTarget.clusterName]}
+              availableClusters={[silenceFormTarget.clusterName]}
               prefillSilence={silenceFormTarget}
               isRecreate={silenceFormTarget.status.state === 'expired'}
               fingerprint={alert.fingerprint}

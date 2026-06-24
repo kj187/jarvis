@@ -7,9 +7,11 @@ interface SheetProps {
   onClose: () => void
   children: React.ReactNode
   className?: string
+  testId?: string
+  closeTestId?: string
 }
 
-export function Sheet({ open, onClose, children, className }: SheetProps) {
+export function Sheet({ open, onClose, children, className, testId, closeTestId }: SheetProps) {
   React.useEffect(() => {
     if (!open) return
     const handleKey = (e: KeyboardEvent) => {
@@ -39,6 +41,7 @@ export function Sheet({ open, onClose, children, className }: SheetProps) {
       <div
         role="dialog"
         aria-modal="true"
+        data-testid={testId}
         className={cn(
           'fixed inset-y-0 right-0 z-50 flex w-full flex-col border-l border-border bg-card shadow-xl',
           'sm:max-w-2xl lg:max-w-4xl',
@@ -46,6 +49,7 @@ export function Sheet({ open, onClose, children, className }: SheetProps) {
         )}
       >
         <button
+          data-testid={closeTestId}
           onClick={onClose}
           className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring cursor-pointer"
           aria-label="Close"

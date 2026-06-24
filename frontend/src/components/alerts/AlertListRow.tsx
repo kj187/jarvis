@@ -113,6 +113,7 @@ export function AlertListRow({
     <tr
       role="row"
       tabIndex={0}
+      data-testid="alert-list-row"
       onClick={() => onClick(alert.fingerprint)}
       onKeyDown={(e) => e.key === 'Enter' && onClick(alert.fingerprint)}
       className={cn(

@@ -43,15 +43,16 @@ function CommentRow({ comment, fingerprint, user, authMode }: CommentRowProps) {
 
   return (
     <>
-      <div className="rounded border border-border bg-accent/20 p-3">
+      <div data-testid="detail-comment-item" className="rounded border border-border bg-accent/20 p-3">
         <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold">{comment.authorName}</span>
+          <span data-testid="detail-comment-author" className="text-xs font-semibold">{comment.authorName}</span>
           <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">
+            <span data-testid="detail-comment-timestamp" className="text-xs text-muted-foreground">
               {formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true, locale: enUS })}
             </span>
             {canDelete && (
               <button
+                data-testid="detail-comment-delete"
                 onClick={execDelete}
                 className="cursor-pointer text-muted-foreground hover:text-destructive"
                 aria-label="Delete comment"
@@ -129,6 +130,7 @@ export function AlertComments({ fingerprint }: AlertCommentsProps) {
             />
           )}
           <Textarea
+            data-testid="detail-comment-input"
             value={body}
             onChange={(e) => setBody(e.target.value)}
             placeholder="Write a comment…"
@@ -136,6 +138,7 @@ export function AlertComments({ fingerprint }: AlertCommentsProps) {
             rows={3}
           />
           <Button
+            data-testid="detail-comment-submit"
             type="submit"
             size="sm"
             disabled={!body.trim() || (authMode === 'none' && !authorName) || addMutation.isPending}
