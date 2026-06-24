@@ -8,8 +8,16 @@ import (
 	"time"
 
 	"github.com/labstack/echo/v4"
+	"golang.org/x/time/rate"
 	"github.com/kj187/jarvis/backend/internal/alertmanager"
 	"github.com/kj187/jarvis/backend/internal/models"
+)
+
+// Poll rate limit for POST /api/v1/poll in e2e builds: effectively unlimited so
+// deterministic tests can force immediate polls without hitting 429.
+const (
+	pollRLRate  rate.Limit = rate.Inf
+	pollRLBurst int        = 1000
 )
 
 // registerTestRoutes wires the e2e-only seed/reset endpoints. These are gated
@@ -180,10 +188,17 @@ func (s *Server) testSetClaim(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "claimedBy is required")
 	}
 
-	_, err := s.store.SetClaim(req.Fingerprint, nil, req.ClaimedBy, req.Note)
+	claim, err := s.store.SetClaim(req.Fingerprint, nil, req.ClaimedBy, req.Note)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
+
+	// Mirror the production claim handler so WS-driven UI updates work in e2e.
+	s.alertStore.SetActiveClaim(req.Fingerprint, claim)
+	s.hub.BroadcastJSON(models.WSTypeClaimSet, map[string]interface{}{
+		"fingerprint": req.Fingerprint,
+		"claim":       claim,
+	})
 
 	return c.NoContent(http.StatusNoContent)
 }
