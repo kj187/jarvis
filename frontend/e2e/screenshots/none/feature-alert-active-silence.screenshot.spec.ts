@@ -1,0 +1,43 @@
+import { test, expect, freezeClock, waitForActiveAlerts, JARVIS_BASE_URL } from '../../support/fixtures'
+import { dismissNoAuthNotice } from '../../support/auth'
+import { kubernetesAlerts } from '../../fixtures/alerts'
+
+const DIR = process.env.SCREENSHOTS_DIR ?? '../docs/assets'
+
+async function waitForSuppressedAlerts(baseURL: string, timeoutMs = 10_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    const res = await fetch(`${baseURL}/api/v1/alerts`)
+    if (res.ok) {
+      const alerts: Array<{ status: { state: string } }> = await res.json()
+      if (alerts.some((a) => a.status.state === 'suppressed')) return
+    }
+    await new Promise((r) => setTimeout(r, 500))
+  }
+  throw new Error('timed out waiting for suppressed alerts')
+}
+
+/**
+ * Screenshot: suppressed alert card showing the covering silence details (creator,
+ * matchers, remaining duration). Navigates to the suppressed state tab.
+ * Regenerate: make e2e-screenshot NAME=feature-alert-active-silence
+ */
+test('feature-alert-active-silence', async ({ page, am, jarvis }) => {
+  await freezeClock(page)
+  await dismissNoAuthNotice(page)
+  await am.fire(kubernetesAlerts)
+  await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, kubernetesAlerts.length)
+
+  await jarvis.createSilence('e2e', [
+    { name: 'alertname', value: 'KubePodCrashLooping', isRegex: false, isEqual: true },
+  ], { durationMinutes: 120, comment: 'Maintenance window — rolling restart', createdBy: 'sre-team' })
+
+  await jarvis.poll()
+  await waitForSuppressedAlerts(JARVIS_BASE_URL)
+
+  await page.goto('/?state=suppressed')
+  await expect(page.getByRole('columnheader', { name: 'Alert Name' })).toBeVisible()
+  await page.waitForTimeout(300)
+
+  await page.screenshot({ path: `${DIR}/feature-alert-active-silence.png`, fullPage: true })
+})

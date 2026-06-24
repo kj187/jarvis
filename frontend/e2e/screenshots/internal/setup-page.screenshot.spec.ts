@@ -12,5 +12,5 @@ test('setup-page', async ({ page }) => {
   await expect(page.getByText('Initial setup')).toBeVisible()
   await page.waitForTimeout(300)
 
-  await page.screenshot({ path: `${DIR}/setup-page.png`, fullPage: true })
+  await page.screenshot({ path: `${DIR}/auth-setup.png`, fullPage: true })
 })

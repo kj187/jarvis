@@ -28,5 +28,5 @@ test('detail-panel', async ({ page, am, jarvis }) => {
   await expect(page.getByTestId('detail-panel')).toBeVisible()
   await page.waitForTimeout(300)
 
-  await page.screenshot({ path: `${DIR}/detail-panel.png`, fullPage: true })
+  await page.screenshot({ path: `${DIR}/feature-detail-panel.png`, fullPage: true })
 })

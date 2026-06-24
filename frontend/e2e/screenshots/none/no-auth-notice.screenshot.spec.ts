@@ -17,5 +17,5 @@ test('no-auth-notice', async ({ page, am, jarvis }) => {
   await expect(page.getByRole('dialog', { name: 'Authentication notice' })).toBeVisible()
   await page.waitForTimeout(300)
 
-  await page.screenshot({ path: `${DIR}/no-auth-notice.png` })
+  await page.screenshot({ path: `${DIR}/auth-noauth-notice.png` })
 })

@@ -5,10 +5,10 @@ import { manyAlerts } from '../../fixtures/alerts'
 const DIR = process.env.SCREENSHOTS_DIR ?? '../docs/assets'
 
 /**
- * Screenshot: alerts card view, populated with a rich set so it doesn't look
- * empty. Regenerate individually:  make e2e-screenshot NAME=card-view
+ * Screenshot: filter bar open with a search term, showing narrowed results.
+ * Regenerate: make e2e-screenshot NAME=feature-filter
  */
-test('card-view', async ({ page, am, jarvis }) => {
+test('feature-filter', async ({ page, am, jarvis }) => {
   await freezeClock(page)
   await dismissNoAuthNotice(page)
   await am.fire(manyAlerts)
@@ -16,8 +16,11 @@ test('card-view', async ({ page, am, jarvis }) => {
 
   await page.goto('/?state=active')
   await expect(page.getByTestId('alert-card').first()).toBeVisible()
+
+  await page.getByRole('button', { name: 'Toggle search' }).click()
+  await expect(page.getByPlaceholder('Search alerts…')).toBeVisible()
+  await page.getByPlaceholder('Search alerts…').fill('OOM')
   await page.waitForTimeout(300)
 
-  await page.screenshot({ path: `${DIR}/feature-card-view.png`, fullPage: true })
-  await page.screenshot({ path: `${DIR}/screenshot.png`, fullPage: true })
+  await page.screenshot({ path: `${DIR}/feature-filter.png`, fullPage: true })
 })

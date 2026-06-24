@@ -5,10 +5,10 @@ import { manyAlerts } from '../../fixtures/alerts'
 const DIR = process.env.SCREENSHOTS_DIR ?? '../docs/assets'
 
 /**
- * Screenshot: alerts card view, populated with a rich set so it doesn't look
- * empty. Regenerate individually:  make e2e-screenshot NAME=card-view
+ * Screenshot: settings panel open over the populated dashboard.
+ * Regenerate: make e2e-screenshot NAME=feature-settings-panel
  */
-test('card-view', async ({ page, am, jarvis }) => {
+test('feature-settings-panel', async ({ page, am, jarvis }) => {
   await freezeClock(page)
   await dismissNoAuthNotice(page)
   await am.fire(manyAlerts)
@@ -16,8 +16,10 @@ test('card-view', async ({ page, am, jarvis }) => {
 
   await page.goto('/?state=active')
   await expect(page.getByTestId('alert-card').first()).toBeVisible()
+
+  await page.getByRole('button', { name: 'Open settings' }).click()
+  await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
   await page.waitForTimeout(300)
 
-  await page.screenshot({ path: `${DIR}/feature-card-view.png`, fullPage: true })
-  await page.screenshot({ path: `${DIR}/screenshot.png`, fullPage: true })
+  await page.screenshot({ path: `${DIR}/feature-settings-panel.png` })
 })

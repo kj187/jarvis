@@ -30,5 +30,5 @@ test('detail-claimed', async ({ page, am, jarvis }) => {
   await expect(page.getByTestId('detail-claim-badge')).toBeVisible()
   await page.waitForTimeout(300)
 
-  await page.screenshot({ path: `${DIR}/detail-claimed.png`, fullPage: true })
+  await page.screenshot({ path: `${DIR}/feature-detail-claimed.png`, fullPage: true })
 })

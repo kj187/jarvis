@@ -21,5 +21,5 @@ test('login-modal', async ({ page, am, jarvis }) => {
   await expect(dialog).toBeVisible()
   await page.waitForTimeout(300)
 
-  await page.screenshot({ path: `${DIR}/login-modal.png` })
+  await page.screenshot({ path: `${DIR}/auth-login-internal.png` })
 })
