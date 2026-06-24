@@ -61,7 +61,7 @@ export function renderTextWithLinks(text: string): ReactNode {
         href={url}
         target="_blank"
         rel="noopener noreferrer"
-        className="underline underline-offset-2 text-[var(--color-link)] hover:opacity-80"
+        className="underline underline-offset-2 text-blue-400 hover:text-blue-300"
         onClick={(e) => e.stopPropagation()}
       >
         {url}
