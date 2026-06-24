@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
-import { Loader2, X, ArrowUpDown } from 'lucide-react'
+import { Loader2, X, ArrowUpDown, Search, Maximize2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { SilenceCard } from './SilenceCard'
 import { SilenceGroupCard } from './SilenceGroupCard'
 import { SilenceListView } from './SilenceListView'
@@ -48,7 +49,7 @@ export function SilencesPage() {
   })
   const deleteMutation = useDeleteSilence()
 
-  const { silencesViewMode: viewMode, setSilencesViewMode, filters } = useUIStore()
+  const { silencesViewMode: viewMode, setSilencesViewMode, filters, setFilter, isFullscreen, setIsFullscreen } = useUIStore()
   const [sortBy, setSortBy] = useState<SortBy>('expires')
   const [showExpired, setShowExpired] = useState(false)
   const [formOpen, setFormOpen] = useState(false)
@@ -56,6 +57,16 @@ export function SilencesPage() {
   const [editSilence, setEditSilence] = useState<Silence | null>(null)
   const [editGroup, setEditGroup] = useState<Silence[]>([])
   const [expireTargets, setExpireTargets] = useState<Silence[]>([])
+  const [searchOpen, setSearchOpen] = useState(() => Boolean(filters.search))
+
+  function toggleSearch() {
+    if (searchOpen) {
+      setFilter('search', '')
+      setSearchOpen(false)
+    } else {
+      setSearchOpen(true)
+    }
+  }
 
   useEffect(() => {
     if (!formOpen) return
@@ -69,6 +80,15 @@ export function SilencesPage() {
     document.body.style.overflow = 'hidden'
     return () => { document.body.style.overflow = '' }
   }, [formOpen])
+
+  useEffect(() => {
+    if (!isFullscreen) return
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setIsFullscreen(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [isFullscreen, setIsFullscreen])
 
   const clusterNames = clusters.map((c) => c.name)
 
@@ -117,7 +137,7 @@ export function SilencesPage() {
     : editGroup.length > 0 && editGroup.every((s) => s.status.state === 'expired')
 
   return (
-    <div className="px-4 space-y-4">
+    <div className={`space-y-4 px-4${isFullscreen ? ' pt-4' : ''}`}>
       {/* Toolbar */}
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-3">
@@ -158,6 +178,52 @@ export function SilencesPage() {
           >
             {showExpired ? 'Hide expired' : 'Show expired'}
           </Button>
+          {searchOpen ? (
+            <div className="flex items-center rounded-md border border-border overflow-hidden bg-input h-7">
+              <Search className="ml-2 h-3 w-3 text-muted-foreground shrink-0 pointer-events-none" />
+              <Input
+                value={filters.search}
+                onChange={(e) => setFilter('search', e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') {
+                    setFilter('search', '')
+                    setSearchOpen(false)
+                  }
+                }}
+                placeholder="Search silences..."
+                className="h-full w-44 text-xs border-0 bg-transparent shadow-none focus-visible:ring-0 px-2"
+                aria-label="Search silences"
+              />
+              <button
+                onClick={toggleSearch}
+                className="cursor-pointer h-full px-2 flex items-center text-muted-foreground hover:text-foreground transition-colors"
+                aria-label="Close search"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center rounded-md border border-border overflow-hidden">
+              <button
+                onClick={toggleSearch}
+                className="cursor-pointer h-7 w-7 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                title="Search"
+                aria-label="Toggle search"
+              >
+                <Search className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
+          <div className="flex items-center rounded-md border border-border overflow-hidden">
+            <button
+              onClick={() => setIsFullscreen(true)}
+              className="cursor-pointer h-7 w-7 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+              title="Fullscreen (ESC to exit)"
+              aria-label="Enter fullscreen"
+            >
+              <Maximize2 className="h-3.5 w-3.5" />
+            </button>
+          </div>
         </div>
       </div>
 
