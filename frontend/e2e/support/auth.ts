@@ -29,15 +29,23 @@ export async function dismissNoAuthNotice(page: Page): Promise<void> {
 /**
  * Internal mode first-run: creates the initial admin via POST /setup.
  * Idempotent — a 403 ("already completed") is treated as success.
+ * Retries on 429: /setup has rateLimiter(0.1, 3), so 4 sequential tests exhaust
+ * the burst. A 10s wait is enough to refill 1 token (rate = 0.1 req/s).
  */
 export async function ensureInternalAdmin(
   page: Page,
   creds = INTERNAL_ADMIN,
 ): Promise<void> {
-  const res = await page.request.post('/setup', { data: creds })
-  if (!res.ok() && res.status() !== 403) {
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const res = await page.request.post('/setup', { data: creds })
+    if (res.ok() || res.status() === 403) return
+    if (res.status() === 429) {
+      await new Promise((r) => setTimeout(r, 10_000))
+      continue
+    }
     throw new Error(`setup failed: ${res.status()} ${await res.text()}`)
   }
+  throw new Error('setup failed: /setup rate limit not cleared after retries')
 }
 
 /** Internal mode: logs in via POST /auth/login; the session cookie lands in the page context. */
