@@ -18,7 +18,7 @@ test('feature-silence-create', async ({ page, am, jarvis }) => {
   await page.goto('/?state=active')
   await expect(page.getByTestId('alert-card').first()).toBeVisible()
 
-  await page.getByRole('button', { name: 'Create silence' }).click()
+  await page.getByRole('button', { name: 'Create silence' }).first().click()
   await expect(page.getByText('Create Silence').first()).toBeVisible()
   await page.waitForTimeout(300)
 
