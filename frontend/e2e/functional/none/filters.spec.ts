@@ -31,17 +31,23 @@ test('C10 matcher state is restored from URL', async ({ page, am, jarvis }) => {
   const matchers = encodeURIComponent(JSON.stringify([{ name: 'severity', operator: '=', value: 'critical' }]))
   await page.goto(`/?state=active&matchers=${matchers}`)
 
-  await expect(page.getByText('severity')).toBeVisible()
-  await expect(page.getByText('critical')).toBeVisible()
+  await expect(page.getByText('severity', { exact: true })).toBeVisible()
+  await expect(page.getByText('critical', { exact: true })).toBeVisible()
 })
 
-test('C11 search via q filters by alertname/labels', async ({ page, am, jarvis }) => {
+test('C11 search via ?q= filters by alertname/labels', async ({ page, am, jarvis }) => {
   await dismissNoAuthNotice(page)
   await am.fire(kubernetesAlerts)
   await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, kubernetesAlerts.length)
 
   await page.goto('/?state=active&q=kubepod')
-  await expect(page.getByText(/KubePodCrashLooping/i)).toBeVisible()
+  await expect(page.getByText('KubePodCrashLooping', { exact: true })).toBeVisible()
+})
+
+test('C11 search via the toggle input filters by label value', async ({ page, am, jarvis }) => {
+  await dismissNoAuthNotice(page)
+  await am.fire(kubernetesAlerts)
+  await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, kubernetesAlerts.length)
 
   await page.goto('/?state=active')
   await page.getByLabel('Toggle search').click()
