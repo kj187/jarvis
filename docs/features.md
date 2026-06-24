@@ -46,6 +46,18 @@ Switching between card and list view is instant. The selected view mode is persi
 
 ---
 
+## Fullscreen
+
+Hide the header and all controls — only the alert list fills the screen. Useful for wall displays or focused incident response.
+
+![Fullscreen](assets/feature-fullscreen.png)
+
+Click the **expand icon** (⛶) in the top-right corner of the filter bar to enter fullscreen. The main header, navigation, and filter controls all disappear, giving the alert list maximum vertical space.
+
+Press **ESC** to exit fullscreen and restore the full interface.
+
+---
+
 ## Label Filters
 
 Chip-based label matchers (`=` `!=` `=~` `!~`) that compose into a filter expression and are serialized into the URL for sharing.
@@ -323,6 +335,10 @@ The search term is not persisted in `localStorage` or the URL — it resets on p
 ## Dark / Light Theme
 
 Switch between dark and light mode at any time; the preference is persisted in `localStorage`.
+
+| Dark Mode | Light Mode |
+|:---:|:---:|
+| ![Dark Mode](assets/feature-theme-dark.png) | ![Light Mode](assets/feature-theme-light.png) |
 
 The theme toggle is located in the top-right corner of the header. Clicking the icon switches the entire UI between dark and light mode instantly — no page reload required.
 
