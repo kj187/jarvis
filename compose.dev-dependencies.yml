@@ -2,8 +2,8 @@
 # Requires: make up (dev stack) must be running first so the network exists.
 #
 # Usage (via Makefile):
-#   make test-am-up / make test-am-down
-#   make test-pg-up / make test-pg-down
+#   make up-alertmanager / make down-alertmanager
+#   make up-postgres / make down-postgres
 #
 # Reachable from backend container:
 #   Alertmanager: http://test-alertmanager:9093

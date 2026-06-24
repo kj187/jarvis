@@ -1,7 +1,7 @@
 services:
   backend:
     build:
-      context: ./backend
+      context: .
       dockerfile: Containerfile.dev
     ports:
       - "8080:8080"

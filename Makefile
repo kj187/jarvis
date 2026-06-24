@@ -1,5 +1,5 @@
 COMPOSE_DEV        = podman compose -f compose.dev.yml
-COMPOSE_TEST_DEPS  = podman compose -f compose.test-dependencies.yml
+COMPOSE_TEST_DEPS  = podman compose -f compose.dev-dependencies.yml
 COMPOSE_E2E        = podman compose -f compose.e2e.yml
 GITLEAKS           = podman run --rm -v "$(CURDIR):/repo:ro,z" zricethezav/gitleaks:latest
 FRONTEND_CONTAINER = jarvis_frontend_1
