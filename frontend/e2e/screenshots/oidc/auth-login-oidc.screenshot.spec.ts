@@ -21,7 +21,7 @@ test('auth-login-oidc', async ({ page, am, jarvis }) => {
 
   const dialog = page.getByRole('dialog', { name: 'Login' })
   await expect(dialog).toBeVisible()
-  await expect(dialog.getByRole('button', { name: 'Sign in with SSO' })).toBeVisible()
+  await expect(dialog.getByRole('button', { name: 'Login with SSO' })).toBeVisible()
   await page.waitForTimeout(300)
 
   await page.screenshot({ path: `${DIR}/auth-login-oidc.png` })
