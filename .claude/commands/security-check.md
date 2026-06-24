@@ -82,7 +82,7 @@ tmpfs:
 
 - [ ] `JARVIS_ALLOWED_ORIGINS` is set (no wildcard `*`)
 - [ ] `.env.example` contains only placeholders, no real values
-- [ ] `JARVIS_DB_PATH` points to a volume, not a tmp directory
+- [ ] `JARVIS_DB_DSN` points to a persistent volume (SQLite) or a real DB host (PostgreSQL), not a tmp directory — and is never logged raw (`db.RedactDSN()`)
 
 ---
 

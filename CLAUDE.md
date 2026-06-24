@@ -50,9 +50,11 @@ git push && gh pr create        → CI runs on PR
 git push --tags                 → triggers release.yml
 
 # release.yml does automatically:
-#   1. Build linux/amd64 + linux/arm64 Docker image (Containerfile, multi-stage)
-#   2. Push → ghcr.io/kj187/jarvis:v1.2.3 + ghcr.io/kj187/jarvis:1.2 + :latest
-#   3. Create GitHub Release (auto-generated release notes)
+#   1. Build linux/amd64 + linux/arm64 Docker image (Containerfile, multi-stage), SBOM + provenance
+#   2. Push → ghcr.io/kj187/jarvis:1.2.3 + ghcr.io/kj187/jarvis:1.2  (no v prefix, no :latest image tag)
+#   3. Sign image keylessly with cosign (GitHub OIDC)
+#   4. Create GitHub Release (notes from CHANGELOG.md, marked --latest)
+#   5. Package + push Helm chart → oci://ghcr.io/kj187/charts
 ```
 
 **Image structure:** Frontend is embedded into the Go binary at build time (`//go:build prod` + `embed.FS`). Single image, no separate frontend container.

@@ -504,7 +504,7 @@ interface UserSettings {
 | Var | Notes |
 |---|---|
 | `JARVIS_PORT` `JARVIS_LOG_LEVEL` `JARVIS_LOG_REQUESTS` `JARVIS_POLL_INTERVAL` | server basics |
-| `JARVIS_DB_DSN` (`JARVIS_DB_PATH` legacy) | `postgres://…` → PostgreSQL, else SQLite path |
+| `JARVIS_DB_DSN` | `postgres://…` → PostgreSQL, anything else → SQLite file path. Never logged raw (`db.RedactDSN()`) |
 | `JARVIS_RUNBOOK_BASE_URL` | prefix for non-URL `runbook` values |
 | `JARVIS_ALLOWED_ORIGINS` | CORS + WS origin allow-list (no `*`) |
 | `JARVIS_AUTH_PROVIDER` `JARVIS_AUTH_MODE` `JARVIS_SECRET_KEY` | auth |

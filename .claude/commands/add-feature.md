@@ -46,7 +46,7 @@ After every new Go model → add the corresponding TypeScript type in `frontend/
 2. API wrapper in api/client.ts (if new endpoint)
 3. TanStack Query hook in hooks/useXyz.ts
 4. Write component (see checklist below)
-5. Vitest unit test or Playwright E2E for golden path
+5. Playwright functional E2E for golden path
 ```
 
 ### Component Checklist

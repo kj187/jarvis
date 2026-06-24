@@ -127,7 +127,7 @@ Full release process: generate changelog, set tag, trigger GitHub Actions.
     ---
 
     **Full diff:** [vPREV...vNEW](https://github.com/kj187/jarvis/compare/vPREV...vNEW)
-    **Container image:** `ghcr.io/kj187/jarvis:vX.Y.Z`
+    **Container image:** `ghcr.io/kj187/jarvis:X.Y.Z`
     ```
 
     → Present the filled-out description to the user and ask: *"Does this look good? I'll copy it to your clipboard / you can paste it into the GitHub Release."*
@@ -136,7 +136,8 @@ Full release process: generate changelog, set tag, trigger GitHub Actions.
 13. **Inform about next steps**:
     - GitHub Actions is now running: https://github.com/kj187/jarvis/actions
     - Release will be created at: https://github.com/kj187/jarvis/releases
-    - Container image will be pushed to: `ghcr.io/kj187/jarvis:vX.Y.Z` + `ghcr.io/kj187/jarvis:latest`
+    - Container image will be pushed to: `ghcr.io/kj187/jarvis:X.Y.Z` + `ghcr.io/kj187/jarvis:X.Y` (no `v` prefix, no `:latest` image tag — the GitHub Release itself is marked "latest")
+    - A signed (cosign) multi-arch image (amd64 + arm64) and the Helm chart are published automatically
 
 ---
 
@@ -165,9 +166,17 @@ git push origin v1.2.1
 ## What GitHub Actions does automatically (after tag push)
 
 From `.github/workflows/release.yml`:
-1. `git-chglog --output RELEASE_NOTES.md vX.Y.Z` — generate release notes for this version
-2. Build container image + push to GHCR (`ghcr.io/kj187/jarvis:vX.Y.Z` + `:latest`)
-3. Create GitHub Release with the generated release notes
+
+**Job `build-and-push`:**
+1. Derive image tags via `docker/metadata-action` → `{{version}}` (e.g. `1.2.3`) + `{{major}}.{{minor}}` (e.g. `1.2`). **No `v` prefix, no `:latest` image tag.**
+2. Build multi-arch image (`linux/amd64` + `linux/arm64`) from `Containerfile`, with SBOM + provenance, push to GHCR.
+3. Sign the image keylessly with **cosign** (GitHub OIDC).
+4. Build the release body by extracting this version's section from `CHANGELOG.md` (awk) and appending pull/cosign-verify instructions.
+5. Create the GitHub Release via `gh release create --notes-file release-body.md --latest` (the `--latest` flag marks the *GitHub Release* as latest, not a Docker tag).
+
+**Job `helm-publish`:**
+6. Patch `charts/jarvis/Chart.yaml` (`version` + `appVersion`) to the release version.
+7. Package and push the Helm chart to `oci://ghcr.io/kj187/charts`.
 
 ---
 

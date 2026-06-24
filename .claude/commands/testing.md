@@ -29,10 +29,18 @@ go test -run TestGracePeriod ./internal/history/...  # Single test
 # ── Frontend ─────────────────────────────────────────────────
 cd frontend
 
-pnpm test                          # Playwright E2E (alias for test:e2e)
-pnpm test:e2e                      # Playwright E2E (browser must be installed)
+pnpm test                          # Playwright functional E2E (alias for test:e2e)
+pnpm test:e2e                      # Playwright functional E2E (browser must be installed)
 pnpm exec playwright install       # Install Playwright browsers (once)
 pnpm duplication                   # jscpd code duplication check
+pnpm lint                          # eslint src
+pnpm build                         # tsc -b && vite build (type-check + build)
+
+# ── Functional E2E via Makefile (isolated container stack) ───
+make e2e                           # functional suite across all auth modes (none + internal + oidc)
+make e2e-mode MODE=oidc            # functional suite for ONE mode
+make e2e-screenshots               # regenerate all docs screenshots
+make e2e-screenshot NAME=card-view # regenerate ONE screenshot
 ```
 
 ---
@@ -144,11 +152,17 @@ suppressed → resolved: directly resolved, no expired event
 
 ## Frontend Test Strategy
 
-### Vitest Unit Tests (components + utils)
+There are **no frontend unit tests** (no Vitest). The unit-test stack was removed in favor of
+functional E2E (commit `test(frontend): remove unit-test stack in favor of functional e2e`).
+All frontend behaviour — including `alertUtils` logic (`getEffectiveAlertState`,
+`matchesLabelMatchers`, `safeRegex`, `getFilterableLabels`, regex matchers, `@cluster`/`@receiver`
+pseudo-labels) and Zustand store actions/filter state — is verified through Playwright functional
+E2E against a real running app.
 
-- `lib/alertUtils.test.ts` — `getEffectiveAlertState`, `matchesLabelMatchers`, `safeRegex`, `getFilterableLabels`
-- Especially: edge cases for regex matchers, `@cluster`/`@receiver` pseudo-labels
-- Store tests: Zustand actions, filter state
+Specs live under `frontend/e2e/`:
+- `e2e/functional/<mode>/*.spec.ts` — functional golden paths per auth mode (`none`, `internal`, `oidc`)
+- `e2e/screenshots/<mode>/*.screenshot.spec.ts` — screenshot generation for docs (`docs/assets/`)
+- `e2e/fixtures/`, `e2e/support/` — shared fixtures and helpers
 
 ### Playwright E2E — Functional Golden Paths
 
@@ -230,9 +244,16 @@ Playwright E2E runs **only in CI** (too slow for pre-commit).
 
 ---
 
-## CI Pipeline (`.github/workflows/ci.yml`)
+## CI Pipeline
+
+Split across two workflows.
+
+### `.github/workflows/ci.yml`
 
 ```yaml
+pin-check:           # ratchet: verify all action pins
+secrets:             # secret scanning
+
 backend:
   - go test -v -race -coverprofile=coverage.out ./... | go-junit-report → report.xml
   - Coverage summary → GITHUB_STEP_SUMMARY (go tool cover -func)
@@ -247,6 +268,13 @@ frontend:
   - pnpm build
   - pnpm duplication  # jscpd code duplication check
 
+helm:
+  - helm lint + helm unittest
+```
+
+### `.github/workflows/e2e.yml`
+
+```yaml
 e2e:
   - make e2e          # Functional suite across none + internal + oidc
 ```
