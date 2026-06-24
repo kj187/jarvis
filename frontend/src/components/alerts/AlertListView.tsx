@@ -489,6 +489,7 @@ export function AlertListView({ alerts, silences, onSelectAlert, selectedFingerp
                       <tr
                         role="row"
                         tabIndex={0}
+                        data-testid="alert-group-row"
                         onClick={() => toggleGroup(groupKey)}
                         onKeyDown={(e) => e.key === 'Enter' && toggleGroup(groupKey)}
                         className={cn(

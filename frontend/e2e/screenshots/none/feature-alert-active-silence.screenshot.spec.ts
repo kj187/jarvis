@@ -37,9 +37,8 @@ test('feature-alert-active-silence', async ({ page, am, jarvis }) => {
   await waitForSuppressedAlerts(JARVIS_BASE_URL)
 
   await page.goto('/?state=suppressed')
-  // Groups are collapsed by default — click the first one to expand and reveal alert rows
-  await expect(page.getByRole('row').first()).toBeVisible()
-  await page.getByRole('row').first().click()
+  await expect(page.getByTestId('alert-group-row').first()).toBeVisible()
+  await page.getByTestId('alert-group-row').first().click()
   await expect(page.getByTestId('alert-list-row').first()).toBeVisible()
   await page.waitForTimeout(300)
 
