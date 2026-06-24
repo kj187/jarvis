@@ -168,8 +168,8 @@ func NewRouter(
 	// Rate limiters:
 	//   writeRL  — 30 req/min per IP for all mutating operations
 	//   pollRL   — 1 req/5s  per IP for /poll (matches the minimum client poll interval)
-	writeRL := rateLimiter(0.5, 10) // 0.5 req/s = 30/min, burst 10
-	pollRL := rateLimiter(0.2, 2)   // 0.2 req/s = 1/5s, burst 2
+	writeRL := rateLimiter(0.5, 10)            // 0.5 req/s = 30/min, burst 10
+	pollRL := rateLimiter(pollRLRate, pollRLBurst) // prod: 0.2 req/s = 1/5s, burst 2 (relaxed in e2e builds)
 
 	requireAuth := auth.RequireAuth(authProvider)
 

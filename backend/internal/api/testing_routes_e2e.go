@@ -8,8 +8,16 @@ import (
 	"time"
 
 	"github.com/labstack/echo/v4"
+	"golang.org/x/time/rate"
 	"github.com/kj187/jarvis/backend/internal/alertmanager"
 	"github.com/kj187/jarvis/backend/internal/models"
+)
+
+// Poll rate limit for POST /api/v1/poll in e2e builds: effectively unlimited so
+// deterministic tests can force immediate polls without hitting 429.
+const (
+	pollRLRate  rate.Limit = rate.Inf
+	pollRLBurst int        = 1000
 )
 
 // registerTestRoutes wires the e2e-only seed/reset endpoints. These are gated
