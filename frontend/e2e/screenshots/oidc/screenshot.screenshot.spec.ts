@@ -68,7 +68,7 @@ test('screenshot', async ({ page, am, jarvis }) => {
   })
 
   // 3) Silence expiring in ~5 days.
-  await jarvis.createSilence('eu-west-1-prod', [
+  await jarvis.createSilence('e2e', [
     { name: 'alertname', value: 'PostgresReplicationLag', isRegex: false, isEqual: true },
   ], {
     endsAt: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000),
