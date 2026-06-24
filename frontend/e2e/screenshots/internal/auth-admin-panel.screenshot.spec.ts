@@ -19,7 +19,7 @@ test('auth-admin-panel', async ({ page, am, jarvis }) => {
 
   await page.getByTestId('user-menu').click()
   await expect(page.getByText('Logout')).toBeVisible()
-  await page.getByText('Admin').click()
+  await page.getByRole('button', { name: 'Admin' }).click()
 
   await expect(page.getByRole('heading', { name: 'User Management' })).toBeVisible()
   await page.waitForTimeout(300)

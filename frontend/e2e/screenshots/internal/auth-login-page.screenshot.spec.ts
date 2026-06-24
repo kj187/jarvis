@@ -1,14 +1,18 @@
-import { test, expect } from '../../support/fixtures'
+import { test, expect, JARVIS_BASE_URL } from '../../support/fixtures'
+import { ensureInternalAdmin } from '../../support/auth'
 
 const DIR = process.env.SCREENSHOTS_DIR ?? '../docs/assets'
 
 /**
  * Screenshot: full-page login form (full_protect mode, not authenticated).
- * Uses page.route() to simulate full_protect without restarting the stack.
+ * ensureInternalAdmin runs first so the backend doesn't redirect to SetupPage.
+ * Then page.route() overrides /auth/info to full_protect so App renders LoginPage.
  * Regenerate: make e2e-screenshot NAME=auth-login-page MODE=internal
  */
 test('auth-login-page', async ({ page }) => {
-  await page.route('**/auth/info', (route) =>
+  await ensureInternalAdmin(page)
+
+  await page.route(`${JARVIS_BASE_URL}/auth/info`, (route) =>
     route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -20,7 +24,7 @@ test('auth-login-page', async ({ page }) => {
       }),
     }),
   )
-  await page.route('**/auth/me', (route) =>
+  await page.route(`${JARVIS_BASE_URL}/auth/me`, (route) =>
     route.fulfill({ status: 401, body: '' }),
   )
 
