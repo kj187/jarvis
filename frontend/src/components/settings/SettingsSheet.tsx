@@ -472,15 +472,6 @@ export function SettingsSheet({ open, onClose }: SettingsSheetProps) {
             </Select>
           </SettingRow>
 
-          <SettingRow label="Creator name" info="Pre-filled author name in the silence creator field — stored locally in your browser">
-            <Input
-              value={settings.defaultCreatorName}
-              onChange={(e) => update({ defaultCreatorName: e.target.value.slice(0, 128) })}
-              onBlur={(e) => update({ defaultCreatorName: e.target.value.trim() })}
-              placeholder="Your name or team"
-              className="h-7 w-44 text-xs"
-            />
-          </SettingRow>
         </Section>
 
         <div className="h-px bg-border" />
