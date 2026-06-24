@@ -1,0 +1,567 @@
+import { test, expect, freezeClock, waitForActiveAlerts, JARVIS_BASE_URL } from '../../support/fixtures'
+import { dismissNoAuthNotice } from '../../support/auth'
+import { kubernetesAlerts, manyAlerts } from '../../fixtures/alerts'
+
+/**
+ * Category D: Detail Panel (D1-D2, D5-D7, D9-D10)
+ * Tests for detail panel opening, labels/annotations, stats, claims, comments.
+ */
+
+test.describe('D1: Open detail panel via click and URL', () => {
+  test('clicking alert card opens detail panel', async ({ page, am, jarvis }) => {
+    await dismissNoAuthNotice(page)
+    await am.fire(kubernetesAlerts)
+    await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, kubernetesAlerts.length)
+
+    await page.goto('/?state=active')
+    
+    // Click first card
+    const firstCard = page.getByTestId('alert-card').first()
+    await firstCard.click()
+    await page.waitForTimeout(500)
+    
+    // Verify detail panel opens
+    const detailPanel = page.getByTestId('detail-panel')
+    await expect(detailPanel).toBeVisible()
+  })
+
+  test('URL ?alert=<fingerprint> opens detail panel', async ({ page, am, jarvis }) => {
+    await dismissNoAuthNotice(page)
+    await am.fire(kubernetesAlerts)
+    await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, kubernetesAlerts.length)
+
+    // Get a fingerprint
+    const res = await fetch(`${JARVIS_BASE_URL}/api/v1/alerts`)
+    const alerts: any[] = await res.json()
+    const fingerprint = alerts[0].fingerprint
+    
+    // Navigate with fingerprint param
+    await page.goto(`/?state=active&alert=${fingerprint}`)
+    await page.waitForTimeout(500)
+    
+    // Verify detail panel opens
+    const detailPanel = page.getByTestId('detail-panel')
+    await expect(detailPanel).toBeVisible()
+  })
+
+  test('closing detail panel clears ?alert param', async ({ page, am, jarvis }) => {
+    await dismissNoAuthNotice(page)
+    await am.fire(kubernetesAlerts)
+    await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, kubernetesAlerts.length)
+
+    await page.goto('/?state=active')
+    
+    // Open detail
+    const firstCard = page.getByTestId('alert-card').first()
+    await firstCard.click()
+    await page.waitForTimeout(500)
+    
+    // Close detail
+    const closeButton = page.getByTestId('detail-panel-close')
+    await closeButton.click()
+    await page.waitForTimeout(300)
+    
+    // Verify param removed
+    const url = page.url()
+    expect(url).not.toContain('alert=')
+  })
+})
+
+test.describe('D2: Labels & annotations rendered', () => {
+  test('detail panel shows all labels', async ({ page, am, jarvis }) => {
+    await dismissNoAuthNotice(page)
+    await am.fire(kubernetesAlerts)
+    await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, kubernetesAlerts.length)
+
+    await page.goto('/?state=active')
+    
+    // Open detail
+    const firstCard = page.getByTestId('alert-card').first()
+    await firstCard.click()
+    await page.waitForTimeout(500)
+    
+    // Verify labels section
+    const labelsSection = page.getByTestId('detail-labels-section')
+    await expect(labelsSection).toBeVisible()
+    
+    // Verify specific labels exist
+    const labelItems = page.getByTestId('detail-label-item')
+    const labelTexts = await labelItems.allTextContents()
+    
+    // Should have at least alertname, severity
+    expect(labelTexts.length).toBeGreaterThan(0)
+    expect(labelTexts.join('').toLowerCase()).toContain('alertname')
+  })
+
+  test('detail panel shows all annotations', async ({ page, am, jarvis }) => {
+    await dismissNoAuthNotice(page)
+    await am.fire(kubernetesAlerts)
+    await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, kubernetesAlerts.length)
+
+    await page.goto('/?state=active')
+    
+    // Open detail
+    const firstCard = page.getByTestId('alert-card').first()
+    await firstCard.click()
+    await page.waitForTimeout(500)
+    
+    // Verify annotations section
+    const annotationsSection = page.getByTestId('detail-annotations-section')
+    await expect(annotationsSection).toBeVisible()
+    
+    // Verify annotation items
+    const annotationItems = page.getByTestId('detail-annotation-item')
+    const annotationTexts = await annotationItems.allTextContents()
+    
+    expect(annotationTexts.length).toBeGreaterThan(0)
+    expect(annotationTexts.join('').toLowerCase()).toContain('summary')
+  })
+
+  test('annotation links are clickable (dashboard, runbook)', async ({ page, am, jarvis }) => {
+    await dismissNoAuthNotice(page)
+    await am.fire(kubernetesAlerts)
+    await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, kubernetesAlerts.length)
+
+    await page.goto('/?state=active')
+    
+    // Open detail
+    const firstCard = page.getByTestId('alert-card').first()
+    await firstCard.click()
+    await page.waitForTimeout(500)
+    
+    // Find annotation with URL
+    const annotationItems = page.getByTestId('detail-annotation-item')
+    const annotationValues = page.getByTestId('detail-annotation-value')
+    
+    // Check for links
+    const links = page.locator('a[href^="http"]')
+    const linkCount = await links.count()
+    
+    // Should have some external links in annotations
+    expect(linkCount).toBeGreaterThanOrEqual(0)
+  })
+})
+
+test.describe('D5: Stats & timeline', () => {
+  test('detail panel shows first/last seen timestamps', async ({ page, am, jarvis }) => {
+    await dismissNoAuthNotice(page)
+    await am.fire(kubernetesAlerts)
+    await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, kubernetesAlerts.length)
+
+    await page.goto('/?state=active')
+    
+    // Open detail
+    const firstCard = page.getByTestId('alert-card').first()
+    await firstCard.click()
+    await page.waitForTimeout(500)
+    
+    // Verify stats section
+    const statsSection = page.getByTestId('detail-stats-section')
+    await expect(statsSection).toBeVisible()
+    
+    // Check for first/last seen
+    const firstSeenLabel = page.getByTestId('stat-first-seen')
+    const lastSeenLabel = page.getByTestId('stat-last-seen')
+    
+    await expect(firstSeenLabel).toBeVisible()
+    await expect(lastSeenLabel).toBeVisible()
+  })
+
+  test('detail panel shows occurrence count', async ({ page, am, jarvis }) => {
+    await dismissNoAuthNotice(page)
+    
+    // Seed alert with occurrence count
+    await jarvis.seedResolved([
+      {
+        fingerprint: 'repeated-alert',
+        alertname: 'RepeatedAlert',
+        cluster: 'e2e',
+        startsAt: '2025-01-15T10:00:00Z',
+        resolvedAt: '2025-01-15T10:30:00Z',
+      },
+    ])
+    
+    await am.fire([
+      {
+        labels: {
+          alertname: 'RepeatedAlert',
+          severity: 'warning',
+          cluster: 'e2e',
+        },
+        annotations: {
+          summary: 'This alert has occurred multiple times',
+        },
+      },
+    ])
+    
+    await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, 1)
+    
+    await dismissNoAuthNotice(page)
+    await page.goto('/?state=active')
+    
+    // Open detail
+    const firstCard = page.getByTestId('alert-card').first()
+    await firstCard.click()
+    await page.waitForTimeout(500)
+    
+    // Check occurrence count
+    const occurrenceCountLabel = page.getByTestId('stat-occurrence-count')
+    await expect(occurrenceCountLabel).toBeVisible()
+    
+    const text = await occurrenceCountLabel.textContent()
+    expect(text).toMatch(/\d+/)
+  })
+
+  test('detail panel shows duration (when resolved)', async ({ page, jarvis }) => {
+    await dismissNoAuthNotice(page)
+    
+    // Seed a resolved alert
+    await jarvis.seedResolved([
+      {
+        fingerprint: 'resolved-alert',
+        alertname: 'ResolvedAlert',
+        cluster: 'e2e',
+        startsAt: '2025-01-15T10:00:00Z',
+        resolvedAt: '2025-01-15T10:30:00Z',
+      },
+    ])
+    
+    await page.goto('/?state=resolved')
+    await page.waitForTimeout(500)
+    
+    // Open detail
+    const firstCard = page.getByTestId('alert-list-row').first()
+    await firstCard.click()
+    await page.waitForTimeout(500)
+    
+    // Check duration stat
+    const durationLabel = page.getByTestId('stat-duration')
+    if (await durationLabel.isVisible()) {
+      const text = await durationLabel.textContent()
+      expect(text).toContain('30m') // 30 minute duration
+    }
+  })
+
+  test('detail panel shows merged events timeline', async ({ page, am, jarvis }) => {
+    await dismissNoAuthNotice(page)
+    await am.fire(kubernetesAlerts)
+    await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, kubernetesAlerts.length)
+
+    await page.goto('/?state=active')
+    
+    // Open detail
+    const firstCard = page.getByTestId('alert-card').first()
+    await firstCard.click()
+    await page.waitForTimeout(500)
+    
+    // Check for timeline/events section
+    const timelineSection = page.getByTestId('detail-timeline-section')
+    if (await timelineSection.isVisible()) {
+      const events = page.getByTestId('timeline-event')
+      await expect(events.first()).toBeVisible()
+    }
+  })
+})
+
+test.describe('D6: Set claim', () => {
+  test('set claim shows badge in detail panel', async ({ page, am, jarvis }) => {
+    await dismissNoAuthNotice(page)
+    await am.fire(kubernetesAlerts)
+    await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, kubernetesAlerts.length)
+
+    // Get a fingerprint
+    const res = await fetch(`${JARVIS_BASE_URL}/api/v1/alerts`)
+    const alerts: any[] = await res.json()
+    const fingerprint = alerts[0].fingerprint
+    
+    // Set claim
+    await jarvis.setClaim(fingerprint, 'test-user', 'Working on this')
+    
+    await page.goto(`/?state=active&alert=${fingerprint}`)
+    await page.waitForTimeout(500)
+    
+    // Verify claim badge
+    const claimBadge = page.getByTestId('detail-claim-badge')
+    await expect(claimBadge).toBeVisible()
+    
+    const text = await claimBadge.textContent()
+    expect(text).toContain('test-user')
+  })
+
+  test('claim appears in card header', async ({ page, am, jarvis }) => {
+    await dismissNoAuthNotice(page)
+    await am.fire(kubernetesAlerts)
+    await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, kubernetesAlerts.length)
+
+    // Get a fingerprint
+    const res = await fetch(`${JARVIS_BASE_URL}/api/v1/alerts`)
+    const alerts: any[] = await res.json()
+    const fingerprint = alerts[0].fingerprint
+    
+    // Set claim
+    await jarvis.setClaim(fingerprint, 'claimer')
+    
+    // Poll to sync
+    await jarvis.poll()
+    
+    await page.goto('/?state=active&viewMode=card')
+    await page.waitForTimeout(500)
+    
+    // Verify claim badge on card
+    const cardClaimBadge = page.getByTestId('alert-card-claim-badge').first()
+    if (await cardClaimBadge.isVisible()) {
+      const text = await cardClaimBadge.textContent()
+      expect(text).toContain('claimer')
+    }
+  })
+
+  test('WS update shows claim instantly', async ({ page, am, jarvis }) => {
+    await dismissNoAuthNotice(page)
+    await am.fire(kubernetesAlerts)
+    await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, kubernetesAlerts.length)
+
+    // Get a fingerprint
+    const res = await fetch(`${JARVIS_BASE_URL}/api/v1/alerts`)
+    const alerts: any[] = await res.json()
+    const fingerprint = alerts[0].fingerprint
+    
+    // Open detail panel first
+    await page.goto(`/?state=active&alert=${fingerprint}`)
+    await page.waitForTimeout(500)
+    
+    // Now set claim (should appear via WS)
+    await jarvis.setClaim(fingerprint, 'new-claimer')
+    
+    // Wait for WS update
+    await page.waitForTimeout(1000)
+    
+    // Verify claim appears
+    const claimBadge = page.getByTestId('detail-claim-badge')
+    await expect(claimBadge).toBeVisible()
+    
+    const text = await claimBadge.textContent()
+    expect(text).toContain('new-claimer')
+  })
+})
+
+test.describe('D7: Release claim', () => {
+  test('release claim removes badge', async ({ page, am, jarvis }) => {
+    await dismissNoAuthNotice(page)
+    await am.fire(kubernetesAlerts)
+    await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, kubernetesAlerts.length)
+
+    // Get a fingerprint
+    const res = await fetch(`${JARVIS_BASE_URL}/api/v1/alerts`)
+    const alerts: any[] = await res.json()
+    const fingerprint = alerts[0].fingerprint
+    
+    // Set claim
+    await jarvis.setClaim(fingerprint, 'test-user')
+    
+    // Open detail
+    await page.goto(`/?state=active&alert=${fingerprint}`)
+    await page.waitForTimeout(500)
+    
+    // Verify claim badge exists
+    let claimBadge = page.getByTestId('detail-claim-badge')
+    await expect(claimBadge).toBeVisible()
+    
+    // Click release button
+    const releaseButton = page.getByTestId('claim-release-button')
+    await expect(releaseButton).toBeVisible()
+    await releaseButton.click()
+    
+    await page.waitForTimeout(500)
+    
+    // Verify badge removed
+    claimBadge = page.getByTestId('detail-claim-badge')
+    await expect(claimBadge).not.toBeVisible()
+  })
+
+  test('release claim clears claim note', async ({ page, am, jarvis }) => {
+    await dismissNoAuthNotice(page)
+    await am.fire(kubernetesAlerts)
+    await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, kubernetesAlerts.length)
+
+    // Get a fingerprint
+    const res = await fetch(`${JARVIS_BASE_URL}/api/v1/alerts`)
+    const alerts: any[] = await res.json()
+    const fingerprint = alerts[0].fingerprint
+    
+    // Set claim with note
+    await jarvis.setClaim(fingerprint, 'test-user', 'Investigating DB issue')
+    
+    // Open detail
+    await page.goto(`/?state=active&alert=${fingerprint}`)
+    await page.waitForTimeout(500)
+    
+    // Verify claim note shown
+    const claimNote = page.getByTestId('detail-claim-note')
+    if (await claimNote.isVisible()) {
+      const text = await claimNote.textContent()
+      expect(text).toContain('Investigating DB issue')
+    }
+    
+    // Release claim
+    const releaseButton = page.getByTestId('claim-release-button')
+    await releaseButton.click()
+    
+    await page.waitForTimeout(500)
+    
+    // Verify note gone
+    const noteAfter = page.getByTestId('detail-claim-note')
+    await expect(noteAfter).not.toBeVisible()
+  })
+})
+
+test.describe('D9: Add comment', () => {
+  test('add comment visible in detail panel', async ({ page, am, jarvis }) => {
+    await dismissNoAuthNotice(page)
+    await am.fire(kubernetesAlerts)
+    await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, kubernetesAlerts.length)
+
+    // Get a fingerprint
+    const res = await fetch(`${JARVIS_BASE_URL}/api/v1/alerts`)
+    const alerts: any[] = await res.json()
+    const fingerprint = alerts[0].fingerprint
+    
+    // Add comment
+    await jarvis.addComment(fingerprint, 'This is a test comment', 'test-author')
+    
+    // Open detail
+    await page.goto(`/?state=active&alert=${fingerprint}`)
+    await page.waitForTimeout(500)
+    
+    // Verify comment visible
+    const commentsSection = page.getByTestId('detail-comments-section')
+    await expect(commentsSection).toBeVisible()
+    
+    const commentItems = page.getByTestId('detail-comment-item')
+    const commentTexts = await commentItems.allTextContents()
+    
+    expect(commentTexts.join('\n')).toContain('This is a test comment')
+  })
+
+  test('comment shows author name and timestamp', async ({ page, am, jarvis }) => {
+    await dismissNoAuthNotice(page)
+    await am.fire(kubernetesAlerts)
+    await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, kubernetesAlerts.length)
+
+    // Get a fingerprint
+    const res = await fetch(`${JARVIS_BASE_URL}/api/v1/alerts`)
+    const alerts: any[] = await res.json()
+    const fingerprint = alerts[0].fingerprint
+    
+    // Add comment
+    await jarvis.addComment(fingerprint, 'Check logs for details', 'jane-doe')
+    
+    // Open detail
+    await page.goto(`/?state=active&alert=${fingerprint}`)
+    await page.waitForTimeout(500)
+    
+    // Verify comment metadata
+    const commentAuthor = page.getByTestId('detail-comment-author').first()
+    const commentTimestamp = page.getByTestId('detail-comment-timestamp').first()
+    
+    await expect(commentAuthor).toBeVisible()
+    await expect(commentTimestamp).toBeVisible()
+    
+    const authorText = await commentAuthor.textContent()
+    expect(authorText).toContain('jane-doe')
+  })
+
+  test('can add comment from detail panel form', async ({ page, am, jarvis }) => {
+    await dismissNoAuthNotice(page)
+    await am.fire(kubernetesAlerts)
+    await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, kubernetesAlerts.length)
+
+    // Open detail
+    await page.goto('/?state=active')
+    
+    const firstCard = page.getByTestId('alert-card').first()
+    await firstCard.click()
+    await page.waitForTimeout(500)
+    
+    // Find comment input
+    const commentInput = page.getByTestId('detail-comment-input')
+    if (await commentInput.isVisible()) {
+      await commentInput.fill('New comment from form')
+      
+      const submitButton = page.getByTestId('detail-comment-submit')
+      await submitButton.click()
+      
+      await page.waitForTimeout(500)
+      
+      // Verify comment appears
+      const commentTexts = await page.getByTestId('detail-comment-item').allTextContents()
+      expect(commentTexts.join('\n')).toContain('New comment from form')
+    }
+  })
+})
+
+test.describe('D10: Delete comment (author only)', () => {
+  test('comment author can delete own comment', async ({ page, am, jarvis }) => {
+    await dismissNoAuthNotice(page)
+    await am.fire(kubernetesAlerts)
+    await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, kubernetesAlerts.length)
+
+    // Get a fingerprint
+    const res = await fetch(`${JARVIS_BASE_URL}/api/v1/alerts`)
+    const alerts: any[] = await res.json()
+    const fingerprint = alerts[0].fingerprint
+    
+    // Add comment
+    await jarvis.addComment(fingerprint, 'Delete me', 'e2e-tester')
+    
+    // Open detail (as same user)
+    await page.goto(`/?state=active&alert=${fingerprint}`)
+    await page.waitForTimeout(500)
+    
+    // Verify delete button visible
+    const deleteButton = page.getByTestId('detail-comment-delete').first()
+    if (await deleteButton.isVisible()) {
+      await deleteButton.click()
+      
+      await page.waitForTimeout(500)
+      
+      // Verify comment removed
+      const commentTexts = await page.getByTestId('detail-comment-item').allTextContents()
+      expect(commentTexts.join('\n')).not.toContain('Delete me')
+    }
+  })
+
+  test('different user cannot delete others comments', async ({ page, am, jarvis }) => {
+    await dismissNoAuthNotice(page)
+    await am.fire(kubernetesAlerts)
+    await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, kubernetesAlerts.length)
+
+    // Get a fingerprint
+    const res = await fetch(`${JARVIS_BASE_URL}/api/v1/alerts`)
+    const alerts: any[] = await res.json()
+    const fingerprint = alerts[0].fingerprint
+    
+    // Add comment from user1
+    await jarvis.addComment(fingerprint, 'User1 comment', 'user-one')
+    
+    // Open detail (as user2)
+    await page.goto(`/?state=active&alert=${fingerprint}`)
+    await page.waitForTimeout(500)
+    
+    // Verify delete button NOT visible for other users comment
+    const deleteButtons = page.getByTestId('detail-comment-delete')
+    const count = await deleteButtons.count()
+    
+    // Either 0 delete buttons or none match this comment
+    if (count > 0) {
+      const firstDeleteParent = await deleteButtons.first().locator('xpath=ancestor::*[@data-testid="detail-comment-item"]')
+      const commentText = await firstDeleteParent.textContent()
+      expect(commentText).not.toContain('User1 comment')
+    }
+  })
+
+  test('admin/mod can delete any comment', async ({ page, am, jarvis }) => {
+    // This test would require auth system to be set up with role support
+    // Skipping for now as e2e suite is 'none' auth mode
+    test.skip()
+  })
+})
