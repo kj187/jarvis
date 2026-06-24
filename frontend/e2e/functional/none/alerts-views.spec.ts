@@ -1,6 +1,6 @@
 import { test, expect, waitForActiveAlerts, JARVIS_BASE_URL } from '../../support/fixtures'
 import { dismissNoAuthNotice } from '../../support/auth'
-import { kubernetesAlerts, manyAlerts } from '../../fixtures/alerts'
+import { kubernetesAlerts, manyAlerts, crashLoopBurst } from '../../fixtures/alerts'
 
 test('B2/B3 list<->card toggle persists', async ({ page, am, jarvis }) => {
   await dismissNoAuthNotice(page)
@@ -25,17 +25,18 @@ test('B4 severity ordering starts with critical section', async ({ page, am, jar
   await am.fire(manyAlerts)
   await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, manyAlerts.length)
 
-  await page.goto('/?state=active&viewMode=list')
+  await page.goto('/?state=active')
+  await page.getByTitle('List View').click()
   const firstSeverityHeader = page.locator('tbody tr td span.text-xs.font-bold.uppercase').first()
   await expect(firstSeverityHeader).toHaveText(/critical/i)
 })
 
 test('B5 card pagination shows "x-y of n" and +/- boundaries', async ({ page, am, jarvis }) => {
   await dismissNoAuthNotice(page)
-  await am.fire(manyAlerts)
-  await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, manyAlerts.length)
+  await am.fire(crashLoopBurst)
+  await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, crashLoopBurst.length)
 
-  await page.goto('/?state=active&viewMode=card')
+  await page.goto('/?state=active')
   await expect(page.getByText(/\d+–\d+ of \d+/).first()).toBeVisible()
 
   const minus = page.getByRole('button', { name: '−' }).first()
@@ -68,6 +69,11 @@ test('B9 resolved mode uses flat list and page size controls', async ({ page, ja
       fingerprint: `resolved-${i}`,
       alertname: `ResolvedAlert${i}`,
       cluster: 'e2e',
+      labels: {
+        alertname: `ResolvedAlert${i}`,
+        severity: 'warning',
+        cluster: 'e2e',
+      },
       startsAt: '2025-01-15T10:00:00Z',
       resolvedAt: '2025-01-15T11:00:00Z',
     })),
@@ -76,9 +82,9 @@ test('B9 resolved mode uses flat list and page size controls', async ({ page, ja
   await page.goto('/?state=resolved')
   await expect(page.getByRole('columnheader', { name: 'Alert Name' })).toBeVisible()
   await expect(page.getByText('Per page:')).toBeVisible()
-  await expect(page.getByRole('button', { name: '10' })).toBeVisible()
-  await expect(page.getByRole('button', { name: '25' })).toBeVisible()
-  await expect(page.getByRole('button', { name: '50' })).toBeVisible()
-  await expect(page.getByRole('button', { name: '100' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '10', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: '25', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: '50', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: '100', exact: true })).toBeVisible()
   await expect(page.getByText(/\d+–\d+ of 35/).first()).toBeVisible()
 })

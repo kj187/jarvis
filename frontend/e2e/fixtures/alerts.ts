@@ -220,3 +220,24 @@ export const manyAlerts: AlertInput[] = [
     },
   },
 ]
+
+/**
+ * Five firing instances of a single alertname (different pods) so a single
+ * AlertCard group exceeds the card page size and renders pagination.
+ */
+export const crashLoopBurst: AlertInput[] = Array.from({ length: 5 }, (_, i) => ({
+  labels: {
+    alertname: 'KubePodCrashLooping',
+    severity: 'critical',
+    namespace: 'prod',
+    pod: `payment-api-7d9f6b8c4-pod${i}`,
+    container: 'payment-api',
+    cluster: 'e2e',
+    team: 'platform',
+    runbook: `${RUNBOOKS}/KubePodCrashLooping`,
+  },
+  annotations: {
+    summary: `Pod payment-api-7d9f6b8c4-pod${i} is crash looping`,
+    description: 'Pod has restarted repeatedly in the last 15 minutes. Exit code: 137 (OOMKilled).',
+  },
+}))
