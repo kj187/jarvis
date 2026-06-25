@@ -106,3 +106,67 @@ test('E3 show/hide expired toggles expired silences visibility', async ({ page, 
   await expect(page.getByRole('button', { name: 'Hide expired' })).toBeVisible()
   await expect(page.getByText(expiredComment).first()).toBeVisible()
 })
+
+test('G1 expire single silence via modal', async ({ page, jarvis }) => {
+  await dismissNoAuthNotice(page)
+  await clearAllAMSilences()
+  await jarvis.poll()
+
+  const singleComment = 'e2e-expire-single'
+  await jarvis.createSilence('e2e', [{ name: 'alertname', value: 'KubePodCrashLooping', isRegex: false, isEqual: true }], {
+    comment: singleComment,
+    createdBy: 'e2e-tester',
+  })
+  await waitForSilences(JARVIS_BASE_URL, 1)
+
+  await page.goto('/')
+  await ensureSilencesPage(page)
+  await expect(page.getByText(singleComment).first()).toBeVisible()
+
+  await page.getByTitle('Expire silence').first().click()
+  await expect(page.getByRole('heading', { name: 'Expire silence?' })).toBeVisible()
+  await page.getByRole('button', { name: 'Expire silence' }).last().click()
+
+  await expect(page.getByText(singleComment)).toHaveCount(0)
+  await page.getByRole('button', { name: 'Show expired' }).click()
+  await expect(page.getByText(singleComment).first()).toBeVisible()
+})
+
+test('G3 expire grouped silences via modal', async ({ page, jarvis }) => {
+  await dismissNoAuthNotice(page)
+  await clearAllAMSilences()
+  await jarvis.poll()
+
+  const now = Date.now()
+  const groupComment = 'e2e-expire-group'
+  const groupEndsAt = new Date(now + 60 * 60 * 1000)
+  const groupStartsAt = new Date(now - 5 * 60 * 1000)
+  const matchers = [{ name: 'severity', value: 'warning', isRegex: false, isEqual: true }]
+
+  await jarvis.createSilence('e2e', matchers, {
+    startsAt: groupStartsAt,
+    endsAt: groupEndsAt,
+    comment: groupComment,
+    createdBy: 'e2e-tester',
+  })
+  await jarvis.createSilence('e2e', matchers, {
+    startsAt: groupStartsAt,
+    endsAt: groupEndsAt,
+    comment: groupComment,
+    createdBy: 'e2e-tester',
+  })
+  await waitForSilences(JARVIS_BASE_URL, 2)
+
+  await page.goto('/')
+  await ensureSilencesPage(page)
+  await expect(page.getByText(groupComment).first()).toBeVisible()
+
+  await page.getByTitle('Expire 2 silences').first().click()
+  await expect(page.getByRole('heading', { name: 'Expire 2 silences?' })).toBeVisible()
+  await page.getByRole('button', { name: 'Expire 2 silences' }).last().click()
+
+  await expect(page.getByText(groupComment)).toHaveCount(0)
+  await page.getByRole('button', { name: 'Show expired' }).click()
+  await expect(page.getByRole('button', { name: 'Hide expired' })).toBeVisible()
+  await expect(page.getByText(groupComment).first()).toBeVisible()
+})

@@ -560,3 +560,74 @@ test.describe('D10: Delete comment (author only)', () => {
     test.skip()
   })
 })
+
+test.describe('G2: Extend controls in detail panel', () => {
+  test('active expiring silence shows +1h/+4h/+1d and hides after extend', async ({ page, am, jarvis }) => {
+    await dismissNoAuthNotice(page)
+    await am.fire(kubernetesAlerts)
+    await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, kubernetesAlerts.length)
+
+    const now = Date.now()
+    await jarvis.createSilence(
+      'e2e',
+      [{ name: 'alertname', value: 'KubePodCrashLooping', isRegex: false, isEqual: true }],
+      {
+        startsAt: new Date(now - 5 * 60 * 1000),
+        endsAt: new Date(now + 10 * 60 * 1000),
+        createdBy: 'e2e-tester',
+        comment: 'expiring silence',
+      },
+    )
+    await jarvis.poll()
+
+    const res = await fetch(`${JARVIS_BASE_URL}/api/v1/alerts`)
+    const alerts: any[] = await res.json()
+    const target = alerts.find((a) => a.labels?.alertname === 'KubePodCrashLooping')
+    expect(target).toBeTruthy()
+
+    await page.goto(`/?state=active&alert=${target.fingerprint}`)
+    const panel = page.getByTestId('detail-panel')
+    await expect(panel).toBeVisible()
+    await expect(panel.getByText('Silence active').first()).toBeVisible()
+
+    await expect(panel.getByRole('button', { name: '+1h' })).toBeVisible()
+    await expect(panel.getByRole('button', { name: '+4h' })).toBeVisible()
+    await expect(panel.getByRole('button', { name: '+1d' })).toBeVisible()
+
+    await panel.getByRole('button', { name: '+1h' }).click()
+    await expect(panel.getByRole('button', { name: '+1h' })).toHaveCount(0)
+  })
+
+  test('non-expiring active silence does not show extend quick actions', async ({ page, am, jarvis }) => {
+    await dismissNoAuthNotice(page)
+    await am.fire(kubernetesAlerts)
+    await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, kubernetesAlerts.length)
+
+    const now = Date.now()
+    await jarvis.createSilence(
+      'e2e',
+      [{ name: 'alertname', value: 'KubePodCrashLooping', isRegex: false, isEqual: true }],
+      {
+        startsAt: new Date(now - 5 * 60 * 1000),
+        endsAt: new Date(now + 2 * 60 * 60 * 1000),
+        createdBy: 'e2e-tester',
+        comment: 'long active silence',
+      },
+    )
+    await jarvis.poll()
+
+    const res = await fetch(`${JARVIS_BASE_URL}/api/v1/alerts`)
+    const alerts: any[] = await res.json()
+    const target = alerts.find((a) => a.labels?.alertname === 'KubePodCrashLooping')
+    expect(target).toBeTruthy()
+
+    await page.goto(`/?state=active&alert=${target.fingerprint}`)
+    const panel = page.getByTestId('detail-panel')
+    await expect(panel).toBeVisible()
+    await expect(panel.getByText('Silence active').first()).toBeVisible()
+
+    await expect(panel.getByRole('button', { name: '+1h' })).toHaveCount(0)
+    await expect(panel.getByRole('button', { name: '+4h' })).toHaveCount(0)
+    await expect(panel.getByRole('button', { name: '+1d' })).toHaveCount(0)
+  })
+})
