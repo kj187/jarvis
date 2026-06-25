@@ -1,5 +1,5 @@
-import { Fragment, useState, useEffect } from 'react'
-import { ArrowUpDown, Bell, BellMinus, BellOff, ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, RefreshCw } from 'lucide-react'
+import { Fragment, useState, useEffect, useRef, type MouseEvent as ReactMouseEvent } from 'react'
+import { ArrowUpDown, Bell, BellMinus, BellOff, ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Grip, RefreshCw } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { AlertListRow } from './AlertListRow'
 import { EmptyState } from './EmptyState'
@@ -9,9 +9,10 @@ import { Sheet } from '@/components/ui/sheet'
 import { SilenceForm } from '@/components/silences/SilenceForm'
 import { SilenceExpireModal } from '@/components/silences/SilenceExpireModal'
 import { fetchClusters, deleteSilence } from '@/api/client'
-import { formatSilenceDuration, severityOrder } from '@/lib/alertUtils'
+import { formatSilenceDuration, getFilterableLabels, severityOrder } from '@/lib/alertUtils'
 import { renderTextWithLinks } from '@/lib/linkUtils'
 import { useSettingsStore, RESOLVED_PAGE_SIZE_OPTIONS } from '@/store/useSettingsStore'
+import { useUIStore } from '@/store/uiStore'
 import type { EnrichedAlert, Silence } from '@/types'
 import { cn } from '@/lib/utils'
 
@@ -126,20 +127,20 @@ function getGroupSilenceInfo(
   return { active, expiring, expired }
 }
 
-function buildGroupsBySeverity(alerts: EnrichedAlert[]): Map<string, AlertGroupData[]> {
-  const bySeverity = new Map<string, Map<string, EnrichedAlert[]>>()
+function buildGroupsByLabel(alerts: EnrichedAlert[], groupByLabel: string): Map<string, AlertGroupData[]> {
+  const byLabelValue = new Map<string, Map<string, EnrichedAlert[]>>()
   for (const alert of alerts) {
-    const severity = alert.labels['severity'] ?? 'none'
+    const labelValue = getFilterableLabels(alert)[groupByLabel] ?? 'none'
     const alertname = alert.labels['alertname'] ?? '—'
-    if (!bySeverity.has(severity)) bySeverity.set(severity, new Map())
-    const byName = bySeverity.get(severity)!
+    if (!byLabelValue.has(labelValue)) byLabelValue.set(labelValue, new Map())
+    const byName = byLabelValue.get(labelValue)!
     if (!byName.has(alertname)) byName.set(alertname, [])
     byName.get(alertname)!.push(alert)
   }
   const result = new Map<string, AlertGroupData[]>()
-  for (const [severity, byName] of bySeverity) {
+  for (const [labelValue, byName] of byLabelValue) {
     result.set(
-      severity,
+      labelValue,
       Array.from(byName.entries()).map(([alertname, groupAlerts]) => {
         const commonLabels: Record<string, string> = {}
         if (groupAlerts.length > 0) {
@@ -169,6 +170,17 @@ function buildGroupsBySeverity(alerts: EnrichedAlert[]): Map<string, AlertGroupD
   return result
 }
 
+function loadStoredArray(key: string): string[] {
+  try {
+    const raw = window.localStorage.getItem(key)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed.filter((v) => typeof v === 'string') : []
+  } catch {
+    return []
+  }
+}
+
 export function AlertListView({ alerts, silences, onSelectAlert, selectedFingerprint, stateFilter, resolvedMode }: AlertListViewProps) {
   const showStateColumn = !stateFilter
   const [sortKey, setSortKey] = useState<SortKey>('alertname')
@@ -179,11 +191,52 @@ export function AlertListView({ alerts, silences, onSelectAlert, selectedFingerp
   const resolvedPageSize = useSettingsStore((s) => s.resolvedPageSize)
   const updateSettings = useSettingsStore((s) => s.update)
   const theme = useSettingsStore((s) => s.theme)
+  const groupByLabel = useSettingsStore((s) => s.groupByLabel)
+  const isFullscreen = useUIStore((s) => s.isFullscreen)
+  const collapsedStorageKey = `jarvis-list-collapsed-sections:${groupByLabel}`
+  const orderStorageKey = `jarvis-list-section-order:${groupByLabel}`
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set())
+  const [sectionOrder, setSectionOrder] = useState<string[]>([])
+  const [draggedSection, setDraggedSection] = useState<string | null>(null)
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
+  const sectionRefs = useRef<Record<string, HTMLTableRowElement | null>>({})
+  const dragGhostRef = useRef<HTMLElement | null>(null)
+  const dragOverIndexRef = useRef<number | null>(null)
   const [resolvedPage, setResolvedPage] = useState(1)
 
   useEffect(() => {
     setResolvedPage(1)
   }, [resolvedPageSize])
+
+  function persistCollapsed(next: Set<string>) {
+    setCollapsedSections(next)
+    try {
+      window.localStorage.setItem(collapsedStorageKey, JSON.stringify(Array.from(next)))
+    } catch {
+      // ignore write errors
+    }
+  }
+
+  function persistSectionOrder(next: string[]) {
+    setSectionOrder(next)
+    try {
+      window.localStorage.setItem(orderStorageKey, JSON.stringify(next))
+    } catch {
+      // ignore write errors
+    }
+  }
+
+  useEffect(() => {
+    setCollapsedSections(new Set(loadStoredArray(collapsedStorageKey)))
+    setSectionOrder(loadStoredArray(orderStorageKey))
+  }, [collapsedStorageKey, orderStorageKey])
+
+  useEffect(() => () => {
+    if (dragGhostRef.current) {
+      document.body.removeChild(dragGhostRef.current)
+      dragGhostRef.current = null
+    }
+  }, [])
 
   const qc = useQueryClient()
   const { data: clusters = [] } = useQuery({ queryKey: ['clusters'], queryFn: fetchClusters })
@@ -224,6 +277,88 @@ export function AlertListView({ alerts, silences, onSelectAlert, selectedFingerp
     })
   }
 
+  function toggleSection(section: string) {
+    const next = new Set(collapsedSections)
+    if (next.has(section)) next.delete(section)
+    else next.add(section)
+    persistCollapsed(next)
+  }
+
+  function moveSectionToIndex(sourceSection: string, targetIndex: number) {
+    const idx = orderedGroupValues.indexOf(sourceSection)
+    if (idx === -1) return
+    let insertAt = targetIndex
+    if (idx < insertAt) insertAt -= 1
+    if (idx === insertAt) return
+    const next = [...orderedGroupValues]
+    next.splice(idx, 1)
+    next.splice(insertAt, 0, sourceSection)
+    persistSectionOrder(next)
+  }
+
+  function startSectionDrag(e: ReactMouseEvent<HTMLButtonElement>, section: string) {
+    e.preventDefault()
+    e.stopPropagation()
+    setDraggedSection(section)
+    const row = sectionRefs.current[section]
+    if (!row) return
+    const rect = row.getBoundingClientRect()
+    const offsetX = e.clientX - rect.left
+    const offsetY = e.clientY - rect.top
+
+    const ghost = row.cloneNode(true) as HTMLElement
+    ghost.style.position = 'fixed'
+    ghost.style.top = `${rect.top}px`
+    ghost.style.left = `${rect.left}px`
+    ghost.style.width = `${rect.width}px`
+    ghost.style.pointerEvents = 'none'
+    ghost.style.opacity = '0.9'
+    ghost.style.zIndex = '9999'
+    document.body.appendChild(ghost)
+    dragGhostRef.current = ghost
+
+    const startIdx = orderedGroupValues.indexOf(section)
+    setDragOverIndex(startIdx)
+    dragOverIndexRef.current = startIdx
+
+    const onMouseMove = (ev: MouseEvent) => {
+      if (dragGhostRef.current) {
+        dragGhostRef.current.style.left = `${ev.clientX - offsetX}px`
+        dragGhostRef.current.style.top = `${ev.clientY - offsetY}px`
+      }
+      let nextIdx = orderedGroupValues.length
+      for (let i = 0; i < orderedGroupValues.length; i++) {
+        const key = orderedGroupValues[i]
+        const el = sectionRefs.current[key]
+        if (!el) continue
+        const r = el.getBoundingClientRect()
+        if (ev.clientY < r.top + r.height / 2) {
+          nextIdx = i
+          break
+        }
+      }
+      setDragOverIndex(nextIdx)
+      dragOverIndexRef.current = nextIdx
+    }
+
+    const onMouseUp = () => {
+      const dropIdx = dragOverIndexRef.current
+      if (dropIdx !== null) moveSectionToIndex(section, dropIdx)
+      setDraggedSection(null)
+      setDragOverIndex(null)
+      dragOverIndexRef.current = null
+      if (dragGhostRef.current) {
+        document.body.removeChild(dragGhostRef.current)
+        dragGhostRef.current = null
+      }
+      window.removeEventListener('mousemove', onMouseMove)
+      window.removeEventListener('mouseup', onMouseUp)
+    }
+
+    window.addEventListener('mousemove', onMouseMove)
+    window.addEventListener('mouseup', onMouseUp)
+  }
+
   function sortGroups(groups: AlertGroupData[]): AlertGroupData[] {
     return [...groups].sort((a, b) => {
       const cmp = a.alertname.localeCompare(b.alertname)
@@ -231,10 +366,16 @@ export function AlertListView({ alerts, silences, onSelectAlert, selectedFingerp
     })
   }
 
-  const groupsBySeverity = buildGroupsBySeverity(alerts)
-  const presentSeverities = [
-    ...SEVERITY_ORDER.filter((s) => groupsBySeverity.has(s)),
-    ...[...groupsBySeverity.keys()].filter((s) => !SEVERITY_ORDER.includes(s)),
+  const groupsByLabel = buildGroupsByLabel(alerts, groupByLabel)
+  const presentGroupValues = groupByLabel === 'severity'
+    ? [
+      ...SEVERITY_ORDER.filter((s) => groupsByLabel.has(s)),
+      ...[...groupsByLabel.keys()].filter((s) => !SEVERITY_ORDER.includes(s)),
+    ]
+    : [...groupsByLabel.keys()].sort((a, b) => a.localeCompare(b))
+  const orderedGroupValues = [
+    ...sectionOrder.filter((v) => presentGroupValues.includes(v)),
+    ...presentGroupValues.filter((v) => !sectionOrder.includes(v)),
   ]
 
   if (alerts.length === 0) {
@@ -449,21 +590,36 @@ export function AlertListView({ alerts, silences, onSelectAlert, selectedFingerp
           </tr>
         </thead>
         <tbody>
-          {presentSeverities.map((severity) => {
-            const groups = sortGroups(groupsBySeverity.get(severity)!)
-            const cfg = severitySectionConfig[severity] ?? {
-              label: severity,
+          {orderedGroupValues.map((groupValue, sectionIdx) => {
+            const groups = sortGroups(groupsByLabel.get(groupValue)!)
+            const cfg = severitySectionConfig[groupValue] ?? {
+              label: groupValue,
               darkRowClass: 'text-slate-400',
               lightRowClass: 'text-slate-600 bg-slate-200/80',
               borderClass: 'border-l-slate-600',
             }
             const totalAlerts = groups.reduce((sum, g) => sum + g.alerts.length, 0)
+            const sectionCollapsed = collapsedSections.has(groupValue)
             return (
-              <Fragment key={severity}>
+              <Fragment key={groupValue}>
+                {draggedSection && (
+                  <tr aria-hidden="true">
+                    <td colSpan={showStateColumn ? 4 : 3} className="h-2 p-0">
+                      {dragOverIndex === sectionIdx && (
+                        <div className="h-0 border-t-2 border-dashed border-primary/80" />
+                      )}
+                    </td>
+                  </tr>
+                )}
                 <tr aria-hidden="true">
                   <td colSpan={showStateColumn ? 4 : 3} className={cn('h-8 p-0', theme === 'light' ? 'bg-muted' : 'bg-background')} />
                 </tr>
-                <tr>
+                <tr
+                  ref={(el) => {
+                    sectionRefs.current[groupValue] = el
+                  }}
+                  className={draggedSection === groupValue ? 'opacity-50' : undefined}
+                >
                   <td
                     colSpan={showStateColumn ? 4 : 3}
                     className={cn(
@@ -472,14 +628,39 @@ export function AlertListView({ alerts, silences, onSelectAlert, selectedFingerp
                       cfg.borderClass,
                     )}
                   >
-                    <span className="flex items-center gap-2">
-                      <span className="text-xs font-bold uppercase tracking-widest">{cfg.label}</span>
-                      <span className="text-xs font-medium opacity-60">{totalAlerts}</span>
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => toggleSection(groupValue)}
+                        className="inline-flex min-w-0 items-center gap-2 cursor-pointer"
+                        aria-expanded={!sectionCollapsed}
+                      >
+                        {sectionCollapsed ? (
+                          <ChevronRight className="h-3.5 w-3.5 shrink-0" />
+                        ) : (
+                          <ChevronDown className="h-3.5 w-3.5 shrink-0" />
+                        )}
+                        <span className="text-xs font-bold uppercase tracking-widest">
+                          {groupByLabel === 'severity' ? cfg.label : `${groupByLabel}: ${groupValue}`}
+                        </span>
+                        <span className="text-xs font-medium opacity-60">{totalAlerts}</span>
+                      </button>
+                      {!isFullscreen && (
+                        <button
+                          type="button"
+                          onMouseDown={(e) => startSectionDrag(e, groupValue)}
+                          className="ml-auto inline-flex h-6 w-6 items-center justify-center rounded text-muted-foreground/55 hover:text-muted-foreground hover:bg-accent/30 cursor-grab active:cursor-grabbing"
+                          aria-label="Drag section"
+                          title="Drag section"
+                        >
+                          <Grip className="h-3 w-3" />
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
-                {groups.map((group) => {
-                  const groupKey = `${severity}:${group.alertname}`
+                {!sectionCollapsed && groups.map((group) => {
+                  const groupKey = `${groupValue}:${group.alertname}`
                   const expanded = expandedGroups.has(groupKey)
                   const stateLabel = group.states.length === 1 ? group.states[0] : 'mixed'
                   const { active: activeSilences, expiring: expiringSilences, expired: expiredSilences } = getGroupSilenceInfo(group.alerts, group.alertname, silences)
@@ -637,6 +818,15 @@ export function AlertListView({ alerts, silences, onSelectAlert, selectedFingerp
               </Fragment>
             )
           })}
+          {draggedSection && (
+            <tr aria-hidden="true">
+              <td colSpan={showStateColumn ? 4 : 3} className="h-2 p-0">
+                {dragOverIndex === orderedGroupValues.length && (
+                  <div className="h-0 border-t-2 border-dashed border-primary/80" />
+                )}
+              </td>
+            </tr>
+          )}
         </tbody>
       </table>
 

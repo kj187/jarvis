@@ -259,6 +259,14 @@ export function SettingsSheet({ open, onClose }: SettingsSheetProps) {
     return map
   }, [allAlerts])
   const availableLabelNames = useMemo(() => Array.from(labelValueMap.keys()).sort(), [labelValueMap])
+  const groupByLabelOptions = useMemo(() => {
+    const unique = new Set(['severity', ...availableLabelNames, settings.groupByLabel])
+    return Array.from(unique).sort((a, b) => {
+      if (a === 'severity') return -1
+      if (b === 'severity') return 1
+      return a.localeCompare(b)
+    })
+  }, [availableLabelNames, settings.groupByLabel])
 
   // Default filter add-row state
   const [newName, setNewName] = useState('')
@@ -339,7 +347,7 @@ export function SettingsSheet({ open, onClose }: SettingsSheetProps) {
 
           <SettingRow
             label="Default view"
-            info="Which view to open on load — Card groups alerts by alertname, List groups by severity"
+            info="Which view to open on load"
           >
             <SegmentedControl
               value={settings.defaultViewMode}
@@ -349,6 +357,24 @@ export function SettingsSheet({ open, onClose }: SettingsSheetProps) {
                 { value: 'list', label: 'List' },
               ]}
             />
+          </SettingRow>
+
+          <SettingRow
+            label="Group alerts by label"
+            info="Used for section grouping in Card and List views. Defaults to severity."
+          >
+            <Select
+              value={settings.groupByLabel}
+              onChange={(e) => update({ groupByLabel: e.target.value })}
+              className="h-7 w-40"
+              selectClassName="text-xs"
+            >
+              {groupByLabelOptions.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </Select>
           </SettingRow>
 
           <SettingRow

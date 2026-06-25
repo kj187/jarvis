@@ -13,6 +13,7 @@ export interface UserSettings {
   theme: 'dark' | 'light'
   timeFormat: 'relative' | 'absolute'
   defaultViewMode: 'card' | 'list'
+  groupByLabel: string
 
   // Default filter (locked, always present in header)
   defaultFilters: DefaultFilter[]
@@ -43,6 +44,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   theme: 'dark',
   timeFormat: 'relative',
   defaultViewMode: 'card',
+  groupByLabel: 'severity',
   defaultFilters: [],
   resolvedPageSize: 25,
   defaultSilenceDurationMinutes: 60,

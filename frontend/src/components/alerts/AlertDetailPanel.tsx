@@ -401,7 +401,7 @@ export function AlertDetailPanel({
                     ✕
                   </button>
                 </div>
-              ) : (
+              ) : alert.status.state === 'resolved' ? null : (
                 <div className="relative p-[2px] overflow-hidden rounded-md">
                   <div className="claim-snake-spinner absolute inset-[-150%]" />
                   <Button
@@ -425,7 +425,7 @@ export function AlertDetailPanel({
             </div>
           </div>
 
-          {showClaimForm && !activeClaim && (
+          {showClaimForm && !activeClaim && alert.status.state !== 'resolved' && (
             authMode !== 'none' && !user ? (
               <p className="mt-3 text-xs text-muted-foreground">
                 Login required to claim this alert.

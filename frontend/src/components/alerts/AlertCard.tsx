@@ -19,6 +19,7 @@ interface AlertCardProps {
   onClick: (fingerprint: string) => void
   selectedFingerprint?: string | null
   onCreateSilence?: (alerts: EnrichedAlert[]) => void
+  showSeverityBadge?: boolean
 }
 
 
@@ -188,11 +189,19 @@ function AlertEntry({
   )
 }
 
-export function AlertCard({ alerts, silences, onClick, selectedFingerprint, onCreateSilence }: AlertCardProps) {
+export function AlertCard({
+  alerts,
+  silences,
+  onClick,
+  selectedFingerprint,
+  onCreateSilence,
+  showSeverityBadge = true,
+}: AlertCardProps) {
   const [page, setPage] = useState(0)
 
   const primary = alerts[0]
   const count = alerts.length
+  const severityRaw = primary.labels['severity']
   const severity = primary.labels['severity'] ?? 'none'
   const alertname = primary.labels['alertname'] ?? 'Unknown'
 
@@ -228,7 +237,7 @@ export function AlertCard({ alerts, silences, onClick, selectedFingerprint, onCr
       <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
         <span className="break-all font-semibold leading-tight text-foreground">{alertname}</span>
         <div className="flex shrink-0 items-center gap-2">
-          <AlertBadge severity={severity} />
+          {showSeverityBadge && severityRaw && <AlertBadge severity={severity} />}
           {count > 1 && (
             <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-accent px-1.5 text-xs font-bold">
               ×{count}
