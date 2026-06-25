@@ -2,13 +2,15 @@ import { useState, useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { format, formatDistanceToNow } from 'date-fns'
 import { enUS } from 'date-fns/locale'
-import { ExternalLink, BookOpen, ChevronDown, ChevronUp, BellOff, Pencil, Trash2, User, Copy, Check, Info, Server } from 'lucide-react'
+import { ExternalLink, BookOpen, ChevronDown, ChevronUp, BellOff, Pencil, Trash2, User, Info, Server } from 'lucide-react'
 import { TruncatableChip } from '@/components/ui/truncatable-chip'
 import { cn } from '@/lib/utils'
 import { Sheet } from '@/components/ui/sheet'
 import { AlertBadge, StatusBadge } from './AlertBadge'
 import { labelColorStyle } from './LabelChip'
 import { AlertComments } from './AlertComments'
+import { AlertDetailHistorySection } from './AlertDetailHistorySection'
+import { AlertDetailSection } from './AlertDetailSection'
 import { SilenceForm } from '@/components/silences/SilenceForm'
 import { useAlerts, useAlertTimeline, useAlertStats } from '@/hooks/useAlerts'
 import { useActiveClaim, useSetClaim, useReleaseClaim } from '@/hooks/useAlertClaim'
@@ -196,41 +198,6 @@ function AffectedAlertsSection({
           })}
         </div>
       )}
-    </div>
-  )
-}
-
-// ── Section ───────────────────────────────────────────────────────────────────
-
-function Section({
-  title,
-  children,
-  defaultOpen = true,
-  headerRight,
-  testId,
-}: {
-  title: React.ReactNode
-  children: React.ReactNode
-  defaultOpen?: boolean
-  headerRight?: React.ReactNode
-  testId?: string
-}) {
-  const [open, setOpen] = useState(defaultOpen)
-  return (
-    <div data-testid={testId} className="border-b border-border py-4 px-5">
-      <button
-        className="flex w-full items-center justify-between text-sm font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground cursor-pointer"
-        onClick={() => setOpen((v) => !v)}
-      >
-        <span className="flex items-center gap-1.5">{title}</span>
-        <div className="flex items-center gap-2">
-          {headerRight && (
-            <span onClick={(e) => e.stopPropagation()}>{headerRight}</span>
-          )}
-          {open ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-        </div>
-      </button>
-      {open && <div className="mt-3">{children}</div>}
     </div>
   )
 }
@@ -782,7 +749,7 @@ export function AlertDetailPanel({
 
         {/* Annotations */}
         {annotationEntries.length > 0 && (
-          <Section title="Annotations" defaultOpen={true} testId="detail-annotations-section">
+          <AlertDetailSection title="Annotations" defaultOpen={true} testId="detail-annotations-section">
             <div className="space-y-1 text-xs">
               {annotationEntries.map(([k, v]) => (
                 <div key={k} data-testid="detail-annotation-item" className="flex gap-2">
@@ -791,12 +758,12 @@ export function AlertDetailPanel({
                 </div>
               ))}
             </div>
-          </Section>
+          </AlertDetailSection>
         )}
 
         {/* Summary / Description */}
         {(summaryText || descriptionText) && (
-          <Section title="Summary" defaultOpen={true}>
+          <AlertDetailSection title="Summary" defaultOpen={true}>
             <div className="space-y-2">
               {summaryText && (
                 <p className="text-sm text-foreground">{renderTextWithLinks(summaryText)}</p>
@@ -805,12 +772,12 @@ export function AlertDetailPanel({
                 <p className="text-xs text-muted-foreground leading-relaxed">{renderTextWithLinks(descriptionText)}</p>
               )}
             </div>
-          </Section>
+          </AlertDetailSection>
         )}
 
         {/* Links */}
         {linkButtons.length > 0 && (
-          <Section
+          <AlertDetailSection
             title={
               <>
                 Links
@@ -844,217 +811,34 @@ export function AlertDetailPanel({
                 </a>
               ))}
             </div>
-          </Section>
+          </AlertDetailSection>
         )}
 
         {/* Labels */}
-        <Section title="Labels" testId="detail-labels-section">
+        <AlertDetailSection title="Labels" testId="detail-labels-section">
           <div className="grid grid-cols-2 gap-x-4 gap-y-2">
             <div className="space-y-2">{renderLabelColumn(leftLabels)}</div>
             <div className="space-y-2">{renderLabelColumn(rightLabels)}</div>
           </div>
-        </Section>
+        </AlertDetailSection>
 
         {/* History */}
-        {(() => {
-          type HistoryRow = { key: string; time: Date; who: string; action: string; comment?: string; silenceId?: string; alertmanagerUrl?: string }
-
-          const actionColor: Record<string, string> = theme === 'light' ? {
-            'Alert fired': 'text-red-600',
-            'Alert resolved': 'text-green-600',
-            'Alert suppressed': 'text-muted-foreground',
-            'Silence expired': 'text-yellow-600',
-            claimed: 'text-blue-600',
-            unclaimed: 'text-muted-foreground',
-            'Silence pending': 'text-muted-foreground',
-            'Silence created': 'text-muted-foreground',
-            'Silence updated': 'text-muted-foreground',
-            'Silence deleted': 'text-orange-600',
-          } : {
-            'Alert fired': 'text-red-400',
-            'Alert resolved': 'text-green-400',
-            'Alert suppressed': 'text-slate-400',
-            'Silence expired': 'text-yellow-400',
-            claimed: 'text-blue-400',
-            unclaimed: 'text-muted-foreground',
-            'Silence pending': 'text-slate-300',
-            'Silence created': 'text-slate-300',
-            'Silence updated': 'text-slate-300',
-            'Silence deleted': 'text-orange-400',
-          }
-
-          const mappedRows: HistoryRow[] = (timelineData?.entries ?? []).map((entry) => {
-          const action = toHistoryAction(entry.source, entry.action)
-
-          return {
-            key: `${entry.source}-${entry.sourceId}-${entry.action}-${entry.recordedAt}`,
-            time: new Date(entry.recordedAt),
-            who: entry.who,
-            action,
-            comment: entry.comment || undefined,
-            silenceId: entry.silenceId || undefined,
-            alertmanagerUrl: alert.alertmanagerUrl,
-          }
-          })
-
-          const totalRows = timelineData?.total ?? 0
-          const totalPages = Math.max(1, Math.ceil(totalRows / historyPageSize))
-          const safePage = Math.min(historyPage, totalPages)
-          const pageStart = totalRows === 0 ? 0 : (safePage - 1) * historyPageSize + 1
-          const pageEnd = Math.min(safePage * historyPageSize, totalRows)
-
-          const pageSizeButtons = totalRows > 10 ? (
-          <div className="flex items-center gap-1">
-              {([10, 50, 100] as const).map((n) => (
-                <button
-                  key={n}
-                  onClick={() => { setHistoryPageSize(n); setHistoryPage(1) }}
-                  className={cn(
-                    'rounded px-1.5 py-0.5 text-[10px] font-medium cursor-pointer',
-                    historyPageSize === n
-                      ? 'bg-accent text-foreground'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-accent/50',
-                  )}
-                >
-                  {n}
-                </button>
-              ))}
-            </div>
-          ) : null
-
-          const pageWindow: (number | '…')[] = (() => {
-            if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1)
-            const pages: (number | '…')[] = [1]
-            if (safePage > 3) pages.push('…')
-            for (let p = Math.max(2, safePage - 1); p <= Math.min(totalPages - 1, safePage + 1); p++) pages.push(p)
-            if (safePage < totalPages - 2) pages.push('…')
-            pages.push(totalPages)
-            return pages
-          })()
-
-          return (
-            <>
-            <Section title="History" defaultOpen={true} headerRight={pageSizeButtons}>
-              {!timelineData ? (
-                <p className="text-xs text-muted-foreground">Loading…</p>
-              ) : (
-                <div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-xs">
-                      <thead>
-                        <tr className="border-b border-border bg-accent/30">
-                          <th className="px-3 py-2 text-left text-muted-foreground">Time</th>
-                          <th className="px-3 py-2 text-left text-muted-foreground">Who</th>
-                          <th className="px-3 py-2 text-left text-muted-foreground">Action</th>
-                          <th className="px-3 py-2 text-left text-muted-foreground">Comment</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {mappedRows.map((r) => (
-                          <tr key={r.key} className="border-b border-border last:border-0">
-                            <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">
-                              {format(r.time, 'yyyy-MM-dd HH:mm', { locale: enUS })} {tzAbbr}
-                            </td>
-                            <td className="px-3 py-2 font-medium">{r.who}</td>
-                            <td className={`px-3 py-2 font-medium ${actionColor[r.action] ?? 'text-foreground'}`}>
-                              {r.action}
-                              {r.silenceId && (
-                                <div className="mt-0.5 font-mono text-[10px] text-muted-foreground">
-                                  {r.alertmanagerUrl ? (
-                                    <a
-                                      href={`${r.alertmanagerUrl}/#/silences/${r.silenceId}`}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                      className="underline underline-offset-2 hover:text-foreground"
-                                    >
-                                      {r.silenceId}
-                                    </a>
-                                  ) : (
-                                    r.silenceId
-                                  )}
-                                </div>
-                              )}
-                            </td>
-                            <td className="px-3 py-2 text-muted-foreground">{r.comment ?? '—'}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  {totalPages > 1 && (
-                    <div className="mt-3 flex items-center justify-between gap-2">
-                      <span className="text-[10px] text-muted-foreground">
-                        {pageStart}–{pageEnd} of {totalRows}
-                      </span>
-                      <div className="flex items-center gap-1">
-                        <button
-                          disabled={safePage === 1}
-                          onClick={() => setHistoryPage((p) => p - 1)}
-                          className="rounded px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-30 disabled:cursor-default cursor-pointer"
-                        >
-                          ‹
-                        </button>
-                        {pageWindow.map((p, i) =>
-                          p === '…' ? (
-                            <span key={`ellipsis-${i}`} className="px-1 text-[10px] text-muted-foreground">…</span>
-                          ) : (
-                            <button
-                              key={p}
-                              onClick={() => setHistoryPage(p)}
-                              className={cn(
-                                'rounded px-1.5 py-0.5 text-[10px] cursor-pointer',
-                                safePage === p
-                                  ? 'bg-accent text-foreground font-medium'
-                                  : 'text-muted-foreground hover:text-foreground hover:bg-accent/50',
-                              )}
-                            >
-                              {p}
-                            </button>
-                          )
-                        )}
-                        <button
-                          disabled={safePage === totalPages}
-                          onClick={() => setHistoryPage((p) => p + 1)}
-                          className="rounded px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-30 disabled:cursor-default cursor-pointer"
-                        >
-                          ›
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </Section>
-            <Section title="AI Prompt" defaultOpen={false}>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs text-muted-foreground">Prompt with alert context for AI analysis</p>
-                  <button
-                    className="flex items-center gap-1 rounded border border-border px-2 py-1 text-xs hover:bg-accent cursor-pointer"
-                    onClick={() => {
-                      void navigator.clipboard.writeText(promptText)
-                      setPromptCopied(true)
-                      setTimeout(() => setPromptCopied(false), 2000)
-                    }}
-                  >
-                    {promptCopied ? <Check className="h-3 w-3 text-green-400" /> : <Copy className="h-3 w-3" />}
-                    {promptCopied ? 'Copied!' : 'Copy'}
-                  </button>
-                </div>
-                <pre className="max-h-64 overflow-y-auto rounded bg-accent/30 p-3 text-[10px] leading-relaxed text-muted-foreground whitespace-pre-wrap break-words">
-                  {promptText}
-                </pre>
-              </div>
-            </Section>
-            </>
-          )
-        })()}
+        <AlertDetailHistorySection
+          timelineData={timelineData}
+          historyPage={historyPage}
+          historyPageSize={historyPageSize}
+          setHistoryPage={setHistoryPage}
+          setHistoryPageSize={setHistoryPageSize}
+          alertmanagerUrl={alert.alertmanagerUrl}
+          promptText={promptText}
+          promptCopied={promptCopied}
+          setPromptCopied={setPromptCopied}
+        />
 
         {/* Comments */}
-        <Section title="Comments" testId="detail-comments-section">
+        <AlertDetailSection title="Comments" testId="detail-comments-section">
           <AlertComments fingerprint={alert.fingerprint} />
-        </Section>
+        </AlertDetailSection>
 
       </Sheet>
 
