@@ -733,7 +733,7 @@ export function AlertDetailPanel({
                   className="flex items-center gap-1 rounded border border-border px-2 py-1 text-xs hover:bg-accent cursor-pointer"
                 >
                   {btn.isRunbook ? <BookOpen className="h-3 w-3" /> : <ExternalLink className="h-3 w-3" />}
-                  {btn.label}
+                  <span className="first-letter:uppercase">{btn.label}</span>
                 </a>
               ))}
             </div>
@@ -842,7 +842,7 @@ export function AlertDetailPanel({
           const safePage = Math.min(historyPage, totalPages)
           const pagedRows = allRows.slice((safePage - 1) * historyPageSize, safePage * historyPageSize)
 
-          const pageSizeButtons = (
+          const pageSizeButtons = totalRows > 10 ? (
             <div className="flex items-center gap-1">
               {([10, 50, 100] as const).map((n) => (
                 <button
@@ -859,7 +859,7 @@ export function AlertDetailPanel({
                 </button>
               ))}
             </div>
-          )
+          ) : null
 
           const pageWindow: (number | '…')[] = (() => {
             if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1)
