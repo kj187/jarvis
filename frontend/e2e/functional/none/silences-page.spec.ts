@@ -62,8 +62,9 @@ test('E1 silences page list view persists via localStorage', async ({ page, jarv
   await clearAllAMSilences()
   await jarvis.poll()
 
+  const comment = 'e2e-active-silence'
   await jarvis.createSilence('e2e', [{ name: 'alertname', value: 'KubePodCrashLooping', isRegex: false, isEqual: true }], {
-    comment: 'e2e-active-silence',
+    comment,
     createdBy: 'e2e-tester',
   })
   await waitForSilences(JARVIS_BASE_URL, 1)
@@ -71,16 +72,19 @@ test('E1 silences page list view persists via localStorage', async ({ page, jarv
   await page.goto('/')
   await ensureSilencesPage(page)
   await expect(page.getByRole('button', { name: 'Show expired' })).toBeVisible()
+  await expect(page.getByText(comment).first()).toBeVisible()
 
-  await page.getByTitle('List View').click()
-  await expect(page.getByText('Matchers / Clusters / Comment')).toBeVisible()
+  const listToggle = page.getByTitle('List View')
+  await listToggle.click()
+  await expect(listToggle).toHaveAttribute('aria-pressed', 'true')
 
   const stored = await page.evaluate(() => localStorage.getItem('jarvis-silencesViewMode'))
   expect(stored).toBe('list')
 
   await page.reload()
   await ensureSilencesPage(page)
-  await expect(page.getByText('Matchers / Clusters / Comment')).toBeVisible()
+  await expect(page.getByText(comment).first()).toBeVisible()
+  await expect(page.getByTitle('List View')).toHaveAttribute('aria-pressed', 'true')
 })
 
 test('E2 identical silences are grouped into one group card', async ({ page, jarvis }) => {
@@ -224,6 +228,91 @@ test('E5 matcher filter narrows visible silences', async ({ page, jarvis }) => {
 
   await expect(page.getByText(criticalComment).first()).toBeVisible()
   await expect(page.getByText(warningComment)).toHaveCount(0)
+})
+
+test('E6 expiry status shows pending, active, expiring and expired labels', async ({ page, jarvis }) => {
+  await dismissNoAuthNotice(page)
+  await resetPersistedUIState(page)
+  await clearAllAMSilences()
+  await jarvis.poll()
+
+  const now = Date.now()
+  const pendingComment = 'e6-pending'
+  const activeComment = 'e6-active'
+  const expiringComment = 'e6-expiring'
+  const expiredComment = 'e6-expired'
+
+  await jarvis.createSilence('e2e', [{ name: 'alertname', value: 'E6Pending', isRegex: false, isEqual: true }], {
+    startsAt: new Date(now + 20 * 60 * 1000),
+    endsAt: new Date(now + 80 * 60 * 1000),
+    comment: pendingComment,
+    createdBy: 'e2e-tester',
+  })
+  await jarvis.createSilence('e2e', [{ name: 'alertname', value: 'E6Active', isRegex: false, isEqual: true }], {
+    startsAt: new Date(now - 20 * 60 * 1000),
+    endsAt: new Date(now + 80 * 60 * 1000),
+    comment: activeComment,
+    createdBy: 'e2e-tester',
+  })
+  await jarvis.createSilence('e2e', [{ name: 'alertname', value: 'E6Expiring', isRegex: false, isEqual: true }], {
+    startsAt: new Date(now - 20 * 60 * 1000),
+    endsAt: new Date(now + 10 * 60 * 1000),
+    comment: expiringComment,
+    createdBy: 'e2e-tester',
+  })
+  const toExpireId = await jarvis.createSilence('e2e', [{ name: 'alertname', value: 'E6Expired', isRegex: false, isEqual: true }], {
+    startsAt: new Date(now - 20 * 60 * 1000),
+    endsAt: new Date(now + 60 * 60 * 1000),
+    comment: expiredComment,
+    createdBy: 'e2e-tester',
+  })
+  await expireSilenceInAlertmanager(toExpireId)
+  await jarvis.poll()
+  await waitForSilences(JARVIS_BASE_URL, 4)
+
+  await page.goto('/')
+  await ensureSilencesPage(page)
+  await page.getByTitle('List View').click()
+  await page.getByRole('button', { name: 'Show expired' }).click()
+
+  const pendingRow = page.locator('div.grid').filter({ has: page.getByText(pendingComment, { exact: true }) }).first()
+  const activeRow = page.locator('div.grid').filter({ has: page.getByText(activeComment, { exact: true }) }).first()
+  const expiringRow = page.locator('div.grid').filter({ has: page.getByText(expiringComment, { exact: true }) }).first()
+  const expiredRow = page.locator('div.grid').filter({ has: page.getByText(expiredComment, { exact: true }) }).first()
+
+  await expect(pendingRow).toContainText('Starts in')
+  await expect(activeRow).toContainText('In ')
+  await expect(expiringRow).toContainText('⚠️')
+  await expect(expiredRow).toContainText('Expired')
+  await expect(expiredRow).toContainText('ago')
+})
+
+test('E7 expired silence can be re-created from silences page', async ({ page, jarvis }) => {
+  await dismissNoAuthNotice(page)
+  await resetPersistedUIState(page)
+  await clearAllAMSilences()
+  await jarvis.poll()
+
+  const sourceComment = 'e7-recreate-source'
+  const silenceId = await jarvis.createSilence('e2e', [{ name: 'alertname', value: 'E7Recreate', isRegex: false, isEqual: true }], {
+    comment: sourceComment,
+    createdBy: 'e2e-tester',
+  })
+  await expireSilenceInAlertmanager(silenceId)
+  await jarvis.poll()
+  await waitForSilences(JARVIS_BASE_URL, 1)
+
+  await page.goto('/')
+  await ensureSilencesPage(page)
+  await page.getByRole('button', { name: 'Show expired' }).click()
+  const sourceRow = page.locator('div.grid').filter({ has: page.getByText(sourceComment, { exact: true }) }).first()
+  await expect(sourceRow).toBeVisible()
+
+  await sourceRow.getByTitle('Re-create silence').first().click()
+  const formSheet = page.locator('div.fixed.inset-y-0.right-0.z-50').first()
+  await expect(formSheet.getByText('Re-create Silence', { exact: true })).toBeVisible()
+  await page.getByLabel('Close').click()
+  await expect(formSheet).toHaveCount(0)
 })
 
 test('G1 expire single silence via modal', async ({ page, jarvis }) => {
