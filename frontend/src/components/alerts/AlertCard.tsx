@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Bell, BellOff, User } from 'lucide-react'
+import { ArrowUpRight, Bell, BellOff, User } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getFilterableLabels, getSilenceState, getExpiredSilence, formatSilenceDuration, tzAbbr } from '@/lib/alertUtils'
 import { renderTextWithLinks } from '@/lib/linkUtils'
@@ -77,7 +77,7 @@ function AlertEntry({
       onClick={() => onClick(alert.fingerprint)}
       onKeyDown={(e) => e.key === 'Enter' && onClick(alert.fingerprint)}
       className={cn(
-        'cursor-pointer px-3 py-2.5 transition-colors focus:outline-none focus-visible:outline-none',
+        'group relative cursor-pointer border-l-2 border-transparent px-3 py-2.5 transition-colors focus:outline-none focus-visible:outline-none',
         claim
           ? 'bg-muted/30 hover:bg-muted/50'
           : 'hover:bg-accent/20',
@@ -85,6 +85,11 @@ function AlertEntry({
         isSelected && claim && 'bg-muted/50 hover:bg-muted/70',
       )}
     >
+      <span className="pointer-events-none absolute right-2 top-2 z-10 inline-flex items-center gap-0.5 rounded border border-transparent bg-transparent px-1 py-0.5 text-[10px] font-medium text-foreground opacity-0 shadow-none transition-all group-hover:border-border/80 group-hover:bg-card/95 group-hover:opacity-100 group-hover:shadow-sm">
+        Open
+        <ArrowUpRight className="h-2.5 w-2.5" />
+      </span>
+
       {/* Claim banner */}
       {claim && (
         <div className={cn(
@@ -292,7 +297,7 @@ export function AlertCard({
       )}
 
       {/* Alert entries */}
-      <div className="divide-y divide-border">
+      <div className="divide-y divide-border bg-muted/10">
         {visible.map((alert) => (
           <AlertEntry
             key={alert.fingerprint}

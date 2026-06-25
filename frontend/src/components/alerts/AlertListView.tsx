@@ -23,6 +23,7 @@ interface AlertListViewProps {
   selectedFingerprint?: string | null
   stateFilter?: string
   resolvedMode?: boolean
+  groupingEnabled?: boolean
 }
 
 interface SilenceSheetState {
@@ -43,6 +44,10 @@ interface AlertGroupData {
   states: string[]
   claimCount: number
   commonSummary?: string
+}
+
+function alertRowKey(alert: EnrichedAlert): string {
+  return `${alert.clusterName}:${alert.fingerprint}:${alert.startsAt}`
 }
 
 function buildPageWindow(current: number, total: number): (number | '…')[] {
@@ -181,7 +186,15 @@ function loadStoredArray(key: string): string[] {
   }
 }
 
-export function AlertListView({ alerts, silences, onSelectAlert, selectedFingerprint, stateFilter, resolvedMode }: AlertListViewProps) {
+export function AlertListView({
+  alerts,
+  silences,
+  onSelectAlert,
+  selectedFingerprint,
+  stateFilter,
+  resolvedMode,
+  groupingEnabled = true,
+}: AlertListViewProps) {
   const showStateColumn = !stateFilter
   const [sortKey, setSortKey] = useState<SortKey>('alertname')
   const [sortAsc, setSortAsc] = useState(true)
@@ -502,7 +515,7 @@ export function AlertListView({ alerts, silences, onSelectAlert, selectedFingerp
             <tbody>
               {pageAlerts.map((alert) => (
                 <AlertListRow
-                  key={alert.fingerprint}
+                  key={alertRowKey(alert)}
                   alert={alert}
                   onClick={onSelectAlert}
                   selected={selectedFingerprint === alert.fingerprint}
@@ -528,6 +541,80 @@ export function AlertListView({ alerts, silences, onSelectAlert, selectedFingerp
             </span>
           </div>
         )}
+
+        <Sheet open={silenceSheet.open} onClose={closeSilenceForm} className="sm:max-w-2xl lg:max-w-3xl" ariaLabel={silenceSheet.isRecreate ? 'Extend silence' : 'Create silence'}>
+          <div className="p-5 pt-10">
+            <h2 className="mb-4 text-base font-semibold">
+              {silenceSheet.isRecreate ? 'Extend silence' : 'Create silence'}
+            </h2>
+            <SilenceForm
+              availableClusters={
+                clusterNames.length > 0
+                  ? clusterNames
+                  : [...new Set(silenceSheet.alerts.map((a) => a.clusterName))]
+              }
+              prefillAlerts={silenceSheet.alerts.length > 0 ? silenceSheet.alerts : undefined}
+              prefillSilence={silenceSheet.prefillSilence}
+              isRecreate={silenceSheet.isRecreate}
+              onSuccess={closeSilenceForm}
+              onCancel={closeSilenceForm}
+            />
+          </div>
+        </Sheet>
+      </div>
+    )
+  }
+
+  if (!groupingEnabled) {
+    const sorted = [...alerts].sort((a, b) => {
+      const cmp = (a.labels['alertname'] ?? '—').localeCompare(b.labels['alertname'] ?? '—')
+      if (cmp !== 0) return sortAsc ? cmp : -cmp
+      return new Date(b.startsAt).getTime() - new Date(a.startsAt).getTime()
+    })
+
+    return (
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-border">
+              <SortHeader label="Alert Name" sortKeyVal="alertname" />
+              {showStateColumn && (
+                <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  State
+                </th>
+              )}
+              <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Actions
+              </th>
+              <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Claim
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map((alert) => (
+              <AlertListRow
+                key={alertRowKey(alert)}
+                alert={alert}
+                onClick={onSelectAlert}
+                selected={selectedFingerprint === alert.fingerprint}
+                silences={silences}
+                onCreateSilence={openSilenceForm}
+                onExpireSilence={(silence) => setExpireTargets([silence])}
+                showStateColumn={showStateColumn}
+              />
+            ))}
+          </tbody>
+        </table>
+
+        <SilenceExpireModal
+          silences={expireTargets}
+          allAlerts={alerts}
+          open={expireTargets.length > 0}
+          onConfirm={handleExpireConfirm}
+          onCancel={() => setExpireTargets([])}
+          isPending={expireMutation.isPending}
+        />
 
         <Sheet open={silenceSheet.open} onClose={closeSilenceForm} className="sm:max-w-2xl lg:max-w-3xl" ariaLabel={silenceSheet.isRecreate ? 'Extend silence' : 'Create silence'}>
           <div className="p-5 pt-10">
@@ -797,7 +884,7 @@ export function AlertListView({ alerts, silences, onSelectAlert, selectedFingerp
                       {expanded &&
                         group.alerts.map((alert, idx) => (
                           <AlertListRow
-                            key={alert.fingerprint}
+                            key={alertRowKey(alert)}
                             alert={alert}
                             onClick={onSelectAlert}
                             selected={selectedFingerprint === alert.fingerprint}

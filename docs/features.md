@@ -2,7 +2,7 @@
 
 ## Card View
 
-Alerts grouped by severity, with inline claim and silence actions.
+Alerts grouped by your configured label (severity by default), with inline claim and silence actions.
 
 ![Card View](assets/feature-card-view.png)
 
@@ -19,7 +19,13 @@ The card view is the default landing page and the primary interface for active a
 - **Silence** — opens the silence form pre-filled with this alert's labels
 - **Detail** — click anywhere on the alert entry to slide open the full detail panel; claim and all other actions are available there
 
-Within each severity section, groups are sorted alphabetically by alert name. The view updates in real time via WebSocket: new alerts appear, resolved alerts disappear, and claim/silence state refreshes without any page reload.
+Sections are grouped by the label selected in **Settings → Group alerts by label** (default: `severity`). You can collapse/expand each section and reorder sections via drag-and-drop (drag handle on the right). The section order and collapsed state are persisted in localStorage per grouping label.
+
+Within each section, groups are sorted alphabetically by alert name. The view updates in real time via WebSocket: new alerts appear, resolved alerts disappear, and claim/silence state refreshes without any page reload.
+
+In the top-right toolbar of the alerts page, the compact **Grouped** toggle lets you switch grouping on/off in Card View.  
+- **On**: section grouping by the configured label  
+- **Off**: all alerts shown together without section grouping
 
 ---
 
@@ -31,7 +37,9 @@ Compact table layout with sortable columns — useful when dealing with many ale
 
 The list view is optimized for situations where you have a lot of alerts and need to scan and sort quickly rather than focus on individual cards. It trades visual weight for density.
 
-Alerts are grouped into severity sections (critical / warning / info). Within each section, groups are collapsed by alert name. Expand a group to see individual alert instances.
+Alerts are grouped into sections based on the label selected in **Settings → Group alerts by label** (severity by default). Section headers can be collapsed/expanded, and section order can be changed via drag-and-drop.
+
+Within each section, groups are collapsed by alert name. Expand a group to see individual alert instances.
 
 **Columns:**
 - **Alert Name** — sortable; shows alert count per group, common labels, and cluster names
@@ -101,6 +109,7 @@ Open the Settings panel by clicking the **⚙ gear icon** in the top-right area 
 |---|---|
 | **Time format** | Switch between *Relative* ("6 days ago") and *Absolute* ("Jun 4, 2025, 12:30 PM") timestamps. A live preview updates as you toggle. |
 | **Default view** | Choose whether the app starts in *Card* or *List* view on every page load. |
+| **Group alerts by label** | Select which label defines top-level sections in Card and List views (`severity` by default, or any label seen in current alerts). |
 | **Resolved page size** | Number of resolved alerts shown per page (10 / 25 / 50 / 100). Set via the per-page selector in the resolved view; persisted in localStorage. |
 | **Default filter** | Label matchers that are always active — see below. |
 | **Default silence duration** | Pre-selected duration when the silence creation form opens (15 min to 3 days). |

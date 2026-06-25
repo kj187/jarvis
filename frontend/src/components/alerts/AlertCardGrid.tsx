@@ -17,6 +17,7 @@ interface AlertCardGridProps {
   onSelectAlert: (fingerprint: string) => void
   selectedFingerprint?: string | null
   resolvedMode?: boolean
+  groupingEnabled?: boolean
 }
 
 interface CardGroup {
@@ -120,6 +121,7 @@ export function AlertCardGrid({
   onSelectAlert,
   selectedFingerprint,
   resolvedMode,
+  groupingEnabled = true,
 }: AlertCardGridProps) {
   const numCols = useColumns()
   const groupByLabel = useSettingsStore((s) => s.groupByLabel)
@@ -207,16 +209,12 @@ export function AlertCardGrid({
     </Sheet>
   )
 
-  // Resolved mode: flat grid sorted by endsAt desc, each alert is its own card
-  if (resolvedMode) {
-    const sorted = [...alerts].sort(
-      (a, b) => new Date(b.endsAt).getTime() - new Date(a.endsAt).getTime(),
-    )
-    if (sorted.length === 0) {
+  function renderFlatGrid(flatAlerts: EnrichedAlert[]) {
+    if (flatAlerts.length === 0) {
       return <EmptyState />
     }
     const cols: EnrichedAlert[][] = Array.from({ length: numCols }, () => [])
-    sorted.forEach((alert, i) => cols[i % numCols].push(alert))
+    flatAlerts.forEach((alert, i) => cols[i % numCols].push(alert))
     return (
       <>
         <div className="flex gap-3">
@@ -230,7 +228,7 @@ export function AlertCardGrid({
                   onClick={onSelectAlert}
                   selectedFingerprint={selectedFingerprint}
                   onCreateSilence={setSilenceAlerts}
-                  showSeverityBadge={groupByLabel !== 'severity'}
+                  showSeverityBadge={!groupingEnabled || groupByLabel !== 'severity'}
                 />
               ))}
             </div>
@@ -239,6 +237,17 @@ export function AlertCardGrid({
         {silenceSheet}
       </>
     )
+  }
+
+  // Flat grid mode (resolved is always flat, active can be toggled to flat)
+  if (resolvedMode) {
+    const sorted = [...alerts].sort(
+      (a, b) => new Date(b.endsAt).getTime() - new Date(a.endsAt).getTime(),
+    )
+    return renderFlatGrid(sorted)
+  }
+  if (!groupingEnabled) {
+    return renderFlatGrid(alerts)
   }
 
   // Group by configured label + alertname

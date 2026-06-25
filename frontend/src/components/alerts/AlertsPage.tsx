@@ -13,6 +13,18 @@ import { AlertDetailPanel } from './AlertDetailPanel'
 import { matchesLabelMatchers, getEffectiveAlertState } from '@/lib/alertUtils'
 import type { EnrichedAlert } from '@/types'
 
+const CARD_GROUPING_KEY = 'jarvis-alert-card-grouping-enabled'
+
+function loadCardGroupingEnabled(): boolean {
+  try {
+    const stored = window.localStorage.getItem(CARD_GROUPING_KEY)
+    if (stored === 'false') return false
+  } catch {
+    // ignore malformed local storage value
+  }
+  return true
+}
+
 // ── URL state sync ────────────────────────────────────────────────────────────
 
 function useURLState() {
@@ -96,6 +108,7 @@ export function AlertsPage() {
 
   // Search panel — auto-open when URL contains a search param
   const [searchOpen, setSearchOpen] = useState(() => Boolean(filters.search))
+  const [cardGroupingEnabled, setCardGroupingEnabled] = useState(loadCardGroupingEnabled)
   const searchInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -109,6 +122,15 @@ export function AlertsPage() {
       setSearchOpen(false)
     } else {
       setSearchOpen(true)
+    }
+  }
+
+  function toggleCardGrouping(enabled: boolean) {
+    setCardGroupingEnabled(enabled)
+    try {
+      window.localStorage.setItem(CARD_GROUPING_KEY, String(enabled))
+    } catch {
+      // ignore write errors
     }
   }
 
@@ -153,6 +175,8 @@ export function AlertsPage() {
       alerts.find((a) => a.fingerprint === selectedFingerprint) ??
       null
     : null
+  const showsCardGrid = viewMode === 'card' && filters.state !== 'resolved' && filters.state !== 'suppressed'
+  const canToggleGrouping = !isResolvedMode
 
   return (
     <div className={`flex flex-col gap-4${isFullscreen ? ' pt-4' : ''}`}>
@@ -166,6 +190,20 @@ export function AlertsPage() {
             <div className="flex items-center gap-2 shrink-0 ml-auto">
               {!isResolvedMode && (
                 <ViewToggle value={viewMode} onChange={(mode) => { setViewMode(mode); setActiveViewMode(mode) }} />
+              )}
+              {canToggleGrouping && (
+                <button
+                  onClick={() => toggleCardGrouping(!cardGroupingEnabled)}
+                  className={`cursor-pointer h-7 rounded-md border border-border px-2 text-xs font-medium transition-colors ${
+                    cardGroupingEnabled
+                      ? 'bg-accent text-foreground'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-accent/40'
+                  }`}
+                  aria-pressed={cardGroupingEnabled}
+                  title={cardGroupingEnabled ? 'Disable grouping' : 'Enable grouping'}
+                >
+                  Grouped
+                </button>
               )}
               <div className="flex items-center rounded-md border border-border overflow-hidden">
                 <button
@@ -253,13 +291,14 @@ export function AlertsPage() {
       {/* Content */}
       {isLoading ? (
         <div className="px-4 text-sm text-muted-foreground">Loading…</div>
-      ) : viewMode === 'card' && filters.state !== 'resolved' && filters.state !== 'suppressed' ? (
+      ) : showsCardGrid ? (
         <div className="px-4">
           <AlertCardGrid
             alerts={filtered}
             silences={silences}
             onSelectAlert={setSelectedFingerprint}
             selectedFingerprint={selectedFingerprint}
+            groupingEnabled={cardGroupingEnabled}
           />
         </div>
       ) : (
@@ -271,6 +310,7 @@ export function AlertsPage() {
             selectedFingerprint={selectedFingerprint}
             stateFilter={filters.state}
             resolvedMode={filters.state === 'resolved'}
+            groupingEnabled={cardGroupingEnabled}
           />
         </div>
       )}
