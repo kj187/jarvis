@@ -23,6 +23,39 @@ import { renderTextWithLinks, extractLinkButtons } from '@/lib/linkUtils'
 import { pickIdentifierLabel, tzAbbr } from '@/lib/alertUtils'
 
 const USERNAME_KEY = 'jarvis-username'
+const ALERT_EVENT_LABEL: Record<string, string> = {
+  firing: 'Alert fired',
+  suppressed: 'Alert suppressed',
+  expired: 'Silence expired',
+  resolved: 'Alert resolved',
+}
+const SILENCE_ACTION_LABEL: Record<string, string> = {
+  pending: 'Silence pending',
+  created: 'Silence created',
+  updated: 'Silence updated',
+  deleted: 'Silence deleted',
+  expired: 'Silence expired',
+}
+
+function toHistoryAction(source: 'alert' | 'claim' | 'silence', action: string): string {
+  if (source === 'alert') return ALERT_EVENT_LABEL[action] ?? action
+  if (source === 'silence') return SILENCE_ACTION_LABEL[action] ?? `Silence ${action}`
+  return action
+}
+
+const promptCache = new Map<string, string>()
+
+function getCachedPrompt(cacheKey: string, build: () => string): string {
+  const cached = promptCache.get(cacheKey)
+  if (cached !== undefined) return cached
+  const prompt = build()
+  promptCache.set(cacheKey, prompt)
+  if (promptCache.size > 100) {
+    const oldest = promptCache.keys().next().value
+    if (oldest) promptCache.delete(oldest)
+  }
+  return prompt
+}
 
 // ── Silence helpers ───────────────────────────────────────────────────────────
 
@@ -342,6 +375,67 @@ export function AlertDetailPanel({
   const annotationEntries = Object.entries(alert.annotations).filter(
     ([k]) => k !== 'summary' && k !== 'description' && !linkButtonKeys.has(k),
   )
+  const promptHistoryRows = (timelineData?.entries ?? []).map((entry) => ({
+    time: new Date(entry.recordedAt),
+    who: entry.who,
+    action: toHistoryAction(entry.source, entry.action),
+    comment: entry.comment || undefined,
+  }))
+  const promptTotalRows = timelineData?.total ?? 0
+  const promptTotalPages = Math.max(1, Math.ceil(promptTotalRows / historyPageSize))
+  const promptSafePage = Math.min(historyPage, promptTotalPages)
+  const promptCacheKey = JSON.stringify({
+    fingerprint: alert.fingerprint,
+    historyPageSize,
+    historyPage,
+    timelineTotal: promptTotalRows,
+    timelineEntries: timelineData?.entries ?? [],
+    stats: stats ?? null,
+    labels: alert.labels,
+    annotations: annotationEntries,
+    status: alert.status.state,
+    severity,
+    alertname,
+  })
+  const promptText = getCachedPrompt(promptCacheKey, () => {
+    const lines: string[] = []
+    lines.push('You are an experienced Site Reliability Engineer (SRE). Analyze the following Prometheus alert and help with root cause analysis and remediation.')
+    lines.push('')
+    lines.push(`## Alert: ${alertname}`)
+    lines.push(`- **Cluster**: ${alert.clusterName}`)
+    lines.push(`- **Severity**: ${severity}`)
+    lines.push(`- **Status**: ${alert.status.state}`)
+    if (stats) {
+      lines.push(`- **First seen**: ${format(new Date(stats.firstSeenAt), 'yyyy-MM-dd HH:mm', { locale: enUS })}`)
+      lines.push(`- **Occurrences**: ${stats.occurrenceCount}`)
+    }
+    lines.push('')
+    lines.push('## Labels')
+    for (const [k, v] of Object.entries(alert.labels)) {
+      lines.push(`- **${k}**: ${v}`)
+    }
+    if (annotationEntries.length > 0) {
+      lines.push('')
+      lines.push('## Annotations')
+      for (const [k, v] of annotationEntries) {
+        lines.push(`- **${k}**: ${v}`)
+      }
+    }
+    lines.push('')
+    lines.push(`## History (${promptTotalRows} entries, page ${promptSafePage}/${promptTotalPages})`)
+    lines.push('| Time | Who | Action | Comment |')
+    lines.push('|------|-----|--------|---------|')
+    for (const r of promptHistoryRows) {
+      const t = format(r.time, 'yyyy-MM-dd HH:mm', { locale: enUS })
+      lines.push(`| ${t} | ${r.who} | ${r.action} | ${r.comment ?? '—'} |`)
+    }
+    lines.push('')
+    lines.push('## Tasks')
+    lines.push('1. What is the most likely cause of this alert?')
+    lines.push('2. What further steps do you recommend for diagnosis?')
+    lines.push('3. How can this alert be permanently resolved?')
+    return lines.join('\n')
+  })
 
   return (
     <>
@@ -765,21 +859,6 @@ export function AlertDetailPanel({
         {(() => {
           type HistoryRow = { key: string; time: Date; who: string; action: string; comment?: string; silenceId?: string; alertmanagerUrl?: string }
 
-          const alertEventLabel: Record<string, string> = {
-            firing: 'Alert fired',
-            suppressed: 'Alert suppressed',
-            expired: 'Silence expired',
-            resolved: 'Alert resolved',
-          }
-
-          const silenceActionLabel: Record<string, string> = {
-            pending: 'Silence pending',
-            created: 'Silence created',
-            updated: 'Silence updated',
-            deleted: 'Silence deleted',
-            expired: 'Silence expired',
-          }
-
           const actionColor: Record<string, string> = theme === 'light' ? {
             'Alert fired': 'text-red-600',
             'Alert resolved': 'text-green-600',
@@ -805,12 +884,7 @@ export function AlertDetailPanel({
           }
 
           const mappedRows: HistoryRow[] = (timelineData?.entries ?? []).map((entry) => {
-          const action =
-            entry.source === 'alert'
-              ? (alertEventLabel[entry.action] ?? entry.action)
-              : entry.source === 'silence'
-                ? (silenceActionLabel[entry.action] ?? `Silence ${entry.action}`)
-                : entry.action
+          const action = toHistoryAction(entry.source, entry.action)
 
           return {
             key: `${entry.source}-${entry.sourceId}-${entry.action}-${entry.recordedAt}`,
@@ -857,46 +931,6 @@ export function AlertDetailPanel({
             pages.push(totalPages)
             return pages
           })()
-
-          const buildPrompt = (): string => {
-            const lines: string[] = []
-            lines.push('You are an experienced Site Reliability Engineer (SRE). Analyze the following Prometheus alert and help with root cause analysis and remediation.')
-            lines.push('')
-            lines.push(`## Alert: ${alertname}`)
-            lines.push(`- **Cluster**: ${alert.clusterName}`)
-            lines.push(`- **Severity**: ${severity}`)
-            lines.push(`- **Status**: ${alert.status.state}`)
-            if (stats) {
-              lines.push(`- **First seen**: ${format(new Date(stats.firstSeenAt), 'yyyy-MM-dd HH:mm', { locale: enUS })}`)
-              lines.push(`- **Occurrences**: ${stats.occurrenceCount}`)
-            }
-            lines.push('')
-            lines.push('## Labels')
-            for (const [k, v] of Object.entries(alert.labels)) {
-              lines.push(`- **${k}**: ${v}`)
-            }
-            if (annotationEntries.length > 0) {
-              lines.push('')
-              lines.push('## Annotations')
-              for (const [k, v] of annotationEntries) {
-                lines.push(`- **${k}**: ${v}`)
-              }
-            }
-            lines.push('')
-            lines.push(`## History (${totalRows} entries, page ${safePage}/${totalPages})`)
-            lines.push('| Time | Who | Action | Comment |')
-            lines.push('|------|-----|--------|---------|')
-            for (const r of mappedRows) {
-              const t = format(r.time, 'yyyy-MM-dd HH:mm', { locale: enUS })
-              lines.push(`| ${t} | ${r.who} | ${r.action} | ${r.comment ?? '—'} |`)
-            }
-            lines.push('')
-            lines.push('## Tasks')
-            lines.push('1. What is the most likely cause of this alert?')
-            lines.push('2. What further steps do you recommend for diagnosis?')
-            lines.push('3. How can this alert be permanently resolved?')
-            return lines.join('\n')
-          }
 
           return (
             <>
@@ -999,7 +1033,7 @@ export function AlertDetailPanel({
                   <button
                     className="flex items-center gap-1 rounded border border-border px-2 py-1 text-xs hover:bg-accent cursor-pointer"
                     onClick={() => {
-                      void navigator.clipboard.writeText(buildPrompt())
+                      void navigator.clipboard.writeText(promptText)
                       setPromptCopied(true)
                       setTimeout(() => setPromptCopied(false), 2000)
                     }}
@@ -1009,7 +1043,7 @@ export function AlertDetailPanel({
                   </button>
                 </div>
                 <pre className="max-h-64 overflow-y-auto rounded bg-accent/30 p-3 text-[10px] leading-relaxed text-muted-foreground whitespace-pre-wrap break-words">
-                  {buildPrompt()}
+                  {promptText}
                 </pre>
               </div>
             </Section>
