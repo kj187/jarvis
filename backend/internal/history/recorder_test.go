@@ -179,73 +179,11 @@ func TestRecorder_SilenceTrueExpiry(t *testing.T) {
 	}
 }
 
-// processAlerts is a helper that runs the core recorder logic without needing
-// a real cluster registry.
+// processAlerts drives the core recorder logic without needing a real cluster
+// registry. It delegates to the production applyPollResults so tests exercise
+// the real code path (claim batching, broadcast dedup, silence handling).
 func (r *Recorder) processAlerts(ctx context.Context, allAlerts []models.EnrichedAlert) {
-	r.prevMu.Lock()
-	prev := r.prevSnapshot
-	curr := make(map[string]string, len(allAlerts))
-	for _, a := range allAlerts {
-		curr[a.Fingerprint] = a.Status.State
-	}
-
-	var resolvedFPs []string
-	for fp, prevState := range prev {
-		if _, stillActive := curr[fp]; !stillActive && prevState != "resolved" {
-			resolvedFPs = append(resolvedFPs, fp)
-		}
-	}
-	r.prevSnapshot = curr
-	r.prevMu.Unlock()
-
-	now := time.Now().UTC()
-	for i := range allAlerts {
-		a := &allAlerts[i]
-		if err := r.store.UpsertFingerprint(a.Fingerprint, a.Labels["alertname"], a.ClusterName, a.Labels); err != nil {
-			continue
-		}
-		eventStatus := models.EventStatusFiring
-		switch a.Status.State {
-		case "suppressed":
-			eventStatus = models.EventStatusSuppressed
-		case "active", "unprocessed":
-			if prev[a.Fingerprint] == "suppressed" {
-				eventStatus = models.EventStatusExpired
-			}
-		}
-		r.store.RecordStatusChange(a.Fingerprint, a.ClusterName, a.AlertmanagerURL, eventStatus, a.StartsAt, a.Annotations) //nolint:errcheck
-	}
-
-	if len(resolvedFPs) > 0 {
-		for _, fp := range resolvedFPs {
-			r.store.RecordResolved(fp, now) //nolint:errcheck
-		}
-		for _, fp := range resolvedFPs {
-			go func(fp string) {
-				select {
-				case <-ctx.Done():
-					return
-				case <-time.After(r.claimReleaseDelay):
-				}
-				still, err := r.store.IsStillResolved(fp)
-				if err != nil || !still {
-					return
-				}
-				r.store.ReleaseClaimsForResolved([]string{fp}) //nolint:errcheck
-			}(fp)
-		}
-		for _, fp := range resolvedFPs {
-			r.alertStore.MarkResolved(fp)
-		}
-	}
-
-	for i := range allAlerts {
-		claim, _ := r.store.GetActiveClaim(allAlerts[i].Fingerprint)
-		allAlerts[i].ActiveClaim = claim
-	}
-
-	r.alertStore.Set(allAlerts)
-	r.hub.BroadcastJSON(models.WSTypeAlertsUpdate, map[string]interface{}{"alerts": allAlerts})
+	r.applyPollResults(ctx, allAlerts, nil)
 }
 
 // TestRecorder_ClaimReleasedAfterGenuineResolution verifies that a claim is

@@ -3,8 +3,11 @@ package alertmanager
 import (
 	"context"
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -42,6 +45,51 @@ func TestGetAlerts(t *testing.T) {
 	}
 	if got[0].Fingerprint != "abc123" {
 		t.Errorf("Fingerprint = %q", got[0].Fingerprint)
+	}
+}
+
+// TestGetAlerts_ReusesConnection verifies that get() drains the response body so
+// the underlying TCP connection is kept alive and reused across polls. The handler
+// appends trailing whitespace after the JSON value: the JSON decoder stops at the
+// end of the array and leaves those bytes unread, so without an explicit drain the
+// connection would not be returned to the pool and each request would open a new one.
+func TestGetAlerts_ReusesConnection(t *testing.T) {
+	alerts := []GettableAlert{{Fingerprint: "abc123", Status: GettableAlertStatus{State: "active"}}}
+	body, err := json.Marshal(alerts)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	// Trailing bytes the decoder will not consume on its own.
+	padding := strings.Repeat(" ", 8192)
+
+	srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v2/alerts" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(body)
+		_, _ = w.Write([]byte(padding))
+	}))
+
+	var newConns int64
+	srv.Config.ConnState = func(_ net.Conn, state http.ConnState) {
+		if state == http.StateNew {
+			atomic.AddInt64(&newConns, 1)
+		}
+	}
+	srv.Start()
+	defer srv.Close()
+
+	client := NewClient(srv.URL)
+	for i := 0; i < 3; i++ {
+		if _, err := client.GetAlerts(context.Background()); err != nil {
+			t.Fatalf("GetAlerts() iteration %d error: %v", i, err)
+		}
+	}
+
+	if got := atomic.LoadInt64(&newConns); got != 1 {
+		t.Errorf("opened %d connections across 3 sequential requests, want 1 (connection not reused)", got)
 	}
 }
 

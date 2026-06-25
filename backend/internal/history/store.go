@@ -397,6 +397,45 @@ func (s *Store) GetActiveClaim(fingerprint string) (*models.Claim, error) {
 	return &c, nil
 }
 
+// GetActiveClaims returns the most recent active (unreleased) claim for every
+// fingerprint that currently has one, keyed by fingerprint. It is the batched
+// equivalent of calling GetActiveClaim for each fingerprint and exists to avoid
+// an N+1 query pattern in the poll loop, where one query per alert would
+// otherwise be issued against the single SQLite writer connection.
+func (s *Store) GetActiveClaims() (map[string]*models.Claim, error) {
+	rows, err := s.query(context.Background(), `
+		SELECT id, fingerprint, event_id, claimed_by, claimed_at, note
+		FROM alert_claims WHERE released_at IS NULL
+		ORDER BY claimed_at DESC
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("get active claims: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	result := make(map[string]*models.Claim)
+	for rows.Next() {
+		var c models.Claim
+		var eventID sql.NullInt64
+		var claimedAt time.Time
+		if err := rows.Scan(&c.ID, &c.Fingerprint, &eventID, &c.ClaimedBy, &claimedAt, &c.Note); err != nil {
+			return nil, fmt.Errorf("scan active claim: %w", err)
+		}
+		// Rows are ordered newest-first, so the first row seen for a fingerprint
+		// is its most recent active claim — matching GetActiveClaim's semantics.
+		if _, exists := result[c.Fingerprint]; exists {
+			continue
+		}
+		c.ClaimedAt = claimedAt.UTC()
+		if eventID.Valid {
+			c.EventID = &eventID.Int64
+		}
+		claim := c
+		result[c.Fingerprint] = &claim
+	}
+	return result, rows.Err()
+}
+
 // SetClaim releases any existing active claim (reason: reclaimed) and creates a
 // new one.
 func (s *Store) SetClaim(fingerprint string, eventID *int64, claimedBy, note string) (*models.Claim, error) {

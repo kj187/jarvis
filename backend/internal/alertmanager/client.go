@@ -141,5 +141,11 @@ func (c *Client) get(ctx context.Context, path string, v interface{}) error {
 	if err := json.NewDecoder(resp.Body).Decode(v); err != nil {
 		return fmt.Errorf("decode response from %s: %w", path, err)
 	}
+
+	// Drain any bytes the JSON decoder left unread (e.g. trailing whitespace)
+	// so the underlying TCP connection is returned to the pool and reused on the
+	// next poll. This avoids a fresh TCP/TLS handshake per request, which matters
+	// for large, frequently-polled responses such as /api/v2/alerts.
+	_, _ = io.Copy(io.Discard, resp.Body)
 	return nil
 }

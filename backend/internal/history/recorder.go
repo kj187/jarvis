@@ -3,6 +3,7 @@ package history
 import (
 	"context"
 	"encoding/json"
+	"hash/fnv"
 	"log/slog"
 	"strings"
 	"sync"
@@ -38,6 +39,11 @@ type Recorder struct {
 	// releasing claims. Must exceed the 60s grace period so grace-period re-fires
 	// can cancel the release before it runs.
 	claimReleaseDelay time.Duration
+
+	// broadcastMu guards the dedup state for the alerts-update WebSocket broadcast.
+	broadcastMu       sync.Mutex
+	lastBroadcastHash uint64
+	hasBroadcast      bool
 }
 
 type silenceInfoEntry struct {
@@ -151,6 +157,23 @@ func (r *Recorder) poll(ctx context.Context) {
 				createdBy:   s.CreatedBy,
 			}
 		}
+	}
+
+	r.applyPollResults(ctx, allAlerts, currSilenceInfo)
+}
+
+// applyPollResults persists lifecycle events for the given alert snapshot,
+// detects silence creation/expiry, updates the in-memory store, and broadcasts
+// the result. It contains the core recorder logic, decoupled from the cluster
+// fetch so it can be driven directly by tests. currSilenceInfo maps silence IDs
+// to their current state; pass nil when there are no silences to consider.
+func (r *Recorder) applyPollResults(
+	ctx context.Context,
+	allAlerts []models.EnrichedAlert,
+	currSilenceInfo map[string]silenceInfoEntry,
+) {
+	if currSilenceInfo == nil {
+		currSilenceInfo = map[string]silenceInfoEntry{}
 	}
 
 	// Compute diff against previous snapshot.
@@ -288,21 +311,55 @@ func (r *Recorder) poll(ctx context.Context) {
 		}
 	}
 
-	// Attach active claims to all alerts.
+	// Attach active claims to all alerts. A single batched query avoids an N+1
+	// pattern (one query per alert) against the single SQLite writer connection.
+	activeClaims, err := r.store.GetActiveClaims()
+	if err != nil {
+		r.logger.Error("get active claims", "err", err)
+		activeClaims = nil
+	}
 	for i := range allAlerts {
-		claim, err := r.store.GetActiveClaim(allAlerts[i].Fingerprint)
-		if err != nil {
-			r.logger.Error("get active claim", "fp", allAlerts[i].Fingerprint, "err", err)
-			continue
+		if claim, ok := activeClaims[allAlerts[i].Fingerprint]; ok {
+			allAlerts[i].ActiveClaim = claim
 		}
-		allAlerts[i].ActiveClaim = claim
 	}
 
 	r.alertStore.Set(allAlerts)
 
 	// Broadcast via WebSocket — use Get() to include resolved buffer.
+	r.broadcastAlertsIfChanged()
+}
+
+// broadcastAlertsIfChanged pushes the current alert snapshot to all WebSocket
+// clients, but skips the push when the snapshot is byte-identical to the one
+// broadcast on the previous poll. The frontend loads its initial state via REST
+// and relies on WebSocket messages only for *changes*, so suppressing redundant
+// identical broadcasts saves an envelope marshal and a fan-out write to every
+// client on idle polls — with no visible effect. The comparison can only ever
+// yield a false "changed" (e.g. resolved-buffer map ordering), never a false
+// "unchanged", so updates are never missed.
+func (r *Recorder) broadcastAlertsIfChanged() {
 	payload := map[string]interface{}{"alerts": r.alertStore.Get()}
-	r.hub.BroadcastJSON(models.WSTypeAlertsUpdate, payload)
+	data, err := json.Marshal(payload)
+	if err != nil {
+		r.logger.Error("marshal alerts payload", "err", err)
+		return
+	}
+
+	h := fnv.New64a()
+	_, _ = h.Write(data)
+	sum := h.Sum64()
+
+	r.broadcastMu.Lock()
+	unchanged := r.hasBroadcast && sum == r.lastBroadcastHash
+	r.lastBroadcastHash = sum
+	r.hasBroadcast = true
+	r.broadcastMu.Unlock()
+
+	if unchanged {
+		return
+	}
+	r.hub.BroadcastJSON(models.WSTypeAlertsUpdate, json.RawMessage(data))
 }
 
 // fetchCluster fetches and enriches alerts for a single cluster.
@@ -311,26 +368,44 @@ func (r *Recorder) fetchCluster(ctx context.Context, cl *cluster.Cluster) ([]mod
 	if err != nil {
 		return nil, err
 	}
+	return enrichAlerts(rawAlerts, cl.Name, cl.AlertmanagerLinkURL), nil
+}
 
+// enrichAlerts maps raw Alertmanager alerts to EnrichedAlert, injecting the
+// cluster metadata and the synthetic "@receiver" label (comma-separated list of
+// receiver names) used for filtering. It is a pure function so it can be unit
+// tested and benchmarked without an HTTP round-trip.
+//
+// The receiver names are gathered in a single pass that builds both the
+// Receivers slice and the "@receiver" join string, avoiding a second loop and a
+// throwaway slice per alert — this matters when enriching large alert sets.
+func enrichAlerts(rawAlerts []alertmanager.GettableAlert, clusterName, alertmanagerLinkURL string) []models.EnrichedAlert {
 	enriched := make([]models.EnrichedAlert, 0, len(rawAlerts))
-	for _, a := range rawAlerts {
+	for i := range rawAlerts {
+		a := &rawAlerts[i]
+
 		receivers := make([]models.Receiver, len(a.Receivers))
-		for i, r := range a.Receivers {
-			receivers[i] = models.Receiver{Name: r.Name}
+		var receiverList strings.Builder
+		for j, rcv := range a.Receivers {
+			receivers[j] = models.Receiver{Name: rcv.Name}
+			if j > 0 {
+				receiverList.WriteByte(',')
+			}
+			receiverList.WriteString(rcv.Name)
 		}
 
-		labels := make(map[string]string, len(a.Labels)+1)
+		labelCount := len(a.Labels)
+		if len(a.Receivers) > 0 {
+			labelCount++
+		}
+		labels := make(map[string]string, labelCount)
 		for k, v := range a.Labels {
 			labels[k] = v
 		}
 		// Store all receivers as comma-separated list for filtering.
 		// This allows filters to match any receiver that handles this alert.
 		if len(a.Receivers) > 0 {
-			receiverNames := make([]string, len(a.Receivers))
-			for i, r := range a.Receivers {
-				receiverNames[i] = r.Name
-			}
-			labels["@receiver"] = strings.Join(receiverNames, ",")
+			labels["@receiver"] = receiverList.String()
 		}
 
 		enriched = append(enriched, models.EnrichedAlert{
@@ -347,11 +422,11 @@ func (r *Recorder) fetchCluster(ctx context.Context, cl *cluster.Cluster) ([]mod
 			UpdatedAt:       a.UpdatedAt,
 			GeneratorURL:    a.GeneratorURL,
 			Receivers:       receivers,
-			ClusterName:     cl.Name,
-			AlertmanagerURL: cl.AlertmanagerLinkURL,
+			ClusterName:     clusterName,
+			AlertmanagerURL: alertmanagerLinkURL,
 		})
 	}
-	return enriched, nil
+	return enriched
 }
 
 // buildWSPayload marshals a typed WS event payload (helper used in tests).
