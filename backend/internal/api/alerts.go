@@ -135,6 +135,30 @@ func (s *Server) getAlertHistory(c echo.Context) error {
 	})
 }
 
+// GET /api/v1/alerts/:fingerprint/timeline
+func (s *Server) getAlertTimeline(c echo.Context) error {
+	fp := c.Param("fingerprint")
+	if !validateFingerprint(fp) {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid fingerprint")
+	}
+
+	cluster := c.QueryParam("cluster")
+	limit, _ := strconv.Atoi(c.QueryParam("limit"))
+	offset, _ := strconv.Atoi(c.QueryParam("offset"))
+	if limit <= 0 {
+		limit = 20
+	}
+
+	entries, total, err := s.store.GetTimeline(fp, cluster, limit, offset)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get timeline").SetInternal(err)
+	}
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"entries": entries,
+		"total":   total,
+	})
+}
+
 // GET /api/v1/alerts/:fingerprint/silence-events
 func (s *Server) getSilenceEvents(c echo.Context) error {
 	fp := c.Param("fingerprint")

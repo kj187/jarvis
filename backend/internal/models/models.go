@@ -86,6 +86,16 @@ type AlertEvent struct {
 	RecordedAt      time.Time  `json:"recordedAt"`
 }
 
+type AlertTimelineEntry struct {
+	Source     string    `json:"source"` // alert | claim | silence
+	SourceID   int64     `json:"sourceId"`
+	RecordedAt time.Time `json:"recordedAt"`
+	Who        string    `json:"who"`
+	Action     string    `json:"action"`
+	Comment    string    `json:"comment,omitempty"`
+	SilenceID  string    `json:"silenceId,omitempty"`
+}
+
 type AlertStats struct {
 	Fingerprint     string     `json:"fingerprint"`
 	Alertname       string     `json:"alertname"`

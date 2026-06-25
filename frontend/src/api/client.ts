@@ -2,6 +2,7 @@ import type {
   EnrichedAlert,
   AlertGroup,
   AlertEvent,
+  AlertTimelineEntry,
   AlertStats,
   Comment,
   Claim,
@@ -61,6 +62,18 @@ export function fetchAlertHistory(
   if (params?.offset) q.set('offset', String(params.offset))
   const qs = q.toString()
   return request(`/alerts/${fingerprint}/history${qs ? `?${qs}` : ''}`)
+}
+
+export function fetchAlertTimeline(
+  fingerprint: string,
+  params?: { cluster?: string; limit?: number; offset?: number },
+): Promise<{ entries: AlertTimelineEntry[]; total: number }> {
+  const q = new URLSearchParams()
+  if (params?.cluster) q.set('cluster', params.cluster)
+  if (params?.limit) q.set('limit', String(params.limit))
+  if (params?.offset) q.set('offset', String(params.offset))
+  const qs = q.toString()
+  return request(`/alerts/${fingerprint}/timeline${qs ? `?${qs}` : ''}`)
 }
 
 export function fetchAlertStats(fingerprint: string): Promise<AlertStats> {

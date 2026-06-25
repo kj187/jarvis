@@ -246,6 +246,140 @@ func (s *Store) GetHistory(fingerprint string, limit, offset int) ([]models.Aler
 	return events, total, nil
 }
 
+// GetTimeline returns a merged, paginated timeline for a fingerprint.
+// Rows are ordered by recorded timestamp (newest first).
+func (s *Store) GetTimeline(fingerprint, clusterName string, limit, offset int) ([]models.AlertTimelineEntry, int, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	clusterFilter := ""
+	argsAlert := []interface{}{fingerprint}
+	argsClaim := []interface{}{fingerprint}
+	argsSilence := []interface{}{fingerprint}
+	if clusterName != "" {
+		clusterFilter = " AND cluster_name = ?"
+		argsAlert = append(argsAlert, clusterName)
+		argsClaim = append(argsClaim, clusterName)
+		argsSilence = append(argsSilence, clusterName)
+	}
+
+	countQuery := `
+		SELECT COUNT(*) FROM (
+			SELECT 1 FROM alert_events WHERE fingerprint = ?` + clusterFilter + `
+			UNION ALL
+			SELECT 1 FROM alert_claims WHERE fingerprint = ?` + clusterFilter + `
+			UNION ALL
+			SELECT 1 FROM alert_claims WHERE fingerprint = ?` + clusterFilter + ` AND released_at IS NOT NULL
+			UNION ALL
+			SELECT 1 FROM silence_events WHERE fingerprint = ?` + clusterFilter + `
+		) AS timeline_count
+	`
+
+	countArgs := make([]interface{}, 0, len(argsAlert)+len(argsClaim)*2+len(argsSilence))
+	countArgs = append(countArgs, argsAlert...)
+	countArgs = append(countArgs, argsClaim...)
+	countArgs = append(countArgs, argsClaim...)
+	countArgs = append(countArgs, argsSilence...)
+
+	var total int
+	if err := s.queryRow(context.Background(), countQuery, countArgs...).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("count timeline: %w", err)
+	}
+
+	query := `
+		SELECT source, source_id, recorded_at, who, action, comment, silence_id
+		FROM (
+			SELECT
+				'alert' AS source,
+				id AS source_id,
+				recorded_at,
+				'system' AS who,
+				status AS action,
+				'' AS comment,
+				NULL AS silence_id
+			FROM alert_events
+			WHERE fingerprint = ?` + clusterFilter + `
+
+			UNION ALL
+
+			SELECT
+				'claim' AS source,
+				id AS source_id,
+				claimed_at AS recorded_at,
+				claimed_by AS who,
+				'claimed' AS action,
+				note AS comment,
+				NULL AS silence_id
+			FROM alert_claims
+			WHERE fingerprint = ?` + clusterFilter + `
+
+			UNION ALL
+
+			SELECT
+				'claim' AS source,
+				id AS source_id,
+				released_at AS recorded_at,
+				COALESCE(released_by, 'system') AS who,
+				'unclaimed' AS action,
+				COALESCE(release_reason, '') AS comment,
+				NULL AS silence_id
+			FROM alert_claims
+			WHERE fingerprint = ?` + clusterFilter + ` AND released_at IS NOT NULL
+
+			UNION ALL
+
+			SELECT
+				'silence' AS source,
+				id AS source_id,
+				recorded_at,
+				performed_by AS who,
+				action,
+				comment,
+				silence_id
+			FROM silence_events
+			WHERE fingerprint = ?` + clusterFilter + `
+		) AS timeline
+		ORDER BY recorded_at DESC
+		LIMIT ? OFFSET ?
+	`
+
+	queryArgs := make([]interface{}, 0, len(countArgs)+2)
+	queryArgs = append(queryArgs, countArgs...)
+	queryArgs = append(queryArgs, limit, offset)
+	rows, err := s.query(context.Background(), query, queryArgs...)
+	if err != nil {
+		return nil, 0, fmt.Errorf("query timeline: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	entries := make([]models.AlertTimelineEntry, 0, limit)
+	for rows.Next() {
+		var e models.AlertTimelineEntry
+		var recordedAt time.Time
+		var comment, silenceID sql.NullString
+		if err := rows.Scan(&e.Source, &e.SourceID, &recordedAt, &e.Who, &e.Action, &comment, &silenceID); err != nil {
+			return nil, 0, fmt.Errorf("scan timeline row: %w", err)
+		}
+		e.RecordedAt = recordedAt.UTC()
+		if comment.Valid {
+			e.Comment = comment.String
+		}
+		if silenceID.Valid {
+			e.SilenceID = silenceID.String
+		}
+		entries = append(entries, e)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+
+	return entries, total, nil
+}
+
 // GetStats returns occurrence statistics for a fingerprint.
 func (s *Store) GetStats(fingerprint string) (*models.AlertStats, error) {
 	var st models.AlertStats

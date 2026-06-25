@@ -426,6 +426,62 @@ func TestReleaseClaimsForResolved(t *testing.T) {
 	}
 }
 
+func TestGetTimeline_PaginatedAndSorted(t *testing.T) {
+	s := newTestStore(t)
+
+	fingerprint := "aabbccddeeff0011"
+	cluster := "homelab"
+	now := time.Now().UTC()
+
+	s.UpsertFingerprint(fingerprint, "A", cluster, nil) //nolint:errcheck
+	if _, err := s.exec(context.Background(),
+		`INSERT INTO alert_events (fingerprint, cluster_name, alertmanager_url, status, starts_at, recorded_at) VALUES (?, ?, ?, ?, ?, ?)`,
+		fingerprint, cluster, "http://am:9093", models.EventStatusFiring, now.Add(-15*time.Minute), now.Add(-15*time.Minute),
+	); err != nil {
+		t.Fatalf("insert alert event: %v", err)
+	}
+	if _, err := s.exec(context.Background(),
+		`INSERT INTO alert_claims (fingerprint, cluster_name, claimed_by, claimed_at, note) VALUES (?, ?, ?, ?, ?)`,
+		fingerprint, cluster, "alice", now.Add(-10*time.Minute), "investigating",
+	); err != nil {
+		t.Fatalf("insert claim: %v", err)
+	}
+	if _, err := s.exec(context.Background(),
+		`INSERT INTO silence_events (fingerprint, silence_id, cluster_name, action, performed_by, comment, recorded_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		fingerprint, "sil-1", cluster, "created", "bob", "maintenance", now.Add(-5*time.Minute),
+	); err != nil {
+		t.Fatalf("insert silence event: %v", err)
+	}
+
+	entries, total, err := s.GetTimeline(fingerprint, cluster, 2, 0)
+	if err != nil {
+		t.Fatalf("GetTimeline page 1: %v", err)
+	}
+	if total != 3 {
+		t.Fatalf("total = %d, want 3", total)
+	}
+	if len(entries) != 2 {
+		t.Fatalf("len(entries) = %d, want 2", len(entries))
+	}
+	if entries[0].Source != "silence" || entries[0].Action != "created" {
+		t.Errorf("entries[0] = %+v, want newest silence created", entries[0])
+	}
+	if entries[1].Source != "claim" || entries[1].Action != "claimed" {
+		t.Errorf("entries[1] = %+v, want claim row", entries[1])
+	}
+
+	entries2, _, err := s.GetTimeline(fingerprint, cluster, 2, 2)
+	if err != nil {
+		t.Fatalf("GetTimeline page 2: %v", err)
+	}
+	if len(entries2) != 1 {
+		t.Fatalf("len(entries2) = %d, want 1", len(entries2))
+	}
+	if entries2[0].Source != "alert" || entries2[0].Action != models.EventStatusFiring {
+		t.Errorf("entries2[0] = %+v, want alert firing row", entries2[0])
+	}
+}
+
 func TestCreateSilenceTemplate(t *testing.T) {
 	s := newTestStore(t)
 
@@ -455,7 +511,7 @@ func TestGetAllSilenceTemplates(t *testing.T) {
 		{Name: "alertname", Value: "HighCPU", IsEqual: true, IsRegex: false},
 	}
 
-	s.CreateSilenceTemplate("tpl1", "Template 1", matchers1, "First template") //nolint:errcheck
+	s.CreateSilenceTemplate("tpl1", "Template 1", matchers1, "First template")  //nolint:errcheck
 	s.CreateSilenceTemplate("tpl2", "Template 2", matchers2, "Second template") //nolint:errcheck
 
 	templates, err := s.GetAllSilenceTemplates()

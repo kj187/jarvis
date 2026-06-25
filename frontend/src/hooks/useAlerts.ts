@@ -3,6 +3,7 @@ import {
   fetchAlerts,
   fetchAlertGroups,
   fetchAlertHistory,
+  fetchAlertTimeline,
   fetchAlertStats,
 } from '@/api/client'
 import { useUIStore } from '@/store/uiStore'
@@ -33,6 +34,19 @@ export function useAlertHistory(fingerprint: string, limit = 20, offset = 0) {
   return useQuery({
     queryKey: ['alert-history', fingerprint, limit, offset],
     queryFn: () => fetchAlertHistory(fingerprint, { limit, offset }),
+    enabled: Boolean(fingerprint),
+  })
+}
+
+export function useAlertTimeline(
+  fingerprint: string,
+  cluster: string,
+  limit = 20,
+  offset = 0,
+) {
+  return useQuery({
+    queryKey: ['alert-timeline', fingerprint, cluster, limit, offset],
+    queryFn: () => fetchAlertTimeline(fingerprint, { cluster, limit, offset }),
     enabled: Boolean(fingerprint),
   })
 }

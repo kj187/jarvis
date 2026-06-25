@@ -10,9 +10,9 @@ import { AlertBadge, StatusBadge } from './AlertBadge'
 import { labelColorStyle } from './LabelChip'
 import { AlertComments } from './AlertComments'
 import { SilenceForm } from '@/components/silences/SilenceForm'
-import { useAlerts, useAlertHistory, useAlertStats } from '@/hooks/useAlerts'
-import { useActiveClaim, useSetClaim, useReleaseClaim, useClaimHistory } from '@/hooks/useAlertClaim'
-import { useDeleteSilence, useSilenceEvents, useUpsertSilence } from '@/hooks/useSilences'
+import { useAlerts, useAlertTimeline, useAlertStats } from '@/hooks/useAlerts'
+import { useActiveClaim, useSetClaim, useReleaseClaim } from '@/hooks/useAlertClaim'
+import { useDeleteSilence, useUpsertSilence } from '@/hooks/useSilences'
 import { useAuthStore } from '@/store/authStore'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { Button } from '@/components/ui/button'
@@ -236,16 +236,17 @@ export function AlertDetailPanel({
   const claimName = user?.username ?? manualClaimName
   const [promptCopied, setPromptCopied] = useState(false)
 
-  const { data: historyData } = useAlertHistory(
+  const historyOffset = (historyPage - 1) * historyPageSize
+  const { data: timelineData } = useAlertTimeline(
     alert?.fingerprint ?? '',
-    1000,
+    alert?.clusterName ?? '',
+    historyPageSize,
+    historyOffset,
   )
   const { data: stats } = useAlertStats(alert?.fingerprint ?? '')
   const { data: activeClaim } = useActiveClaim(alert?.fingerprint ?? '', alert?.clusterName ?? '')
   const setClaimMutation = useSetClaim(alert?.fingerprint ?? '', alert?.clusterName ?? '')
   const releaseMutation = useReleaseClaim(alert?.fingerprint ?? '', alert?.clusterName ?? '')
-  const { data: claimHistory = [] } = useClaimHistory(alert?.fingerprint ?? '', alert?.clusterName ?? '')
-  const { data: silenceHistory = [] } = useSilenceEvents(alert?.fingerprint ?? '')
   const { mutate: deleteSilence } = useDeleteSilence()
   const { mutate: upsertSilence, isPending: isExtending } = useUpsertSilence()
   const { data: allAlerts = [] } = useAlerts()
@@ -255,6 +256,18 @@ export function AlertDetailPanel({
     const id = setInterval(() => setNow(Date.now()), 30_000)
     return () => clearInterval(id)
   }, [])
+
+  useEffect(() => {
+    setHistoryPage(1)
+  }, [alert?.fingerprint])
+
+  useEffect(() => {
+    if (!timelineData) return
+    const totalPages = Math.max(1, Math.ceil(timelineData.total / historyPageSize))
+    if (historyPage > totalPages) {
+      setHistoryPage(totalPages)
+    }
+  }, [timelineData, historyPage, historyPageSize])
 
   if (!alert) return null
 
@@ -791,59 +804,33 @@ export function AlertDetailPanel({
             'Silence deleted': 'text-orange-400',
           }
 
-          const allRows: HistoryRow[] = []
+          const mappedRows: HistoryRow[] = (timelineData?.entries ?? []).map((entry) => {
+          const action =
+            entry.source === 'alert'
+              ? (alertEventLabel[entry.action] ?? entry.action)
+              : entry.source === 'silence'
+                ? (silenceActionLabel[entry.action] ?? `Silence ${entry.action}`)
+                : entry.action
 
-          if (historyData) {
-            for (const e of historyData.events) {
-              allRows.push({
-                key: `event-${e.id}`,
-                time: new Date(e.recordedAt),
-                who: 'system',
-                action: alertEventLabel[e.status] ?? e.status,
-              })
-            }
+          return {
+            key: `${entry.source}-${entry.sourceId}-${entry.action}-${entry.recordedAt}`,
+            time: new Date(entry.recordedAt),
+            who: entry.who,
+            action,
+            comment: entry.comment || undefined,
+            silenceId: entry.silenceId || undefined,
+            alertmanagerUrl: alert.alertmanagerUrl,
           }
+          })
 
-          for (const c of claimHistory) {
-            allRows.push({
-              key: `claim-${c.id}`,
-              time: new Date(c.claimedAt),
-              who: c.claimedBy,
-              action: 'claimed',
-              comment: c.note || undefined,
-            })
-            if (c.releasedAt) {
-              allRows.push({
-                key: `release-${c.id}`,
-                time: new Date(c.releasedAt),
-                who: c.releasedBy ?? 'system',
-                action: 'unclaimed',
-                comment: c.releaseReason ?? undefined,
-              })
-            }
-          }
-
-          for (const se of silenceHistory) {
-            allRows.push({
-              key: `silence-${se.id}`,
-              time: new Date(se.recordedAt),
-              who: se.performedBy,
-              action: silenceActionLabel[se.action] ?? `Silence ${se.action}`,
-              comment: se.comment || undefined,
-              silenceId: se.silenceId,
-              alertmanagerUrl: alert.alertmanagerUrl,
-            })
-          }
-
-          allRows.sort((a, b) => b.time.getTime() - a.time.getTime())
-
-          const totalRows = allRows.length
+          const totalRows = timelineData?.total ?? 0
           const totalPages = Math.max(1, Math.ceil(totalRows / historyPageSize))
           const safePage = Math.min(historyPage, totalPages)
-          const pagedRows = allRows.slice((safePage - 1) * historyPageSize, safePage * historyPageSize)
+          const pageStart = totalRows === 0 ? 0 : (safePage - 1) * historyPageSize + 1
+          const pageEnd = Math.min(safePage * historyPageSize, totalRows)
 
           const pageSizeButtons = totalRows > 10 ? (
-            <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1">
               {([10, 50, 100] as const).map((n) => (
                 <button
                   key={n}
@@ -896,10 +883,10 @@ export function AlertDetailPanel({
               }
             }
             lines.push('')
-            lines.push(`## History (${allRows.length} entries)`)
+            lines.push(`## History (${totalRows} entries, page ${safePage}/${totalPages})`)
             lines.push('| Time | Who | Action | Comment |')
             lines.push('|------|-----|--------|---------|')
-            for (const r of allRows) {
+            for (const r of mappedRows) {
               const t = format(r.time, 'yyyy-MM-dd HH:mm', { locale: enUS })
               lines.push(`| ${t} | ${r.who} | ${r.action} | ${r.comment ?? '—'} |`)
             }
@@ -914,7 +901,7 @@ export function AlertDetailPanel({
           return (
             <>
             <Section title="History" defaultOpen={true} headerRight={pageSizeButtons}>
-              {!historyData ? (
+              {!timelineData ? (
                 <p className="text-xs text-muted-foreground">Loading…</p>
               ) : (
                 <div>
@@ -929,7 +916,7 @@ export function AlertDetailPanel({
                         </tr>
                       </thead>
                       <tbody>
-                        {pagedRows.map((r) => (
+                        {mappedRows.map((r) => (
                           <tr key={r.key} className="border-b border-border last:border-0">
                             <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">
                               {format(r.time, 'yyyy-MM-dd HH:mm', { locale: enUS })} {tzAbbr}
@@ -964,7 +951,7 @@ export function AlertDetailPanel({
                   {totalPages > 1 && (
                     <div className="mt-3 flex items-center justify-between gap-2">
                       <span className="text-[10px] text-muted-foreground">
-                        {(safePage - 1) * historyPageSize + 1}–{Math.min(safePage * historyPageSize, totalRows)} of {totalRows}
+                        {pageStart}–{pageEnd} of {totalRows}
                       </span>
                       <div className="flex items-center gap-1">
                         <button

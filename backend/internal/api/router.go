@@ -162,13 +162,14 @@ func NewRouter(
 	apiV1.GET("/alerts/groups", srv.getAlertGroups)
 	apiV1.GET("/alerts", srv.getAlerts)
 	apiV1.GET("/alerts/:fingerprint/history", srv.getAlertHistory)
+	apiV1.GET("/alerts/:fingerprint/timeline", srv.getAlertTimeline)
 	apiV1.GET("/alerts/:fingerprint/stats", srv.getAlertStats)
 	apiV1.GET("/alerts/:fingerprint/silence-events", srv.getSilenceEvents)
 
 	// Rate limiters:
 	//   writeRL  — 30 req/min per IP for all mutating operations
 	//   pollRL   — 1 req/5s  per IP for /poll (matches the minimum client poll interval)
-	writeRL := rateLimiter(0.5, 10)            // 0.5 req/s = 30/min, burst 10
+	writeRL := rateLimiter(0.5, 10)                // 0.5 req/s = 30/min, burst 10
 	pollRL := rateLimiter(pollRLRate, pollRLBurst) // prod: 0.2 req/s = 1/5s, burst 2 (relaxed in e2e builds)
 
 	requireAuth := auth.RequireAuth(authProvider)

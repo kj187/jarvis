@@ -75,6 +75,16 @@ export interface AlertEvent {
   recordedAt: string
 }
 
+export interface AlertTimelineEntry {
+  source: 'alert' | 'claim' | 'silence'
+  sourceId: number
+  recordedAt: string
+  who: string
+  action: string
+  comment?: string
+  silenceId?: string
+}
+
 export interface AlertStats {
   fingerprint: string
   alertname: string

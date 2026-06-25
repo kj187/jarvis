@@ -182,6 +182,21 @@ func TestGetAlertHistory_InvalidFingerprint(t *testing.T) {
 	}
 }
 
+func TestGetAlertTimeline_InvalidFingerprint(t *testing.T) {
+	srv, _ := newTestServer(t)
+	e := echo.New()
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/alerts/INVALID!/timeline", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("fingerprint")
+	c.SetParamValues("INVALID!")
+
+	err := srv.getAlertTimeline(c)
+	if err == nil {
+		t.Error("expected error for invalid fingerprint, got nil")
+	}
+}
+
 func TestGetHealth(t *testing.T) {
 	srv, _ := newTestServer(t)
 	e := echo.New()
