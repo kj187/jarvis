@@ -48,6 +48,7 @@ created_at   DATETIME NOT NULL DEFAULT (datetime('now'))
 `CREATE TABLE IF NOT EXISTS alert_claims (
 id             INTEGER PRIMARY KEY AUTOINCREMENT,
 fingerprint    TEXT NOT NULL REFERENCES alert_fingerprints(fingerprint),
+cluster_name   TEXT NOT NULL DEFAULT '',
 event_id       INTEGER REFERENCES alert_events(id),
 claimed_by     TEXT NOT NULL,
 claimed_at     DATETIME NOT NULL DEFAULT (datetime('now')),
@@ -78,7 +79,7 @@ created_at DATETIME NOT NULL DEFAULT (datetime('now'))
 `CREATE INDEX IF NOT EXISTS idx_alert_events_fingerprint_recorded ON alert_events(fingerprint, recorded_at DESC)`,
 `CREATE INDEX IF NOT EXISTS idx_alert_comments_fingerprint ON alert_comments(fingerprint)`,
 `CREATE INDEX IF NOT EXISTS idx_alert_claims_fingerprint ON alert_claims(fingerprint)`,
-`CREATE INDEX IF NOT EXISTS idx_alert_claims_active      ON alert_claims(fingerprint) WHERE released_at IS NULL`,
+`CREATE INDEX IF NOT EXISTS idx_alert_claims_active      ON alert_claims(fingerprint, cluster_name) WHERE released_at IS NULL`,
 `CREATE INDEX IF NOT EXISTS idx_silence_events_fingerprint ON silence_events(fingerprint, recorded_at DESC)`,
 `CREATE TABLE IF NOT EXISTS users (
 id             TEXT PRIMARY KEY,
@@ -102,7 +103,12 @@ return fmt.Errorf("migrate sqlite: %w", err)
 }
 // Add user_id column to alert_comments (nullable, for ownership checks by ID).
 // SQLite does not support ADD COLUMN IF NOT EXISTS; use the helper.
-return addColumnIfNotExistsSQLite(database, "alert_comments", "user_id", "TEXT")
+if err := addColumnIfNotExistsSQLite(database, "alert_comments", "user_id", "TEXT"); err != nil {
+return err
+}
+// Add cluster_name to alert_claims so claims are scoped per (fingerprint, cluster).
+// Existing rows default to '' (legacy single-cluster claims).
+return addColumnIfNotExistsSQLite(database, "alert_claims", "cluster_name", "TEXT NOT NULL DEFAULT ''")
 }
 
 // addColumnIfNotExistsSQLite adds a column to a table if it does not already exist.

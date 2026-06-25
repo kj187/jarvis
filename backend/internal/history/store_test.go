@@ -376,13 +376,13 @@ func TestClaims(t *testing.T) {
 	s.UpsertFingerprint("fp1", "A", "c", nil) //nolint:errcheck
 
 	// No active claim initially.
-	claim, err := s.GetActiveClaim("fp1")
+	claim, err := s.GetActiveClaim("fp1", "c")
 	if err != nil || claim != nil {
 		t.Fatalf("expected nil claim, got %+v err=%v", claim, err)
 	}
 
 	// Set a claim.
-	c, err := s.SetClaim("fp1", nil, "alice", "looking into it")
+	c, err := s.SetClaim("fp1", "c", nil, "alice", "looking into it")
 	if err != nil {
 		t.Fatalf("SetClaim: %v", err)
 	}
@@ -390,18 +390,18 @@ func TestClaims(t *testing.T) {
 		t.Errorf("ClaimedBy = %q", c.ClaimedBy)
 	}
 
-	active, _ := s.GetActiveClaim("fp1")
+	active, _ := s.GetActiveClaim("fp1", "c")
 	if active == nil || active.ClaimedBy != "alice" {
 		t.Fatalf("expected active claim by alice, got %+v", active)
 	}
 
 	// Release claim.
-	released, err := s.ReleaseClaim("fp1", "alice", models.ReleaseReasonManual)
+	released, err := s.ReleaseClaim("fp1", "c", "alice", models.ReleaseReasonManual)
 	if err != nil || !released {
 		t.Fatalf("ReleaseClaim: released=%v err=%v", released, err)
 	}
 
-	active2, _ := s.GetActiveClaim("fp1")
+	active2, _ := s.GetActiveClaim("fp1", "c")
 	if active2 != nil {
 		t.Errorf("expected nil after release, got %+v", active2)
 	}
@@ -412,15 +412,15 @@ func TestReleaseClaimsForResolved(t *testing.T) {
 
 	s.UpsertFingerprint("fp1", "A", "c", nil) //nolint:errcheck
 	s.UpsertFingerprint("fp2", "B", "c", nil) //nolint:errcheck
-	s.SetClaim("fp1", nil, "alice", "")       //nolint:errcheck
-	s.SetClaim("fp2", nil, "bob", "")         //nolint:errcheck
+	s.SetClaim("fp1", "c", nil, "alice", "")  //nolint:errcheck
+	s.SetClaim("fp2", "c", nil, "bob", "")    //nolint:errcheck
 
 	if err := s.ReleaseClaimsForResolved([]string{"fp1", "fp2"}); err != nil {
 		t.Fatalf("ReleaseClaimsForResolved: %v", err)
 	}
 
-	c1, _ := s.GetActiveClaim("fp1")
-	c2, _ := s.GetActiveClaim("fp2")
+	c1, _ := s.GetActiveClaim("fp1", "c")
+	c2, _ := s.GetActiveClaim("fp2", "c")
 	if c1 != nil || c2 != nil {
 		t.Error("expected all claims released")
 	}

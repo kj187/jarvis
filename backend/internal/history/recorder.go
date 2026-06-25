@@ -319,7 +319,8 @@ func (r *Recorder) applyPollResults(
 		activeClaims = nil
 	}
 	for i := range allAlerts {
-		if claim, ok := activeClaims[allAlerts[i].Fingerprint]; ok {
+		key := ClaimKey{Fingerprint: allAlerts[i].Fingerprint, ClusterName: allAlerts[i].ClusterName}
+		if claim, ok := activeClaims[key]; ok {
 			allAlerts[i].ActiveClaim = claim
 		}
 	}

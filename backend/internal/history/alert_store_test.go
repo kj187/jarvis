@@ -43,7 +43,7 @@ func TestAlertStore_SetActiveClaim(t *testing.T) {
 	s.Set([]models.EnrichedAlert{makeAlert("fp1", "active")})
 
 	claim := &models.Claim{ID: 1, ClaimedBy: "alice"}
-	s.SetActiveClaim("fp1", claim)
+	s.SetActiveClaim("fp1", "", claim)
 
 	got := s.Get()
 	if got[0].ActiveClaim == nil {
@@ -57,8 +57,8 @@ func TestAlertStore_SetActiveClaim(t *testing.T) {
 func TestAlertStore_ClearActiveClaim(t *testing.T) {
 	s := &AlertStore{}
 	s.Set([]models.EnrichedAlert{makeAlert("fp1", "active")})
-	s.SetActiveClaim("fp1", &models.Claim{ID: 1, ClaimedBy: "alice"})
-	s.ClearActiveClaim("fp1")
+	s.SetActiveClaim("fp1", "", &models.Claim{ID: 1, ClaimedBy: "alice"})
+	s.ClearActiveClaim("fp1", "")
 
 	got := s.Get()
 	if got[0].ActiveClaim != nil {
@@ -69,7 +69,7 @@ func TestAlertStore_ClearActiveClaim(t *testing.T) {
 func TestAlertStore_MarkResolved(t *testing.T) {
 	s := &AlertStore{}
 	s.Set([]models.EnrichedAlert{makeAlert("fp1", "active")})
-	s.SetActiveClaim("fp1", &models.Claim{ClaimedBy: "bob"})
+	s.SetActiveClaim("fp1", "", &models.Claim{ClaimedBy: "bob"})
 	s.MarkResolved("fp1")
 
 	got := s.Get()

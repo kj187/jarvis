@@ -104,6 +104,7 @@ export type ClaimReleaseReason = 'manual' | 'resolved' | 'reclaimed'
 export interface Claim {
   id: number
   fingerprint: string
+  clusterName: string
   eventId?: number
   claimedBy: string
   claimedAt: string
@@ -198,11 +199,13 @@ export interface AlertsUpdatePayload {
 
 export interface ClaimSetPayload {
   fingerprint: string
+  clusterName: string
   claim: Claim
 }
 
 export interface ClaimReleasedPayload {
   fingerprint: string
+  clusterName: string
   releasedBy: string
 }
 

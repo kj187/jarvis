@@ -6,41 +6,41 @@ import {
   releaseClaim,
 } from '@/api/client'
 
-function invalidateClaimQueries(qc: QueryClient, fingerprint: string): void {
-  qc.invalidateQueries({ queryKey: ['claim', fingerprint] })
-  qc.invalidateQueries({ queryKey: ['claim-history', fingerprint] })
+function invalidateClaimQueries(qc: QueryClient, fingerprint: string, clusterName: string): void {
+  qc.invalidateQueries({ queryKey: ['claim', fingerprint, clusterName] })
+  qc.invalidateQueries({ queryKey: ['claim-history', fingerprint, clusterName] })
   qc.invalidateQueries({ queryKey: ['alerts'] })
 }
 
-export function useActiveClaim(fingerprint: string) {
+export function useActiveClaim(fingerprint: string, clusterName: string) {
   return useQuery({
-    queryKey: ['claim', fingerprint],
-    queryFn: () => fetchActiveClaim(fingerprint),
+    queryKey: ['claim', fingerprint, clusterName],
+    queryFn: () => fetchActiveClaim(fingerprint, clusterName),
     enabled: Boolean(fingerprint),
   })
 }
 
-export function useClaimHistory(fingerprint: string) {
+export function useClaimHistory(fingerprint: string, clusterName: string) {
   return useQuery({
-    queryKey: ['claim-history', fingerprint],
-    queryFn: () => fetchClaimHistory(fingerprint),
+    queryKey: ['claim-history', fingerprint, clusterName],
+    queryFn: () => fetchClaimHistory(fingerprint, clusterName),
     enabled: Boolean(fingerprint),
   })
 }
 
-export function useSetClaim(fingerprint: string) {
+export function useSetClaim(fingerprint: string, clusterName: string) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (body: { claimedBy: string; note?: string; eventId?: number }) =>
-      setClaim(fingerprint, body),
-    onSuccess: () => invalidateClaimQueries(qc, fingerprint),
+      setClaim(fingerprint, clusterName, body),
+    onSuccess: () => invalidateClaimQueries(qc, fingerprint, clusterName),
   })
 }
 
-export function useReleaseClaim(fingerprint: string) {
+export function useReleaseClaim(fingerprint: string, clusterName: string) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (by: string) => releaseClaim(fingerprint, by),
-    onSuccess: () => invalidateClaimQueries(qc, fingerprint),
+    mutationFn: (by: string) => releaseClaim(fingerprint, clusterName, by),
+    onSuccess: () => invalidateClaimQueries(qc, fingerprint, clusterName),
   })
 }

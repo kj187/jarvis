@@ -374,16 +374,25 @@ func (s *Store) DeleteComment(id int64, fingerprint string) (bool, error) {
 
 // ── Claims ────────────────────────────────────────────────────────────────────
 
-// GetActiveClaim returns the active (unreleased) claim for a fingerprint, or nil.
-func (s *Store) GetActiveClaim(fingerprint string) (*models.Claim, error) {
+// ClaimKey uniquely identifies a claimable alert. The Alertmanager fingerprint
+// alone is not unique across clusters: the same alert mirrored in two clusters
+// shares one fingerprint, so claims must additionally be scoped by cluster.
+type ClaimKey struct {
+	Fingerprint string
+	ClusterName string
+}
+
+// GetActiveClaim returns the active (unreleased) claim for a (fingerprint,
+// cluster) pair, or nil.
+func (s *Store) GetActiveClaim(fingerprint, clusterName string) (*models.Claim, error) {
 	var c models.Claim
 	var eventID sql.NullInt64
 	var claimedAt time.Time
 	err := s.queryRow(context.Background(), `
-		SELECT id, fingerprint, event_id, claimed_by, claimed_at, note
-		FROM alert_claims WHERE fingerprint = ? AND released_at IS NULL
+		SELECT id, fingerprint, cluster_name, event_id, claimed_by, claimed_at, note
+		FROM alert_claims WHERE fingerprint = ? AND cluster_name = ? AND released_at IS NULL
 		ORDER BY claimed_at DESC LIMIT 1
-	`, fingerprint).Scan(&c.ID, &c.Fingerprint, &eventID, &c.ClaimedBy, &claimedAt, &c.Note)
+	`, fingerprint, clusterName).Scan(&c.ID, &c.Fingerprint, &c.ClusterName, &eventID, &c.ClaimedBy, &claimedAt, &c.Note)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -398,13 +407,13 @@ func (s *Store) GetActiveClaim(fingerprint string) (*models.Claim, error) {
 }
 
 // GetActiveClaims returns the most recent active (unreleased) claim for every
-// fingerprint that currently has one, keyed by fingerprint. It is the batched
-// equivalent of calling GetActiveClaim for each fingerprint and exists to avoid
-// an N+1 query pattern in the poll loop, where one query per alert would
+// (fingerprint, cluster) pair that currently has one, keyed by ClaimKey. It is
+// the batched equivalent of calling GetActiveClaim for each alert and exists to
+// avoid an N+1 query pattern in the poll loop, where one query per alert would
 // otherwise be issued against the single SQLite writer connection.
-func (s *Store) GetActiveClaims() (map[string]*models.Claim, error) {
+func (s *Store) GetActiveClaims() (map[ClaimKey]*models.Claim, error) {
 	rows, err := s.query(context.Background(), `
-		SELECT id, fingerprint, event_id, claimed_by, claimed_at, note
+		SELECT id, fingerprint, cluster_name, event_id, claimed_by, claimed_at, note
 		FROM alert_claims WHERE released_at IS NULL
 		ORDER BY claimed_at DESC
 	`)
@@ -413,17 +422,18 @@ func (s *Store) GetActiveClaims() (map[string]*models.Claim, error) {
 	}
 	defer func() { _ = rows.Close() }()
 
-	result := make(map[string]*models.Claim)
+	result := make(map[ClaimKey]*models.Claim)
 	for rows.Next() {
 		var c models.Claim
 		var eventID sql.NullInt64
 		var claimedAt time.Time
-		if err := rows.Scan(&c.ID, &c.Fingerprint, &eventID, &c.ClaimedBy, &claimedAt, &c.Note); err != nil {
+		if err := rows.Scan(&c.ID, &c.Fingerprint, &c.ClusterName, &eventID, &c.ClaimedBy, &claimedAt, &c.Note); err != nil {
 			return nil, fmt.Errorf("scan active claim: %w", err)
 		}
-		// Rows are ordered newest-first, so the first row seen for a fingerprint
-		// is its most recent active claim — matching GetActiveClaim's semantics.
-		if _, exists := result[c.Fingerprint]; exists {
+		key := ClaimKey{Fingerprint: c.Fingerprint, ClusterName: c.ClusterName}
+		// Rows are ordered newest-first, so the first row seen for a key is its
+		// most recent active claim — matching GetActiveClaim's semantics.
+		if _, exists := result[key]; exists {
 			continue
 		}
 		c.ClaimedAt = claimedAt.UTC()
@@ -431,34 +441,35 @@ func (s *Store) GetActiveClaims() (map[string]*models.Claim, error) {
 			c.EventID = &eventID.Int64
 		}
 		claim := c
-		result[c.Fingerprint] = &claim
+		result[key] = &claim
 	}
 	return result, rows.Err()
 }
 
-// SetClaim releases any existing active claim (reason: reclaimed) and creates a
-// new one.
-func (s *Store) SetClaim(fingerprint string, eventID *int64, claimedBy, note string) (*models.Claim, error) {
+// SetClaim sets an active claim for a (fingerprint, cluster) pair, releasing any
+// existing active claim for that same pair (reclaim).
+func (s *Store) SetClaim(fingerprint, clusterName string, eventID *int64, claimedBy, note string) (*models.Claim, error) {
 	now := time.Now().UTC()
-	// Release existing active claims.
+	// Release existing active claims for this exact alert (fingerprint + cluster).
 	_, err := s.exec(context.Background(), `
 		UPDATE alert_claims SET released_at = ?, released_by = 'system', release_reason = ?
-		WHERE fingerprint = ? AND released_at IS NULL
-	`, now, models.ReleaseReasonReclaimed, fingerprint)
+		WHERE fingerprint = ? AND cluster_name = ? AND released_at IS NULL
+	`, now, models.ReleaseReasonReclaimed, fingerprint, clusterName)
 	if err != nil {
 		return nil, fmt.Errorf("release existing claims: %w", err)
 	}
 
 	id, err := s.insertReturningID(context.Background(), `
-		INSERT INTO alert_claims (fingerprint, event_id, claimed_by, claimed_at, note)
-		VALUES (?, ?, ?, ?, ?)
-	`, fingerprint, eventID, claimedBy, now, note)
+		INSERT INTO alert_claims (fingerprint, cluster_name, event_id, claimed_by, claimed_at, note)
+		VALUES (?, ?, ?, ?, ?, ?)
+	`, fingerprint, clusterName, eventID, claimedBy, now, note)
 	if err != nil {
 		return nil, fmt.Errorf("insert claim: %w", err)
 	}
 	return &models.Claim{
 		ID:          id,
 		Fingerprint: fingerprint,
+		ClusterName: clusterName,
 		EventID:     eventID,
 		ClaimedBy:   claimedBy,
 		ClaimedAt:   now,
@@ -466,14 +477,14 @@ func (s *Store) SetClaim(fingerprint string, eventID *int64, claimedBy, note str
 	}, nil
 }
 
-// ReleaseClaim releases the active claim for a fingerprint. Returns false if no
-// active claim was found.
-func (s *Store) ReleaseClaim(fingerprint, releasedBy, reason string) (bool, error) {
+// ReleaseClaim releases the active claim for a (fingerprint, cluster) pair.
+// Returns false if no active claim was found.
+func (s *Store) ReleaseClaim(fingerprint, clusterName, releasedBy, reason string) (bool, error) {
 	now := time.Now().UTC()
 	res, err := s.exec(context.Background(), `
 		UPDATE alert_claims SET released_at = ?, released_by = ?, release_reason = ?
-		WHERE fingerprint = ? AND released_at IS NULL
-	`, now, releasedBy, reason, fingerprint)
+		WHERE fingerprint = ? AND cluster_name = ? AND released_at IS NULL
+	`, now, releasedBy, reason, fingerprint, clusterName)
 	if err != nil {
 		return false, fmt.Errorf("release claim: %w", err)
 	}
@@ -481,13 +492,13 @@ func (s *Store) ReleaseClaim(fingerprint, releasedBy, reason string) (bool, erro
 	return n > 0, nil
 }
 
-// GetClaimHistory returns all claims for a fingerprint (newest first).
-func (s *Store) GetClaimHistory(fingerprint string) ([]models.Claim, error) {
+// GetClaimHistory returns all claims for a (fingerprint, cluster) pair (newest first).
+func (s *Store) GetClaimHistory(fingerprint, clusterName string) ([]models.Claim, error) {
 	rows, err := s.query(context.Background(), `
-		SELECT id, fingerprint, event_id, claimed_by, claimed_at, note, released_at, released_by, release_reason
-		FROM alert_claims WHERE fingerprint = ?
+		SELECT id, fingerprint, cluster_name, event_id, claimed_by, claimed_at, note, released_at, released_by, release_reason
+		FROM alert_claims WHERE fingerprint = ? AND cluster_name = ?
 		ORDER BY claimed_at DESC
-	`, fingerprint)
+	`, fingerprint, clusterName)
 	if err != nil {
 		return nil, fmt.Errorf("query claims: %w", err)
 	}
@@ -500,7 +511,7 @@ func (s *Store) GetClaimHistory(fingerprint string) ([]models.Claim, error) {
 		var claimedAt time.Time
 		var releasedAt sql.NullTime
 		var releasedBy, releaseReason sql.NullString
-		if err := rows.Scan(&c.ID, &c.Fingerprint, &eventID, &c.ClaimedBy, &claimedAt,
+		if err := rows.Scan(&c.ID, &c.Fingerprint, &c.ClusterName, &eventID, &c.ClaimedBy, &claimedAt,
 			&c.Note, &releasedAt, &releasedBy, &releaseReason); err != nil {
 			return nil, fmt.Errorf("scan claim: %w", err)
 		}

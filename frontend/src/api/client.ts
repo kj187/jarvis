@@ -91,8 +91,8 @@ export function deleteComment(fingerprint: string, id: number): Promise<void> {
 
 // ── Claims ────────────────────────────────────────────────────────────────────
 
-export function fetchActiveClaim(fingerprint: string): Promise<Claim | null> {
-  return request<Claim>(`/alerts/${fingerprint}/claim`).catch((e: Error) => {
+export function fetchActiveClaim(fingerprint: string, clusterName: string): Promise<Claim | null> {
+  return request<Claim>(`/alerts/${fingerprint}/claim?cluster=${encodeURIComponent(clusterName)}`).catch((e: Error) => {
     if (e.message.startsWith('404')) return null
     throw e
   })
@@ -100,22 +100,26 @@ export function fetchActiveClaim(fingerprint: string): Promise<Claim | null> {
 
 export function setClaim(
   fingerprint: string,
+  clusterName: string,
   body: { claimedBy: string; note?: string; eventId?: number },
 ): Promise<Claim> {
-  return request<Claim>(`/alerts/${fingerprint}/claim`, {
+  return request<Claim>(`/alerts/${fingerprint}/claim?cluster=${encodeURIComponent(clusterName)}`, {
     method: 'POST',
     body: JSON.stringify(body),
   })
 }
 
-export function releaseClaim(fingerprint: string, by: string): Promise<void> {
-  return request<void>(`/alerts/${fingerprint}/claim?by=${encodeURIComponent(by)}`, {
-    method: 'DELETE',
-  })
+export function releaseClaim(fingerprint: string, clusterName: string, by: string): Promise<void> {
+  return request<void>(
+    `/alerts/${fingerprint}/claim?cluster=${encodeURIComponent(clusterName)}&by=${encodeURIComponent(by)}`,
+    {
+      method: 'DELETE',
+    },
+  )
 }
 
-export function fetchClaimHistory(fingerprint: string): Promise<Claim[]> {
-  return request<Claim[]>(`/alerts/${fingerprint}/claims/history`)
+export function fetchClaimHistory(fingerprint: string, clusterName: string): Promise<Claim[]> {
+  return request<Claim[]>(`/alerts/${fingerprint}/claims/history?cluster=${encodeURIComponent(clusterName)}`)
 }
 
 export function fetchSilenceEvents(fingerprint: string): Promise<SilenceEvent[]> {

@@ -13,14 +13,15 @@ const (
 	maxClaimNoteLen = 1_000
 )
 
-// GET /api/v1/alerts/:fingerprint/claim
+// GET /api/v1/alerts/:fingerprint/claim?cluster=<cluster>
 func (s *Server) getClaim(c echo.Context) error {
 	fp := c.Param("fingerprint")
 	if !validateFingerprint(fp) {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid fingerprint")
 	}
+	cluster := c.QueryParam("cluster")
 
-	claim, err := s.store.GetActiveClaim(fp)
+	claim, err := s.store.GetActiveClaim(fp, cluster)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get claim")
 	}
@@ -30,12 +31,13 @@ func (s *Server) getClaim(c echo.Context) error {
 	return c.JSON(http.StatusOK, claim)
 }
 
-// POST /api/v1/alerts/:fingerprint/claim
+// POST /api/v1/alerts/:fingerprint/claim?cluster=<cluster>
 func (s *Server) setClaim(c echo.Context) error {
 	fp := c.Param("fingerprint")
 	if !validateFingerprint(fp) {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid fingerprint")
 	}
+	cluster := c.QueryParam("cluster")
 
 	var body struct {
 		ClaimedBy string `json:"claimedBy"`
@@ -64,27 +66,29 @@ func (s *Server) setClaim(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "note too long (max 1000 characters)")
 	}
 
-	claim, err := s.store.SetClaim(fp, body.EventID, claimedBy, body.Note)
+	claim, err := s.store.SetClaim(fp, cluster, body.EventID, claimedBy, body.Note)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to set claim")
 	}
 
-	s.alertStore.SetActiveClaim(fp, claim)
+	s.alertStore.SetActiveClaim(fp, cluster, claim)
 
 	s.hub.BroadcastJSON(models.WSTypeClaimSet, map[string]interface{}{
 		"fingerprint": fp,
+		"clusterName": cluster,
 		"claim":       claim,
 	})
 
 	return c.JSON(http.StatusCreated, claim)
 }
 
-// DELETE /api/v1/alerts/:fingerprint/claim
+// DELETE /api/v1/alerts/:fingerprint/claim?cluster=<cluster>
 func (s *Server) releaseClaim(c echo.Context) error {
 	fp := c.Param("fingerprint")
 	if !validateFingerprint(fp) {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid fingerprint")
 	}
+	cluster := c.QueryParam("cluster")
 
 	by := c.QueryParam("by")
 	if s.authProvider.Mode() != "none" {
@@ -97,7 +101,7 @@ func (s *Server) releaseClaim(c echo.Context) error {
 		by = "unknown"
 	}
 
-	released, err := s.store.ReleaseClaim(fp, by, models.ReleaseReasonManual)
+	released, err := s.store.ReleaseClaim(fp, cluster, by, models.ReleaseReasonManual)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to release claim")
 	}
@@ -105,24 +109,26 @@ func (s *Server) releaseClaim(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusNotFound, "no active claim")
 	}
 
-	s.alertStore.ClearActiveClaim(fp)
+	s.alertStore.ClearActiveClaim(fp, cluster)
 
 	s.hub.BroadcastJSON(models.WSTypeClaimReleased, map[string]interface{}{
 		"fingerprint": fp,
+		"clusterName": cluster,
 		"releasedBy":  by,
 	})
 
 	return c.NoContent(http.StatusNoContent)
 }
 
-// GET /api/v1/alerts/:fingerprint/claims/history
+// GET /api/v1/alerts/:fingerprint/claims/history?cluster=<cluster>
 func (s *Server) getClaimHistory(c echo.Context) error {
 	fp := c.Param("fingerprint")
 	if !validateFingerprint(fp) {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid fingerprint")
 	}
+	cluster := c.QueryParam("cluster")
 
-	claims, err := s.store.GetClaimHistory(fp)
+	claims, err := s.store.GetClaimHistory(fp, cluster)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get claim history")
 	}

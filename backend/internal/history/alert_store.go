@@ -38,24 +38,24 @@ func (s *AlertStore) Get() []models.EnrichedAlert {
 	return result
 }
 
-// SetActiveClaim patches the active claim for a specific alert fingerprint.
-func (s *AlertStore) SetActiveClaim(fingerprint string, claim *models.Claim) {
+// SetActiveClaim patches the active claim for a specific alert (fingerprint + cluster).
+func (s *AlertStore) SetActiveClaim(fingerprint, clusterName string, claim *models.Claim) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for i := range s.alerts {
-		if s.alerts[i].Fingerprint == fingerprint {
+		if s.alerts[i].Fingerprint == fingerprint && s.alerts[i].ClusterName == clusterName {
 			s.alerts[i].ActiveClaim = claim
 			return
 		}
 	}
 }
 
-// ClearActiveClaim removes the active claim for a specific alert fingerprint.
-func (s *AlertStore) ClearActiveClaim(fingerprint string) {
+// ClearActiveClaim removes the active claim for a specific alert (fingerprint + cluster).
+func (s *AlertStore) ClearActiveClaim(fingerprint, clusterName string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for i := range s.alerts {
-		if s.alerts[i].Fingerprint == fingerprint {
+		if s.alerts[i].Fingerprint == fingerprint && s.alerts[i].ClusterName == clusterName {
 			s.alerts[i].ActiveClaim = nil
 			return
 		}

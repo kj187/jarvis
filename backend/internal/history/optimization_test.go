@@ -20,13 +20,13 @@ func TestGetActiveClaims(t *testing.T) {
 		}
 	}
 
-	if _, err := s.SetClaim("fp1", nil, "alice", "a"); err != nil {
+	if _, err := s.SetClaim("fp1", "homelab", nil, "alice", "a"); err != nil {
 		t.Fatalf("SetClaim fp1: %v", err)
 	}
-	if _, err := s.SetClaim("fp2", nil, "bob", "b"); err != nil {
+	if _, err := s.SetClaim("fp2", "homelab", nil, "bob", "b"); err != nil {
 		t.Fatalf("SetClaim fp2: %v", err)
 	}
-	if _, err := s.SetClaim("fp3", nil, "carol", "c"); err != nil {
+	if _, err := s.SetClaim("fp3", "homelab", nil, "carol", "c"); err != nil {
 		t.Fatalf("SetClaim fp3: %v", err)
 	}
 	// Release fp3's claim — it must not appear in the active set.
@@ -34,7 +34,7 @@ func TestGetActiveClaims(t *testing.T) {
 		t.Fatalf("ReleaseClaimsForResolved: %v", err)
 	}
 	// Re-claim fp1 — the newer claim must win over the older (now reclaimed) one.
-	if _, err := s.SetClaim("fp1", nil, "dave", "d"); err != nil {
+	if _, err := s.SetClaim("fp1", "homelab", nil, "dave", "d"); err != nil {
 		t.Fatalf("re-claim fp1: %v", err)
 	}
 
@@ -46,24 +46,27 @@ func TestGetActiveClaims(t *testing.T) {
 	if len(claims) != 2 {
 		t.Fatalf("active claims = %d, want 2 (%v)", len(claims), claims)
 	}
-	if claims["fp1"] == nil || claims["fp1"].ClaimedBy != "dave" {
-		t.Errorf("fp1 claim = %+v, want most recent claim by dave", claims["fp1"])
+	fp1Key := ClaimKey{Fingerprint: "fp1", ClusterName: "homelab"}
+	fp2Key := ClaimKey{Fingerprint: "fp2", ClusterName: "homelab"}
+	fp3Key := ClaimKey{Fingerprint: "fp3", ClusterName: "homelab"}
+	if claims[fp1Key] == nil || claims[fp1Key].ClaimedBy != "dave" {
+		t.Errorf("fp1 claim = %+v, want most recent claim by dave", claims[fp1Key])
 	}
-	if claims["fp2"] == nil || claims["fp2"].ClaimedBy != "bob" {
-		t.Errorf("fp2 claim = %+v, want claim by bob", claims["fp2"])
+	if claims[fp2Key] == nil || claims[fp2Key].ClaimedBy != "bob" {
+		t.Errorf("fp2 claim = %+v, want claim by bob", claims[fp2Key])
 	}
-	if _, ok := claims["fp3"]; ok {
+	if _, ok := claims[fp3Key]; ok {
 		t.Errorf("fp3 has a released claim and must be excluded")
 	}
 
-	// Parity: the batched result must match GetActiveClaim for each fingerprint.
-	for fp, batched := range claims {
-		single, err := s.GetActiveClaim(fp)
+	// Parity: the batched result must match GetActiveClaim for each key.
+	for key, batched := range claims {
+		single, err := s.GetActiveClaim(key.Fingerprint, key.ClusterName)
 		if err != nil {
-			t.Fatalf("GetActiveClaim(%v): %v", fp, err)
+			t.Fatalf("GetActiveClaim(%v): %v", key, err)
 		}
 		if single == nil || single.ID != batched.ID {
-			t.Errorf("fp %v: batched claim ID %d mismatches GetActiveClaim", fp, batched.ID)
+			t.Errorf("key %v: batched claim ID %d mismatches GetActiveClaim", key, batched.ID)
 		}
 	}
 }
@@ -75,7 +78,7 @@ func TestRecorder_AttachesActiveClaimBatched(t *testing.T) {
 	ctx := context.Background()
 
 	rec.processAlerts(ctx, alert("fp1", "active"))
-	if _, err := rec.store.SetClaim("fp1", nil, "alice", "mine"); err != nil {
+	if _, err := rec.store.SetClaim("fp1", "homelab", nil, "alice", "mine"); err != nil {
 		t.Fatalf("SetClaim: %v", err)
 	}
 

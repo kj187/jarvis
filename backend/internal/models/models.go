@@ -120,6 +120,7 @@ const (
 type Claim struct {
 	ID            int64      `json:"id"`
 	Fingerprint   string     `json:"fingerprint"`
+	ClusterName   string     `json:"clusterName"`
 	EventID       *int64     `json:"eventId,omitempty"`
 	ClaimedBy     string     `json:"claimedBy"`
 	ClaimedAt     time.Time  `json:"claimedAt"`
@@ -163,8 +164,8 @@ type WSEvent struct {
 
 const (
 	WSTypeAlertsUpdate  = "alerts_update"  // payload: { alerts: EnrichedAlert[] }
-	WSTypeClaimSet      = "claim_set"      // payload: { fingerprint, claim }
-	WSTypeClaimReleased = "claim_released" // payload: { fingerprint, releasedBy }
+	WSTypeClaimSet      = "claim_set"      // payload: { fingerprint, clusterName, claim }
+	WSTypeClaimReleased = "claim_released" // payload: { fingerprint, clusterName, releasedBy }
 	WSTypeCommentAdded  = "comment_added"  // payload: { fingerprint, comment }
 )
 

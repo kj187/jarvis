@@ -68,14 +68,14 @@ export function useWebSocket() {
           // Patch alerts cache
           qc.setQueriesData({ queryKey: ['alerts'] }, (old: unknown) => {
             if (!Array.isArray(old)) return old
-            return old.map((a: { fingerprint: string }) =>
-              a.fingerprint === payload.fingerprint
+            return old.map((a: { fingerprint: string; clusterName: string }) =>
+              a.fingerprint === payload.fingerprint && a.clusterName === payload.clusterName
                 ? { ...a, activeClaim: payload.claim }
                 : a,
             )
           })
-          qc.invalidateQueries({ queryKey: ['claim', payload.fingerprint] })
-          qc.invalidateQueries({ queryKey: ['claim-history', payload.fingerprint] })
+          qc.invalidateQueries({ queryKey: ['claim', payload.fingerprint, payload.clusterName] })
+          qc.invalidateQueries({ queryKey: ['claim-history', payload.fingerprint, payload.clusterName] })
           break
         }
 
@@ -83,14 +83,14 @@ export function useWebSocket() {
           const payload = event.payload as ClaimReleasedPayload
           qc.setQueriesData({ queryKey: ['alerts'] }, (old: unknown) => {
             if (!Array.isArray(old)) return old
-            return old.map((a: { fingerprint: string }) =>
-              a.fingerprint === payload.fingerprint
+            return old.map((a: { fingerprint: string; clusterName: string }) =>
+              a.fingerprint === payload.fingerprint && a.clusterName === payload.clusterName
                 ? { ...a, activeClaim: undefined }
                 : a,
             )
           })
-          qc.invalidateQueries({ queryKey: ['claim', payload.fingerprint] })
-          qc.invalidateQueries({ queryKey: ['claim-history', payload.fingerprint] })
+          qc.invalidateQueries({ queryKey: ['claim', payload.fingerprint, payload.clusterName] })
+          qc.invalidateQueries({ queryKey: ['claim-history', payload.fingerprint, payload.clusterName] })
           break
         }
 

@@ -39,6 +39,7 @@ func migratePostgres(database *sql.DB) error {
 		`CREATE TABLE IF NOT EXISTS alert_claims (
 			id             BIGSERIAL PRIMARY KEY,
 			fingerprint    TEXT NOT NULL REFERENCES alert_fingerprints(fingerprint),
+			cluster_name   TEXT NOT NULL DEFAULT '',
 			event_id       BIGINT REFERENCES alert_events(id),
 			claimed_by     TEXT NOT NULL,
 			claimed_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -69,7 +70,7 @@ func migratePostgres(database *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_alert_events_fingerprint_recorded ON alert_events(fingerprint, recorded_at DESC)`,
 		`CREATE INDEX IF NOT EXISTS idx_alert_comments_fingerprint ON alert_comments(fingerprint)`,
 		`CREATE INDEX IF NOT EXISTS idx_alert_claims_fingerprint ON alert_claims(fingerprint)`,
-		`CREATE INDEX IF NOT EXISTS idx_alert_claims_active      ON alert_claims(fingerprint) WHERE released_at IS NULL`,
+		`CREATE INDEX IF NOT EXISTS idx_alert_claims_active      ON alert_claims(fingerprint, cluster_name) WHERE released_at IS NULL`,
 		`CREATE INDEX IF NOT EXISTS idx_silence_events_fingerprint ON silence_events(fingerprint, recorded_at DESC)`,
 		`CREATE TABLE IF NOT EXISTS users (
 			id             TEXT PRIMARY KEY,
@@ -86,6 +87,8 @@ func migratePostgres(database *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_users_oidc_sub ON users(oidc_sub)`,
 		// Add user_id column to alert_comments (nullable, for ownership checks by ID).
 		`ALTER TABLE alert_comments ADD COLUMN IF NOT EXISTS user_id TEXT REFERENCES users(id)`,
+		// Add cluster_name to alert_claims so claims are scoped per (fingerprint, cluster).
+		`ALTER TABLE alert_claims ADD COLUMN IF NOT EXISTS cluster_name TEXT NOT NULL DEFAULT ''`,
 	}
 
 	for _, stmt := range stmts {

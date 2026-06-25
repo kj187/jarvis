@@ -12,7 +12,7 @@ import (
 
 func TestGetClaimHistory_Empty(t *testing.T) {
 	rec, _ := newTestRecorder(t)
-	claims, err := rec.store.GetClaimHistory("abc123")
+	claims, err := rec.store.GetClaimHistory("abc123", "homelab")
 	if err != nil {
 		t.Fatalf("GetClaimHistory: %v", err)
 	}
@@ -30,21 +30,21 @@ func TestGetClaimHistory_WithClaims(t *testing.T) {
 	}
 
 	// Create two claims
-	c1, err := rec.store.SetClaim("fp1", nil, "alice", "first claim")
+	c1, err := rec.store.SetClaim("fp1", "homelab", nil, "alice", "first claim")
 	if err != nil || c1 == nil {
 		t.Fatalf("SetClaim 1: %v", err)
 	}
-	_, err = rec.store.ReleaseClaim("fp1", "alice", models.ReleaseReasonManual)
+	_, err = rec.store.ReleaseClaim("fp1", "homelab", "alice", models.ReleaseReasonManual)
 	if err != nil {
 		t.Fatalf("ReleaseClaim: %v", err)
 	}
 
-	c2, err := rec.store.SetClaim("fp1", nil, "bob", "second claim")
+	c2, err := rec.store.SetClaim("fp1", "homelab", nil, "bob", "second claim")
 	if err != nil || c2 == nil {
 		t.Fatalf("SetClaim 2: %v", err)
 	}
 
-	claims, err := rec.store.GetClaimHistory("fp1")
+	claims, err := rec.store.GetClaimHistory("fp1", "homelab")
 	if err != nil {
 		t.Fatalf("GetClaimHistory: %v", err)
 	}

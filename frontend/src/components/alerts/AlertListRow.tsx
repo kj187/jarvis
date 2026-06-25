@@ -54,8 +54,8 @@ export function AlertListRow({
   const [showNameInput, setShowNameInput] = useState(false)
   const [nameInput, setNameInput] = useState('')
   const nameInputRef = useRef<HTMLInputElement>(null)
-  const setClaimMutation = useSetClaim(alert.fingerprint)
-  const releaseMutation = useReleaseClaim(alert.fingerprint)
+  const setClaimMutation = useSetClaim(alert.fingerprint, alert.clusterName)
+  const releaseMutation = useReleaseClaim(alert.fingerprint, alert.clusterName)
   const { user, providerInfo } = useAuthStore()
   const authMode = providerInfo?.mode ?? 'none'
 

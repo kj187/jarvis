@@ -64,6 +64,7 @@ type testCommentRequest struct {
 
 type testClaimRequest struct {
 	Fingerprint string `json:"fingerprint"`
+	ClusterName string `json:"clusterName"`
 	ClaimedBy   string `json:"claimedBy"`
 	Note        string `json:"note"`
 }
@@ -188,15 +189,29 @@ func (s *Server) testSetClaim(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "claimedBy is required")
 	}
 
-	claim, err := s.store.SetClaim(req.Fingerprint, nil, req.ClaimedBy, req.Note)
+	// Convenience for e2e: when no cluster is supplied, resolve it from the
+	// current snapshot so claims attach to the matching alert. Production claims
+	// always carry an explicit cluster from the frontend.
+	cluster := req.ClusterName
+	if cluster == "" {
+		for _, a := range s.alertStore.Get() {
+			if a.Fingerprint == req.Fingerprint {
+				cluster = a.ClusterName
+				break
+			}
+		}
+	}
+
+	claim, err := s.store.SetClaim(req.Fingerprint, cluster, nil, req.ClaimedBy, req.Note)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
 	// Mirror the production claim handler so WS-driven UI updates work in e2e.
-	s.alertStore.SetActiveClaim(req.Fingerprint, claim)
+	s.alertStore.SetActiveClaim(req.Fingerprint, cluster, claim)
 	s.hub.BroadcastJSON(models.WSTypeClaimSet, map[string]interface{}{
 		"fingerprint": req.Fingerprint,
+		"clusterName": cluster,
 		"claim":       claim,
 	})
 

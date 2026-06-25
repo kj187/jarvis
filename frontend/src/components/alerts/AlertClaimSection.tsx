@@ -13,12 +13,13 @@ import { cn } from '@/lib/utils'
 
 interface AlertClaimSectionProps {
   fingerprint: string
+  clusterName: string
 }
 
-export function AlertClaimSection({ fingerprint }: AlertClaimSectionProps) {
-  const { data: activeClaim, isLoading } = useActiveClaim(fingerprint)
-  const setClaimMutation = useSetClaim(fingerprint)
-  const releaseMutation = useReleaseClaim(fingerprint)
+export function AlertClaimSection({ fingerprint, clusterName }: AlertClaimSectionProps) {
+  const { data: activeClaim, isLoading } = useActiveClaim(fingerprint, clusterName)
+  const setClaimMutation = useSetClaim(fingerprint, clusterName)
+  const releaseMutation = useReleaseClaim(fingerprint, clusterName)
   const { user, providerInfo } = useAuthStore()
   const authMode = providerInfo?.mode ?? 'none'
 

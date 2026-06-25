@@ -193,7 +193,7 @@ func TestRecorder_ClaimReleasedAfterGenuineResolution(t *testing.T) {
 	ctx := context.Background()
 
 	rec.processAlerts(ctx, alert("fp1", "active"))
-	if _, err := rec.store.SetClaim("fp1", nil, "alice", ""); err != nil {
+	if _, err := rec.store.SetClaim("fp1", "homelab", nil, "alice", ""); err != nil {
 		t.Fatalf("SetClaim: %v", err)
 	}
 
@@ -201,7 +201,7 @@ func TestRecorder_ClaimReleasedAfterGenuineResolution(t *testing.T) {
 	rec.processAlerts(ctx, noAlerts())
 
 	// Claim still active — delay not elapsed yet.
-	c, _ := rec.store.GetActiveClaim("fp1")
+	c, _ := rec.store.GetActiveClaim("fp1", "homelab")
 	if c == nil {
 		t.Fatal("claim should still be active before claimReleaseDelay elapses")
 	}
@@ -209,7 +209,7 @@ func TestRecorder_ClaimReleasedAfterGenuineResolution(t *testing.T) {
 	// Wait for the delayed goroutine to fire and release.
 	time.Sleep(5 * rec.claimReleaseDelay)
 
-	c, _ = rec.store.GetActiveClaim("fp1")
+	c, _ = rec.store.GetActiveClaim("fp1", "homelab")
 	if c != nil {
 		t.Error("claim should be released after genuine resolution + delay")
 	}
@@ -308,7 +308,7 @@ func TestRecorder_ClaimNotReleasedOnGracePeriodRefire(t *testing.T) {
 	ctx := context.Background()
 
 	rec.processAlerts(ctx, alert("fp1", "active"))
-	if _, err := rec.store.SetClaim("fp1", nil, "alice", ""); err != nil {
+	if _, err := rec.store.SetClaim("fp1", "homelab", nil, "alice", ""); err != nil {
 		t.Fatalf("SetClaim: %v", err)
 	}
 
@@ -321,7 +321,7 @@ func TestRecorder_ClaimNotReleasedOnGracePeriodRefire(t *testing.T) {
 	// Wait past the claim release delay; goroutine must have checked and skipped.
 	time.Sleep(5 * rec.claimReleaseDelay)
 
-	c, _ := rec.store.GetActiveClaim("fp1")
+	c, _ := rec.store.GetActiveClaim("fp1", "homelab")
 	if c == nil {
 		t.Error("claim must survive a grace-period re-fire")
 	}
