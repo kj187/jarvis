@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button'
 import { SilenceExpiry } from './SilenceExpiry'
 import { labelColorStyle } from '@/components/alerts/LabelChip'
 import { useSettingsStore } from '@/store/useSettingsStore'
+import { TruncatableChip } from '@/components/ui/truncatable-chip'
 import type { Silence, EnrichedAlert } from '@/types'
 import { cn } from '@/lib/utils'
 import type { SilenceGroup } from './SilenceGroupCard'
@@ -66,9 +67,9 @@ export function SilenceListView({ groups, alerts, onEditGroup, onExpireGroup, de
             <div className="flex flex-col gap-1.5 min-w-0">
               <div className="flex flex-wrap gap-1">
                 {rep.matchers.map((m, i) => (
-                  <span key={i} className="rounded border px-1.5 py-0.5 font-mono text-xs" style={labelColorStyle(m.name, theme)}>
+                  <TruncatableChip key={i} className="rounded border px-1.5 py-0.5 font-mono text-xs" style={labelColorStyle(m.name, theme)}>
                     {m.name}{m.isRegex ? (m.isEqual ? '=~' : '!~') : m.isEqual ? '=' : '!='}{m.value}
-                  </span>
+                  </TruncatableChip>
                 ))}
               </div>
               <div className="flex flex-wrap items-center gap-1.5">

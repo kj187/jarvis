@@ -3,6 +3,7 @@ import { Card, CardHeader, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { SilenceExpiry } from './SilenceExpiry'
 import { labelColorStyle } from '@/components/alerts/LabelChip'
+import { TruncatableChip } from '@/components/ui/truncatable-chip'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import type { Silence, EnrichedAlert } from '@/types'
 import { cn } from '@/lib/utils'
@@ -62,9 +63,9 @@ export function SilenceCard({ silence, alerts, onEdit, onExpire, isDeleting = fa
       <CardContent className="space-y-2 pb-10">
         <div className="flex flex-wrap gap-1">
           {silence.matchers.map((m, i) => (
-            <span key={i} className="rounded border px-1.5 py-0.5 font-mono text-xs" style={labelColorStyle(m.name, theme)}>
+            <TruncatableChip key={i} className="rounded border px-1.5 py-0.5 font-mono text-xs" style={labelColorStyle(m.name, theme)}>
               {m.name}{m.isRegex ? (m.isEqual ? '=~' : '!~') : m.isEqual ? '=' : '!='}{m.value}
-            </span>
+            </TruncatableChip>
           ))}
         </div>
 

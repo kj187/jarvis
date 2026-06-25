@@ -62,6 +62,7 @@ export function LabelChip({ labelKey, value }: { labelKey: string; value: string
         ref={chipRef}
         className="max-w-[200px] truncate rounded border px-1.5 py-0.5 text-[10px] font-medium"
         style={labelColorStyle(labelKey, theme)}
+        title={`${labelKey}: ${value}`}
       >
         {labelKey}: {value}
       </span>
