@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { format, formatDistanceToNow } from 'date-fns'
 import { enUS } from 'date-fns/locale'
-import { ExternalLink, BookOpen, ChevronDown, ChevronUp, BellOff, Pencil, Trash2, User, Copy, Check, Info } from 'lucide-react'
+import { ExternalLink, BookOpen, ChevronDown, ChevronUp, BellOff, Pencil, Trash2, User, Copy, Check, Info, Server } from 'lucide-react'
 import { TruncatableChip } from '@/components/ui/truncatable-chip'
 import { cn } from '@/lib/utils'
 import { Sheet } from '@/components/ui/sheet'
@@ -340,7 +340,10 @@ export function AlertDetailPanel({
           <div className="flex items-start justify-between gap-3 pr-8">
             <h2 className="text-lg font-bold break-all">{alertname}</h2>
             <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
-              <span className="rounded bg-accent px-2 py-0.5 text-xs">{alert.clusterName}</span>
+              <span className="inline-flex items-center gap-1 rounded border border-border bg-muted px-2 py-0.5 text-xs font-medium">
+                <Server className="h-3 w-3 text-muted-foreground" />
+                {alert.clusterName}
+              </span>
               <AlertBadge severity={severity} />
               <StatusBadge state={alert.status.state} />
             </div>
