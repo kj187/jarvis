@@ -416,6 +416,17 @@ func (s *Store) GetStats(fingerprint string) (*models.AlertStats, error) {
 		st.LastResolvedAt = &t
 	}
 
+	var firedAt sql.NullTime
+	_ = s.queryRow(context.Background(), `
+		SELECT recorded_at FROM alert_events
+		WHERE fingerprint = ? AND status = 'firing'
+		ORDER BY recorded_at DESC LIMIT 1
+	`, fingerprint).Scan(&firedAt)
+	if firedAt.Valid {
+		t := firedAt.Time.UTC()
+		st.LastFiredAt = &t
+	}
+
 	return &st, nil
 }
 

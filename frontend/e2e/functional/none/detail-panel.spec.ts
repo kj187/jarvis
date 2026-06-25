@@ -172,12 +172,12 @@ test.describe('D5: Stats & timeline', () => {
     const statsSection = page.getByTestId('detail-stats-section')
     await expect(statsSection).toBeVisible()
     
-    // Check for first/last seen
-    const firstSeenLabel = page.getByTestId('stat-first-seen')
-    const lastSeenLabel = page.getByTestId('stat-last-seen')
-    
-    await expect(firstSeenLabel).toBeVisible()
-    await expect(lastSeenLabel).toBeVisible()
+    // Check last fired stat (first/last seen were removed in favour of last-fired)
+    const lastFiredLabel = page.getByTestId('stat-last-fired')
+    const occurrenceCountLabel = page.getByTestId('stat-occurrence-count')
+
+    await expect(lastFiredLabel).toBeVisible()
+    await expect(occurrenceCountLabel).toBeVisible()
   })
 
   test('detail panel shows occurrence count', async ({ page, am, jarvis }) => {

@@ -67,6 +67,39 @@ func TestUpsertFingerprint_UpdatesLastSeenAt(t *testing.T) {
 	}
 }
 
+func TestGetStats_LastFiredAt(t *testing.T) {
+	s := newTestStore(t)
+
+	labels := map[string]string{"alertname": "TestAlert"}
+	if err := s.UpsertFingerprint("fp1", "TestAlert", "homelab", labels); err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+
+	// No firing event yet → LastFiredAt nil.
+	st0, _ := s.GetStats("fp1")
+	if st0.LastFiredAt != nil {
+		t.Errorf("LastFiredAt = %v, want nil before any firing event", st0.LastFiredAt)
+	}
+
+	if _, err := s.RecordStatusChange("fp1", "homelab", "http://am:9093", models.EventStatusFiring, time.Now(), nil); err != nil {
+		t.Fatalf("record firing: %v", err)
+	}
+
+	st1, _ := s.GetStats("fp1")
+	if st1.LastFiredAt == nil {
+		t.Fatal("LastFiredAt = nil, want firing timestamp")
+	}
+
+	// Resolving must not clear LastFiredAt (it reflects the last firing event).
+	if _, err := s.RecordStatusChange("fp1", "homelab", "http://am:9093", models.EventStatusResolved, time.Now(), nil); err != nil {
+		t.Fatalf("record resolved: %v", err)
+	}
+	st2, _ := s.GetStats("fp1")
+	if st2.LastFiredAt == nil {
+		t.Error("LastFiredAt = nil after resolve, want last firing timestamp retained")
+	}
+}
+
 func TestRecordStatusChange_CreatesNew(t *testing.T) {
 	s := newTestStore(t)
 

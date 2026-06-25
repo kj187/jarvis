@@ -91,6 +91,7 @@ export interface AlertStats {
   clusterName: string
   firstSeenAt: string
   lastSeenAt: string
+  lastFiredAt?: string
   lastResolvedAt?: string
   occurrenceCount: number
 }

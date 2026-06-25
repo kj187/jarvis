@@ -102,6 +102,7 @@ type AlertStats struct {
 	ClusterName     string     `json:"clusterName"`
 	FirstSeenAt     time.Time  `json:"firstSeenAt"`
 	LastSeenAt      time.Time  `json:"lastSeenAt"`
+	LastFiredAt     *time.Time `json:"lastFiredAt,omitempty"`
 	LastResolvedAt  *time.Time `json:"lastResolvedAt,omitempty"`
 	OccurrenceCount int        `json:"occurrenceCount"`
 }

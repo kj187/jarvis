@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { format, formatDistanceToNow } from 'date-fns'
+import { format } from 'date-fns'
 import { enUS } from 'date-fns/locale'
 import { ExternalLink, BookOpen, ChevronDown, ChevronUp, BellOff, Pencil, Trash2, User, Info, Server } from 'lucide-react'
 import { TruncatableChip } from '@/components/ui/truncatable-chip'
@@ -13,6 +13,7 @@ import { AlertDetailHistorySection } from './AlertDetailHistorySection'
 import { AlertDetailSection } from './AlertDetailSection'
 import { SilenceForm } from '@/components/silences/SilenceForm'
 import { useAlerts, useAlertTimeline, useAlertStats } from '@/hooks/useAlerts'
+import { useFormatTime } from '@/hooks/useFormatTime'
 import { useActiveClaim, useClaimController, USERNAME_KEY } from '@/hooks/useAlertClaim'
 import { useDeleteSilence, useUpsertSilence } from '@/hooks/useSilences'
 import { useAuthStore } from '@/store/authStore'
@@ -236,6 +237,7 @@ export function AlertDetailPanel({
   const authMode = providerInfo?.mode ?? 'none'
   const claimName = user?.username ?? manualClaimName
   const [promptCopied, setPromptCopied] = useState(false)
+  const fmtTime = useFormatTime()
 
   const historyOffset = (historyPage - 1) * historyPageSize
   const { data: timelineData } = useAlertTimeline(
@@ -433,10 +435,12 @@ export function AlertDetailPanel({
           </div>
           {stats && (
             <div data-testid="detail-stats-section" className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground">
-              <span data-testid="stat-first-seen">First seen <span className="font-medium text-foreground">{formatDistanceToNow(new Date(stats.firstSeenAt), { addSuffix: true, locale: enUS })}</span></span>
-              <span>·</span>
-              <span data-testid="stat-last-seen">Last seen <span className="font-medium text-foreground">{formatDistanceToNow(new Date(stats.lastSeenAt), { addSuffix: true, locale: enUS })}</span></span>
-              <span>·</span>
+              {stats.lastFiredAt && (
+                <>
+                  <span data-testid="stat-last-fired">Last fired <span className="font-medium text-foreground">{fmtTime(stats.lastFiredAt)}</span></span>
+                  <span>·</span>
+                </>
+              )}
               <span data-testid="stat-occurrence-count">{stats.occurrenceCount}× fired</span>
             </div>
           )}
