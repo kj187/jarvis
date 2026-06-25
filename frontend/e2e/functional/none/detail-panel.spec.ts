@@ -704,3 +704,34 @@ test.describe('D8: Owner edits claim note (immutable history)', () => {
     await expect(page.getByTestId('claim-edit-note-button')).toHaveCount(0)
   })
 })
+
+test.describe('D11: Detail panel accessibility', () => {
+  test('dialog is labelled, traps focus on open and closes via Escape', async ({ page, am, jarvis }) => {
+    await dismissNoAuthNotice(page)
+    await am.fire(kubernetesAlerts)
+    await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, kubernetesAlerts.length)
+
+    await page.goto('/?state=active')
+    const firstCard = page.getByTestId('alert-card').first()
+    await firstCard.click()
+
+    const panel = page.getByTestId('detail-panel')
+    await expect(panel).toBeVisible()
+
+    // Dialog semantics: modal + labelled by the visible heading.
+    await expect(panel).toHaveAttribute('aria-modal', 'true')
+    await expect(panel).toHaveAttribute('aria-labelledby', 'detail-panel-title')
+    await expect(page.locator('#detail-panel-title')).toBeVisible()
+
+    // Focus moved into the dialog on open.
+    const focusInside = await page.evaluate(() => {
+      const p = document.querySelector('[data-testid="detail-panel"]')
+      return !!p && (p === document.activeElement || p.contains(document.activeElement))
+    })
+    expect(focusInside).toBe(true)
+
+    // Escape closes the dialog.
+    await page.keyboard.press('Escape')
+    await expect(panel).not.toBeVisible()
+  })
+})

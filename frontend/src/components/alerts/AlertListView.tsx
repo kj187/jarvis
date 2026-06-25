@@ -529,7 +529,7 @@ export function AlertListView({ alerts, silences, onSelectAlert, selectedFingerp
           </div>
         )}
 
-        <Sheet open={silenceSheet.open} onClose={closeSilenceForm} className="sm:max-w-2xl lg:max-w-3xl">
+        <Sheet open={silenceSheet.open} onClose={closeSilenceForm} className="sm:max-w-2xl lg:max-w-3xl" ariaLabel={silenceSheet.isRecreate ? 'Extend silence' : 'Create silence'}>
           <div className="p-5 pt-10">
             <h2 className="mb-4 text-base font-semibold">
               {silenceSheet.isRecreate ? 'Extend silence' : 'Create silence'}
@@ -837,7 +837,7 @@ export function AlertListView({ alerts, silences, onSelectAlert, selectedFingerp
         isPending={expireMutation.isPending}
       />
 
-      <Sheet open={silenceSheet.open} onClose={closeSilenceForm} className="sm:max-w-2xl lg:max-w-3xl">
+      <Sheet open={silenceSheet.open} onClose={closeSilenceForm} className="sm:max-w-2xl lg:max-w-3xl" ariaLabel={silenceSheet.isRecreate ? 'Extend silence' : 'Create silence'}>
         <div className="p-5 pt-10">
           <h2 className="mb-4 text-base font-semibold">
             {silenceSheet.isRecreate ? 'Extend silence' : 'Create silence'}

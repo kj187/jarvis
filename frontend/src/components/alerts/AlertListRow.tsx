@@ -111,7 +111,7 @@ export function AlertListRow({
       onClick={() => onClick(alert.fingerprint)}
       onKeyDown={(e) => e.key === 'Enter' && onClick(alert.fingerprint)}
       className={cn(
-        'cursor-pointer transition-colors hover:bg-accent/50',
+        'cursor-pointer transition-colors hover:bg-accent/50 focus:outline-none focus-visible:outline-none',
         indented && !selected && !alert.activeClaim && (theme === 'light' ? 'bg-background' : 'bg-background/60'),
         alert.activeClaim && !selected && (theme === 'light' ? 'bg-blue-50 hover:bg-blue-100/80' : 'bg-blue-950/30 hover:bg-blue-950/50'),
         isLastInGroup && 'border-b border-border/60',

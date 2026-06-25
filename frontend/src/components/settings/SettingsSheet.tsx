@@ -309,7 +309,7 @@ export function SettingsSheet({ open, onClose }: SettingsSheetProps) {
   }
 
   return (
-    <Sheet open={open} onClose={onClose} className="sm:max-w-sm">
+    <Sheet open={open} onClose={onClose} className="sm:max-w-sm" ariaLabel="Settings">
       <div className="p-5 pt-10 space-y-6">
         <div className="flex items-center justify-between">
           <h2 className="text-base font-semibold">Settings</h2>

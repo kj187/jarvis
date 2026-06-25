@@ -335,7 +335,7 @@ export function Header() {
     </header>
 
 
-    <Sheet open={silenceFormOpen} onClose={() => setSilenceFormOpen(false)} className="sm:max-w-[760px] lg:max-w-[760px]">
+    <Sheet open={silenceFormOpen} onClose={() => setSilenceFormOpen(false)} className="sm:max-w-[760px] lg:max-w-[760px]" ariaLabel="Create silence">
       <div className="border-b border-border px-5 pt-10 pb-0">
         <div className="flex gap-1 -mb-px">
           <button
@@ -383,7 +383,7 @@ export function Header() {
       onClose={() => setLoginModalOpen(false)}
     />
 
-    <Sheet open={adminOpen} onClose={() => setAdminOpen(false)}>
+    <Sheet open={adminOpen} onClose={() => setAdminOpen(false)} ariaLabel="User Management">
       <div className="p-5 pt-10">
         <h2 className="mb-4 text-base font-semibold">User Management</h2>
         <UserManagement />

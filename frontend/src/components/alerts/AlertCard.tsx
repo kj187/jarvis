@@ -77,7 +77,7 @@ function AlertEntry({
       onClick={() => onClick(alert.fingerprint)}
       onKeyDown={(e) => e.key === 'Enter' && onClick(alert.fingerprint)}
       className={cn(
-        'cursor-pointer px-3 py-2.5 transition-colors',
+        'cursor-pointer px-3 py-2.5 transition-colors focus:outline-none focus-visible:outline-none',
         claim
           ? 'bg-muted/30 hover:bg-muted/50'
           : 'hover:bg-accent/20',

@@ -187,6 +187,7 @@ export function AlertCardGrid({
       open={silenceAlerts !== null}
       onClose={() => setSilenceAlerts(null)}
       className="sm:max-w-2xl lg:max-w-3xl"
+      ariaLabel="Create silence"
     >
       {silenceAlerts && (
         <div className="p-5 pt-10">

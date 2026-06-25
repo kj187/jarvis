@@ -414,14 +414,14 @@ export function AlertDetailPanel({
 
   return (
     <>
-      <Sheet open={!!alert} onClose={onClose} testId="detail-panel" closeTestId="detail-panel-close">
+      <Sheet open={!!alert} onClose={onClose} testId="detail-panel" closeTestId="detail-panel-close" ariaLabelledby="detail-panel-title">
         {(silenceFormTarget || showNewSilenceForm) && (
           <div className="absolute inset-0 z-10 bg-black/40 pointer-events-none" aria-hidden="true" />
         )}
         {/* Header */}
         <div className="border-b border-border bg-card px-5 py-4 pt-8">
           <div className="flex items-start justify-between gap-3 pr-8">
-            <h2 className="text-lg font-bold break-all">{alertname}</h2>
+            <h2 id="detail-panel-title" className="text-lg font-bold break-all">{alertname}</h2>
             <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
               <span className="inline-flex items-center gap-1 rounded border border-border bg-muted px-2 py-0.5 text-xs font-medium">
                 <Server className="h-3 w-3 text-muted-foreground" />
