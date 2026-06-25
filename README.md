@@ -84,8 +84,11 @@ helm install jarvis oci://ghcr.io/kj187/charts/jarvis \
   --version 1.4.0 \
   --set clusters[0].name=production \
   --set clusters[0].alertmanagerUrl=http://alertmanager:9093 \
-  --set persistence.enabled=true
+  --set database.dsn='postgres://jarvis:secret@postgres.monitoring.svc:5432/jarvis?sslmode=require'
 ```
+
+> For Kubernetes production deployments, prefer PostgreSQL.
+> SQLite with a PVC is best kept for single-replica setups and tests.
 
 All configuration options → [Configuration](#configuration) · [User Authentication](#user-authentication) · [Helm chart](#kubernetes--helm)
 
@@ -282,6 +285,8 @@ For a threat model and full security discussion see [docs/security.md](docs/secu
 ## Kubernetes / Helm
 
 Jarvis ships a Helm chart published to GHCR as an OCI artifact alongside the Docker image. No separate Helm registry is needed.
+
+For Kubernetes production deployments, PostgreSQL is recommended. SQLite + PVC can work for single replica setups, but can become fragile with higher replica counts (for example due to PVC access mode and pod rescheduling constraints).
 
 ```bash
 helm install jarvis oci://ghcr.io/kj187/charts/jarvis \

@@ -51,7 +51,7 @@ Tests cover four suites (`deployment`, `configmap`, `secret`, `ingress`) and run
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `replicaCount` | int | `1` | Number of replicas |
+| `replicaCount` | int | `1` | Number of replicas (for `>1`, use PostgreSQL backend) |
 | `image.repository` | string | `ghcr.io/kj187/jarvis` | Container image repository |
 | `image.tag` | string | `""` | Image tag (defaults to chart appVersion) |
 | `image.pullPolicy` | string | `IfNotPresent` | Image pull policy |
@@ -80,7 +80,7 @@ Tests cover four suites (`deployment`, `configmap`, `secret`, `ingress`) and run
 | `clusters[].alertmanagerUrl` | string | `http://alertmanager:9093` | Internal Alertmanager URL |
 | `clusters[].prometheusUrl` | string | `""` | Optional Prometheus URL |
 | `clusters[].hostAlias` | string | `""` | Optional browser-visible URL override |
-| `database.dsn` | string | `/data/jarvis.db` | Database DSN (SQLite path or `postgres://` URL) |
+| `database.dsn` | string | `/data/jarvis.db` | Database DSN (SQLite path or `postgres://` URL; PostgreSQL recommended for production) |
 | `database.existingSecret` | string | `""` | Use an existing Secret for the DSN instead |
 | `database.existingSecretKey` | string | `dsn` | Key in the existing Secret |
 | `auth.provider` | string | `none` | Authentication mode: `none`, `internal`, or `oidc` |
@@ -94,7 +94,7 @@ Tests cover four suites (`deployment`, `configmap`, `secret`, `ingress`) and run
 | `auth.oidc.clientSecret` | string | `""` | OIDC client secret (stored in Secret, not ConfigMap) |
 | `auth.oidc.redirectUrl` | string | `""` | OIDC redirect URL (must match provider config) |
 | `auth.oidc.scopes` | string | `openid,profile,email` | Comma-separated OIDC scopes |
-| `persistence.enabled` | bool | `false` | Enable PVC for SQLite storage |
+| `persistence.enabled` | bool | `false` | Enable PVC for SQLite storage (single-replica recommended) |
 | `persistence.storageClass` | string | `""` | StorageClass name |
 | `persistence.accessMode` | string | `ReadWriteOnce` | PVC access mode |
 | `persistence.size` | string | `1Gi` | PVC size |
@@ -115,6 +115,9 @@ Tests cover four suites (`deployment`, `configmap`, `secret`, `ingress`) and run
 
 ## Examples
 
+For Kubernetes production deployments, PostgreSQL is recommended.
+SQLite (with or without PVC) is mainly intended for single-replica or test setups.
+
 ### Minimal (SQLite, ephemeral)
 
 ```yaml
@@ -124,6 +127,8 @@ clusters:
 ```
 
 ### SQLite with persistent storage
+
+> Recommended only for single-replica setups (`replicaCount: 1`).
 
 ```yaml
 clusters:
