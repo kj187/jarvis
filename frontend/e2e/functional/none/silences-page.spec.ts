@@ -45,8 +45,20 @@ async function clearAllAMSilences(): Promise<void> {
   }
 }
 
+async function resetPersistedUIState(page: Page) {
+  await page.goto('/')
+  await page.evaluate(() => {
+    localStorage.removeItem('jarvis-ui')
+    localStorage.removeItem('jarvis-user-settings')
+    localStorage.removeItem('jarvis-viewMode')
+    localStorage.removeItem('jarvis-activeViewMode')
+    localStorage.removeItem('jarvis-silencesViewMode')
+  })
+}
+
 test('E1 silences page list view persists via localStorage', async ({ page, jarvis }) => {
   await dismissNoAuthNotice(page)
+  await resetPersistedUIState(page)
   await clearAllAMSilences()
   await jarvis.poll()
 
@@ -73,6 +85,7 @@ test('E1 silences page list view persists via localStorage', async ({ page, jarv
 
 test('E2 identical silences are grouped into one group card', async ({ page, jarvis }) => {
   await dismissNoAuthNotice(page)
+  await resetPersistedUIState(page)
   await clearAllAMSilences()
   await jarvis.poll()
 
@@ -105,6 +118,7 @@ test('E2 identical silences are grouped into one group card', async ({ page, jar
 
 test('E3 show/hide expired toggles expired silences visibility', async ({ page, jarvis }) => {
   await dismissNoAuthNotice(page)
+  await resetPersistedUIState(page)
   await clearAllAMSilences()
   await jarvis.poll()
 
@@ -141,6 +155,7 @@ test('E3 show/hide expired toggles expired silences visibility', async ({ page, 
 
 test('E4 sort toggle switches ordering between expires and created', async ({ page, jarvis }) => {
   await dismissNoAuthNotice(page)
+  await resetPersistedUIState(page)
   await clearAllAMSilences()
   await jarvis.poll()
 
@@ -164,19 +179,20 @@ test('E4 sort toggle switches ordering between expires and created', async ({ pa
 
   await page.goto('/')
   await ensureSilencesPage(page)
-
-  const firstComment = page.locator('p.text-xs.text-muted-foreground.line-clamp-2').first()
-  await expect(firstComment).toHaveText(earlyExpiryComment)
+  const e4Matchers = page.locator('span.font-mono.text-xs').filter({ hasText: 'alertname=E4' })
+  await expect(e4Matchers).toHaveCount(2)
+  await expect(e4Matchers.first()).toContainText('E4EarlyExpiry')
 
   await page.getByRole('button', { name: 'Created' }).click()
-  await expect(firstComment).toHaveText(oldCreatedComment)
+  await expect(e4Matchers.first()).toContainText('E4OldCreated')
 
   await page.getByRole('button', { name: 'Expires' }).click()
-  await expect(firstComment).toHaveText(earlyExpiryComment)
+  await expect(e4Matchers.first()).toContainText('E4EarlyExpiry')
 })
 
 test('E5 matcher filter narrows visible silences', async ({ page, jarvis }) => {
   await dismissNoAuthNotice(page)
+  await resetPersistedUIState(page)
   await clearAllAMSilences()
   await jarvis.poll()
 
@@ -212,6 +228,7 @@ test('E5 matcher filter narrows visible silences', async ({ page, jarvis }) => {
 
 test('G1 expire single silence via modal', async ({ page, jarvis }) => {
   await dismissNoAuthNotice(page)
+  await resetPersistedUIState(page)
   await clearAllAMSilences()
   await jarvis.poll()
 
@@ -237,6 +254,7 @@ test('G1 expire single silence via modal', async ({ page, jarvis }) => {
 
 test('G3 expire grouped silences via modal', async ({ page, jarvis }) => {
   await dismissNoAuthNotice(page)
+  await resetPersistedUIState(page)
   await clearAllAMSilences()
   await jarvis.poll()
 

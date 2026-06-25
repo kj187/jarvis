@@ -22,6 +22,32 @@ test('F1 silence form opens and closes via Cancel', async ({ page }) => {
   await expect(page.getByPlaceholder('Reason for the silence…')).toHaveCount(0)
 })
 
+test('F1 silence form closes via Close button and Escape', async ({ page }) => {
+  await dismissNoAuthNotice(page)
+
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Create silence' }).first().click()
+  await expect(page.getByPlaceholder('Reason for the silence…')).toBeVisible()
+  await page.getByRole('button', { name: 'Close' }).click()
+  await expect(page.getByPlaceholder('Reason for the silence…')).toHaveCount(0)
+
+  await page.getByRole('button', { name: 'Create silence' }).first().click()
+  await expect(page.getByPlaceholder('Reason for the silence…')).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(page.getByPlaceholder('Reason for the silence…')).toHaveCount(0)
+})
+
+test('F1 silence form closes via backdrop click', async ({ page }) => {
+  await dismissNoAuthNotice(page)
+
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Create silence' }).first().click()
+  await expect(page.getByPlaceholder('Reason for the silence…')).toBeVisible()
+
+  await page.locator('div.fixed.inset-0.z-40.bg-black\\/50').click({ position: { x: 10, y: 10 } })
+  await expect(page.getByPlaceholder('Reason for the silence…')).toHaveCount(0)
+})
+
 test('F14 reason is required before preview is enabled', async ({ page }) => {
   await dismissNoAuthNotice(page)
 
