@@ -16,6 +16,7 @@ import { useDeleteSilence, useSilenceEvents, useUpsertSilence } from '@/hooks/us
 import { useAuthStore } from '@/store/authStore'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { Button } from '@/components/ui/button'
+import { Tooltip } from '@/components/ui/tooltip'
 import { Input } from '@/components/ui/input'
 import type { EnrichedAlert, LabelMatcher, Silence, SilenceMatcher } from '@/types'
 import { renderTextWithLinks, extractLinkButtons } from '@/lib/linkUtils'
@@ -383,15 +384,17 @@ export function AlertDetailPanel({
             )}
             <div className="flex shrink-0 items-center gap-2 ml-auto">
               {activeClaim ? (
-                <div data-testid="detail-claim-badge" className={cn('flex items-center gap-1.5 rounded border px-2 py-1', theme === 'light' ? 'border-blue-300 bg-blue-50' : 'border-blue-800 bg-blue-950/40')}>
+                <div data-testid="detail-claim-badge" className={cn('flex h-8 min-w-0 max-w-[16rem] items-center gap-1.5 rounded-md border px-2', theme === 'light' ? 'border-blue-300 bg-blue-50' : 'border-blue-800 bg-blue-950/40')}>
                   <User className={cn('h-3 w-3 shrink-0', theme === 'light' ? 'text-blue-600' : 'text-blue-400')} />
-                  <span className={cn('text-xs font-medium', theme === 'light' ? 'text-blue-700' : 'text-blue-300')}>{activeClaim.claimedBy}</span>
+                  <span className={cn('shrink-0 text-xs font-medium', theme === 'light' ? 'text-blue-700' : 'text-blue-300')}>{activeClaim.claimedBy}</span>
                   {activeClaim.note && (
-                    <span data-testid="detail-claim-note" className={cn('text-xs', theme === 'light' ? 'text-blue-600' : 'text-blue-400/80')}>{activeClaim.note}</span>
+                    <Tooltip content={activeClaim.note} wrapperClassName="min-w-0">
+                      <span data-testid="detail-claim-note" className={cn('min-w-0 truncate text-xs', theme === 'light' ? 'text-blue-600' : 'text-blue-400/80')}>{activeClaim.note}</span>
+                    </Tooltip>
                   )}
                   <button
                     data-testid="claim-release-button"
-                    className="ml-1 text-[10px] text-muted-foreground hover:text-foreground cursor-pointer"
+                    className="ml-1 shrink-0 text-[10px] text-muted-foreground hover:text-foreground cursor-pointer"
                     onClick={() => releaseMutation.mutate(user?.username ?? localStorage.getItem(USERNAME_KEY) ?? 'unknown')}
                     disabled={releaseMutation.isPending}
                   >
