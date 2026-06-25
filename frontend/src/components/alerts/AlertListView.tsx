@@ -497,9 +497,6 @@ export function AlertListView({ alerts, silences, onSelectAlert, selectedFingerp
                 <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   Alert Name
                 </th>
-                <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Severity
-                </th>
               </tr>
             </thead>
             <tbody>
@@ -511,10 +508,11 @@ export function AlertListView({ alerts, silences, onSelectAlert, selectedFingerp
                   selected={selectedFingerprint === alert.fingerprint}
                   silences={silences}
                   showStateColumn={false}
-                  showSeverityColumn={true}
+                  showSeverityColumn={false}
                   showActionsColumn={false}
                   showClaimColumn={false}
                   noOpacity={true}
+                  includeSeverityLabelChip={true}
                 />
               ))}
             </tbody>

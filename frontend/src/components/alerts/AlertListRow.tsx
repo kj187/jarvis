@@ -29,6 +29,7 @@ interface AlertListRowProps {
   showActionsColumn?: boolean
   showClaimColumn?: boolean
   noOpacity?: boolean
+  includeSeverityLabelChip?: boolean
 }
 
 export function AlertListRow({
@@ -46,6 +47,7 @@ export function AlertListRow({
   showActionsColumn = true,
   showClaimColumn = true,
   noOpacity = false,
+  includeSeverityLabelChip = false,
 }: AlertListRowProps) {
   const alertname = alert.labels['alertname'] ?? '—'
   const isResolved = alert.status.state === 'resolved'
@@ -104,7 +106,7 @@ export function AlertListRow({
 
   const uniqueLabels = Object.entries(alert.labels).filter(
     ([key, value]) =>
-      !HIDDEN_LABEL_KEYS.has(key) &&
+      ((!HIDDEN_LABEL_KEYS.has(key)) || (includeSeverityLabelChip && key === 'severity')) &&
       !key.startsWith('__') &&
       excludeLabels?.[key] !== value,
   )
