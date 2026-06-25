@@ -71,6 +71,38 @@ test('E1 silences page list view persists via localStorage', async ({ page, jarv
   await expect(page.getByText('Matchers / Clusters / Comment')).toBeVisible()
 })
 
+test('E2 identical silences are grouped into one group card', async ({ page, jarvis }) => {
+  await dismissNoAuthNotice(page)
+  await clearAllAMSilences()
+  await jarvis.poll()
+
+  const now = Date.now()
+  const groupComment = 'e2-grouped-card'
+  const groupEndsAt = new Date(now + 60 * 60 * 1000)
+  const groupStartsAt = new Date(now - 5 * 60 * 1000)
+  const matchers = [{ name: 'severity', value: 'warning', isRegex: false, isEqual: true }]
+
+  await jarvis.createSilence('e2e', matchers, {
+    startsAt: groupStartsAt,
+    endsAt: groupEndsAt,
+    comment: groupComment,
+    createdBy: 'e2e-tester',
+  })
+  await jarvis.createSilence('e2e', matchers, {
+    startsAt: groupStartsAt,
+    endsAt: groupEndsAt,
+    comment: groupComment,
+    createdBy: 'e2e-tester',
+  })
+  await waitForSilences(JARVIS_BASE_URL, 2)
+
+  await page.goto('/')
+  await ensureSilencesPage(page)
+
+  await expect(page.getByText(groupComment)).toHaveCount(1)
+  await expect(page.getByTitle('Expire 2 silences')).toHaveCount(1)
+})
+
 test('E3 show/hide expired toggles expired silences visibility', async ({ page, jarvis }) => {
   await dismissNoAuthNotice(page)
   await clearAllAMSilences()
@@ -105,6 +137,77 @@ test('E3 show/hide expired toggles expired silences visibility', async ({ page, 
   await page.getByRole('button', { name: 'Show expired' }).click()
   await expect(page.getByRole('button', { name: 'Hide expired' })).toBeVisible()
   await expect(page.getByText(expiredComment).first()).toBeVisible()
+})
+
+test('E4 sort toggle switches ordering between expires and created', async ({ page, jarvis }) => {
+  await dismissNoAuthNotice(page)
+  await clearAllAMSilences()
+  await jarvis.poll()
+
+  const now = Date.now()
+  const earlyExpiryComment = 'e4-early-expiry'
+  const oldCreatedComment = 'e4-old-created'
+
+  await jarvis.createSilence('e2e', [{ name: 'alertname', value: 'E4OldCreated', isRegex: false, isEqual: true }], {
+    startsAt: new Date(now - 2 * 60 * 60 * 1000),
+    endsAt: new Date(now + 2 * 60 * 60 * 1000),
+    comment: oldCreatedComment,
+    createdBy: 'e2e-tester',
+  })
+  await jarvis.createSilence('e2e', [{ name: 'alertname', value: 'E4EarlyExpiry', isRegex: false, isEqual: true }], {
+    startsAt: new Date(now - 30 * 60 * 1000),
+    endsAt: new Date(now + 30 * 60 * 1000),
+    comment: earlyExpiryComment,
+    createdBy: 'e2e-tester',
+  })
+  await waitForSilences(JARVIS_BASE_URL, 2)
+
+  await page.goto('/')
+  await ensureSilencesPage(page)
+
+  const firstComment = page.locator('p.text-xs.text-muted-foreground.line-clamp-2').first()
+  await expect(firstComment).toHaveText(earlyExpiryComment)
+
+  await page.getByRole('button', { name: 'Created' }).click()
+  await expect(firstComment).toHaveText(oldCreatedComment)
+
+  await page.getByRole('button', { name: 'Expires' }).click()
+  await expect(firstComment).toHaveText(earlyExpiryComment)
+})
+
+test('E5 matcher filter narrows visible silences', async ({ page, jarvis }) => {
+  await dismissNoAuthNotice(page)
+  await clearAllAMSilences()
+  await jarvis.poll()
+
+  const warningComment = 'e5-warning-silence'
+  const criticalComment = 'e5-critical-silence'
+
+  await jarvis.createSilence('e2e', [{ name: 'severity', value: 'warning', isRegex: false, isEqual: true }], {
+    comment: warningComment,
+    createdBy: 'e2e-tester',
+  })
+  await jarvis.createSilence('e2e', [{ name: 'severity', value: 'critical', isRegex: false, isEqual: true }], {
+    comment: criticalComment,
+    createdBy: 'e2e-tester',
+  })
+  await waitForSilences(JARVIS_BASE_URL, 2)
+
+  await page.goto('/')
+  await ensureSilencesPage(page)
+  await expect(page.getByText(warningComment).first()).toBeVisible()
+  await expect(page.getByText(criticalComment).first()).toBeVisible()
+
+  await page.getByRole('button', { name: 'Add filter' }).click()
+  const label = page.getByLabel('Label name')
+  const value = page.getByLabel('Label value')
+  await label.fill('severity')
+  await label.press('Enter')
+  await value.fill('critical')
+  await value.press('Enter')
+
+  await expect(page.getByText(criticalComment).first()).toBeVisible()
+  await expect(page.getByText(warningComment)).toHaveCount(0)
 })
 
 test('G1 expire single silence via modal', async ({ page, jarvis }) => {

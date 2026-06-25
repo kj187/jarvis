@@ -141,3 +141,22 @@ test('C11 search via the toggle input filters by label value', async ({ page, am
   await expect.poll(() => visibleAlertCount(page)).toBeLessThan(totalVisible)
   await expect.poll(() => visibleAlertCount(page)).toBeGreaterThan(0)
 })
+
+test('C12 search from ?q= is prefilled and ESC clears/closes search', async ({ page, am, jarvis }) => {
+  await dismissNoAuthNotice(page)
+  await resetPersistedUIState(page)
+  await am.fire(c11Alerts)
+  await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, c11Alerts.length)
+
+  await page.goto('/?state=active&q=c11searchtarget')
+  await ensureAlertsPage(page)
+
+  await page.getByLabel('Toggle search').click()
+  const searchInput = page.getByLabel('Search alerts')
+  await expect(searchInput).toBeVisible()
+  await expect(searchInput).toHaveValue('c11searchtarget')
+
+  await searchInput.press('Escape')
+  await expect(searchInput).toBeHidden()
+  await expect(page.getByLabel('Toggle search')).toBeVisible()
+})

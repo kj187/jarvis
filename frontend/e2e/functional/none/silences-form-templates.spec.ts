@@ -10,6 +10,18 @@ async function clearAllTemplates(baseURL: string): Promise<void> {
   }
 }
 
+test('F1 silence form opens and closes via Cancel', async ({ page }) => {
+  await dismissNoAuthNotice(page)
+
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Create silence' }).first().click()
+  await expect(page.getByText('Create Silence').first()).toBeVisible()
+  await expect(page.getByPlaceholder('Reason for the silence…')).toBeVisible()
+
+  await page.getByRole('button', { name: 'Cancel' }).click()
+  await expect(page.getByPlaceholder('Reason for the silence…')).toHaveCount(0)
+})
+
 test('F14 reason is required before preview is enabled', async ({ page }) => {
   await dismissNoAuthNotice(page)
 
@@ -23,6 +35,27 @@ test('F14 reason is required before preview is enabled', async ({ page }) => {
   await expect(previewButton).toBeDisabled()
 
   await page.getByPlaceholder('Reason for the silence…').fill('Planned maintenance')
+  await expect(previewButton).toBeEnabled()
+})
+
+test('F2 submit requires at least one selected cluster', async ({ page }) => {
+  await dismissNoAuthNotice(page)
+
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Create silence' }).first().click()
+  await expect(page.getByText('Create Silence').first()).toBeVisible()
+
+  await page.getByPlaceholder('Your name').fill('e2e-user')
+  await page.getByPlaceholder('Reason for the silence…').fill('Planned maintenance')
+
+  const previewButton = page.getByRole('button', { name: 'Preview' })
+  await expect(previewButton).toBeEnabled()
+
+  const clusterButton = page.getByRole('button', { name: 'e2e' }).first()
+  await clusterButton.click()
+  await expect(previewButton).toBeDisabled()
+
+  await clusterButton.click()
   await expect(previewButton).toBeEnabled()
 })
 
