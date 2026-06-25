@@ -122,9 +122,10 @@ type Comment struct {
 
 // ClaimReleaseReason — typed constants for release reasons.
 const (
-	ReleaseReasonManual    = "manual"
-	ReleaseReasonResolved  = "resolved"
-	ReleaseReasonReclaimed = "reclaimed"
+	ReleaseReasonManual      = "manual"
+	ReleaseReasonResolved    = "resolved"
+	ReleaseReasonReclaimed   = "reclaimed"
+	ReleaseReasonNoteUpdated = "note_updated"
 )
 
 type Claim struct {

@@ -3,16 +3,13 @@ import { useState, useRef, useEffect } from 'react'
 import { AlertBadge, StatusBadge } from './AlertBadge'
 import { HIDDEN_LABEL_KEYS, LabelChip } from './LabelChip'
 import { useAlertStats } from '@/hooks/useAlerts'
-import { useSetClaim, useReleaseClaim } from '@/hooks/useAlertClaim'
+import { useClaimController } from '@/hooks/useAlertClaim'
 import { getSilenceState, formatSilenceDuration } from '@/lib/alertUtils'
 import { renderTextWithLinks } from '@/lib/linkUtils'
 import { useFormatTime } from '@/hooks/useFormatTime'
 import type { EnrichedAlert, Silence } from '@/types'
 import { cn } from '@/lib/utils'
-import { useAuthStore } from '@/store/authStore'
 import { useSettingsStore } from '@/store/useSettingsStore'
-
-const USERNAME_KEY = 'jarvis-username'
 
 interface AlertListRowProps {
   alert: EnrichedAlert
@@ -56,10 +53,8 @@ export function AlertListRow({
   const [showNameInput, setShowNameInput] = useState(false)
   const [nameInput, setNameInput] = useState('')
   const nameInputRef = useRef<HTMLInputElement>(null)
-  const setClaimMutation = useSetClaim(alert.fingerprint, alert.clusterName)
-  const releaseMutation = useReleaseClaim(alert.fingerprint, alert.clusterName)
-  const { user, providerInfo } = useAuthStore()
-  const authMode = providerInfo?.mode ?? 'none'
+  const { setClaimMutation, releaseMutation, user, authMode, storedName, claim, release } =
+    useClaimController(alert.fingerprint, alert.clusterName)
 
   useEffect(() => {
     if (showNameInput) nameInputRef.current?.focus()
@@ -69,14 +64,14 @@ export function AlertListRow({
     e.stopPropagation()
     if (authMode !== 'none') {
       if (user) {
-        setClaimMutation.mutate({ claimedBy: user.username })
+        claim({ claimedBy: user.username })
       }
       // not logged in: do nothing (button will show tooltip)
       return
     }
-    const stored = localStorage.getItem(USERNAME_KEY)
+    const stored = storedName()
     if (stored) {
-      setClaimMutation.mutate({ claimedBy: stored })
+      claim({ claimedBy: stored })
     } else {
       setNameInput('')
       setShowNameInput(true)
@@ -86,15 +81,12 @@ export function AlertListRow({
   function handleNameSubmit(e: React.FormEvent) {
     e.preventDefault()
     e.stopPropagation()
-    const name = nameInput.trim()
-    if (!name) return
-    localStorage.setItem(USERNAME_KEY, name)
-    setClaimMutation.mutate({ claimedBy: name }, { onSuccess: () => setShowNameInput(false) })
+    claim({ claimedBy: nameInput }, { onSuccess: () => setShowNameInput(false) })
   }
 
   function handleRelease(e: React.MouseEvent) {
     e.stopPropagation()
-    releaseMutation.mutate(user?.username ?? localStorage.getItem(USERNAME_KEY) ?? 'unknown')
+    release()
   }
 
   const { data: stats } = useAlertStats(alert.fingerprint)

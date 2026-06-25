@@ -131,6 +131,17 @@ export function releaseClaim(fingerprint: string, clusterName: string, by: strin
   )
 }
 
+export function updateClaimNote(
+  fingerprint: string,
+  clusterName: string,
+  body: { claimedBy: string; note: string },
+): Promise<Claim> {
+  return request<Claim>(`/alerts/${fingerprint}/claim/note?cluster=${encodeURIComponent(clusterName)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  })
+}
+
 export function fetchClaimHistory(fingerprint: string, clusterName: string): Promise<Claim[]> {
   return request<Claim[]>(`/alerts/${fingerprint}/claims/history?cluster=${encodeURIComponent(clusterName)}`)
 }

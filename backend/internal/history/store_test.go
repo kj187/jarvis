@@ -2,6 +2,7 @@ package history
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -404,6 +405,74 @@ func TestClaims(t *testing.T) {
 	active2, _ := s.GetActiveClaim("fp1", "c")
 	if active2 != nil {
 		t.Errorf("expected nil after release, got %+v", active2)
+	}
+}
+
+func TestUpdateClaimNote(t *testing.T) {
+	s := newTestStore(t)
+	s.UpsertFingerprint("fp1", "A", "c", nil) //nolint:errcheck
+
+	// No active claim → ErrNoActiveClaim.
+	if _, err := s.UpdateClaimNote("fp1", "c", "alice", "new"); !errors.Is(err, ErrNoActiveClaim) {
+		t.Fatalf("expected ErrNoActiveClaim, got %v", err)
+	}
+
+	orig, err := s.SetClaim("fp1", "c", nil, "alice", "first note")
+	if err != nil {
+		t.Fatalf("SetClaim: %v", err)
+	}
+
+	// Non-owner cannot update.
+	if _, err := s.UpdateClaimNote("fp1", "c", "bob", "hijack"); !errors.Is(err, ErrNotClaimOwner) {
+		t.Fatalf("expected ErrNotClaimOwner, got %v", err)
+	}
+
+	// Owner updates note → new active claim, same owner, new note.
+	updated, err := s.UpdateClaimNote("fp1", "c", "alice", "second note")
+	if err != nil {
+		t.Fatalf("UpdateClaimNote: %v", err)
+	}
+	if updated.ClaimedBy != "alice" || updated.Note != "second note" {
+		t.Errorf("updated = %+v", updated)
+	}
+	if updated.ID == orig.ID {
+		t.Errorf("expected a new immutable claim row, got same id %d", updated.ID)
+	}
+
+	// Active claim now reflects the new note.
+	active, _ := s.GetActiveClaim("fp1", "c")
+	if active == nil || active.Note != "second note" || active.ClaimedBy != "alice" {
+		t.Fatalf("active = %+v", active)
+	}
+
+	// History is append-only: old row preserved, released with note_updated reason.
+	hist, err := s.GetClaimHistory("fp1", "c")
+	if err != nil {
+		t.Fatalf("GetClaimHistory: %v", err)
+	}
+	if len(hist) != 2 {
+		t.Fatalf("expected 2 immutable claim rows, got %d", len(hist))
+	}
+	var foundOldNote, foundNoteUpdated bool
+	for _, h := range hist {
+		if h.ID == orig.ID {
+			if h.Note != "first note" {
+				t.Errorf("old note mutated: %q", h.Note)
+			}
+			if h.ReleaseReason != models.ReleaseReasonNoteUpdated {
+				t.Errorf("old release reason = %q", h.ReleaseReason)
+			}
+			if h.ReleasedBy != "alice" {
+				t.Errorf("old released_by = %q", h.ReleasedBy)
+			}
+			foundOldNote = true
+		}
+		if h.ReleaseReason == models.ReleaseReasonNoteUpdated {
+			foundNoteUpdated = true
+		}
+	}
+	if !foundOldNote || !foundNoteUpdated {
+		t.Errorf("history missing immutable note-update entry: %+v", hist)
 	}
 }
 

@@ -1,9 +1,11 @@
 package api
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/kj187/jarvis/backend/internal/auth"
+	"github.com/kj187/jarvis/backend/internal/history"
 	"github.com/kj187/jarvis/backend/internal/models"
 	"github.com/labstack/echo/v4"
 )
@@ -118,6 +120,62 @@ func (s *Server) releaseClaim(c echo.Context) error {
 	})
 
 	return c.NoContent(http.StatusNoContent)
+}
+
+// PATCH /api/v1/alerts/:fingerprint/claim/note?cluster=<cluster>
+// Lets the current owner update the note of the active claim. The change is
+// append-only: the previous note is preserved as an immutable history entry.
+func (s *Server) updateClaimNote(c echo.Context) error {
+	fp := c.Param("fingerprint")
+	if !validateFingerprint(fp) {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid fingerprint")
+	}
+	cluster := c.QueryParam("cluster")
+
+	var body struct {
+		ClaimedBy string `json:"claimedBy"`
+		Note      string `json:"note"`
+	}
+	if err := c.Bind(&body); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
+	}
+	by := body.ClaimedBy
+	if s.authProvider.Mode() == "none" {
+		if by == "" {
+			return echo.NewHTTPError(http.StatusBadRequest, "claimedBy is required")
+		}
+	} else {
+		u := auth.UserFromContext(c)
+		if u == nil || u.Username == "" {
+			return echo.NewHTTPError(http.StatusUnauthorized, "unauthorized")
+		}
+		by = u.Username
+	}
+	if len([]rune(body.Note)) > maxClaimNoteLen {
+		return echo.NewHTTPError(http.StatusBadRequest, "note too long (max 1000 characters)")
+	}
+
+	claim, err := s.store.UpdateClaimNote(fp, cluster, by, body.Note)
+	if err != nil {
+		switch {
+		case errors.Is(err, history.ErrNoActiveClaim):
+			return echo.NewHTTPError(http.StatusNotFound, "no active claim")
+		case errors.Is(err, history.ErrNotClaimOwner):
+			return echo.NewHTTPError(http.StatusForbidden, "only the claim owner can update the note")
+		default:
+			return echo.NewHTTPError(http.StatusInternalServerError, "failed to update claim note")
+		}
+	}
+
+	s.alertStore.SetActiveClaim(fp, cluster, claim)
+
+	s.hub.BroadcastJSON(models.WSTypeClaimSet, map[string]interface{}{
+		"fingerprint": fp,
+		"clusterName": cluster,
+		"claim":       claim,
+	})
+
+	return c.JSON(http.StatusOK, claim)
 }
 
 // GET /api/v1/alerts/:fingerprint/claims/history?cluster=<cluster>

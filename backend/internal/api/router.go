@@ -180,6 +180,7 @@ func NewRouter(
 
 	apiV1.GET("/alerts/:fingerprint/claim", srv.getClaim)
 	apiV1.POST("/alerts/:fingerprint/claim", srv.setClaim, requireAuth, writeRL)
+	apiV1.PATCH("/alerts/:fingerprint/claim/note", srv.updateClaimNote, requireAuth, writeRL)
 	apiV1.DELETE("/alerts/:fingerprint/claim", srv.releaseClaim, requireAuth, writeRL)
 	apiV1.GET("/alerts/:fingerprint/claims/history", srv.getClaimHistory)
 

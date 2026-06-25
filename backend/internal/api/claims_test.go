@@ -13,6 +13,7 @@ import (
 	"github.com/kj187/jarvis/backend/internal/config"
 	idb "github.com/kj187/jarvis/backend/internal/db"
 	"github.com/kj187/jarvis/backend/internal/history"
+	"github.com/kj187/jarvis/backend/internal/models"
 	"github.com/kj187/jarvis/backend/internal/users"
 	"github.com/kj187/jarvis/backend/internal/ws"
 	"github.com/labstack/echo/v4"
@@ -353,5 +354,87 @@ func TestSetClaim_AuthMode_UsesContextUser(t *testing.T) { //nolint:dupl
 	}
 	if !contains(rec.Body.String(), "real-user") || contains(rec.Body.String(), "spoofed") {
 		t.Fatalf("expected context user as claimedBy, got: %s", rec.Body.String())
+	}
+}
+
+func TestUpdateClaimNote_OwnerHappyPath(t *testing.T) {
+	srv, alertStore, store := newTestServerFull(t)
+	const fp = "1234567890abcdef"
+	seedFP(t, store, fp)
+	if _, err := store.SetClaim(fp, "", nil, "alice", "first"); err != nil {
+		t.Fatalf("SetClaim: %v", err)
+	}
+	alertStore.SetActiveClaim(fp, "", &models.Claim{Fingerprint: fp, ClaimedBy: "alice", Note: "first"})
+
+	e := echo.New()
+	body := map[string]interface{}{"claimedBy": "alice", "note": "second"}
+	b, _ := json.Marshal(body)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPatch, "/", bytes.NewReader(b))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("fingerprint")
+	c.SetParamValues(fp)
+
+	if err := srv.updateClaimNote(c); err != nil {
+		t.Fatalf("updateClaimNote: %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want 200", rec.Code)
+	}
+	if !contains(rec.Body.String(), "second") {
+		t.Errorf("expected new note in response: %s", rec.Body.String())
+	}
+
+	hist, _ := store.GetClaimHistory(fp, "")
+	if len(hist) != 2 {
+		t.Fatalf("expected 2 immutable rows, got %d", len(hist))
+	}
+}
+
+func TestUpdateClaimNote_NotOwnerForbidden(t *testing.T) {
+	srv, _, store := newTestServerFull(t)
+	const fp = "1234567890abcdef"
+	seedFP(t, store, fp)
+	if _, err := store.SetClaim(fp, "", nil, "alice", "first"); err != nil {
+		t.Fatalf("SetClaim: %v", err)
+	}
+
+	e := echo.New()
+	body := map[string]interface{}{"claimedBy": "bob", "note": "hijack"}
+	b, _ := json.Marshal(body)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPatch, "/", bytes.NewReader(b))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("fingerprint")
+	c.SetParamValues(fp)
+
+	err := srv.updateClaimNote(c)
+	he, ok := err.(*echo.HTTPError)
+	if !ok || he.Code != http.StatusForbidden {
+		t.Errorf("expected 403, got %v", err)
+	}
+}
+
+func TestUpdateClaimNote_NoActiveClaim(t *testing.T) {
+	srv, _, store := newTestServerFull(t)
+	const fp = "1234567890abcdef"
+	seedFP(t, store, fp)
+
+	e := echo.New()
+	body := map[string]interface{}{"claimedBy": "alice", "note": "x"}
+	b, _ := json.Marshal(body)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPatch, "/", bytes.NewReader(b))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("fingerprint")
+	c.SetParamValues(fp)
+
+	err := srv.updateClaimNote(c)
+	he, ok := err.(*echo.HTTPError)
+	if !ok || he.Code != http.StatusNotFound {
+		t.Errorf("expected 404, got %v", err)
 	}
 }

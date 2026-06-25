@@ -631,3 +631,76 @@ test.describe('G2: Extend controls in detail panel', () => {
     await expect(panel.getByRole('button', { name: '+1d' })).toHaveCount(0)
   })
 })
+
+test.describe('D8: Owner edits claim note (immutable history)', () => {
+  test('owner can update note and a new immutable history entry appears instantly', async ({ page, am, jarvis }) => {
+    await dismissNoAuthNotice(page)
+    await am.fire(kubernetesAlerts)
+    await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, kubernetesAlerts.length)
+
+    const res = await fetch(`${JARVIS_BASE_URL}/api/v1/alerts`)
+    const alerts: any[] = await res.json()
+    const fingerprint = alerts[0].fingerprint
+
+    await jarvis.setClaim(fingerprint, 'owner-user', 'first note')
+
+    // In none-mode, ownership is the locally stored name → seed it so the
+    // edit affordance shows for this claimant.
+    await page.addInitScript(() => localStorage.setItem('jarvis-username', 'owner-user'))
+
+    await page.goto(`/?state=active&alert=${fingerprint}`)
+    await page.waitForTimeout(500)
+
+    const claimNote = page.getByTestId('detail-claim-note')
+    await expect(claimNote).toContainText('first note')
+
+    // Open the edit form and change the note.
+    const editButton = page.getByTestId('claim-edit-note-button')
+    await expect(editButton).toBeVisible()
+    await editButton.click()
+
+    const editForm = page.getByTestId('claim-edit-note-form')
+    await expect(editForm).toBeVisible()
+    await editForm.locator('textarea').fill('second note')
+    await editForm.getByRole('button', { name: 'Save' }).click()
+
+    await page.waitForTimeout(500)
+
+    // Badge reflects the new note.
+    await expect(page.getByTestId('detail-claim-note')).toContainText('second note')
+
+    // History updates instantly (no reload) and preserves the old note as an
+    // immutable entry: both notes are present in the detail panel.
+    const panel = page.getByTestId('detail-panel')
+    await expect(panel).toContainText('second note')
+    await expect(panel).toContainText('first note')
+
+    // Backend kept both claim rows immutably.
+    const histRes = await fetch(
+      `${JARVIS_BASE_URL}/api/v1/alerts/${fingerprint}/claims/history?cluster=${encodeURIComponent(alerts[0].clusterName)}`,
+    )
+    const history: any[] = await histRes.json()
+    expect(history.length).toBe(2)
+    expect(history.some((h) => h.note === 'first note')).toBe(true)
+    expect(history.some((h) => h.note === 'second note')).toBe(true)
+  })
+
+  test('non-owner does not see the edit affordance', async ({ page, am, jarvis }) => {
+    await dismissNoAuthNotice(page)
+    await am.fire(kubernetesAlerts)
+    await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, kubernetesAlerts.length)
+
+    const res = await fetch(`${JARVIS_BASE_URL}/api/v1/alerts`)
+    const alerts: any[] = await res.json()
+    const fingerprint = alerts[0].fingerprint
+
+    await jarvis.setClaim(fingerprint, 'someone-else', 'their note')
+
+    await page.addInitScript(() => localStorage.setItem('jarvis-username', 'not-the-owner'))
+    await page.goto(`/?state=active&alert=${fingerprint}`)
+    await page.waitForTimeout(500)
+
+    await expect(page.getByTestId('detail-claim-badge')).toBeVisible()
+    await expect(page.getByTestId('claim-edit-note-button')).toHaveCount(0)
+  })
+})

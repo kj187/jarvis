@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -11,6 +12,14 @@ import (
 
 	idb "github.com/kj187/jarvis/backend/internal/db"
 	"github.com/kj187/jarvis/backend/internal/models"
+)
+
+// Claim-update sentinel errors returned by UpdateClaimNote.
+var (
+	// ErrNoActiveClaim indicates there is no active claim to update.
+	ErrNoActiveClaim = errors.New("no active claim")
+	// ErrNotClaimOwner indicates the requester is not the owner of the active claim.
+	ErrNotClaimOwner = errors.New("not claim owner")
 )
 
 // Store handles all database persistence for alerts.
@@ -606,6 +615,52 @@ func (s *Store) SetClaim(fingerprint, clusterName string, eventID *int64, claime
 		ClusterName: clusterName,
 		EventID:     eventID,
 		ClaimedBy:   claimedBy,
+		ClaimedAt:   now,
+		Note:        note,
+	}, nil
+}
+
+// UpdateClaimNote lets the current owner change the note of the active claim.
+// To keep the claim history append-only and immutable, this does not mutate the
+// existing row: it releases the current claim with reason note_updated and
+// inserts a fresh claim row (same owner, same event) carrying the new note. The
+// previous note therefore remains preserved as an immutable history entry.
+// Returns ErrNoActiveClaim if nothing is claimed and ErrNotClaimOwner if by is
+// not the current claimant.
+func (s *Store) UpdateClaimNote(fingerprint, clusterName, by, note string) (*models.Claim, error) {
+	active, err := s.GetActiveClaim(fingerprint, clusterName)
+	if err != nil {
+		return nil, err
+	}
+	if active == nil {
+		return nil, ErrNoActiveClaim
+	}
+	if active.ClaimedBy != by {
+		return nil, ErrNotClaimOwner
+	}
+
+	now := time.Now().UTC()
+	if _, err := s.exec(context.Background(), `
+		UPDATE alert_claims SET released_at = ?, released_by = ?, release_reason = ?
+		WHERE id = ? AND released_at IS NULL
+	`, now, by, models.ReleaseReasonNoteUpdated, active.ID); err != nil {
+		return nil, fmt.Errorf("release claim for note update: %w", err)
+	}
+
+	id, err := s.insertReturningID(context.Background(), `
+		INSERT INTO alert_claims (fingerprint, cluster_name, event_id, claimed_by, claimed_at, note)
+		VALUES (?, ?, ?, ?, ?, ?)
+	`, fingerprint, clusterName, active.EventID, by, now, note)
+	if err != nil {
+		return nil, fmt.Errorf("insert updated claim: %w", err)
+	}
+
+	return &models.Claim{
+		ID:          id,
+		Fingerprint: fingerprint,
+		ClusterName: clusterName,
+		EventID:     active.EventID,
+		ClaimedBy:   by,
 		ClaimedAt:   now,
 		Note:        note,
 	}, nil

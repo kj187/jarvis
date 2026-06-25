@@ -13,7 +13,7 @@ import { AlertDetailHistorySection } from './AlertDetailHistorySection'
 import { AlertDetailSection } from './AlertDetailSection'
 import { SilenceForm } from '@/components/silences/SilenceForm'
 import { useAlerts, useAlertTimeline, useAlertStats } from '@/hooks/useAlerts'
-import { useActiveClaim, useSetClaim, useReleaseClaim } from '@/hooks/useAlertClaim'
+import { useActiveClaim, useClaimController, USERNAME_KEY } from '@/hooks/useAlertClaim'
 import { useDeleteSilence, useUpsertSilence } from '@/hooks/useSilences'
 import { useAuthStore } from '@/store/authStore'
 import { useSettingsStore } from '@/store/useSettingsStore'
@@ -24,7 +24,6 @@ import type { EnrichedAlert, LabelMatcher, Silence, SilenceMatcher } from '@/typ
 import { renderTextWithLinks, extractLinkButtons } from '@/lib/linkUtils'
 import { pickIdentifierLabel, tzAbbr } from '@/lib/alertUtils'
 
-const USERNAME_KEY = 'jarvis-username'
 const ALERT_EVENT_LABEL: Record<string, string> = {
   firing: 'Alert fired',
   suppressed: 'Alert suppressed',
@@ -228,6 +227,8 @@ export function AlertDetailPanel({
   const [showNewSilenceForm, setShowNewSilenceForm] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [showClaimForm, setShowClaimForm] = useState(false)
+  const [showEditNoteForm, setShowEditNoteForm] = useState(false)
+  const [editNote, setEditNote] = useState('')
   const [manualClaimName, setManualClaimName] = useState(() => localStorage.getItem(USERNAME_KEY) ?? '')
   const [claimNote, setClaimNote] = useState('')
   const { user, providerInfo } = useAuthStore()
@@ -245,8 +246,15 @@ export function AlertDetailPanel({
   )
   const { data: stats } = useAlertStats(alert?.fingerprint ?? '')
   const { data: activeClaim } = useActiveClaim(alert?.fingerprint ?? '', alert?.clusterName ?? '')
-  const setClaimMutation = useSetClaim(alert?.fingerprint ?? '', alert?.clusterName ?? '')
-  const releaseMutation = useReleaseClaim(alert?.fingerprint ?? '', alert?.clusterName ?? '')
+  const {
+    setClaimMutation,
+    releaseMutation,
+    updateNoteMutation,
+    isOwner,
+    claim: submitClaim,
+    release: releaseClaim,
+    updateNote,
+  } = useClaimController(alert?.fingerprint ?? '', alert?.clusterName ?? '')
   const { mutate: deleteSilence } = useDeleteSilence()
   const { mutate: upsertSilence, isPending: isExtending } = useUpsertSilence()
   const { data: allAlerts = [] } = useAlerts()
@@ -466,10 +474,23 @@ export function AlertDetailPanel({
                       <span data-testid="detail-claim-note" className={cn('min-w-0 truncate text-xs', theme === 'light' ? 'text-blue-600' : 'text-blue-400/80')}>{activeClaim.note}</span>
                     </Tooltip>
                   )}
+                  {isOwner(activeClaim.claimedBy) && (
+                    <button
+                      data-testid="claim-edit-note-button"
+                      title="Edit note"
+                      className={cn('ml-1 shrink-0 cursor-pointer', theme === 'light' ? 'text-blue-500 hover:text-blue-700' : 'text-blue-400/70 hover:text-blue-300')}
+                      onClick={() => {
+                        setEditNote(activeClaim.note ?? '')
+                        setShowEditNoteForm((v) => !v)
+                      }}
+                    >
+                      <Pencil className="h-3 w-3" />
+                    </button>
+                  )}
                   <button
                     data-testid="claim-release-button"
                     className="ml-1 shrink-0 text-[10px] text-muted-foreground hover:text-foreground cursor-pointer"
-                    onClick={() => releaseMutation.mutate(user?.username ?? localStorage.getItem(USERNAME_KEY) ?? 'unknown')}
+                    onClick={() => releaseClaim()}
                     disabled={releaseMutation.isPending}
                   >
                     ✕
@@ -499,6 +520,33 @@ export function AlertDetailPanel({
             </div>
           </div>
 
+          {showEditNoteForm && activeClaim && isOwner(activeClaim.claimedBy) && (
+            <form
+              data-testid="claim-edit-note-form"
+              className="mt-3 space-y-2"
+              onSubmit={(e) => {
+                e.preventDefault()
+                updateNote(editNote, { onSuccess: () => setShowEditNoteForm(false) })
+              }}
+            >
+              <textarea
+                value={editNote}
+                onChange={(e) => setEditNote(e.target.value)}
+                placeholder="Note"
+                rows={5}
+                className="w-full resize-none rounded-md border border-input bg-transparent px-3 py-2 text-xs shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              />
+              <div className="flex gap-2">
+                <Button type="submit" size="sm" className="h-7 text-xs" disabled={updateNoteMutation.isPending}>
+                  Save
+                </Button>
+                <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setShowEditNoteForm(false)}>
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          )}
+
           {showClaimForm && !activeClaim && alert.status.state !== 'resolved' && (
             authMode !== 'none' && !user ? (
               <p className="mt-3 text-xs text-muted-foreground">
@@ -509,10 +557,8 @@ export function AlertDetailPanel({
               className="mt-3 space-y-2"
               onSubmit={(e) => {
                 e.preventDefault()
-                if (!claimName.trim()) return
-                if (authMode === 'none') localStorage.setItem(USERNAME_KEY, claimName.trim())
-                setClaimMutation.mutate(
-                  { claimedBy: claimName.trim(), note: claimNote.trim() || undefined },
+                submitClaim(
+                  { claimedBy: claimName, note: claimNote },
                   { onSuccess: () => { setShowClaimForm(false); setClaimNote('') } },
                 )
               }}
