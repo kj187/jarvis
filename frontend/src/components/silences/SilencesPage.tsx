@@ -8,6 +8,7 @@ import { SilenceListView } from './SilenceListView'
 import { SilenceForm } from './SilenceForm'
 import { SilenceExpireModal } from './SilenceExpireModal'
 import { SilenceTemplateTab } from './SilenceTemplateTab'
+import { AlertDetailPanel } from '@/components/alerts/AlertDetailPanel'
 import { ViewToggle } from '@/components/alerts/ViewToggle'
 import { useSilences, useDeleteSilence } from '@/hooks/useSilences'
 import { useAlerts } from '@/hooks/useAlerts'
@@ -58,6 +59,11 @@ export function SilencesPage() {
   const [editGroup, setEditGroup] = useState<Silence[]>([])
   const [expireTargets, setExpireTargets] = useState<Silence[]>([])
   const [searchOpen, setSearchOpen] = useState(() => Boolean(filters.search))
+  const [selectedFingerprint, setSelectedFingerprint] = useState<string | null>(null)
+
+  const selectedAlert = selectedFingerprint
+    ? alerts.find((a) => a.fingerprint === selectedFingerprint) ?? null
+    : null
 
   function toggleSearch() {
     if (searchOpen) {
@@ -274,6 +280,7 @@ export function SilencesPage() {
         onConfirm={handleExpireConfirm}
         onCancel={() => setExpireTargets([])}
         isPending={deleteMutation.isPending}
+        onSelectAlert={setSelectedFingerprint}
       />
 
       {formOpen && (
@@ -317,6 +324,7 @@ export function SilencesPage() {
                   isRecreate={isRecreate}
                   onSuccess={() => { setFormOpen(false); setEditGroup([]) }}
                   onCancel={() => { setFormOpen(false); setEditGroup([]) }}
+                  onSelectAlert={setSelectedFingerprint}
                 />
               </div>
             )}
@@ -328,6 +336,14 @@ export function SilencesPage() {
       {formOpen && (
         <div className="fixed inset-0 z-40 bg-black/50" onClick={() => { setFormOpen(false); setEditGroup([]) }} aria-hidden="true" />
       )}
+
+      <AlertDetailPanel
+        alert={selectedAlert}
+        onClose={() => setSelectedFingerprint(null)}
+        onAddLabelMatcher={() => {}}
+        silences={silences}
+        onSelectAlert={setSelectedFingerprint}
+      />
     </div>
   )
 }

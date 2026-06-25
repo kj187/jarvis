@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { format, formatDistanceToNow } from 'date-fns'
 import { enUS } from 'date-fns/locale'
 import { ExternalLink, BookOpen, ChevronDown, ChevronUp, BellOff, Pencil, Trash2, User, Copy, Check, Info } from 'lucide-react'
+import { TruncatableChip } from '@/components/ui/truncatable-chip'
 import { cn } from '@/lib/utils'
 import { Sheet } from '@/components/ui/sheet'
 import { AlertBadge, StatusBadge } from './AlertBadge'
@@ -18,7 +19,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import type { EnrichedAlert, LabelMatcher, Silence, SilenceMatcher } from '@/types'
 import { renderTextWithLinks, extractLinkButtons } from '@/lib/linkUtils'
-import { tzAbbr } from '@/lib/alertUtils'
+import { pickIdentifierLabel, tzAbbr } from '@/lib/alertUtils'
 
 const USERNAME_KEY = 'jarvis-username'
 
@@ -81,12 +82,87 @@ function silenceMatchesAlert(silence: Silence, alert: EnrichedAlert): boolean {
 function MatcherChip({ matcher }: { matcher: SilenceMatcher }) {
   const theme = useSettingsStore((s) => s.theme)
   return (
-    <span
+    <TruncatableChip
       className="rounded border px-1.5 py-0.5 text-[10px] font-medium"
       style={labelColorStyle(matcher.name, theme)}
     >
       {matcher.name}{matcherOp(matcher)}{matcher.value}
-    </span>
+    </TruncatableChip>
+  )
+}
+
+// ── Affected alerts (silence banner) ──────────────────────────────────────────
+
+function AffectedAlertRow({
+  alert,
+  idKey,
+  isCurrent,
+  onSelect,
+}: {
+  alert: EnrichedAlert
+  idKey: string | null
+  isCurrent: boolean
+  onSelect?: () => void
+}) {
+  return (
+    <div
+      className={cn(
+        'flex items-center gap-2 text-xs rounded px-1 -mx-1 py-0.5 w-full',
+        onSelect && !isCurrent && 'cursor-pointer hover:bg-accent'
+      )}
+      onClick={onSelect}
+    >
+      <span className="font-medium text-foreground shrink-0">{alert.labels['alertname'] ?? alert.fingerprint}</span>
+      {idKey && alert.labels[idKey] != null && (
+        <span className="truncate font-mono text-[11px] text-muted-foreground" title={`${idKey}=${alert.labels[idKey]}`}>
+          {alert.labels[idKey]}
+        </span>
+      )}
+      {isCurrent && (
+        <span className="ml-auto rounded bg-primary/15 px-1 py-0.5 text-[10px] font-medium text-primary shrink-0">this alert</span>
+      )}
+    </div>
+  )
+}
+
+function AffectedAlertsSection({
+  affected,
+  currentFingerprint,
+  onSelectAlert,
+}: {
+  affected: EnrichedAlert[]
+  currentFingerprint: string
+  onSelectAlert?: (fingerprint: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const idKey = pickIdentifierLabel(affected)
+  return (
+    <div className="mt-2">
+      <button
+        className="mb-1 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground cursor-pointer"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+      >
+        {open ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+        Affected Alerts ({affected.length})
+      </button>
+      {open && (
+        <div className="combo-dropdown max-h-80 overflow-y-auto overflow-x-hidden space-y-0.5">
+          {affected.map((a) => {
+            const isCurrent = a.fingerprint === currentFingerprint
+            return (
+              <AffectedAlertRow
+                key={a.fingerprint}
+                alert={a}
+                idKey={idKey}
+                isCurrent={isCurrent}
+                onSelect={onSelectAlert && !isCurrent ? () => onSelectAlert(a.fingerprint) : undefined}
+              />
+            )
+          })}
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -133,6 +209,7 @@ interface AlertDetailPanelProps {
   onAddLabelMatcher: (matcher: Omit<LabelMatcher, 'id'>) => void
   runbookBaseUrl?: string
   silences: Silence[]
+  onSelectAlert?: (fingerprint: string) => void
 }
 
 export function AlertDetailPanel({
@@ -141,6 +218,7 @@ export function AlertDetailPanel({
   onAddLabelMatcher,
   runbookBaseUrl,
   silences,
+  onSelectAlert,
 }: AlertDetailPanelProps) {
   const [now, setNow] = useState(Date.now())
   const [historyPageSize, setHistoryPageSize] = useState<10 | 50 | 100>(10)
@@ -519,25 +597,13 @@ export function AlertDetailPanel({
               {(() => {
                 const affected = allAlerts.filter((a) => a.status.silencedBy.includes(s.id))
                 if (affected.length === 0) return null
+
                 return (
-                  <div className="mt-2">
-                    <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                      Affected Alerts ({affected.length})
-                    </p>
-                    <div className="space-y-0.5">
-                      {affected.map((a) => (
-                        <div key={a.fingerprint} className="flex items-center gap-2 text-xs">
-                          <span className="font-medium text-foreground">{a.labels['alertname'] ?? a.fingerprint}</span>
-                          {a.labels['instance'] && (
-                            <span className="text-muted-foreground">{a.labels['instance']}</span>
-                          )}
-                          {a.labels['job'] && !a.labels['instance'] && (
-                            <span className="text-muted-foreground">{a.labels['job']}</span>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                  <AffectedAlertsSection
+                    affected={affected}
+                    currentFingerprint={alert.fingerprint}
+                    onSelectAlert={onSelectAlert}
+                  />
                 )
               })()}
             </div>

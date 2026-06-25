@@ -13,7 +13,7 @@ import { DateTimePicker } from '@/components/ui/date-time-picker'
 import { useAlerts } from '@/hooks/useAlerts'
 import { useSilences } from '@/hooks/useSilences'
 import { useSilenceTemplates } from '@/hooks/useSilenceTemplates'
-import { matchesLabelMatchers, tzAbbr } from '@/lib/alertUtils'
+import { matchesLabelMatchers, pickIdentifierLabel, tzAbbr } from '@/lib/alertUtils'
 import { upsertSilence, triggerPoll } from '@/api/client'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { useAuthStore } from '@/store/authStore'
@@ -49,6 +49,10 @@ const nextId = () => _id++
 
 function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function unescapeRegex(s: string): string {
+  return s.replace(/\\([.*+?^${}()|[\]\\])/g, '$1')
 }
 
 // ── TagValueInput ─────────────────────────────────────────────────────────────
@@ -458,6 +462,7 @@ export interface SilenceFormProps {
   fingerprint?: string
   onSuccess: () => void
   onCancel: () => void
+  onSelectAlert?: (fingerprint: string) => void
 }
 
 export function SilenceForm({
@@ -469,6 +474,7 @@ export function SilenceForm({
   fingerprint,
   onSuccess,
   onCancel,
+  onSelectAlert,
 }: SilenceFormProps) {
   const { data: allAlerts = [] } = useAlerts()
   const { data: allSilences = [] } = useSilences()
@@ -529,7 +535,7 @@ export function SilenceForm({
         operator: (
           m.isRegex ? (m.isEqual ? '=~' : '!~') : m.isEqual ? '=' : '!='
         ) as LabelMatcherOperator,
-        value: m.value,
+        value: m.isRegex ? m.value.split('|').map(unescapeRegex).join('|') : m.value,
       }))
     }
     if (prefillAlerts?.length) return buildPrefillMatchers(prefillAlerts)
@@ -972,16 +978,23 @@ export function SilenceForm({
           </div>
 
           {/* Expandable affected alerts panel — between badge and matcher rows */}
-          {affectedOpen && liveMatchCount > 0 && (
+          {affectedOpen && liveMatchCount > 0 && (() => {
+            // Pick the single most distinguishing label across matched alerts
+            const idKey = pickIdentifierLabel(matchedAlerts)
+            return (
             <div className="mb-2 rounded border border-border bg-muted/30 p-2 space-y-1 max-h-60 overflow-y-auto combo-dropdown">
               {matchedAlerts.map((alert) => (
-                <div key={alert.fingerprint} className="flex flex-wrap items-center gap-1.5">
-                  <span className="font-mono text-xs font-medium">
+                <div
+                  key={alert.fingerprint}
+                  className={cn('flex items-center gap-1.5 rounded px-1 -mx-1 py-0.5', onSelectAlert && 'cursor-pointer hover:bg-accent/50')}
+                  onClick={() => onSelectAlert?.(alert.fingerprint)}
+                >
+                  <span className="font-mono text-xs font-medium shrink-0">
                     {alert.labels.alertname ?? alert.fingerprint.slice(0, 8)}
                   </span>
                   {alert.labels.severity && (
                     <span className={cn(
-                      'rounded px-1.5 py-0.5 text-[10px] font-medium',
+                      'rounded px-1.5 py-0.5 text-[10px] font-medium shrink-0',
                       alert.labels.severity === 'critical' && 'bg-destructive/20 text-destructive',
                       alert.labels.severity === 'warning' && 'bg-yellow-500/20 text-yellow-600 dark:text-yellow-400',
                       !['critical', 'warning'].includes(alert.labels.severity) && 'bg-accent text-muted-foreground',
@@ -989,13 +1002,16 @@ export function SilenceForm({
                       {alert.labels.severity}
                     </span>
                   )}
-                  {alert.clusterName && (
-                    <span className="text-[10px] text-muted-foreground">{alert.clusterName}</span>
+                  {idKey && alert.labels[idKey] != null && (
+                    <span className="truncate font-mono text-[11px] text-muted-foreground" title={`${idKey}=${alert.labels[idKey]}`}>
+                      {alert.labels[idKey]}
+                    </span>
                   )}
                 </div>
               ))}
             </div>
-          )}
+            )
+          })()}
 
           <div className="space-y-2">
             {matchers.map((m) => (
@@ -1334,19 +1350,28 @@ export function SilenceForm({
           </p>
           {matched.length === 0 ? (
             <p className="text-xs text-muted-foreground">No alerts match these matchers.</p>
-          ) : (
-            <div className="combo-dropdown max-h-[35vh] space-y-2 overflow-y-auto">
-              {matched.map((alert) => (
-                <div key={alert.fingerprint} className="flex flex-wrap gap-1 rounded border border-border p-2">
-                  {Object.entries(alert.labels).map(([k, v]) => (
-                    <span key={k} className="rounded bg-accent px-1.5 py-0.5 font-mono text-[10px]">
-                      {k}: {v}
-                    </span>
-                  ))}
-                </div>
-              ))}
-            </div>
-          )}
+          ) : (() => {
+            // Pick the single most distinguishing label across matched alerts
+            const idKey = pickIdentifierLabel(matched)
+            return (
+              <div className="combo-dropdown max-h-[35vh] space-y-1 overflow-y-auto">
+                {matched.map((alert) => (
+                  <div
+                    key={alert.fingerprint}
+                    className={cn('flex items-center gap-2 rounded border border-border px-2 py-1.5', onSelectAlert && 'cursor-pointer hover:border-border/80 hover:bg-accent/30')}
+                    onClick={() => onSelectAlert?.(alert.fingerprint)}
+                  >
+                    <span className="text-xs font-medium text-foreground shrink-0">{alert.labels.alertname ?? alert.fingerprint.slice(0, 8)}</span>
+                    {idKey && alert.labels[idKey] != null && (
+                      <span className="truncate font-mono text-[11px] text-muted-foreground" title={`${idKey}=${alert.labels[idKey]}`}>
+                        {alert.labels[idKey]}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )
+          })()}
         </div>
 
         <div className="flex gap-2 pt-1">

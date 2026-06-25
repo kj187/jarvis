@@ -282,6 +282,7 @@ export function AlertsPage() {
         onAddLabelMatcher={addLabelMatcher}
         runbookBaseUrl={providerInfo?.runbookBaseUrl}
         silences={silences}
+        onSelectAlert={setSelectedFingerprint}
       />
     </div>
   )

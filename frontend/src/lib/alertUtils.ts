@@ -27,6 +27,32 @@ export function getFilterableLabels(alert: EnrichedAlert): Record<string, string
   return labels
 }
 
+// ── Affected-alert identifier ──────────────────────────────────────────────
+
+/**
+ * Picks the single most useful label key to distinguish a set of affected
+ * alerts: the differing label (skipping alertname/severity) with the highest
+ * number of distinct values across the set. Returns null when nothing differs.
+ */
+export function pickIdentifierLabel(
+  alerts: EnrichedAlert[],
+  skip: string[] = ['alertname', 'severity'],
+): string | null {
+  if (alerts.length === 0) return null
+  const allKeys = [...new Set(alerts.flatMap((a) => Object.keys(a.labels)))]
+  let best: string | null = null
+  let bestCardinality = 1
+  for (const k of allKeys) {
+    if (skip.includes(k)) continue
+    const distinct = new Set(alerts.map((a) => a.labels[k] ?? '')).size
+    if (distinct > bestCardinality) {
+      bestCardinality = distinct
+      best = k
+    }
+  }
+  return best
+}
+
 // ── Regex helper ──────────────────────────────────────────────────────────
 
 export function safeRegex(pattern: string): RegExp | null {

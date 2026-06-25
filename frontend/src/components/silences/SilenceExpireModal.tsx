@@ -3,7 +3,8 @@ import { enUS } from 'date-fns/locale'
 import { BellMinus, Loader2 } from 'lucide-react'
 import { Dialog } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { tzAbbr } from '@/lib/alertUtils'
+import { TruncatableChip } from '@/components/ui/truncatable-chip'
+import { pickIdentifierLabel, tzAbbr } from '@/lib/alertUtils'
 import { cn } from '@/lib/utils'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import type { Silence, EnrichedAlert } from '@/types'
@@ -15,6 +16,7 @@ interface SilenceExpireModalProps {
   onConfirm: () => void
   onCancel: () => void
   isPending: boolean
+  onSelectAlert?: (fingerprint: string) => void
 }
 
 function MatcherChip({ matcher }: { matcher: Silence['matchers'][number] }) {
@@ -22,13 +24,13 @@ function MatcherChip({ matcher }: { matcher: Silence['matchers'][number] }) {
     ? matcher.isEqual ? '=~' : '!~'
     : matcher.isEqual ? '=' : '!='
   return (
-    <span className="rounded bg-accent px-1.5 py-0.5 font-mono text-xs">
+    <TruncatableChip className="rounded bg-accent px-1.5 py-0.5 font-mono text-xs">
       {matcher.name}{op}{matcher.value}
-    </span>
+    </TruncatableChip>
   )
 }
 
-function SilenceDetail({ silence, allAlerts }: { silence: Silence; allAlerts?: EnrichedAlert[] }) {
+function SilenceDetail({ silence, allAlerts, onSelectAlert }: { silence: Silence; allAlerts?: EnrichedAlert[]; onSelectAlert?: (fingerprint: string) => void }) {
   const theme = useSettingsStore((s) => s.theme)
   const isPending = silence.status.state === 'pending'
   const now = Date.now()
@@ -100,31 +102,37 @@ function SilenceDetail({ silence, allAlerts }: { silence: Silence; allAlerts?: E
         {silence.matchers.map((m, i) => <MatcherChip key={i} matcher={m} />)}
       </div>
 
-      {affected.length > 0 && (
+      {affected.length > 0 && (() => {
+        const idKey = pickIdentifierLabel(affected)
+        return (
         <div>
           <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
             Affected Alerts ({affected.length})
           </p>
-          <div className="space-y-0.5">
+          <div className="combo-dropdown max-h-48 overflow-y-auto space-y-0.5">
             {affected.map((a) => (
-              <div key={a.fingerprint} className="flex items-center gap-2 text-xs">
-                <span className="font-medium text-foreground">{a.labels['alertname'] ?? a.fingerprint}</span>
-                {a.labels['instance'] && (
-                  <span className="text-muted-foreground">{a.labels['instance']}</span>
-                )}
-                {a.labels['job'] && !a.labels['instance'] && (
-                  <span className="text-muted-foreground">{a.labels['job']}</span>
+              <div
+                key={a.fingerprint}
+                className={cn('flex items-center gap-2 text-xs rounded px-1 -mx-1 py-0.5', onSelectAlert && 'cursor-pointer hover:bg-accent')}
+                onClick={() => onSelectAlert?.(a.fingerprint)}
+              >
+                <span className="font-medium text-foreground shrink-0">{a.labels['alertname'] ?? a.fingerprint}</span>
+                {idKey && a.labels[idKey] != null && (
+                  <span className="truncate font-mono text-[11px] text-muted-foreground" title={`${idKey}=${a.labels[idKey]}`}>
+                    {a.labels[idKey]}
+                  </span>
                 )}
               </div>
             ))}
           </div>
         </div>
-      )}
+        )
+      })()}
     </div>
   )
 }
 
-export function SilenceExpireModal({ silences, allAlerts, open, onConfirm, onCancel, isPending }: SilenceExpireModalProps) {
+export function SilenceExpireModal({ silences, allAlerts, open, onConfirm, onCancel, isPending, onSelectAlert }: SilenceExpireModalProps) {
   const count = silences.length
   const title = count === 1 ? 'Expire silence?' : `Expire ${count} silences?`
 
@@ -145,7 +153,7 @@ export function SilenceExpireModal({ silences, allAlerts, open, onConfirm, onCan
           {silences.map((s, i) => (
             <div key={s.id}>
               {count > 1 && i > 0 && <div className="border-t border-border mt-4 mb-4" />}
-              <SilenceDetail silence={s} allAlerts={allAlerts} />
+              <SilenceDetail silence={s} allAlerts={allAlerts} onSelectAlert={onSelectAlert} />
             </div>
           ))}
         </div>
