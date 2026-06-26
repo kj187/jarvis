@@ -23,6 +23,7 @@ import { useSettingsStore } from '@/store/useSettingsStore'
 import { Button } from '@/components/ui/button'
 import { Tooltip } from '@/components/ui/tooltip'
 import { Input } from '@/components/ui/input'
+import { makeAlertSelectionKeyForAlert } from '@/lib/alertSelection'
 import type { EnrichedAlert, LabelMatcher, Silence, SilenceMatcher } from '@/types'
 import { renderTextWithLinks, extractLinkButtons } from '@/lib/linkUtils'
 import { pickIdentifierLabel, tzAbbr } from '@/lib/alertUtils'
@@ -165,12 +166,12 @@ function AffectedAlertRow({
 
 function AffectedAlertsSection({
   affected,
-  currentFingerprint,
+  currentAlert,
   onSelectAlert,
 }: {
   affected: EnrichedAlert[]
-  currentFingerprint: string
-  onSelectAlert?: (fingerprint: string) => void
+  currentAlert: EnrichedAlert
+  onSelectAlert?: (selectionKey: string) => void
 }) {
   const [open, setOpen] = useState(false)
   const idKey = pickIdentifierLabel(affected)
@@ -187,14 +188,14 @@ function AffectedAlertsSection({
       {open && (
         <div className="combo-dropdown max-h-80 overflow-y-auto overflow-x-hidden space-y-0.5">
           {affected.map((a) => {
-            const isCurrent = a.fingerprint === currentFingerprint
+            const isCurrent = a.fingerprint === currentAlert.fingerprint && a.clusterName === currentAlert.clusterName
             return (
               <AffectedAlertRow
-                key={a.fingerprint}
+                key={`${a.clusterName}:${a.fingerprint}:${a.startsAt}`}
                 alert={a}
                 idKey={idKey}
                 isCurrent={isCurrent}
-                onSelect={onSelectAlert && !isCurrent ? () => onSelectAlert(a.fingerprint) : undefined}
+                onSelect={onSelectAlert && !isCurrent ? () => onSelectAlert(makeAlertSelectionKeyForAlert(a)) : undefined}
               />
             )
           })}
@@ -212,7 +213,7 @@ interface AlertDetailPanelProps {
   onAddLabelMatcher: (matcher: Omit<LabelMatcher, 'id'>) => void
   runbookBaseUrl?: string
   silences: Silence[]
-  onSelectAlert?: (fingerprint: string) => void
+  onSelectAlert?: (selectionKey: string) => void
 }
 
 export function AlertDetailPanel({
@@ -249,7 +250,7 @@ export function AlertDetailPanel({
     historyPageSize,
     historyOffset,
   )
-  const { data: stats } = useAlertStats(alert?.fingerprint ?? '')
+  const { data: stats } = useAlertStats(alert?.fingerprint ?? '', alert?.clusterName)
   const { data: activeClaim } = useActiveClaim(alert?.fingerprint ?? '', alert?.clusterName ?? '')
   const {
     setClaimMutation,
@@ -272,7 +273,7 @@ export function AlertDetailPanel({
 
   useEffect(() => {
     setHistoryPage(1)
-  }, [alert?.fingerprint])
+  }, [alert?.fingerprint, alert?.clusterName])
 
   useEffect(() => {
     if (!timelineData) return
@@ -436,17 +437,19 @@ export function AlertDetailPanel({
               <StatusBadge state={alert.status.state} />
             </div>
           </div>
-          {stats && (
-            <div data-testid="detail-stats-section" className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground">
-              {stats.lastFiredAt && (
-                <>
-                  <span data-testid="stat-last-fired">Last fired <span className="font-medium text-foreground">{fmtTime(stats.lastFiredAt)}</span></span>
-                  <span>·</span>
-                </>
-              )}
-              <span data-testid="stat-occurrence-count">{stats.occurrenceCount}× fired</span>
-            </div>
-          )}
+          <div data-testid="detail-stats-section" className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground">
+            {stats ? (
+              <>
+                <span data-testid="stat-last-fired">
+                  Last fired <span className="font-medium text-foreground">{fmtTime(stats.lastFiredAt ?? stats.lastSeenAt)}</span>
+                </span>
+                <span>·</span>
+                <span data-testid="stat-occurrence-count">{stats.occurrenceCount}× fired</span>
+              </>
+            ) : (
+              <span>Stats unavailable</span>
+            )}
+          </div>
 
           {/* Action buttons */}
           <div className="mt-3 flex items-center justify-between gap-2 pr-8">
@@ -736,7 +739,7 @@ export function AlertDetailPanel({
                 return (
                   <AffectedAlertsSection
                     affected={affected}
-                    currentFingerprint={alert.fingerprint}
+                    currentAlert={alert}
                     onSelectAlert={onSelectAlert}
                   />
                 )
@@ -888,7 +891,7 @@ export function AlertDetailPanel({
 
         {/* Comments */}
         <AlertDetailSection title="Comments" testId="detail-comments-section">
-          <AlertComments fingerprint={alert.fingerprint} />
+          <AlertComments fingerprint={alert.fingerprint} clusterName={alert.clusterName} />
         </AlertDetailSection>
 
       </Sheet>

@@ -20,8 +20,12 @@ func (s *Server) getComments(c echo.Context) error {
 	if !validateFingerprint(fp) {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid fingerprint")
 	}
+	cluster := c.QueryParam("cluster")
+	if cluster == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "cluster is required")
+	}
 
-	comments, err := s.store.GetComments(fp)
+	comments, err := s.store.GetComments(fp, cluster)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get comments")
 	}
@@ -36,6 +40,10 @@ func (s *Server) addComment(c echo.Context) error {
 	fp := c.Param("fingerprint")
 	if !validateFingerprint(fp) {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid fingerprint")
+	}
+	cluster := c.QueryParam("cluster")
+	if cluster == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "cluster is required")
 	}
 
 	var body struct {
@@ -71,7 +79,7 @@ func (s *Server) addComment(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "authorName too long (max 100 characters)")
 	}
 
-	comment, err := s.store.AddComment(fp, body.EventID, userID, authorName, body.Body)
+	comment, err := s.store.AddComment(fp, cluster, body.EventID, userID, authorName, body.Body)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to add comment")
 	}
@@ -90,6 +98,10 @@ func (s *Server) deleteComment(c echo.Context) error {
 	if !validateFingerprint(fp) {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid fingerprint")
 	}
+	cluster := c.QueryParam("cluster")
+	if cluster == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "cluster is required")
+	}
 
 	idStr := c.Param("id")
 	id, err := strconv.ParseInt(idStr, 10, 64)
@@ -102,7 +114,7 @@ func (s *Server) deleteComment(c echo.Context) error {
 		if u == nil || u.Username == "" {
 			return echo.NewHTTPError(http.StatusUnauthorized, "unauthorized")
 		}
-		comment, err := s.store.GetComment(fp, id)
+		comment, err := s.store.GetComment(fp, cluster, id)
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, "failed to get comment")
 		}
@@ -120,7 +132,7 @@ func (s *Server) deleteComment(c echo.Context) error {
 		}
 	}
 
-	deleted, err := s.store.DeleteComment(id, fp)
+	deleted, err := s.store.DeleteComment(id, fp, cluster)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to delete comment")
 	}

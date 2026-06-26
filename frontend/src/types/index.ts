@@ -101,6 +101,7 @@ export interface AlertStats {
 export interface Comment {
   id: number
   fingerprint: string
+  clusterName?: string
   eventId?: number
   userId?: string
   authorName: string

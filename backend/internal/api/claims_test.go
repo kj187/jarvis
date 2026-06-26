@@ -82,7 +82,7 @@ func TestGetClaim_InvalidFingerprint(t *testing.T) {
 	}
 }
 
-func TestGetClaim_NotFound(t *testing.T) {
+func TestGetClaim_NoActiveClaimReturnsNull(t *testing.T) {
 	srv, _, store := newTestServerFull(t)
 	seedFP(t, store, "1234567890abcdef")
 	e := echo.New()
@@ -92,13 +92,14 @@ func TestGetClaim_NotFound(t *testing.T) {
 	c.SetParamNames("fingerprint")
 	c.SetParamValues("1234567890abcdef")
 
-	err := srv.getClaim(c)
-	if err == nil {
-		t.Fatal("expected error for no active claim")
+	if err := srv.getClaim(c); err != nil {
+		t.Fatalf("getClaim: %v", err)
 	}
-	he, ok := err.(*echo.HTTPError)
-	if !ok || he.Code != http.StatusNotFound {
-		t.Errorf("expected 404, got %v", err)
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want 200", rec.Code)
+	}
+	if rec.Body.String() != "null\n" {
+		t.Errorf("expected null response, got %s", rec.Body.String())
 	}
 }
 

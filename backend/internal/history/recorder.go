@@ -29,11 +29,11 @@ type Recorder struct {
 	logger     *slog.Logger
 	triggerCh  chan struct{}
 
-	// prevSnapshot holds the fingerprints from the last poll for diff computation.
+	// prevSnapshot holds the alert instance (fingerprint+cluster) from the last poll for diff computation.
 	prevMu            sync.Mutex
-	prevSnapshot      map[string]string           // fingerprint → status
-	prevSilenceInfo   map[string]silenceInfoEntry // silenceID → {state, cluster, comment}
-	prevAlertSilences map[string][]string         // fingerprint → []silenceID
+	prevSnapshot      map[string]string           // fingerprint+cluster → status
+	prevSilenceInfo   map[string]silenceInfoEntry // cluster+silenceID → {state, cluster, comment}
+	prevAlertSilences map[string][]string         // fingerprint+cluster → []cluster+silenceID
 
 	// claimReleaseDelay is how long to wait after detecting a resolution before
 	// releasing claims. Must exceed the 60s grace period so grace-period re-fires
@@ -51,6 +51,35 @@ type silenceInfoEntry struct {
 	clusterName string
 	comment     string
 	createdBy   string
+}
+
+type resolvedAlert struct {
+	fingerprint string
+	clusterName string
+}
+
+func recorderAlertKey(fingerprint, clusterName string) string {
+	return fingerprint + "\x1f" + clusterName
+}
+
+func splitRecorderAlertKey(key string) (fingerprint, clusterName string) {
+	parts := strings.SplitN(key, "\x1f", 2)
+	if len(parts) == 2 {
+		return parts[0], parts[1]
+	}
+	return key, ""
+}
+
+func recorderSilenceKey(clusterName, silenceID string) string {
+	return clusterName + "\x1f" + silenceID
+}
+
+func splitRecorderSilenceKey(key string) (clusterName, silenceID string) {
+	parts := strings.SplitN(key, "\x1f", 2)
+	if len(parts) == 2 {
+		return parts[0], parts[1]
+	}
+	return "", key
 }
 
 // NewRecorder creates a new Recorder.
@@ -150,7 +179,7 @@ func (r *Recorder) poll(ctx context.Context) {
 		}
 		allAlerts = append(allAlerts, res.alerts...)
 		for _, s := range res.silences {
-			currSilenceInfo[s.ID] = silenceInfoEntry{
+			currSilenceInfo[recorderSilenceKey(res.name, s.ID)] = silenceInfoEntry{
 				state:       s.Status.State,
 				clusterName: res.name,
 				comment:     s.Comment,
@@ -165,8 +194,8 @@ func (r *Recorder) poll(ctx context.Context) {
 // applyPollResults persists lifecycle events for the given alert snapshot,
 // detects silence creation/expiry, updates the in-memory store, and broadcasts
 // the result. It contains the core recorder logic, decoupled from the cluster
-// fetch so it can be driven directly by tests. currSilenceInfo maps silence IDs
-// to their current state; pass nil when there are no silences to consider.
+// fetch so it can be driven directly by tests. currSilenceInfo maps
+// cluster+silenceID to current state; pass nil when there are no silences.
 func (r *Recorder) applyPollResults(
 	ctx context.Context,
 	allAlerts []models.EnrichedAlert,
@@ -181,14 +210,15 @@ func (r *Recorder) applyPollResults(
 	prev := r.prevSnapshot
 	curr := make(map[string]string, len(allAlerts))
 	for _, a := range allAlerts {
-		curr[a.Fingerprint] = a.Status.State
+		curr[recorderAlertKey(a.Fingerprint, a.ClusterName)] = a.Status.State
 	}
 
-	// Resolved = fingerprints in prev but not in curr (and not already resolved).
-	var resolvedFPs []string
-	for fp, prevState := range prev {
-		if _, stillActive := curr[fp]; !stillActive && prevState != "resolved" {
-			resolvedFPs = append(resolvedFPs, fp)
+	// Resolved = alerts (fingerprint+cluster) in prev but not in curr.
+	var resolvedAlerts []resolvedAlert
+	for key, prevState := range prev {
+		if _, stillActive := curr[key]; !stillActive && prevState != "resolved" {
+			fp, clusterName := splitRecorderAlertKey(key)
+			resolvedAlerts = append(resolvedAlerts, resolvedAlert{fingerprint: fp, clusterName: clusterName})
 		}
 	}
 
@@ -196,7 +226,12 @@ func (r *Recorder) applyPollResults(
 	currAlertSilences := make(map[string][]string, len(allAlerts))
 	for _, a := range allAlerts {
 		if len(a.Status.SilencedBy) > 0 {
-			currAlertSilences[a.Fingerprint] = a.Status.SilencedBy
+			key := recorderAlertKey(a.Fingerprint, a.ClusterName)
+			silenceKeys := make([]string, 0, len(a.Status.SilencedBy))
+			for _, silenceID := range a.Status.SilencedBy {
+				silenceKeys = append(silenceKeys, recorderSilenceKey(a.ClusterName, silenceID))
+			}
+			currAlertSilences[key] = silenceKeys
 		}
 	}
 
@@ -213,7 +248,7 @@ func (r *Recorder) applyPollResults(
 
 	// Record new external silence "created" events (only when not already tracked by Jarvis).
 	for _, e := range newSilenceEntries {
-		exists, err := r.store.HasSilenceEventsForSilenceID(e.silenceID)
+		exists, err := r.store.HasSilenceEventsForSilenceIDInCluster(e.silenceID, e.info.clusterName)
 		if err != nil {
 			r.logger.Error("check silence events for silence_id", "silence", e.silenceID, "err", err)
 			continue
@@ -245,6 +280,7 @@ func (r *Recorder) applyPollResults(
 	now := time.Now().UTC()
 	for i := range allAlerts {
 		a := &allAlerts[i]
+		alertKey := recorderAlertKey(a.Fingerprint, a.ClusterName)
 		if err := r.store.UpsertFingerprint(a.Fingerprint, a.Labels["alertname"], a.ClusterName, a.Labels); err != nil {
 			r.logger.Error("upsert fingerprint", "fp", a.Fingerprint, "err", err)
 			continue
@@ -257,7 +293,7 @@ func (r *Recorder) applyPollResults(
 			eventStatus = models.EventStatusSuppressed
 		case "active", "unprocessed":
 			// Check if previously suppressed → expired transition.
-			if prev[a.Fingerprint] == "suppressed" {
+			if prev[alertKey] == "suppressed" {
 				eventStatus = models.EventStatusExpired
 			} else {
 				eventStatus = models.EventStatusFiring
@@ -271,43 +307,43 @@ func (r *Recorder) applyPollResults(
 	}
 
 	// Resolve missing alerts.
-	if len(resolvedFPs) > 0 {
-		for _, fp := range resolvedFPs {
-			if err := r.store.RecordResolved(fp, now); err != nil {
-				r.logger.Error("record resolved", "fp", fp, "err", err)
+	if len(resolvedAlerts) > 0 {
+		for _, ra := range resolvedAlerts {
+			if err := r.store.RecordResolvedForCluster(ra.fingerprint, ra.clusterName, now); err != nil {
+				r.logger.Error("record resolved", "fp", ra.fingerprint, "cluster", ra.clusterName, "err", err)
 			}
 		}
-		for _, fp := range resolvedFPs {
-			go func(fp string) {
+		for _, ra := range resolvedAlerts {
+			go func(ra resolvedAlert) {
 				select {
 				case <-ctx.Done():
 					return
 				case <-time.After(r.claimReleaseDelay):
 				}
-				still, err := r.store.IsStillResolved(fp)
+				still, err := r.store.IsStillResolvedForCluster(ra.fingerprint, ra.clusterName)
 				if err != nil {
-					r.logger.Error("check still resolved for claim release", "fp", fp, "err", err)
+					r.logger.Error("check still resolved for claim release", "fp", ra.fingerprint, "cluster", ra.clusterName, "err", err)
 					return
 				}
 				if !still {
 					return
 				}
-				if err := r.store.ReleaseClaimsForResolved([]string{fp}); err != nil {
-					r.logger.Error("delayed release claims for resolved", "fp", fp, "err", err)
+				if err := r.store.ReleaseClaimsForResolvedInCluster(ra.fingerprint, ra.clusterName); err != nil {
+					r.logger.Error("delayed release claims for resolved", "fp", ra.fingerprint, "cluster", ra.clusterName, "err", err)
 				}
-			}(fp)
+			}(ra)
 		}
 
 		// Keep resolved alerts in-memory for 20 minutes (greyed out), then remove.
-		for _, fp := range resolvedFPs {
-			r.alertStore.MarkResolved(fp)
-			go func(fp string) {
+		for _, ra := range resolvedAlerts {
+			r.alertStore.MarkResolvedForCluster(ra.fingerprint, ra.clusterName)
+			go func(ra resolvedAlert) {
 				select {
 				case <-ctx.Done():
 				case <-time.After(20 * time.Minute):
-					r.alertStore.RemoveByFingerprint(fp)
+					r.alertStore.RemoveByFingerprintForCluster(ra.fingerprint, ra.clusterName)
 				}
-			}(fp)
+			}(ra)
 		}
 	}
 
@@ -465,7 +501,9 @@ func (r *Recorder) collectNewExternalSilences(
 		for fp, sids := range currAlertSilences {
 			for _, sid := range sids {
 				if sid == silenceID {
-					entries = append(entries, silenceEntry{fp, silenceID, info})
+					fingerprint, _ := splitRecorderAlertKey(fp)
+					_, rawSilenceID := splitRecorderSilenceKey(silenceID)
+					entries = append(entries, silenceEntry{fingerprint, rawSilenceID, info})
 					break
 				}
 			}
@@ -497,7 +535,9 @@ func (r *Recorder) collectExpiredSilences(
 				for _, sid := range sids {
 					if sid == silenceID {
 						if _, stillSilenced := currAlertSilences[fp]; !stillSilenced {
-							entries = append(entries, expiredEntry{fp, silenceID, info})
+							fingerprint, _ := splitRecorderAlertKey(fp)
+							_, rawSilenceID := splitRecorderSilenceKey(silenceID)
+							entries = append(entries, expiredEntry{fingerprint, rawSilenceID, info})
 						}
 						break
 					}

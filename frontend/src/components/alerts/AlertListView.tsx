@@ -15,13 +15,14 @@ import { useSettingsStore, RESOLVED_PAGE_SIZE_OPTIONS } from '@/store/useSetting
 import { useUIStore } from '@/store/uiStore'
 import { useLoginGuard } from '@/hooks/useLoginGuard'
 import { LoginModal } from '@/components/auth/LoginModal'
+import { matchesAlertSelectionKey } from '@/lib/alertSelection'
 import type { EnrichedAlert, Silence } from '@/types'
 import { cn } from '@/lib/utils'
 
 interface AlertListViewProps {
   alerts: EnrichedAlert[]
   silences: Silence[]
-  onSelectAlert: (fingerprint: string) => void
+  onSelectAlert: (selectionKey: string) => void
   selectedFingerprint?: string | null
   stateFilter?: string
   resolvedMode?: boolean
@@ -521,7 +522,7 @@ export function AlertListView({
                   key={alertRowKey(alert)}
                   alert={alert}
                   onClick={onSelectAlert}
-                  selected={selectedFingerprint === alert.fingerprint}
+                  selected={matchesAlertSelectionKey(alert, selectedFingerprint)}
                   silences={silences}
                   showStateColumn={false}
                   showSeverityColumn={false}
@@ -600,7 +601,7 @@ export function AlertListView({
                 key={alertRowKey(alert)}
                 alert={alert}
                 onClick={onSelectAlert}
-                selected={selectedFingerprint === alert.fingerprint}
+                selected={matchesAlertSelectionKey(alert, selectedFingerprint)}
                 silences={silences}
                 onCreateSilence={openSilenceForm}
                 onExpireSilence={(silence) => setExpireTargets([silence])}
@@ -890,7 +891,7 @@ export function AlertListView({
                             key={alertRowKey(alert)}
                             alert={alert}
                             onClick={onSelectAlert}
-                            selected={selectedFingerprint === alert.fingerprint}
+                            selected={matchesAlertSelectionKey(alert, selectedFingerprint)}
                             indented
                             isLastInGroup={idx === group.alerts.length - 1}
                             excludeLabels={group.commonLabels}

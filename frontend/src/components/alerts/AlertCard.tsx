@@ -8,6 +8,7 @@ import { HIDDEN_LABEL_KEYS, LabelChip } from './LabelChip'
 import { useAlertStats } from '@/hooks/useAlerts'
 import { useFormatTime } from '@/hooks/useFormatTime'
 import { useSettingsStore } from '@/store/useSettingsStore'
+import { makeAlertSelectionKeyForAlert, matchesAlertSelectionKey } from '@/lib/alertSelection'
 import type { EnrichedAlert, Silence } from '@/types'
 
 const PAGE_SIZE = 3
@@ -16,7 +17,7 @@ const PAGE_SIZE = 3
 interface AlertCardProps {
   alerts: EnrichedAlert[]
   silences: Silence[]
-  onClick: (fingerprint: string) => void
+  onClick: (selectionKey: string) => void
   selectedFingerprint?: string | null
   onCreateSilence?: (alerts: EnrichedAlert[]) => void
   showSeverityBadge?: boolean
@@ -45,14 +46,14 @@ function AlertEntry({
 }: {
   alert: EnrichedAlert
   silences: Silence[]
-  onClick: (fp: string) => void
+  onClick: (selectionKey: string) => void
   isSelected: boolean
   commonLabelKeys: Set<string>
 }) {
   const { type: silenceType, silence, remaining } = getSilenceState(alert, silences)
   const expiredSilence = silenceType === null ? getExpiredSilence(alert, silences) : null
   const isResolved = alert.status.state === 'resolved'
-  const { data: stats } = useAlertStats(alert.fingerprint)
+  const { data: stats } = useAlertStats(alert.fingerprint, alert.clusterName)
   const claim = alert.activeClaim ?? null
   const theme = useSettingsStore((s) => s.theme)
   const maintainer = claim ? null : (alert.labels['maintainer'] ?? null)
@@ -74,8 +75,8 @@ function AlertEntry({
       tabIndex={0}
       data-testid="alert-card"
       data-fingerprint={alert.fingerprint}
-      onClick={() => onClick(alert.fingerprint)}
-      onKeyDown={(e) => e.key === 'Enter' && onClick(alert.fingerprint)}
+      onClick={() => onClick(makeAlertSelectionKeyForAlert(alert))}
+      onKeyDown={(e) => e.key === 'Enter' && onClick(makeAlertSelectionKeyForAlert(alert))}
       className={cn(
         'group relative cursor-pointer border-l-2 border-transparent px-3 py-2.5 transition-colors focus:outline-none focus-visible:outline-none',
         claim
@@ -300,11 +301,11 @@ export function AlertCard({
       <div className="divide-y divide-border bg-muted/10">
         {visible.map((alert) => (
           <AlertEntry
-            key={alert.fingerprint}
+            key={`${alert.clusterName}:${alert.fingerprint}:${alert.startsAt}`}
             alert={alert}
             silences={silences}
             onClick={onClick}
-            isSelected={selectedFingerprint === alert.fingerprint}
+            isSelected={matchesAlertSelectionKey(alert, selectedFingerprint)}
             commonLabelKeys={commonLabelKeys}
           />
         ))}

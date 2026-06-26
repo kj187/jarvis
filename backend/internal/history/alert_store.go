@@ -14,6 +14,10 @@ type AlertStore struct {
 	resolvedBuffer map[string]models.EnrichedAlert // kept for 20 min after resolve
 }
 
+func alertSnapshotKey(fingerprint, clusterName string) string {
+	return fingerprint + "\x1f" + clusterName
+}
+
 // Set replaces the active alert snapshot. Alerts that reappear as active are
 // removed from the resolved buffer (they came back before the 20-min window).
 func (s *AlertStore) Set(alerts []models.EnrichedAlert) {
@@ -22,7 +26,7 @@ func (s *AlertStore) Set(alerts []models.EnrichedAlert) {
 	s.alerts = make([]models.EnrichedAlert, len(alerts))
 	copy(s.alerts, alerts)
 	for _, a := range alerts {
-		delete(s.resolvedBuffer, a.Fingerprint)
+		delete(s.resolvedBuffer, alertSnapshotKey(a.Fingerprint, a.ClusterName))
 	}
 }
 
@@ -65,6 +69,25 @@ func (s *AlertStore) ClearActiveClaim(fingerprint, clusterName string) {
 // MarkResolved moves the alert to the resolved buffer so it stays visible for
 // 20 minutes after disappearing from Alertmanager. Clears its active claim.
 // The resolved buffer is NOT overwritten by Set, so the entry survives the next poll.
+func (s *AlertStore) MarkResolvedForCluster(fingerprint, clusterName string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i, a := range s.alerts {
+		if a.Fingerprint == fingerprint && a.ClusterName == clusterName {
+			resolved := a
+			resolved.Status.State = "resolved"
+			resolved.ActiveClaim = nil
+			if s.resolvedBuffer == nil {
+				s.resolvedBuffer = make(map[string]models.EnrichedAlert)
+			}
+			s.resolvedBuffer[alertSnapshotKey(fingerprint, clusterName)] = resolved
+			s.alerts = append(s.alerts[:i], s.alerts[i+1:]...)
+			return
+		}
+	}
+}
+
+// MarkResolved keeps backward compatibility for tests and legacy single-cluster callers.
 func (s *AlertStore) MarkResolved(fingerprint string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -76,7 +99,7 @@ func (s *AlertStore) MarkResolved(fingerprint string) {
 			if s.resolvedBuffer == nil {
 				s.resolvedBuffer = make(map[string]models.EnrichedAlert)
 			}
-			s.resolvedBuffer[fingerprint] = resolved
+			s.resolvedBuffer[alertSnapshotKey(a.Fingerprint, a.ClusterName)] = resolved
 			s.alerts = append(s.alerts[:i], s.alerts[i+1:]...)
 			return
 		}
@@ -93,13 +116,28 @@ func (s *AlertStore) SeedResolved(alerts []models.EnrichedAlert) {
 		s.resolvedBuffer = make(map[string]models.EnrichedAlert)
 	}
 	for _, a := range alerts {
-		if _, exists := s.resolvedBuffer[a.Fingerprint]; !exists {
-			s.resolvedBuffer[a.Fingerprint] = a
+		key := alertSnapshotKey(a.Fingerprint, a.ClusterName)
+		if _, exists := s.resolvedBuffer[key]; !exists {
+			s.resolvedBuffer[key] = a
 		}
 	}
 }
 
 // RemoveByFingerprint removes the alert from both active list and resolved buffer.
+func (s *AlertStore) RemoveByFingerprintForCluster(fingerprint, clusterName string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	filtered := s.alerts[:0]
+	for _, a := range s.alerts {
+		if a.Fingerprint != fingerprint || a.ClusterName != clusterName {
+			filtered = append(filtered, a)
+		}
+	}
+	s.alerts = append([]models.EnrichedAlert(nil), filtered...)
+	delete(s.resolvedBuffer, alertSnapshotKey(fingerprint, clusterName))
+}
+
+// RemoveByFingerprint keeps backward compatibility for tests and legacy single-cluster callers.
 func (s *AlertStore) RemoveByFingerprint(fingerprint string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -110,5 +148,9 @@ func (s *AlertStore) RemoveByFingerprint(fingerprint string) {
 		}
 	}
 	s.alerts = append([]models.EnrichedAlert(nil), filtered...)
-	delete(s.resolvedBuffer, fingerprint)
+	for key, a := range s.resolvedBuffer {
+		if a.Fingerprint == fingerprint {
+			delete(s.resolvedBuffer, key)
+		}
+	}
 }

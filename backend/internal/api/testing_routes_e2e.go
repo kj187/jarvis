@@ -7,10 +7,10 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/labstack/echo/v4"
-	"golang.org/x/time/rate"
 	"github.com/kj187/jarvis/backend/internal/alertmanager"
 	"github.com/kj187/jarvis/backend/internal/models"
+	"github.com/labstack/echo/v4"
+	"golang.org/x/time/rate"
 )
 
 // Poll rate limit for POST /api/v1/poll in e2e builds: effectively unlimited so
@@ -48,16 +48,17 @@ type seedRequest struct {
 }
 
 type testSilenceRequest struct {
-	Cluster   string                      `json:"cluster"`
+	Cluster   string                          `json:"cluster"`
 	Matchers  []alertmanager.AMSilenceMatcher `json:"matchers"`
-	StartsAt  time.Time                   `json:"startsAt"`
-	EndsAt    time.Time                   `json:"endsAt"`
-	CreatedBy string                      `json:"createdBy"`
-	Comment   string                      `json:"comment"`
+	StartsAt  time.Time                       `json:"startsAt"`
+	EndsAt    time.Time                       `json:"endsAt"`
+	CreatedBy string                          `json:"createdBy"`
+	Comment   string                          `json:"comment"`
 }
 
 type testCommentRequest struct {
 	Fingerprint string `json:"fingerprint"`
+	ClusterName string `json:"clusterName"`
 	AuthorName  string `json:"authorName"`
 	Body        string `json:"body"`
 }
@@ -70,9 +71,9 @@ type testClaimRequest struct {
 }
 
 type testTemplateRequest struct {
-	Name    string                  `json:"name"`
+	Name     string                  `json:"name"`
 	Matchers []models.SilenceMatcher `json:"matchers"`
-	Reason  string                  `json:"reason"`
+	Reason   string                  `json:"reason"`
 }
 
 // POST /api/v1/test/reset — truncates all history tables and clears the in-memory store.
@@ -167,7 +168,17 @@ func (s *Server) testAddComment(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "authorName is required")
 	}
 
-	comment, err := s.store.AddComment(req.Fingerprint, nil, nil, req.AuthorName, req.Body)
+	cluster := req.ClusterName
+	if cluster == "" {
+		for _, a := range s.alertStore.Get() {
+			if a.Fingerprint == req.Fingerprint {
+				cluster = a.ClusterName
+				break
+			}
+		}
+	}
+
+	comment, err := s.store.AddComment(req.Fingerprint, cluster, nil, nil, req.AuthorName, req.Body)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}

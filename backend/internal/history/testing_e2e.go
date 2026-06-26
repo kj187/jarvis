@@ -41,5 +41,5 @@ func (s *Store) SeedResolvedForTesting(
 	if _, err := s.RecordStatusChange(fingerprint, clusterName, amURL, models.EventStatusFiring, startsAt, annotations); err != nil {
 		return err
 	}
-	return s.RecordResolved(fingerprint, resolvedAt)
+	return s.RecordResolvedForCluster(fingerprint, clusterName, resolvedAt)
 }

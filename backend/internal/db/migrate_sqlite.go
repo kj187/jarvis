@@ -1,23 +1,23 @@
 package db
 
 import (
-"context"
-"database/sql"
-"fmt"
-"os"
-"path/filepath"
+	"context"
+	"database/sql"
+	"fmt"
+	"os"
+	"path/filepath"
 )
 
 func ensureDir(path string) error {
-if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
-return fmt.Errorf("create db directory: %w", err)
-}
-return nil
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+		return fmt.Errorf("create db directory: %w", err)
+	}
+	return nil
 }
 
 func migrateSQLite(database *sql.DB) error {
-stmts := []string{
-`CREATE TABLE IF NOT EXISTS alert_fingerprints (
+	stmts := []string{
+		`CREATE TABLE IF NOT EXISTS alert_fingerprints (
 fingerprint      TEXT PRIMARY KEY,
 alertname        TEXT NOT NULL,
 cluster_name     TEXT NOT NULL,
@@ -26,7 +26,7 @@ first_seen_at    DATETIME NOT NULL,
 last_seen_at     DATETIME NOT NULL,
 occurrence_count INTEGER DEFAULT 1
 )`,
-`CREATE TABLE IF NOT EXISTS alert_events (
+		`CREATE TABLE IF NOT EXISTS alert_events (
 id               INTEGER PRIMARY KEY AUTOINCREMENT,
 fingerprint      TEXT NOT NULL REFERENCES alert_fingerprints(fingerprint),
 cluster_name     TEXT NOT NULL,
@@ -37,7 +37,7 @@ ends_at          DATETIME,
 annotations      TEXT,
 recorded_at      DATETIME NOT NULL DEFAULT (datetime('now'))
 )`,
-`CREATE TABLE IF NOT EXISTS alert_comments (
+		`CREATE TABLE IF NOT EXISTS alert_comments (
 id           INTEGER PRIMARY KEY AUTOINCREMENT,
 fingerprint  TEXT NOT NULL REFERENCES alert_fingerprints(fingerprint),
 event_id     INTEGER REFERENCES alert_events(id),
@@ -45,7 +45,7 @@ author_name  TEXT NOT NULL,
 body         TEXT NOT NULL,
 created_at   DATETIME NOT NULL DEFAULT (datetime('now'))
 )`,
-`CREATE TABLE IF NOT EXISTS alert_claims (
+		`CREATE TABLE IF NOT EXISTS alert_claims (
 id             INTEGER PRIMARY KEY AUTOINCREMENT,
 fingerprint    TEXT NOT NULL REFERENCES alert_fingerprints(fingerprint),
 cluster_name   TEXT NOT NULL DEFAULT '',
@@ -57,7 +57,7 @@ released_at    DATETIME,
 released_by    TEXT,
 release_reason TEXT
 )`,
-`CREATE TABLE IF NOT EXISTS silence_events (
+		`CREATE TABLE IF NOT EXISTS silence_events (
 id           INTEGER PRIMARY KEY AUTOINCREMENT,
 fingerprint  TEXT NOT NULL,
 silence_id   TEXT NOT NULL,
@@ -67,21 +67,21 @@ performed_by TEXT NOT NULL,
 comment      TEXT NOT NULL DEFAULT '',
 recorded_at  DATETIME NOT NULL DEFAULT (datetime('now'))
 )`,
-`CREATE TABLE IF NOT EXISTS silence_templates (
+		`CREATE TABLE IF NOT EXISTS silence_templates (
 id         TEXT PRIMARY KEY,
 name       TEXT NOT NULL UNIQUE,
 matchers   TEXT NOT NULL,
 reason     TEXT NOT NULL DEFAULT '',
 created_at DATETIME NOT NULL DEFAULT (datetime('now'))
 )`,
-`CREATE INDEX IF NOT EXISTS idx_alert_events_fingerprint ON alert_events(fingerprint)`,
-`CREATE INDEX IF NOT EXISTS idx_alert_events_starts_at   ON alert_events(starts_at DESC)`,
-`CREATE INDEX IF NOT EXISTS idx_alert_events_fingerprint_recorded ON alert_events(fingerprint, recorded_at DESC)`,
-`CREATE INDEX IF NOT EXISTS idx_alert_comments_fingerprint ON alert_comments(fingerprint)`,
-`CREATE INDEX IF NOT EXISTS idx_alert_claims_fingerprint ON alert_claims(fingerprint)`,
-`CREATE INDEX IF NOT EXISTS idx_alert_claims_active      ON alert_claims(fingerprint, cluster_name) WHERE released_at IS NULL`,
-`CREATE INDEX IF NOT EXISTS idx_silence_events_fingerprint ON silence_events(fingerprint, recorded_at DESC)`,
-`CREATE TABLE IF NOT EXISTS users (
+		`CREATE INDEX IF NOT EXISTS idx_alert_events_fingerprint ON alert_events(fingerprint)`,
+		`CREATE INDEX IF NOT EXISTS idx_alert_events_starts_at   ON alert_events(starts_at DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_alert_events_fingerprint_recorded ON alert_events(fingerprint, recorded_at DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_alert_comments_fingerprint ON alert_comments(fingerprint)`,
+		`CREATE INDEX IF NOT EXISTS idx_alert_claims_fingerprint ON alert_claims(fingerprint)`,
+		`CREATE INDEX IF NOT EXISTS idx_alert_claims_active      ON alert_claims(fingerprint, cluster_name) WHERE released_at IS NULL`,
+		`CREATE INDEX IF NOT EXISTS idx_silence_events_fingerprint ON silence_events(fingerprint, recorded_at DESC)`,
+		`CREATE TABLE IF NOT EXISTS users (
 id             TEXT PRIMARY KEY,
 username       TEXT NOT NULL UNIQUE,
 email          TEXT,
@@ -92,47 +92,51 @@ oidc_sub       TEXT UNIQUE,
 created_at     DATETIME NOT NULL,
 last_login_at  DATETIME
 )`,
-`CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)`,
-`CREATE INDEX IF NOT EXISTS idx_users_oidc_sub ON users(oidc_sub)`,
-}
+		`CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)`,
+		`CREATE INDEX IF NOT EXISTS idx_users_oidc_sub ON users(oidc_sub)`,
+	}
 
-for _, stmt := range stmts {
-if _, err := database.ExecContext(context.Background(), stmt); err != nil {
-return fmt.Errorf("migrate sqlite: %w", err)
-}
-}
-// Add user_id column to alert_comments (nullable, for ownership checks by ID).
-// SQLite does not support ADD COLUMN IF NOT EXISTS; use the helper.
-if err := addColumnIfNotExistsSQLite(database, "alert_comments", "user_id", "TEXT"); err != nil {
-return err
-}
-// Add cluster_name to alert_claims so claims are scoped per (fingerprint, cluster).
-// Existing rows default to '' (legacy single-cluster claims).
-return addColumnIfNotExistsSQLite(database, "alert_claims", "cluster_name", "TEXT NOT NULL DEFAULT ''")
+	for _, stmt := range stmts {
+		if _, err := database.ExecContext(context.Background(), stmt); err != nil {
+			return fmt.Errorf("migrate sqlite: %w", err)
+		}
+	}
+	// Add user_id column to alert_comments (nullable, for ownership checks by ID).
+	// SQLite does not support ADD COLUMN IF NOT EXISTS; use the helper.
+	if err := addColumnIfNotExistsSQLite(database, "alert_comments", "user_id", "TEXT"); err != nil {
+		return err
+	}
+	// Store originating alert cluster for each comment (legacy rows default to ”).
+	if err := addColumnIfNotExistsSQLite(database, "alert_comments", "cluster_name", "TEXT NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
+	// Add cluster_name to alert_claims so claims are scoped per (fingerprint, cluster).
+	// Existing rows default to ” (legacy single-cluster claims).
+	return addColumnIfNotExistsSQLite(database, "alert_claims", "cluster_name", "TEXT NOT NULL DEFAULT ''")
 }
 
 // addColumnIfNotExistsSQLite adds a column to a table if it does not already exist.
 func addColumnIfNotExistsSQLite(db *sql.DB, table, column, colType string) error {
-rows, err := db.QueryContext(context.Background(), fmt.Sprintf("PRAGMA table_info(%s)", table))
-if err != nil {
-return fmt.Errorf("pragma table_info: %w", err)
-}
-defer func() { _ = rows.Close() }()
-for rows.Next() {
-var cid int
-var name, dataType string
-var notNull, pk int
-var dflt interface{}
-if err := rows.Scan(&cid, &name, &dataType, &notNull, &dflt, &pk); err != nil {
-return fmt.Errorf("scan table_info: %w", err)
-}
-if name == column {
-return nil // already exists
-}
-}
-if err := rows.Err(); err != nil {
-return err
-}
-_, err = db.ExecContext(context.Background(), fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", table, column, colType))
-return err
+	rows, err := db.QueryContext(context.Background(), fmt.Sprintf("PRAGMA table_info(%s)", table))
+	if err != nil {
+		return fmt.Errorf("pragma table_info: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var cid int
+		var name, dataType string
+		var notNull, pk int
+		var dflt interface{}
+		if err := rows.Scan(&cid, &name, &dataType, &notNull, &dflt, &pk); err != nil {
+			return fmt.Errorf("scan table_info: %w", err)
+		}
+		if name == column {
+			return nil // already exists
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	_, err = db.ExecContext(context.Background(), fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", table, column, colType))
+	return err
 }

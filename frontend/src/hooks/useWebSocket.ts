@@ -96,7 +96,12 @@ export function useWebSocket() {
 
         case 'comment_added': {
           const payload = event.payload as CommentAddedPayload
-          qc.invalidateQueries({ queryKey: ['comments', payload.fingerprint] })
+          const clusterName = payload.comment?.clusterName
+          if (clusterName) {
+            qc.invalidateQueries({ queryKey: ['comments', payload.fingerprint, clusterName] })
+          } else {
+            qc.invalidateQueries({ queryKey: ['comments', payload.fingerprint] })
+          }
           break
         }
       }

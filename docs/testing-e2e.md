@@ -211,6 +211,7 @@ Quick reference: which spec file covers what. Use this to find the right place f
 | `filters-extended.spec.ts` | C2–C9 | `!=`/`=~`/`!~` operators, regex multi-value, label/value suggestions, label chip → filter, AND matchers, draft→promotion, remove-all, locked default chips |
 | `detail-panel.spec.ts` | D1–D2, D5–D11, G2 | Open/close/URL param, labels/annotations, stats & timeline, claim set/release, comments add/delete, claim note edit, AI prompt, section collapse, extend controls |
 | `detail-panel-extended.spec.ts` | D4, D12–D14 | Runbook/URL links, AI prompt collapse+copy, section collapse/expand, silence from detail panel |
+| `cluster-scoping.spec.ts` | X1–X3 | Cross-cluster isolation for identical fingerprint: stats/history, comments, claims |
 | `silences-page.spec.ts` | E1–E7, G1, G3 | List view persist, grouping, show/hide expired, sort, matcher filter, expiry status, re-create, expire single/group |
 | `silences-form-extended.spec.ts` | F3–F16 | Operator switch, regex tags+escaping, live match count, overlap warning, zero-match warning, duration presets, spinner normalisation, inline calendar, Now/Reset, end-after-start validation, author editability, reason required, preview summary, results step |
 | `silences-form-templates.spec.ts` | F1–F2, F14–F15, F17, G4–G8 | Form open/close (Cancel/ESC/backdrop), cluster guard, templates CRUD (create/apply/edit/delete) |

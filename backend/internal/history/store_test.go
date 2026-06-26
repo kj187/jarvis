@@ -100,6 +100,29 @@ func TestGetStats_LastFiredAt(t *testing.T) {
 	}
 }
 
+func TestGetStatsForCluster_AggregatedTimesSQLite(t *testing.T) {
+	s := newTestStore(t)
+
+	labels := map[string]string{"alertname": "TestAlert"}
+	if err := s.UpsertFingerprint("fp1", "TestAlert", "homelab", labels); err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+	if _, err := s.RecordStatusChange("fp1", "homelab", "http://am:9093", models.EventStatusFiring, time.Now().UTC(), nil); err != nil {
+		t.Fatalf("record firing: %v", err)
+	}
+
+	st, err := s.GetStatsForCluster("fp1", "homelab")
+	if err != nil {
+		t.Fatalf("GetStatsForCluster: %v", err)
+	}
+	if st == nil {
+		t.Fatal("expected stats, got nil")
+	}
+	if st.ClusterName != "homelab" {
+		t.Fatalf("ClusterName = %q, want homelab", st.ClusterName)
+	}
+}
+
 func TestRecordStatusChange_CreatesNew(t *testing.T) {
 	s := newTestStore(t)
 
@@ -350,7 +373,7 @@ func TestComments(t *testing.T) {
 
 	s.UpsertFingerprint("fp1", "A", "c", nil) //nolint:errcheck
 
-	c, err := s.AddComment("fp1", nil, nil, "alice", "hello")
+	c, err := s.AddComment("fp1", "c", nil, nil, "alice", "hello")
 	if err != nil {
 		t.Fatalf("AddComment: %v", err)
 	}
@@ -358,7 +381,7 @@ func TestComments(t *testing.T) {
 		t.Error("expected non-zero comment ID")
 	}
 
-	comments, err := s.GetComments("fp1")
+	comments, err := s.GetComments("fp1", "c")
 	if err != nil {
 		t.Fatalf("GetComments: %v", err)
 	}
@@ -366,12 +389,12 @@ func TestComments(t *testing.T) {
 		t.Errorf("unexpected comments: %+v", comments)
 	}
 
-	deleted, err := s.DeleteComment(c.ID, "fp1")
+	deleted, err := s.DeleteComment(c.ID, "fp1", "c")
 	if err != nil || !deleted {
 		t.Fatalf("DeleteComment: deleted=%v err=%v", deleted, err)
 	}
 
-	comments2, _ := s.GetComments("fp1")
+	comments2, _ := s.GetComments("fp1", "c")
 	if len(comments2) != 0 {
 		t.Errorf("expected 0 comments after delete, got %d", len(comments2))
 	}
@@ -383,13 +406,13 @@ func TestDeleteComment_WrongFingerprint(t *testing.T) {
 	s.UpsertFingerprint("fp1", "A", "c", nil) //nolint:errcheck
 	s.UpsertFingerprint("fp2", "B", "c", nil) //nolint:errcheck
 
-	c, err := s.AddComment("fp1", nil, nil, "alice", "hello")
+	c, err := s.AddComment("fp1", "c", nil, nil, "alice", "hello")
 	if err != nil {
 		t.Fatalf("AddComment: %v", err)
 	}
 
 	// Attempt to delete fp1's comment while scoped to fp2 — must not delete.
-	deleted, err := s.DeleteComment(c.ID, "fp2")
+	deleted, err := s.DeleteComment(c.ID, "fp2", "c")
 	if err != nil {
 		t.Fatalf("DeleteComment unexpected error: %v", err)
 	}
@@ -398,7 +421,7 @@ func TestDeleteComment_WrongFingerprint(t *testing.T) {
 	}
 
 	// Original comment must still exist.
-	comments, _ := s.GetComments("fp1")
+	comments, _ := s.GetComments("fp1", "c")
 	if len(comments) != 1 {
 		t.Errorf("expected comment to survive wrong-fingerprint delete, got %d comments", len(comments))
 	}

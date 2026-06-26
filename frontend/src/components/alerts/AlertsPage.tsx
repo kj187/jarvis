@@ -11,6 +11,7 @@ import { AlertCardGrid } from './AlertCardGrid'
 import { AlertListView } from './AlertListView'
 import { AlertDetailPanel } from './AlertDetailPanel'
 import { matchesLabelMatchers, getEffectiveAlertState } from '@/lib/alertUtils'
+import { parseAlertSelectionKey } from '@/lib/alertSelection'
 import type { EnrichedAlert } from '@/types'
 
 const CARD_GROUPING_KEY = 'jarvis-alert-card-grouping-enabled'
@@ -170,11 +171,18 @@ export function AlertsPage() {
     return true
   })
 
-  const selectedAlert = selectedFingerprint
-    ? filtered.find((a) => a.fingerprint === selectedFingerprint) ??
-      alerts.find((a) => a.fingerprint === selectedFingerprint) ??
+  const selectedAlert = (() => {
+    if (!selectedFingerprint) return null
+    const selected = parseAlertSelectionKey(selectedFingerprint)
+    if (selected.clusterName) {
+      return filtered.find((a) => a.fingerprint === selected.fingerprint && a.clusterName === selected.clusterName) ??
+        alerts.find((a) => a.fingerprint === selected.fingerprint && a.clusterName === selected.clusterName) ??
+        null
+    }
+    return filtered.find((a) => a.fingerprint === selected.fingerprint) ??
+      alerts.find((a) => a.fingerprint === selected.fingerprint) ??
       null
-    : null
+  })()
   const showsCardGrid = viewMode === 'card' && filters.state !== 'resolved' && filters.state !== 'suppressed'
   const canToggleGrouping = !isResolvedMode
 

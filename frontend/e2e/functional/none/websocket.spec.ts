@@ -30,6 +30,7 @@ test('J3 claim_set WS event shows claim badge in open detail panel', async ({ pa
   const res = await fetch(`${JARVIS_BASE_URL}/api/v1/alerts`)
   const alerts: any[] = await res.json()
   const fingerprint = alerts[0].fingerprint
+  const clusterName = alerts[0].clusterName
 
   // Open the detail panel
   await page.goto(`/?state=active&alert=${fingerprint}`)
@@ -56,6 +57,7 @@ test('J3 claim_released WS event removes claim badge from detail panel', async (
   const res = await fetch(`${JARVIS_BASE_URL}/api/v1/alerts`)
   const alerts: any[] = await res.json()
   const fingerprint = alerts[0].fingerprint
+  const clusterName = alerts[0].clusterName
 
   // Pre-seed a claim
   await jarvis.setClaim(fingerprint, 'ws-claimer')
@@ -120,6 +122,7 @@ test('J4 comment_added WS event updates comments section without reload', async 
   const res = await fetch(`${JARVIS_BASE_URL}/api/v1/alerts`)
   const alerts: any[] = await res.json()
   const fingerprint = alerts[0].fingerprint
+  const clusterName = alerts[0].clusterName
 
   // Open the detail panel
   await page.goto(`/?state=active&alert=${fingerprint}`)
@@ -131,10 +134,13 @@ test('J4 comment_added WS event updates comments section without reload', async 
 
   // Use the production endpoint — only it broadcasts the comment_added WS event
   // The test endpoint /api/v1/test/comment writes to DB but does NOT broadcast WS
-  await page.request.post(`${JARVIS_BASE_URL}/api/v1/alerts/${fingerprint}/comments`, {
-    headers: { 'Content-Type': 'application/json' },
-    data: { authorName: 'ws-author', body: 'WS comment test' },
-  })
+  await page.request.post(
+    `${JARVIS_BASE_URL}/api/v1/alerts/${fingerprint}/comments?cluster=${encodeURIComponent(clusterName)}`,
+    {
+      headers: { 'Content-Type': 'application/json' },
+      data: { authorName: 'ws-author', body: 'WS comment test' },
+    },
+  )
 
   // Comment should appear in the panel without page reload (pushed via WS)
   const commentItems = page.getByTestId('detail-comment-item')

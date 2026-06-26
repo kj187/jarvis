@@ -55,9 +55,10 @@ export function fetchAlertGroups(): Promise<AlertGroup[]> {
 
 export function fetchAlertHistory(
   fingerprint: string,
-  params?: { limit?: number; offset?: number },
+  params?: { cluster?: string; limit?: number; offset?: number },
 ): Promise<{ events: AlertEvent[]; total: number }> {
   const q = new URLSearchParams()
+  if (params?.cluster) q.set('cluster', params.cluster)
   if (params?.limit) q.set('limit', String(params.limit))
   if (params?.offset) q.set('offset', String(params.offset))
   const qs = q.toString()
@@ -76,28 +77,41 @@ export function fetchAlertTimeline(
   return request(`/alerts/${fingerprint}/timeline${qs ? `?${qs}` : ''}`)
 }
 
-export function fetchAlertStats(fingerprint: string): Promise<AlertStats> {
-  return request<AlertStats>(`/alerts/${fingerprint}/stats`)
+export function fetchAlertStats(fingerprint: string, cluster?: string): Promise<AlertStats> {
+  const q = new URLSearchParams()
+  if (cluster) q.set('cluster', cluster)
+  const qs = q.toString()
+  return request<AlertStats>(`/alerts/${fingerprint}/stats${qs ? `?${qs}` : ''}`)
 }
 
 // ── Comments ─────────────────────────────────────────────────────────────────
 
-export function fetchComments(fingerprint: string): Promise<Comment[]> {
-  return request<Comment[]>(`/alerts/${fingerprint}/comments`)
+export function fetchComments(fingerprint: string, clusterName: string): Promise<Comment[]> {
+  const q = new URLSearchParams()
+  if (clusterName) q.set('cluster', clusterName)
+  const qs = q.toString()
+  return request<Comment[]>(`/alerts/${fingerprint}/comments${qs ? `?${qs}` : ''}`)
 }
 
 export function addComment(
   fingerprint: string,
+  clusterName: string,
   body: { authorName: string; body: string; eventId?: number },
 ): Promise<Comment> {
-  return request<Comment>(`/alerts/${fingerprint}/comments`, {
+  const q = new URLSearchParams()
+  if (clusterName) q.set('cluster', clusterName)
+  const qs = q.toString()
+  return request<Comment>(`/alerts/${fingerprint}/comments${qs ? `?${qs}` : ''}`, {
     method: 'POST',
     body: JSON.stringify(body),
   })
 }
 
-export function deleteComment(fingerprint: string, id: number): Promise<void> {
-  return request<void>(`/alerts/${fingerprint}/comments/${id}`, {
+export function deleteComment(fingerprint: string, id: number, clusterName: string): Promise<void> {
+  const q = new URLSearchParams()
+  if (clusterName) q.set('cluster', clusterName)
+  const qs = q.toString()
+  return request<void>(`/alerts/${fingerprint}/comments/${id}${qs ? `?${qs}` : ''}`, {
     method: 'DELETE',
   })
 }
@@ -105,10 +119,7 @@ export function deleteComment(fingerprint: string, id: number): Promise<void> {
 // ── Claims ────────────────────────────────────────────────────────────────────
 
 export function fetchActiveClaim(fingerprint: string, clusterName: string): Promise<Claim | null> {
-  return request<Claim>(`/alerts/${fingerprint}/claim?cluster=${encodeURIComponent(clusterName)}`).catch((e: Error) => {
-    if (e.message.startsWith('404')) return null
-    throw e
-  })
+  return request<Claim | null>(`/alerts/${fingerprint}/claim?cluster=${encodeURIComponent(clusterName)}`)
 }
 
 export function setClaim(
@@ -146,8 +157,11 @@ export function fetchClaimHistory(fingerprint: string, clusterName: string): Pro
   return request<Claim[]>(`/alerts/${fingerprint}/claims/history?cluster=${encodeURIComponent(clusterName)}`)
 }
 
-export function fetchSilenceEvents(fingerprint: string): Promise<SilenceEvent[]> {
-  return request<SilenceEvent[]>(`/alerts/${fingerprint}/silence-events`)
+export function fetchSilenceEvents(fingerprint: string, cluster?: string): Promise<SilenceEvent[]> {
+  const q = new URLSearchParams()
+  if (cluster) q.set('cluster', cluster)
+  const qs = q.toString()
+  return request<SilenceEvent[]>(`/alerts/${fingerprint}/silence-events${qs ? `?${qs}` : ''}`)
 }
 
 // ── Silences ──────────────────────────────────────────────────────────────────

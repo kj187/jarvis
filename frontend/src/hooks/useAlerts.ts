@@ -30,10 +30,10 @@ export function useAlertGroups() {
   })
 }
 
-export function useAlertHistory(fingerprint: string, limit = 20, offset = 0) {
+export function useAlertHistory(fingerprint: string, cluster?: string, limit = 20, offset = 0) {
   return useQuery({
-    queryKey: ['alert-history', fingerprint, limit, offset],
-    queryFn: () => fetchAlertHistory(fingerprint, { limit, offset }),
+    queryKey: ['alert-history', fingerprint, cluster, limit, offset],
+    queryFn: () => fetchAlertHistory(fingerprint, { cluster, limit, offset }),
     enabled: Boolean(fingerprint),
   })
 }
@@ -51,10 +51,10 @@ export function useAlertTimeline(
   })
 }
 
-export function useAlertStats(fingerprint: string) {
+export function useAlertStats(fingerprint: string, cluster?: string) {
   return useQuery({
-    queryKey: ['alert-stats', fingerprint],
-    queryFn: () => fetchAlertStats(fingerprint),
+    queryKey: ['alert-stats', fingerprint, cluster],
+    queryFn: () => fetchAlertStats(fingerprint, cluster),
     enabled: Boolean(fingerprint),
   })
 }

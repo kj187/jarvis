@@ -87,6 +87,8 @@ func migratePostgres(database *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_users_oidc_sub ON users(oidc_sub)`,
 		// Add user_id column to alert_comments (nullable, for ownership checks by ID).
 		`ALTER TABLE alert_comments ADD COLUMN IF NOT EXISTS user_id TEXT REFERENCES users(id)`,
+		// Store originating alert cluster for each comment (legacy rows default to '').
+		`ALTER TABLE alert_comments ADD COLUMN IF NOT EXISTS cluster_name TEXT NOT NULL DEFAULT ''`,
 		// Add cluster_name to alert_claims so claims are scoped per (fingerprint, cluster).
 		`ALTER TABLE alert_claims ADD COLUMN IF NOT EXISTS cluster_name TEXT NOT NULL DEFAULT ''`,
 	}

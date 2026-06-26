@@ -13,6 +13,7 @@ import type { Comment } from '@/types'
 
 interface AlertCommentsProps {
   fingerprint: string
+  clusterName: string
 }
 
 // ── Single comment row (own hook scope per delete action) ─────────────────────
@@ -20,12 +21,13 @@ interface AlertCommentsProps {
 interface CommentRowProps {
   comment: Comment
   fingerprint: string
+  clusterName: string
   user: import('@/types').AuthUser | null
   authMode: string
 }
 
-function CommentRow({ comment, fingerprint, user, authMode }: CommentRowProps) {
-  const deleteMutation = useDeleteComment(fingerprint)
+function CommentRow({ comment, fingerprint, clusterName, user, authMode }: CommentRowProps) {
+  const deleteMutation = useDeleteComment(fingerprint, clusterName)
 
   const deleteAction = useCallback(
     () => deleteMutation.mutateAsync(comment.id),
@@ -45,7 +47,14 @@ function CommentRow({ comment, fingerprint, user, authMode }: CommentRowProps) {
     <>
       <div data-testid="detail-comment-item" className="rounded border border-border bg-accent/20 p-3">
         <div className="flex items-center justify-between">
-          <span data-testid="detail-comment-author" className="text-xs font-semibold">{comment.authorName}</span>
+          <div className="flex items-center gap-2">
+            <span data-testid="detail-comment-author" className="text-xs font-semibold">{comment.authorName}</span>
+            {comment.clusterName && (
+              <span className="inline-flex items-center rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                {comment.clusterName}
+              </span>
+            )}
+          </div>
           <div className="flex items-center gap-2">
             <span data-testid="detail-comment-timestamp" className="text-xs text-muted-foreground">
               {formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true, locale: enUS })}
@@ -71,9 +80,9 @@ function CommentRow({ comment, fingerprint, user, authMode }: CommentRowProps) {
 
 // ── AlertComments ─────────────────────────────────────────────────────────────
 
-export function AlertComments({ fingerprint }: AlertCommentsProps) {
-  const { data: comments = [], isLoading } = useAlertComments(fingerprint)
-  const addMutation = useAddComment(fingerprint)
+export function AlertComments({ fingerprint, clusterName }: AlertCommentsProps) {
+  const { data: comments = [], isLoading } = useAlertComments(fingerprint, clusterName)
+  const addMutation = useAddComment(fingerprint, clusterName)
   const { user, providerInfo } = useAuthStore()
   const authMode = providerInfo?.mode ?? 'none'
 
@@ -108,7 +117,14 @@ export function AlertComments({ fingerprint }: AlertCommentsProps) {
         )}
 
         {comments.map((c) => (
-          <CommentRow key={c.id} comment={c} fingerprint={fingerprint} user={user} authMode={authMode} />
+          <CommentRow
+            key={c.id}
+            comment={c}
+            fingerprint={fingerprint}
+            clusterName={clusterName}
+            user={user}
+            authMode={authMode}
+          />
         ))}
 
         {/* Comment form */}

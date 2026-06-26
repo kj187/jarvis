@@ -305,7 +305,7 @@ POST   /api/v1/alerts/:fingerprint/comments      Auth  (write)  Body: { authorNa
 DELETE /api/v1/alerts/:fingerprint/comments/:id  Auth  (write)  (author-gated: user_id, else author_name)
 
 # ── Claims ───────────────────────────────────────────────────────────────────
-GET    /api/v1/alerts/:fingerprint/claim         full_protect?  → Claim | 404
+GET    /api/v1/alerts/:fingerprint/claim         full_protect?  → Claim | null
 POST   /api/v1/alerts/:fingerprint/claim         Auth  (write)  Body: { claimedBy, note?, eventId? }
 DELETE /api/v1/alerts/:fingerprint/claim         Auth  (write)  ?by=username
 GET    /api/v1/alerts/:fingerprint/claims/history full_protect? → []Claim

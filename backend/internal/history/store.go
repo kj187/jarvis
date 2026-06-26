@@ -67,6 +67,42 @@ func (s *Store) query(ctx context.Context, query string, args ...interface{}) (*
 	return s.db.QueryContext(ctx, rebind(s.dialect, query), args...)
 }
 
+func parseNullableTimeValue(raw interface{}) (sql.NullTime, error) {
+	switch v := raw.(type) {
+	case nil:
+		return sql.NullTime{}, nil
+	case time.Time:
+		return sql.NullTime{Time: v, Valid: true}, nil
+	case string:
+		return parseNullableTimeString(v)
+	case []byte:
+		return parseNullableTimeString(string(v))
+	default:
+		return sql.NullTime{}, fmt.Errorf("unsupported time value type %T", raw)
+	}
+}
+
+func parseNullableTimeString(value string) (sql.NullTime, error) {
+	if value == "" {
+		return sql.NullTime{}, nil
+	}
+	layouts := []string{
+		time.RFC3339Nano,
+		time.RFC3339,
+		"2006-01-02 15:04:05.999999999-07:00",
+		"2006-01-02 15:04:05.999999999 -0700 MST",
+		"2006-01-02 15:04:05 -0700 MST",
+		"2006-01-02 15:04:05.999999999",
+		"2006-01-02 15:04:05",
+	}
+	for _, layout := range layouts {
+		if t, err := time.Parse(layout, value); err == nil {
+			return sql.NullTime{Time: t, Valid: true}, nil
+		}
+	}
+	return sql.NullTime{}, fmt.Errorf("unsupported time format %q", value)
+}
+
 // insertReturningID executes an INSERT and returns the new row ID.
 // PostgreSQL: appends RETURNING id and uses QueryRowContext.
 // SQLite: uses ExecContext + LastInsertId.
@@ -116,7 +152,7 @@ func (s *Store) RecordStatusChange(
 	startsAt time.Time,
 	annotations map[string]string,
 ) (*models.AlertEvent, error) {
-	last, err := s.getLastEvent(fingerprint)
+	last, err := s.getLastEventForCluster(fingerprint, clusterName)
 	if err != nil {
 		return nil, err
 	}
@@ -137,7 +173,7 @@ func (s *Store) RecordStatusChange(
 			if _, err := s.exec(context.Background(), `DELETE FROM alert_events WHERE id = ?`, last.ID); err != nil {
 				return nil, fmt.Errorf("grace period delete resolved: %w", err)
 			}
-			prev, err := s.getLastEvent(fingerprint)
+			prev, err := s.getLastEventForCluster(fingerprint, clusterName)
 			if err != nil {
 				return nil, err
 			}
@@ -166,8 +202,8 @@ func (s *Store) RecordStatusChange(
 	// Increment occurrence_count only on genuine re-fire after full resolution.
 	if status == models.EventStatusFiring && lastStatus == models.EventStatusResolved {
 		if _, err := s.exec(context.Background(),
-			`UPDATE alert_fingerprints SET occurrence_count = occurrence_count + 1 WHERE fingerprint = ?`,
-			fingerprint,
+			`UPDATE alert_fingerprints SET occurrence_count = occurrence_count + 1 WHERE fingerprint = ? AND cluster_name = ?`,
+			fingerprint, clusterName,
 		); err != nil {
 			return nil, fmt.Errorf("increment occurrence_count: %w", err)
 		}
@@ -188,7 +224,11 @@ func (s *Store) RecordStatusChange(
 // info and starts_at from the last known event. No-op if already resolved or
 // no history exists for this fingerprint.
 func (s *Store) RecordResolved(fingerprint string, resolvedAt time.Time) error {
-	last, err := s.getLastEvent(fingerprint)
+	return s.RecordResolvedForCluster(fingerprint, "", resolvedAt)
+}
+
+func (s *Store) RecordResolvedForCluster(fingerprint, clusterName string, resolvedAt time.Time) error {
+	last, err := s.getLastEventForCluster(fingerprint, clusterName)
 	if err != nil {
 		return err
 	}
@@ -204,6 +244,12 @@ func (s *Store) RecordResolved(fingerprint string, resolvedAt time.Time) error {
 
 // GetHistory returns paginated alert events for a fingerprint (newest first).
 func (s *Store) GetHistory(fingerprint string, limit, offset int) ([]models.AlertEvent, int, error) {
+	return s.GetHistoryForCluster(fingerprint, "", limit, offset)
+}
+
+// GetHistoryForCluster returns paginated alert events for a fingerprint,
+// optionally scoped to one cluster (newest first).
+func (s *Store) GetHistoryForCluster(fingerprint, clusterName string, limit, offset int) ([]models.AlertEvent, int, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
@@ -211,20 +257,30 @@ func (s *Store) GetHistory(fingerprint string, limit, offset int) ([]models.Aler
 		offset = 0
 	}
 
+	clusterFilter := ""
+	args := []interface{}{fingerprint}
+	if clusterName != "" {
+		clusterFilter = " AND cluster_name = ?"
+		args = append(args, clusterName)
+	}
+
 	var total int
-	if err := s.queryRow(context.Background(),
-		`SELECT COUNT(*) FROM alert_events WHERE fingerprint = ?`, fingerprint,
+	if err := s.queryRow(context.Background(), `
+		SELECT COUNT(*) FROM alert_events WHERE fingerprint = ?`+clusterFilter,
+		args...,
 	).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("count events: %w", err)
 	}
 
+	queryArgs := append([]interface{}{}, args...)
+	queryArgs = append(queryArgs, limit, offset)
 	rows, err := s.query(context.Background(), `
 		SELECT id, fingerprint, cluster_name, alertmanager_url, status, starts_at, ends_at, annotations, recorded_at
 		FROM alert_events
-		WHERE fingerprint = ?
+		WHERE fingerprint = ?`+clusterFilter+`
 		ORDER BY recorded_at DESC
 		LIMIT ? OFFSET ?
-	`, fingerprint, limit, offset)
+	`, queryArgs...)
 	if err != nil {
 		return nil, 0, fmt.Errorf("query events: %w", err)
 	}
@@ -365,7 +421,7 @@ func (s *Store) GetTimeline(fingerprint, clusterName string, limit, offset int) 
 	}
 	defer func() { _ = rows.Close() }()
 
-	entries := make([]models.AlertTimelineEntry, 0, limit)
+	entries := make([]models.AlertTimelineEntry, 0)
 	for rows.Next() {
 		var e models.AlertTimelineEntry
 		var recordedAt time.Time
@@ -391,11 +447,22 @@ func (s *Store) GetTimeline(fingerprint, clusterName string, limit, offset int) 
 
 // GetStats returns occurrence statistics for a fingerprint.
 func (s *Store) GetStats(fingerprint string) (*models.AlertStats, error) {
+	return s.GetStatsForCluster(fingerprint, "")
+}
+
+// GetStatsForCluster returns occurrence statistics for a fingerprint, optionally scoped to a cluster.
+func (s *Store) GetStatsForCluster(fingerprint, clusterName string) (*models.AlertStats, error) {
 	var st models.AlertStats
-	err := s.queryRow(context.Background(), `
+	q := `
 		SELECT fingerprint, alertname, cluster_name, first_seen_at, last_seen_at, occurrence_count
-		FROM alert_fingerprints WHERE fingerprint = ?
-	`, fingerprint).Scan(&st.Fingerprint, &st.Alertname, &st.ClusterName, &st.FirstSeenAt, &st.LastSeenAt, &st.OccurrenceCount)
+		FROM alert_fingerprints
+		WHERE fingerprint = ?
+		ORDER BY last_seen_at DESC LIMIT 1
+	`
+
+	err := s.queryRow(context.Background(), q, fingerprint).Scan(
+		&st.Fingerprint, &st.Alertname, &st.ClusterName, &st.FirstSeenAt, &st.LastSeenAt, &st.OccurrenceCount,
+	)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -405,23 +472,83 @@ func (s *Store) GetStats(fingerprint string) (*models.AlertStats, error) {
 	st.FirstSeenAt = st.FirstSeenAt.UTC()
 	st.LastSeenAt = st.LastSeenAt.UTC()
 
-	var resolvedAt sql.NullTime
+	if clusterName != "" {
+		st.ClusterName = clusterName
+		var firstByClusterRaw, lastByClusterRaw interface{}
+		if err := s.queryRow(context.Background(), `
+			SELECT MIN(recorded_at), MAX(recorded_at)
+			FROM alert_events
+			WHERE fingerprint = ? AND cluster_name = ?
+		`, fingerprint, clusterName).Scan(&firstByClusterRaw, &lastByClusterRaw); err != nil {
+			return nil, fmt.Errorf("query per-cluster first/last seen: %w", err)
+		}
+		firstByCluster, err := parseNullableTimeValue(firstByClusterRaw)
+		if err != nil {
+			return nil, fmt.Errorf("parse per-cluster first seen: %w", err)
+		}
+		lastByCluster, err := parseNullableTimeValue(lastByClusterRaw)
+		if err != nil {
+			return nil, fmt.Errorf("parse per-cluster last seen: %w", err)
+		}
+		if firstByCluster.Valid {
+			st.FirstSeenAt = firstByCluster.Time.UTC()
+		}
+		if lastByCluster.Valid {
+			st.LastSeenAt = lastByCluster.Time.UTC()
+		}
+		// occurrence_count in alert_fingerprints is keyed per fingerprint (legacy schema),
+		// so derive per-cluster occurrences from lifecycle transitions.
+		if err := s.queryRow(context.Background(), `
+			SELECT COUNT(*) FROM (
+				SELECT
+					status,
+					LAG(status) OVER (ORDER BY recorded_at, id) AS prev_status
+				FROM alert_events
+				WHERE fingerprint = ? AND cluster_name = ?
+			) transitions
+			WHERE status = 'firing' AND (prev_status IS NULL OR prev_status = 'resolved')
+		`, fingerprint, clusterName).Scan(&st.OccurrenceCount); err != nil {
+			return nil, fmt.Errorf("count per-cluster occurrences: %w", err)
+		}
+	}
+
+	var resolvedAtRaw interface{}
+	resolvedArgs := []interface{}{fingerprint}
+	resolvedClusterFilter := ""
+	if clusterName != "" {
+		resolvedClusterFilter = " AND cluster_name = ?"
+		resolvedArgs = append(resolvedArgs, clusterName)
+	}
 	_ = s.queryRow(context.Background(), `
 		SELECT recorded_at FROM alert_events
-		WHERE fingerprint = ? AND status = 'resolved'
+		WHERE fingerprint = ?`+resolvedClusterFilter+` AND status = 'resolved'
 		ORDER BY recorded_at DESC LIMIT 1
-	`, fingerprint).Scan(&resolvedAt)
+	`, resolvedArgs...).Scan(&resolvedAtRaw)
+	resolvedAt, err := parseNullableTimeValue(resolvedAtRaw)
+	if err != nil {
+		return nil, fmt.Errorf("parse last resolved time: %w", err)
+	}
 	if resolvedAt.Valid {
 		t := resolvedAt.Time.UTC()
 		st.LastResolvedAt = &t
 	}
 
-	var firedAt sql.NullTime
+	var firedAtRaw interface{}
+	firedArgs := []interface{}{fingerprint}
+	firedClusterFilter := ""
+	if clusterName != "" {
+		firedClusterFilter = " AND cluster_name = ?"
+		firedArgs = append(firedArgs, clusterName)
+	}
 	_ = s.queryRow(context.Background(), `
 		SELECT recorded_at FROM alert_events
-		WHERE fingerprint = ? AND status = 'firing'
+		WHERE fingerprint = ?`+firedClusterFilter+` AND status = 'firing'
 		ORDER BY recorded_at DESC LIMIT 1
-	`, fingerprint).Scan(&firedAt)
+	`, firedArgs...).Scan(&firedAtRaw)
+	firedAt, err := parseNullableTimeValue(firedAtRaw)
+	if err != nil {
+		return nil, fmt.Errorf("parse last fired time: %w", err)
+	}
 	if firedAt.Valid {
 		t := firedAt.Time.UTC()
 		st.LastFiredAt = &t
@@ -432,13 +559,14 @@ func (s *Store) GetStats(fingerprint string) (*models.AlertStats, error) {
 
 // ── Comments ──────────────────────────────────────────────────────────────────
 
-// GetComments returns all comments for a fingerprint (newest first).
-func (s *Store) GetComments(fingerprint string) ([]models.Comment, error) {
+// GetComments returns all comments for a (fingerprint, cluster) pair (newest first).
+func (s *Store) GetComments(fingerprint, clusterName string) ([]models.Comment, error) {
 	rows, err := s.query(context.Background(), `
-		SELECT id, fingerprint, event_id, user_id, author_name, body, created_at
-		FROM alert_comments WHERE fingerprint = ?
+		SELECT id, fingerprint, cluster_name, event_id, user_id, author_name, body, created_at
+		FROM alert_comments
+		WHERE fingerprint = ? AND cluster_name = ?
 		ORDER BY created_at DESC
-	`, fingerprint)
+	`, fingerprint, clusterName)
 	if err != nil {
 		return nil, fmt.Errorf("query comments: %w", err)
 	}
@@ -450,7 +578,7 @@ func (s *Store) GetComments(fingerprint string) ([]models.Comment, error) {
 		var eventID sql.NullInt64
 		var userID sql.NullString
 		var createdAt time.Time
-		if err := rows.Scan(&c.ID, &c.Fingerprint, &eventID, &userID, &c.AuthorName, &c.Body, &createdAt); err != nil {
+		if err := rows.Scan(&c.ID, &c.Fingerprint, &c.ClusterName, &eventID, &userID, &c.AuthorName, &c.Body, &createdAt); err != nil {
 			return nil, fmt.Errorf("scan comment: %w", err)
 		}
 		c.CreatedAt = createdAt.UTC()
@@ -465,16 +593,17 @@ func (s *Store) GetComments(fingerprint string) ([]models.Comment, error) {
 	return comments, rows.Err()
 }
 
-// GetComment returns a comment by ID scoped to fingerprint.
-func (s *Store) GetComment(fingerprint string, id int64) (*models.Comment, error) {
+// GetComment returns a comment by ID scoped to (fingerprint, cluster).
+func (s *Store) GetComment(fingerprint, clusterName string, id int64) (*models.Comment, error) {
 	var c models.Comment
 	var eventID sql.NullInt64
 	var userID sql.NullString
 	var createdAt time.Time
 	err := s.queryRow(context.Background(), `
-		SELECT id, fingerprint, event_id, user_id, author_name, body, created_at
-		FROM alert_comments WHERE fingerprint = ? AND id = ?
-	`, fingerprint, id).Scan(&c.ID, &c.Fingerprint, &eventID, &userID, &c.AuthorName, &c.Body, &createdAt)
+		SELECT id, fingerprint, cluster_name, event_id, user_id, author_name, body, created_at
+		FROM alert_comments
+		WHERE fingerprint = ? AND cluster_name = ? AND id = ?
+	`, fingerprint, clusterName, id).Scan(&c.ID, &c.Fingerprint, &c.ClusterName, &eventID, &userID, &c.AuthorName, &c.Body, &createdAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -493,18 +622,19 @@ func (s *Store) GetComment(fingerprint string, id int64) (*models.Comment, error
 
 // AddComment inserts a new comment.
 // userID is nil when the server runs in auth-mode "none".
-func (s *Store) AddComment(fingerprint string, eventID *int64, userID *string, authorName, body string) (*models.Comment, error) {
+func (s *Store) AddComment(fingerprint, clusterName string, eventID *int64, userID *string, authorName, body string) (*models.Comment, error) {
 	now := time.Now().UTC()
 	id, err := s.insertReturningID(context.Background(), `
-		INSERT INTO alert_comments (fingerprint, event_id, user_id, author_name, body, created_at)
-		VALUES (?, ?, ?, ?, ?, ?)
-	`, fingerprint, eventID, userID, authorName, body, now)
+		INSERT INTO alert_comments (fingerprint, cluster_name, event_id, user_id, author_name, body, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+	`, fingerprint, clusterName, eventID, userID, authorName, body, now)
 	if err != nil {
 		return nil, fmt.Errorf("insert comment: %w", err)
 	}
 	return &models.Comment{
 		ID:          id,
 		Fingerprint: fingerprint,
+		ClusterName: clusterName,
 		EventID:     eventID,
 		UserID:      userID,
 		AuthorName:  authorName,
@@ -513,12 +643,15 @@ func (s *Store) AddComment(fingerprint string, eventID *int64, userID *string, a
 	}, nil
 }
 
-// DeleteComment deletes a comment by ID scoped to the given fingerprint.
-// Returns false if no row matched (either ID not found or fingerprint mismatch).
-// The fingerprint scope prevents cross-alert IDOR: callers cannot delete a comment
-// that belongs to a different alert by guessing sequential IDs.
-func (s *Store) DeleteComment(id int64, fingerprint string) (bool, error) {
-	res, err := s.exec(context.Background(), `DELETE FROM alert_comments WHERE id = ? AND fingerprint = ?`, id, fingerprint)
+// DeleteComment deletes a comment by ID scoped to the given (fingerprint, cluster).
+// Returns false if no row matched (ID not found or scope mismatch).
+// Fingerprint+cluster scope prevents cross-alert/cluster IDOR: callers cannot delete
+// a comment that belongs to a different alert scope by guessing sequential IDs.
+func (s *Store) DeleteComment(id int64, fingerprint, clusterName string) (bool, error) {
+	res, err := s.exec(context.Background(),
+		`DELETE FROM alert_comments WHERE id = ? AND fingerprint = ? AND cluster_name = ?`,
+		id, fingerprint, clusterName,
+	)
 	if err != nil {
 		return false, fmt.Errorf("delete comment: %w", err)
 	}
@@ -757,11 +890,24 @@ func (s *Store) ReleaseClaimsForResolved(fingerprints []string) error {
 	return err
 }
 
+func (s *Store) ReleaseClaimsForResolvedInCluster(fingerprint, clusterName string) error {
+	now := time.Now().UTC()
+	_, err := s.exec(context.Background(), `
+		UPDATE alert_claims SET released_at = ?, released_by = ?, release_reason = ?
+		WHERE released_at IS NULL AND fingerprint = ? AND cluster_name = ?
+	`, now, "system", models.ReleaseReasonResolved, fingerprint, clusterName)
+	return err
+}
+
 // IsStillResolved reports whether the most recent event for the fingerprint is
 // still "resolved". Guards the delayed claim release against grace-period
 // re-fires that rolled back the resolved row before the delay elapsed.
 func (s *Store) IsStillResolved(fingerprint string) (bool, error) {
-	last, err := s.getLastEvent(fingerprint)
+	return s.IsStillResolvedForCluster(fingerprint, "")
+}
+
+func (s *Store) IsStillResolvedForCluster(fingerprint, clusterName string) (bool, error) {
+	last, err := s.getLastEventForCluster(fingerprint, clusterName)
 	if err != nil || last == nil {
 		return false, err
 	}
@@ -794,10 +940,18 @@ func (s *Store) RecordSilenceEvent(fingerprint, silenceID, clusterName, action, 
 
 // HasSilenceEventsForSilenceID reports whether any silence_events row exists for the given silenceID.
 func (s *Store) HasSilenceEventsForSilenceID(silenceID string) (bool, error) {
+	return s.HasSilenceEventsForSilenceIDInCluster(silenceID, "")
+}
+
+func (s *Store) HasSilenceEventsForSilenceIDInCluster(silenceID, clusterName string) (bool, error) {
 	var count int
-	err := s.queryRow(context.Background(), `
-		SELECT COUNT(*) FROM silence_events WHERE silence_id = ?
-	`, silenceID).Scan(&count)
+	query := `SELECT COUNT(*) FROM silence_events WHERE silence_id = ?`
+	args := []interface{}{silenceID}
+	if clusterName != "" {
+		query += ` AND cluster_name = ?`
+		args = append(args, clusterName)
+	}
+	err := s.queryRow(context.Background(), query, args...).Scan(&count)
 	if err != nil {
 		return false, fmt.Errorf("count silence events by silence_id: %w", err)
 	}
@@ -806,11 +960,25 @@ func (s *Store) HasSilenceEventsForSilenceID(silenceID string) (bool, error) {
 
 // GetSilenceEvents returns all silence events for a fingerprint (newest first).
 func (s *Store) GetSilenceEvents(fingerprint string) ([]models.SilenceEvent, error) {
-	rows, err := s.query(context.Background(), `
+	return s.GetSilenceEventsForCluster(fingerprint, "")
+}
+
+// GetSilenceEventsForCluster returns silence events for a fingerprint,
+// optionally scoped to one cluster.
+func (s *Store) GetSilenceEventsForCluster(fingerprint, clusterName string) ([]models.SilenceEvent, error) {
+	query := `
 		SELECT id, fingerprint, silence_id, cluster_name, action, performed_by, comment, recorded_at
-		FROM silence_events WHERE fingerprint = ?
-		ORDER BY recorded_at DESC
-	`, fingerprint)
+		FROM silence_events
+		WHERE fingerprint = ?
+	`
+	args := []interface{}{fingerprint}
+	if clusterName != "" {
+		query += ` AND cluster_name = ?`
+		args = append(args, clusterName)
+	}
+	query += ` ORDER BY recorded_at DESC`
+
+	rows, err := s.query(context.Background(), query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("query silence events: %w", err)
 	}
@@ -832,15 +1000,21 @@ func (s *Store) GetSilenceEvents(fingerprint string) ([]models.SilenceEvent, err
 
 // ── Internal helpers ──────────────────────────────────────────────────────────
 
-func (s *Store) getLastEvent(fingerprint string) (*models.AlertEvent, error) {
+func (s *Store) getLastEventForCluster(fingerprint, clusterName string) (*models.AlertEvent, error) {
 	var e models.AlertEvent
 	var startsAt, recordedAt time.Time
 	var endsAt sql.NullTime
+	clusterFilter := ""
+	args := []interface{}{fingerprint}
+	if clusterName != "" {
+		clusterFilter = " AND cluster_name = ?"
+		args = append(args, clusterName)
+	}
 	err := s.queryRow(context.Background(), `
 		SELECT id, fingerprint, cluster_name, alertmanager_url, status, starts_at, ends_at, recorded_at
-		FROM alert_events WHERE fingerprint = ?
+		FROM alert_events WHERE fingerprint = ?`+clusterFilter+`
 		ORDER BY recorded_at DESC LIMIT 1
-	`, fingerprint).Scan(&e.ID, &e.Fingerprint, &e.ClusterName, &e.AlertmanagerURL,
+	`, args...).Scan(&e.ID, &e.Fingerprint, &e.ClusterName, &e.AlertmanagerURL,
 		&e.Status, &startsAt, &endsAt, &recordedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -917,9 +1091,9 @@ func scanResolvedAlerts(rows *sql.Rows) ([]models.EnrichedAlert, error) {
 func (s *Store) GetAllResolved() ([]models.EnrichedAlert, error) {
 	rows, err := s.query(context.Background(), `
 		WITH latest AS (
-			SELECT fingerprint, MAX(id) AS max_id
+			SELECT fingerprint, cluster_name, MAX(id) AS max_id
 			FROM alert_events
-			GROUP BY fingerprint
+			GROUP BY fingerprint, cluster_name
 		)
 		SELECT e.fingerprint, e.cluster_name, e.alertmanager_url, e.starts_at, e.recorded_at, e.annotations, f.labels
 		FROM alert_events e
@@ -948,7 +1122,7 @@ func (s *Store) GetRecentResolved(window time.Duration) ([]models.EnrichedAlert,
 		  AND e.id IN (
 		    SELECT MAX(id) FROM alert_events
 		    WHERE status = 'resolved' AND recorded_at >= ?
-		    GROUP BY fingerprint
+		    GROUP BY fingerprint, cluster_name
 		  )
 		ORDER BY e.recorded_at DESC
 	`, since)

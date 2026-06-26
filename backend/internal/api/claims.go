@@ -28,7 +28,7 @@ func (s *Server) getClaim(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get claim")
 	}
 	if claim == nil {
-		return echo.NewHTTPError(http.StatusNotFound, "no active claim")
+		return c.JSON(http.StatusOK, nil)
 	}
 	return c.JSON(http.StatusOK, claim)
 }

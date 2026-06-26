@@ -10,13 +10,14 @@ import { useAuthStore } from '@/store/authStore'
 import { getSilenceState, formatSilenceDuration } from '@/lib/alertUtils'
 import { renderTextWithLinks } from '@/lib/linkUtils'
 import { useFormatTime } from '@/hooks/useFormatTime'
+import { makeAlertSelectionKeyForAlert } from '@/lib/alertSelection'
 import type { EnrichedAlert, Silence } from '@/types'
 import { cn } from '@/lib/utils'
 import { useSettingsStore } from '@/store/useSettingsStore'
 
 interface AlertListRowProps {
   alert: EnrichedAlert
-  onClick: (fingerprint: string) => void
+  onClick: (selectionKey: string) => void
   selected: boolean
   indented?: boolean
   isLastInGroup?: boolean
@@ -93,7 +94,7 @@ export function AlertListRow({
     guard(() => release())
   }
 
-  const { data: stats } = useAlertStats(alert.fingerprint)
+  const { data: stats } = useAlertStats(alert.fingerprint, alert.clusterName)
   const formatTime = useFormatTime()
 
   const { type: silenceType, silence, remaining } = silences
@@ -112,8 +113,8 @@ export function AlertListRow({
       role="row"
       tabIndex={0}
       data-testid="alert-list-row"
-      onClick={() => onClick(alert.fingerprint)}
-      onKeyDown={(e) => e.key === 'Enter' && onClick(alert.fingerprint)}
+      onClick={() => onClick(makeAlertSelectionKeyForAlert(alert))}
+      onKeyDown={(e) => e.key === 'Enter' && onClick(makeAlertSelectionKeyForAlert(alert))}
       className={cn(
         'cursor-pointer transition-colors hover:bg-accent/50 focus:outline-none focus-visible:outline-none',
         indented && !selected && !alert.activeClaim && (theme === 'light' ? 'bg-background' : 'bg-background/60'),

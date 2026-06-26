@@ -17,6 +17,22 @@ func validateFingerprint(fp string) bool {
 	return fingerprintRegex.MatchString(fp)
 }
 
+func parseFingerprintClusterPagination(c echo.Context) (fp, cluster string, limit, offset int, err error) {
+	fp = c.Param("fingerprint")
+	if !validateFingerprint(fp) {
+		err = echo.NewHTTPError(http.StatusBadRequest, "invalid fingerprint")
+		return
+	}
+
+	cluster = c.QueryParam("cluster")
+	limit, _ = strconv.Atoi(c.QueryParam("limit"))
+	offset, _ = strconv.Atoi(c.QueryParam("offset"))
+	if limit <= 0 {
+		limit = 20
+	}
+	return
+}
+
 // GET /api/v1/alerts
 func (s *Server) getAlerts(c echo.Context) error {
 	clusterFilter := c.QueryParam("cluster")
@@ -114,18 +130,12 @@ func (s *Server) getAlertGroups(c echo.Context) error {
 
 // GET /api/v1/alerts/:fingerprint/history
 func (s *Server) getAlertHistory(c echo.Context) error {
-	fp := c.Param("fingerprint")
-	if !validateFingerprint(fp) {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid fingerprint")
+	fp, cluster, limit, offset, err := parseFingerprintClusterPagination(c)
+	if err != nil {
+		return err
 	}
 
-	limit, _ := strconv.Atoi(c.QueryParam("limit"))
-	offset, _ := strconv.Atoi(c.QueryParam("offset"))
-	if limit <= 0 {
-		limit = 20
-	}
-
-	events, total, err := s.store.GetHistory(fp, limit, offset)
+	events, total, err := s.store.GetHistoryForCluster(fp, cluster, limit, offset)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get history").SetInternal(err)
 	}
@@ -137,16 +147,9 @@ func (s *Server) getAlertHistory(c echo.Context) error {
 
 // GET /api/v1/alerts/:fingerprint/timeline
 func (s *Server) getAlertTimeline(c echo.Context) error {
-	fp := c.Param("fingerprint")
-	if !validateFingerprint(fp) {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid fingerprint")
-	}
-
-	cluster := c.QueryParam("cluster")
-	limit, _ := strconv.Atoi(c.QueryParam("limit"))
-	offset, _ := strconv.Atoi(c.QueryParam("offset"))
-	if limit <= 0 {
-		limit = 20
+	fp, cluster, limit, offset, err := parseFingerprintClusterPagination(c)
+	if err != nil {
+		return err
 	}
 
 	entries, total, err := s.store.GetTimeline(fp, cluster, limit, offset)
@@ -165,8 +168,9 @@ func (s *Server) getSilenceEvents(c echo.Context) error {
 	if !validateFingerprint(fp) {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid fingerprint")
 	}
+	cluster := c.QueryParam("cluster")
 
-	events, err := s.store.GetSilenceEvents(fp)
+	events, err := s.store.GetSilenceEventsForCluster(fp, cluster)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get silence events").SetInternal(err)
 	}
@@ -182,8 +186,9 @@ func (s *Server) getAlertStats(c echo.Context) error {
 	if !validateFingerprint(fp) {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid fingerprint")
 	}
+	cluster := c.QueryParam("cluster")
 
-	stats, err := s.store.GetStats(fp)
+	stats, err := s.store.GetStatsForCluster(fp, cluster)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get stats").SetInternal(err)
 	}

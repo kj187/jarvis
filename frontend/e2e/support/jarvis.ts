@@ -89,12 +89,13 @@ export class JarvisClient {
   }
 
   /** Adds a comment to an alert (e2e only). */
-  async addComment(fingerprint: string, body: string, authorName?: string): Promise<void> {
+  async addComment(fingerprint: string, body: string, authorName?: string, clusterName?: string): Promise<void> {
     const res = await fetch(`${this.baseURL}/api/v1/test/comment`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         fingerprint,
+        clusterName,
         body,
         authorName: authorName ?? 'e2e-tester',
       }),
@@ -103,12 +104,13 @@ export class JarvisClient {
   }
 
   /** Sets a claim on an alert (e2e only). */
-  async setClaim(fingerprint: string, claimedBy?: string, note?: string): Promise<void> {
+  async setClaim(fingerprint: string, claimedBy?: string, note?: string, clusterName?: string): Promise<void> {
     const res = await fetch(`${this.baseURL}/api/v1/test/claim`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         fingerprint,
+        clusterName,
         claimedBy: claimedBy ?? 'e2e-tester',
         note: note ?? '',
       }),

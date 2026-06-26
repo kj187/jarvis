@@ -1,10 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { fetchSilences, fetchSilenceEvents, upsertSilence, deleteSilence, triggerPoll, type UpsertSilenceBody } from '@/api/client'
 
-export function useSilenceEvents(fingerprint: string) {
+export function useSilenceEvents(fingerprint: string, cluster?: string) {
   return useQuery({
-    queryKey: ['silence-events', fingerprint],
-    queryFn: () => fetchSilenceEvents(fingerprint),
+    queryKey: ['silence-events', fingerprint, cluster],
+    queryFn: () => fetchSilenceEvents(fingerprint, cluster),
     enabled: Boolean(fingerprint),
   })
 }
