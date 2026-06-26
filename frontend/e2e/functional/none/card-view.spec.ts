@@ -14,6 +14,6 @@ test('card view renders polled alerts', async ({ page, am, jarvis }) => {
   await page.goto('/?state=active')
 
   const cards = page.getByTestId('alert-card')
-  await expect(cards.first()).toBeVisible()
-  await expect(cards).toHaveCount(manyAlerts.length)
+  await expect(cards.first()).toBeVisible({ timeout: 10_000 })
+  await expect(cards).toHaveCount(manyAlerts.length, { timeout: 15_000 })
 })

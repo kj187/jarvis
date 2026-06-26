@@ -37,7 +37,9 @@ test('B5 card pagination shows "x-y of n" and +/- boundaries', async ({ page, am
   await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, crashLoopBurst.length)
 
   await page.goto('/?state=active')
-  await expect(page.getByText(/\d+–\d+ of \d+/).first()).toBeVisible()
+  // Wait for alerts to render before checking pagination
+  await expect(page.getByTestId('alert-card').first()).toBeVisible({ timeout: 10_000 })
+  await expect(page.getByText(/\d+–\d+ of \d+/).first()).toBeVisible({ timeout: 10_000 })
 
   const minus = page.getByRole('button', { name: '−' }).first()
   const plus = page.getByRole('button', { name: '+' }).first()

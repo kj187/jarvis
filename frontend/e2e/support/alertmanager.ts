@@ -41,6 +41,10 @@ export class AlertmanagerClient {
 
   /** Expires all currently active alerts by re-posting them with endsAt=now. */
   async clearAll(): Promise<void> {
+    await Promise.all([this.clearAlerts(), this.clearSilences()])
+  }
+
+  private async clearAlerts(): Promise<void> {
     const res = await fetch(
       `${this.baseURL}/api/v2/alerts?active=true&silenced=true&inhibited=true`,
     )
@@ -62,5 +66,17 @@ export class AlertmanagerClient {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(expired),
     })
+  }
+
+  /** Expires (deletes) all non-expired silences in Alertmanager. */
+  async clearSilences(): Promise<void> {
+    const res = await fetch(`${this.baseURL}/api/v2/silences`)
+    if (!res.ok) return
+    const silences = (await res.json()) as Array<{ id: string; status?: { state?: string } }>
+    await Promise.all(
+      silences
+        .filter((s) => s.status?.state !== 'expired')
+        .map((s) => fetch(`${this.baseURL}/api/v2/silence/${s.id}`, { method: 'DELETE' })),
+    )
   }
 }
