@@ -13,6 +13,8 @@ import { formatSilenceDuration, getFilterableLabels, severityOrder } from '@/lib
 import { renderTextWithLinks } from '@/lib/linkUtils'
 import { useSettingsStore, RESOLVED_PAGE_SIZE_OPTIONS } from '@/store/useSettingsStore'
 import { useUIStore } from '@/store/uiStore'
+import { useLoginGuard } from '@/hooks/useLoginGuard'
+import { LoginModal } from '@/components/auth/LoginModal'
 import type { EnrichedAlert, Silence } from '@/types'
 import { cn } from '@/lib/utils'
 
@@ -195,6 +197,7 @@ export function AlertListView({
   resolvedMode,
   groupingEnabled = true,
 }: AlertListViewProps) {
+  const { guard, loginModalOpen, onLoginSuccess, onLoginClose } = useLoginGuard()
   const showStateColumn = !stateFilter
   const [sortKey, setSortKey] = useState<SortKey>('alertname')
   const [sortAsc, setSortAsc] = useState(true)
@@ -261,8 +264,8 @@ export function AlertListView({
   })
 
   function handleExpireConfirm() {
-    Promise.all(expireTargets.map((s) => expireMutation.mutateAsync({ id: s.id, cluster: s.clusterName })))
-      .finally(() => setExpireTargets([]))
+    guard(() => Promise.all(expireTargets.map((s) => expireMutation.mutateAsync({ id: s.id, cluster: s.clusterName })))
+      .finally(() => setExpireTargets([])))
   }
 
   function openSilenceForm(formAlerts: EnrichedAlert[], prefillSilence?: Silence, isRecreate?: boolean) {
@@ -943,6 +946,7 @@ export function AlertListView({
           />
         </div>
       </Sheet>
+      <LoginModal open={loginModalOpen} onSuccess={onLoginSuccess} onClose={onLoginClose} />
     </div>
   )
 }

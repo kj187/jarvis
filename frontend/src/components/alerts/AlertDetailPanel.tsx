@@ -17,6 +17,8 @@ import { useFormatTime } from '@/hooks/useFormatTime'
 import { useActiveClaim, useClaimController, USERNAME_KEY } from '@/hooks/useAlertClaim'
 import { useDeleteSilence, useUpsertSilence } from '@/hooks/useSilences'
 import { useAuthStore } from '@/store/authStore'
+import { useLoginGuard } from '@/hooks/useLoginGuard'
+import { LoginModal } from '@/components/auth/LoginModal'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { Button } from '@/components/ui/button'
 import { Tooltip } from '@/components/ui/tooltip'
@@ -233,6 +235,7 @@ export function AlertDetailPanel({
   const [manualClaimName, setManualClaimName] = useState(() => localStorage.getItem(USERNAME_KEY) ?? '')
   const [claimNote, setClaimNote] = useState('')
   const { user, providerInfo } = useAuthStore()
+  const { guard, loginModalOpen, onLoginSuccess, onLoginClose } = useLoginGuard()
   const theme = useSettingsStore((s) => s.theme)
   const authMode = providerInfo?.mode ?? 'none'
   const claimName = user?.username ?? manualClaimName
@@ -494,7 +497,7 @@ export function AlertDetailPanel({
                   <button
                     data-testid="claim-release-button"
                     className="ml-1 shrink-0 text-[10px] text-muted-foreground hover:text-foreground cursor-pointer"
-                    onClick={() => releaseClaim()}
+                    onClick={() => guard(() => releaseClaim())}
                     disabled={releaseMutation.isPending}
                   >
                     ✕
@@ -506,7 +509,7 @@ export function AlertDetailPanel({
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setShowClaimForm((v) => !v)}
+                    onClick={() => guard(() => setShowClaimForm((v) => !v))}
                     className="relative z-10 bg-card border-transparent hover:bg-accent hover:border-transparent"
                   >
                     <User className="h-3.5 w-3.5" />
@@ -530,7 +533,7 @@ export function AlertDetailPanel({
               className="mt-3 space-y-2"
               onSubmit={(e) => {
                 e.preventDefault()
-                updateNote(editNote, { onSuccess: () => setShowEditNoteForm(false) })
+                guard(() => updateNote(editNote, { onSuccess: () => setShowEditNoteForm(false) }))
               }}
             >
               <textarea
@@ -552,19 +555,18 @@ export function AlertDetailPanel({
           )}
 
           {showClaimForm && !activeClaim && alert.status.state !== 'resolved' && (
-            authMode !== 'none' && !user ? (
-              <p className="mt-3 text-xs text-muted-foreground">
-                Login required to claim this alert.
-              </p>
-            ) : (
             <form
               className="mt-3 space-y-2"
               onSubmit={(e) => {
                 e.preventDefault()
-                submitClaim(
-                  { claimedBy: claimName, note: claimNote },
-                  { onSuccess: () => { setShowClaimForm(false); setClaimNote('') } },
-                )
+                guard(() => {
+                  const currentUser = useAuthStore.getState().user
+                  const nameToUse = currentUser?.username ?? manualClaimName
+                  submitClaim(
+                    { claimedBy: nameToUse, note: claimNote },
+                    { onSuccess: () => { setShowClaimForm(false); setClaimNote('') } },
+                  )
+                })
               }}
             >
               {authMode !== 'none' ? (
@@ -597,7 +599,6 @@ export function AlertDetailPanel({
                 </Button>
               </div>
             </form>
-            )
           )}
         </div>
 
@@ -644,7 +645,7 @@ export function AlertDetailPanel({
                           key={label}
                           disabled={isExtending}
                           className="flex items-center gap-1 rounded border border-yellow-700 px-2 py-0.5 text-xs text-yellow-300 hover:bg-yellow-900/50 cursor-pointer disabled:opacity-40"
-                          onClick={() => upsertSilence({
+                          onClick={() => guard(() => upsertSilence({
                             id: s.id,
                             cluster: s.clusterName,
                             matchers: s.matchers,
@@ -653,8 +654,8 @@ export function AlertDetailPanel({
                             createdBy: s.createdBy,
                             comment: s.comment,
                             fingerprint: alert.fingerprint,
-                            performedBy: user?.username ?? localStorage.getItem(USERNAME_KEY) ?? 'unknown',
-                          })}
+                            performedBy: useAuthStore.getState().user?.username ?? localStorage.getItem(USERNAME_KEY) ?? 'unknown',
+                          }))}
                         >
                           {label}
                         </button>
@@ -671,7 +672,7 @@ export function AlertDetailPanel({
                   <button
                     disabled={isDeleting}
                     className="flex items-center gap-1 rounded border border-border px-2 py-0.5 text-xs text-red-500/70 hover:text-red-400 hover:bg-red-950/40 cursor-pointer disabled:opacity-40"
-                    onClick={() => handleDelete(s)}
+                    onClick={() => guard(() => handleDelete(s))}
                   >
                     <Trash2 className="h-3 w-3" />
                     {isDeleting ? '…' : 'Expire'}
@@ -934,6 +935,7 @@ export function AlertDetailPanel({
           </div>
         </Sheet>
       )}
+      <LoginModal open={loginModalOpen} onSuccess={onLoginSuccess} onClose={onLoginClose} />
     </>
   )
 }

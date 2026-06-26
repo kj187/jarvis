@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -20,6 +21,8 @@ export function LoginModal({ open, onSuccess, onClose }: LoginModalProps) {
 
   if (!open) return null
 
+  // Render via portal so the modal always escapes its DOM container
+  // (e.g. <tr> in AlertListRow) and appears at document.body level.
   async function handleInternalLogin(e: React.FormEvent) {
     e.preventDefault()
     setError('')
@@ -37,7 +40,7 @@ export function LoginModal({ open, onSuccess, onClose }: LoginModalProps) {
 
   const mode = providerInfo?.mode ?? null
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center"
       role="dialog"
@@ -102,6 +105,7 @@ export function LoginModal({ open, onSuccess, onClose }: LoginModalProps) {
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

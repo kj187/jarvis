@@ -17,6 +17,8 @@ import { fetchClusters } from '@/api/client'
 import { useUIStore } from '@/store/uiStore'
 import { MatcherChipsBar } from '@/components/layout/MatcherChipsBar'
 import { filterSilences } from '@/lib/alertUtils'
+import { useLoginGuard } from '@/hooks/useLoginGuard'
+import { LoginModal } from '@/components/auth/LoginModal'
 import type { Silence } from '@/types'
 import type { SilenceGroup } from './SilenceGroupCard'
 
@@ -50,6 +52,7 @@ export function SilencesPage() {
   })
   const deleteMutation = useDeleteSilence()
 
+  const { guard, loginModalOpen, onLoginSuccess, onLoginClose } = useLoginGuard()
   const { silencesViewMode: viewMode, setSilencesViewMode, filters, setFilter, isFullscreen, setIsFullscreen } = useUIStore()
   const [sortBy, setSortBy] = useState<SortBy>('expires')
   const [showExpired, setShowExpired] = useState(false)
@@ -116,12 +119,14 @@ export function SilencesPage() {
     ? new Set(expireTargets.map((s) => s.id))
     : new Set()
 
-  async function handleExpireConfirm() {
-    if (expireTargets.length === 0) return
-    for (const s of expireTargets) {
-      await deleteMutation.mutateAsync({ id: s.id, cluster: s.clusterName })
-    }
-    setExpireTargets([])
+  function handleExpireConfirm() {
+    guard(async () => {
+      if (expireTargets.length === 0) return
+      for (const s of expireTargets) {
+        await deleteMutation.mutateAsync({ id: s.id, cluster: s.clusterName })
+      }
+      setExpireTargets([])
+    })
   }
 
   function handleEdit(silence: Silence) {
@@ -344,6 +349,7 @@ export function SilencesPage() {
         silences={silences}
         onSelectAlert={setSelectedFingerprint}
       />
+      <LoginModal open={loginModalOpen} onSuccess={onLoginSuccess} onClose={onLoginClose} />
     </div>
   )
 }

@@ -4,6 +4,9 @@ import { AlertBadge, StatusBadge } from './AlertBadge'
 import { HIDDEN_LABEL_KEYS, LabelChip } from './LabelChip'
 import { useAlertStats } from '@/hooks/useAlerts'
 import { useClaimController } from '@/hooks/useAlertClaim'
+import { useLoginGuard } from '@/hooks/useLoginGuard'
+import { LoginModal } from '@/components/auth/LoginModal'
+import { useAuthStore } from '@/store/authStore'
 import { getSilenceState, formatSilenceDuration } from '@/lib/alertUtils'
 import { renderTextWithLinks } from '@/lib/linkUtils'
 import { useFormatTime } from '@/hooks/useFormatTime'
@@ -53,8 +56,9 @@ export function AlertListRow({
   const [showNameInput, setShowNameInput] = useState(false)
   const [nameInput, setNameInput] = useState('')
   const nameInputRef = useRef<HTMLInputElement>(null)
-  const { setClaimMutation, releaseMutation, user, authMode, storedName, claim, release } =
+  const { setClaimMutation, releaseMutation, authMode, storedName, claim, release } =
     useClaimController(alert.fingerprint, alert.clusterName)
+  const { guard, loginModalOpen, onLoginSuccess, onLoginClose } = useLoginGuard()
 
   useEffect(() => {
     if (showNameInput) nameInputRef.current?.focus()
@@ -62,20 +66,20 @@ export function AlertListRow({
 
   function handleClaimClick(e: React.MouseEvent) {
     e.stopPropagation()
-    if (authMode !== 'none') {
-      if (user) {
-        claim({ claimedBy: user.username })
+    guard(() => {
+      if (authMode === 'none') {
+        const stored = storedName()
+        if (stored) {
+          claim({ claimedBy: stored })
+        } else {
+          setNameInput('')
+          setShowNameInput(true)
+        }
+      } else {
+        const currentUser = useAuthStore.getState().user
+        if (currentUser) claim({ claimedBy: currentUser.username })
       }
-      // not logged in: do nothing (button will show tooltip)
-      return
-    }
-    const stored = storedName()
-    if (stored) {
-      claim({ claimedBy: stored })
-    } else {
-      setNameInput('')
-      setShowNameInput(true)
-    }
+    })
   }
 
   function handleNameSubmit(e: React.FormEvent) {
@@ -86,7 +90,7 @@ export function AlertListRow({
 
   function handleRelease(e: React.MouseEvent) {
     e.stopPropagation()
-    release()
+    guard(() => release())
   }
 
   const { data: stats } = useAlertStats(alert.fingerprint)
@@ -221,6 +225,7 @@ export function AlertListRow({
           )}
         </div>
       </td>}
+      <LoginModal open={loginModalOpen} onSuccess={onLoginSuccess} onClose={onLoginClose} />
       {showClaimColumn && <td className="px-4 py-2 text-sm" onClick={(e) => e.stopPropagation()}>
         {alert.activeClaim ? (
           <div className="flex items-center gap-1.5">
@@ -238,15 +243,6 @@ export function AlertListRow({
               <X className="h-3 w-3" />
             </button>
           </div>
-        ) : authMode !== 'none' && !user ? (
-          <button
-            type="button"
-            title="Login required"
-            className="cursor-pointer text-muted-foreground/20 transition-colors"
-            disabled
-          >
-            <User className="h-3.5 w-3.5" />
-          </button>
         ) : showNameInput ? (
           <form onSubmit={handleNameSubmit} className="flex items-center gap-1">
             <input

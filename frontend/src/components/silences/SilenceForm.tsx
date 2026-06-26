@@ -17,6 +17,8 @@ import { matchesLabelMatchers, pickIdentifierLabel, tzAbbr } from '@/lib/alertUt
 import { upsertSilence, triggerPoll } from '@/api/client'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { useAuthStore } from '@/store/authStore'
+import { useLoginGuard } from '@/hooks/useLoginGuard'
+import { LoginModal } from '@/components/auth/LoginModal'
 import type { EnrichedAlert, LabelMatcher, LabelMatcherOperator, Silence } from '@/types'
 
 const USERNAME_KEY = 'jarvis-username'
@@ -481,6 +483,7 @@ export function SilenceForm({
   const qc = useQueryClient()
   const { user, providerInfo } = useAuthStore()
   const authMode = providerInfo?.mode ?? 'none'
+  const { guard, loginModalOpen, onLoginSuccess, onLoginClose } = useLoginGuard()
   const isEdit = (Boolean(prefillSilence) || Boolean(prefillGroup?.length)) && !isRecreate
   const prefillSource = prefillGroup?.[0] ?? prefillSilence
 
@@ -1302,6 +1305,7 @@ export function SilenceForm({
     const activeMatchers = matchers.filter((m) => m.name && m.value)
 
     return (
+      <>
       <div className="space-y-4">
         {/* Summary */}
         <div className="rounded border border-border p-3 text-xs space-y-1.5">
@@ -1379,11 +1383,13 @@ export function SilenceForm({
             <ArrowLeft className="mr-1.5 h-3.5 w-3.5" />
             Back
           </Button>
-          <Button type="button" className="flex-1" onClick={handleSubmit}>
+          <Button type="button" className="flex-1" onClick={() => guard(handleSubmit)}>
             {isEdit ? 'Update' : 'Create'}
           </Button>
         </div>
       </div>
+      <LoginModal open={loginModalOpen} onSuccess={onLoginSuccess} onClose={onLoginClose} />
+      </>
     )
   }
 

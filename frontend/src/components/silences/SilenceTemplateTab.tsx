@@ -4,6 +4,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { useSilenceTemplates, useCreateSilenceTemplate, useUpdateSilenceTemplate, useDeleteSilenceTemplate } from '@/hooks/useSilenceTemplates'
+import { useLoginGuard } from '@/hooks/useLoginGuard'
+import { LoginModal } from '@/components/auth/LoginModal'
 import { MatcherEditor } from './MatcherEditor'
 import type { SilenceMatcher, SilenceTemplate } from '@/types'
 
@@ -13,6 +15,7 @@ export function SilenceTemplateTab() {
   const updateMutation = useUpdateSilenceTemplate()
   const deleteMutation = useDeleteSilenceTemplate()
 
+  const { guard, loginModalOpen, onLoginSuccess, onLoginClose } = useLoginGuard()
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [formData, setFormData] = useState({
@@ -78,31 +81,35 @@ export function SilenceTemplateTab() {
       return
     }
 
-    try {
-      if (editingId) {
-        await updateMutation.mutateAsync({
-          id: editingId,
-          name: formData.name,
-          matchers: formData.matchers,
-          reason: formData.reason,
-        })
-      } else {
-        await createMutation.mutateAsync({
-          name: formData.name,
-          matchers: formData.matchers,
-          reason: formData.reason,
-        })
+    guard(async () => {
+      try {
+        if (editingId) {
+          await updateMutation.mutateAsync({
+            id: editingId,
+            name: formData.name,
+            matchers: formData.matchers,
+            reason: formData.reason,
+          })
+        } else {
+          await createMutation.mutateAsync({
+            name: formData.name,
+            matchers: formData.matchers,
+            reason: formData.reason,
+          })
+        }
+        handleCancelEdit()
+      } catch (err) {
+        setError((err as Error).message)
       }
-      handleCancelEdit()
-    } catch (err) {
-      setError((err as Error).message)
-    }
+    })
   }
 
   function handleDeleteTemplate(id: string) {
-    if (confirm('Delete this template?')) {
-      deleteMutation.mutate(id)
-    }
+    guard(() => {
+      if (confirm('Delete this template?')) {
+        deleteMutation.mutate(id)
+      }
+    })
   }
 
   if (isLoading) {
@@ -260,6 +267,7 @@ export function SilenceTemplateTab() {
           </div>
         </form>
       )}
+      <LoginModal open={loginModalOpen} onSuccess={onLoginSuccess} onClose={onLoginClose} />
     </div>
   )
 }
