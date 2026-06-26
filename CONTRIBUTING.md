@@ -35,13 +35,13 @@ Format: [Conventional Commits](https://www.conventionalcommits.org/)
 
 Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`, `security`
 
-Scopes: `backend`, `frontend`, `db`, `api`, `ws`, `config`, `docker`, `docs`
+Scopes: `alerts` `silences` `claims` `comments` `ws` `api` `db` `config` `frontend` `docker`
 
 Examples:
 ```
-feat(backend): add claim history endpoint
+feat(alerts): add claim history endpoint
 fix(frontend): resolve filter state not persisting across navigation
-security(backend): add gosec and govulncheck to pre-commit hooks
+security(api): add gosec and govulncheck to pre-commit hooks
 ```
 
 ## Testing

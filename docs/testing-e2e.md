@@ -59,6 +59,8 @@ alerts — so functional tests and screenshots exercise the actual system.
 |---|---|
 | `POST /api/v1/test/reset` | Truncate all history tables + clear in-memory store. |
 | `POST /api/v1/test/seed`  | Insert resolved-alert lifecycles directly into the DB. |
+| `POST /api/v1/test/claim` | Set a claim on an alert (bypasses auth). Used by `jarvis.setClaim()`. |
+| `POST /api/v1/test/comment` | Add a comment to an alert (bypasses auth). Note: does **not** broadcast a WS event — use the production endpoint `/api/v1/alerts/:fingerprint/comments` when testing WebSocket behaviour. |
 
 Implementation is split by build tag so production can never expose them:
 - `backend/internal/api/testing_routes_e2e.go`  (`//go:build e2e`)
@@ -190,3 +192,41 @@ frontend/
 - **`missing services [e2e-playwright]`** under podman-compose — don't put the
   playwright service behind a compose `profile`; podman-compose `run` can't see
   profiled services.
+
+---
+
+## Current test inventory
+
+Quick reference: which spec file covers what. Use this to find the right place for a new test or to understand what already exists.
+
+### Mode: `none`
+
+| Spec file | Groups | What it covers |
+|---|---|---|
+| `app-shell.spec.ts` | A1–A6 | Nav-tabs, theme toggle, mobile hamburger, WS indicator, polling pause/refresh, cluster status in header |
+| `card-view.spec.ts` | B1 | Card view renders polled alerts (smoke test) |
+| `alerts-views.spec.ts` | B2–B6, B9 | List↔card toggle, severity ordering, card pagination, fullscreen, resolved view |
+| `alerts-views-extended.spec.ts` | B7–B8, B10 | Responsive column binning, empty state, suppressed/silenced view |
+| `filters.spec.ts` | C1, C10–C13 | Exact matcher + URL, state restore from URL, `?q=` search, combined search+chips |
+| `filters-extended.spec.ts` | C2–C9 | `!=`/`=~`/`!~` operators, regex multi-value, label/value suggestions, label chip → filter, AND matchers, draft→promotion, remove-all, locked default chips |
+| `detail-panel.spec.ts` | D1–D2, D5–D11, G2 | Open/close/URL param, labels/annotations, stats & timeline, claim set/release, comments add/delete, claim note edit, AI prompt, section collapse, extend controls |
+| `detail-panel-extended.spec.ts` | D4, D12–D14 | Runbook/URL links, AI prompt collapse+copy, section collapse/expand, silence from detail panel |
+| `silences-page.spec.ts` | E1–E7, G1, G3 | List view persist, grouping, show/hide expired, sort, matcher filter, expiry status, re-create, expire single/group |
+| `silences-form-extended.spec.ts` | F3–F16 | Operator switch, regex tags+escaping, live match count, overlap warning, zero-match warning, duration presets, spinner normalisation, inline calendar, Now/Reset, end-after-start validation, author editability, reason required, preview summary, results step |
+| `silences-form-templates.spec.ts` | F1–F2, F14–F15, F17, G4–G8 | Form open/close (Cancel/ESC/backdrop), cluster guard, templates CRUD (create/apply/edit/delete) |
+| `settings.spec.ts` | H1–H11 | All settings: timeFormat, defaultViewMode, resolvedPageSize, defaultFilters, silenceDuration, defaultCreatorName, pollInterval, claimAnimation, reset defaults, persistence |
+| `no-auth-notice.spec.ts` | I1 | NoAuth notice appears and dismiss persists |
+| `websocket.spec.ts` | J1–J4 | Reconnect indicator (force-close via patched WebSocket), `alerts_update` / `claim_set` / `claim_released` / `comment_added` live events |
+
+### Mode: `internal`
+
+| Spec file | Groups | What it covers |
+|---|---|---|
+| `login.spec.ts` | I2, I4, I6 | First-run setup + login happy path, write_protect login modal on write attempt, retry flow after modal login |
+| `admin.spec.ts` | I10–I14 | Admin panel user list, add-user password validation, role change, delete confirm flow, self-row guards |
+
+### Mode: `oidc`
+
+| Spec file | Groups | What it covers |
+|---|---|---|
+| `login.spec.ts` | I3, I8–I9 | Full PKCE flow against mock IdP, admin-claim mapping, write_protect SSO modal on write attempt |

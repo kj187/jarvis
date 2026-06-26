@@ -1,19 +1,15 @@
 # Jarvis
 
-> **Built with AI** — Jarvis was developed entirely using AI coding assistants. This is an intentional workflow choice, not a shortcut: the codebase follows established Go and React best practices, enforces security standards through automated tooling (gosec, govulncheck, golangci-lint, pnpm audit) on every commit and in CI, and applies defense-in-depth measures (strict CSP, read-only container filesystem, no-new-privileges). See [SECURITY.md](SECURITY.md) for details.
-
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![CI](https://github.com/kj187/jarvis/actions/workflows/ci.yml/badge.svg)](https://github.com/kj187/jarvis/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/kj187/jarvis)](https://github.com/kj187/jarvis/releases/latest)
 [![Go Version](https://img.shields.io/badge/Go-1.25-00ADD8?logo=go)](backend/go.mod)
-[![Coverage](https://codecov.io/gh/kj187/jarvis/branch/main/graph/badge.svg)](https://codecov.io/gh/kj187/jarvis)
 
 **Jarvis** is an open source web frontend for Prometheus Alertmanager — interactive, realtime, and self-hosted.
 
 It was inspired by [Karma](https://github.com/prymitive/karma), which is a great project. However, I was missing features that matter for day-to-day on-call work: full persistence across restarts, the ability to comment on individual alerts, a claiming system so the team knows who is handling what, and a solid foundation to build further operational tooling on top of. Jarvis is the result.
 
-![Jarvis Screenshot](docs/assets/screenshot.png)
-
+ ![Jarvis Screenshot](docs/assets/screenshot.png)
 
 ## Why Jarvis?
 
@@ -37,6 +33,14 @@ Most Alertmanager UIs are read-only dashboards. Jarvis is built for teams that n
 - **Single binary** — Go backend embeds the Vite build; one container
 - **User authentication** — optional UI login, three modes: `none` (open), `internal` (built-in user management with admin panel), `oidc` (Keycloak, Authentik, Dex, any OIDC provider)
 
+### Built with AI
+> Jarvis was developed entirely using AI coding assistants. This is an intentional workflow choice, not a shortcut: the codebase follows established Go and React best practices, enforces security standards through automated tooling (gosec, govulncheck, golangci-lint, pnpm audit) on every commit and in CI, and applies defense-in-depth measures (strict CSP, read-only container filesystem, no-new-privileges). See [SECURITY.md](SECURITY.md) for details.
+
+## Features
+
+Card view, list view, label filters, silence management, alert history, detail panel, user settings, and more — see **[docs/features.md](docs/features.md)** for the full feature reference.
+
+
 ## Getting Started
 
 **No clone needed — runs entirely from the published image.**
@@ -53,7 +57,7 @@ services:
     volumes:
       - jarvis_data:/data
     environment:
-      JARVIS_CLUSTER_1_NAME: production
+      JARVIS_CLUSTER_1_NAME: dev
       JARVIS_CLUSTER_1_ALERTMANAGER_URL: http://alertmanager:9093
     restart: unless-stopped
     read_only: true
@@ -82,7 +86,7 @@ Now open http://localhost:8080
 ```bash
 helm install jarvis oci://ghcr.io/kj187/charts/jarvis \
   --version 1.4.0 \
-  --set clusters[0].name=production \
+  --set clusters[0].name=dev \
   --set clusters[0].alertmanagerUrl=http://alertmanager:9093 \
   --set database.dsn='postgres://jarvis:secret@postgres.monitoring.svc:5432/jarvis?sslmode=require'
 ```
@@ -92,65 +96,6 @@ helm install jarvis oci://ghcr.io/kj187/charts/jarvis \
 
 All configuration options → [Configuration](#configuration) · [User Authentication](#user-authentication) · [Helm chart](#kubernetes--helm)
 
-## Features
-
-Card view, list view, label filters, silence management, alert history, detail panel, user settings, and more — see **[docs/features.md](docs/features.md)** for the full feature reference.
-
----
-
-
-## Supported Alertmanager Versions
-
-Jarvis uses the **Alertmanager HTTP API v2** exclusively (`/api/v2/alerts`, `/api/v2/silences`, `/api/v2/status`). API v2 was introduced in Alertmanager **0.16.0**.
-
-| Requirement | Version |
-|---|---|
-| Minimum | 0.16.0 |
-| Tested with | 0.27.x · 0.28.x |
-
-Any release shipping API v2 should work. If you run into a compatibility issue with a specific version, please [open an issue](https://github.com/kj187/jarvis/issues).
-
-## Development
-
-> Works with both Podman and Docker — replace `podman` with `docker` in all commands if needed.
-
-```bash
-# 1. Copy and configure environment
-cp .env.example .env
-# Edit .env — set at minimum JARVIS_CLUSTER_1_ALERTMANAGER_URL
-
-# 2. Activate pre-commit hooks (once after clone)
-git config core.hooksPath .githooks
-
-# 3. Start development stack (hot-reload)
-podman compose -f compose.dev.yml up
-# Frontend: http://localhost:5173
-# Backend:  http://localhost:8080
-
-# 4. Production build
-podman compose up --build -d
-# http://localhost:8080
-```
-
-### Running tests
-
-Quick reference — for the full test strategy, matrix, utilities, and CI pipeline, see `/project:testing`.
-
-```bash
-make test-all        # backend (go test -race) + frontend functional E2E + helm lint + helm unittest
-make test-backend    # go test -race ./...
-make test-frontend   # functional E2E (none + internal + oidc)
-make helm-lint       # helm lint charts/jarvis/
-make helm-test       # helm unittest charts/jarvis/
-```
-
-**E2E & screenshots:** See [docs/testing-e2e.md](docs/testing-e2e.md) for the isolated Podman stack, fixture setup, and screenshot generation.
-
-Helm unit tests run without a Kubernetes cluster. Install the plugin once:
-
-```bash
-helm plugin install https://github.com/helm-unittest/helm-unittest --version v0.8.2
-```
 
 ## Configuration
 
@@ -297,13 +242,69 @@ helm install jarvis oci://ghcr.io/kj187/charts/jarvis \
 
 For a full values reference, installation examples (SQLite with PVC, PostgreSQL, multi-cluster, ingress-nginx with WebSocket), and upgrade instructions see [charts/jarvis/README.md](charts/jarvis/README.md).
 
+
+## Supported Alertmanager Versions
+
+Jarvis uses the **Alertmanager HTTP API v2** exclusively (`/api/v2/alerts`, `/api/v2/silences`, `/api/v2/status`). API v2 was introduced in Alertmanager **0.16.0**.
+
+| Requirement | Version |
+|---|---|
+| Minimum | 0.16.0 |
+| Tested with | 0.27.x · 0.28.x |
+
+Any release shipping API v2 should work. If you run into a compatibility issue with a specific version, please [open an issue](https://github.com/kj187/jarvis/issues).
+
+## Development
+
+> Works with both Podman and Docker — replace `podman` with `docker` in all commands if needed.
+
+```bash
+git clone https://github.com/kj187/jarvis.git 
+de jarvis
+
+# Copy and configure environment
+cp .env.example .env
+# Edit .env — set at minimum JARVIS_CLUSTER_1_ALERTMANAGER_URL
+
+# Activate pre-commit hooks (once after clone)
+git config core.hooksPath .githooks
+
+# Start development stack (hot-reload)
+podman compose -f compose.dev.yml up
+# Frontend: http://localhost:5173
+# Backend:  http://localhost:8080
+
+# Production build
+podman compose up --build -d
+# http://localhost:8080
+```
+
+### Running tests
+
+Quick reference — for the full test strategy, matrix, utilities, and CI pipeline, see `/project:testing`.
+
+```bash
+make test-all        # backend (go test -race) + frontend functional E2E + helm lint + helm unittest
+make test-backend    # go test -race ./...
+make test-frontend   # functional E2E (none + internal + oidc)
+make helm-lint       # helm lint charts/jarvis/
+make helm-test       # helm unittest charts/jarvis/
+```
+
+**E2E & screenshots:** See [docs/testing-e2e.md](docs/testing-e2e.md) for the isolated Podman stack, fixture setup, and screenshot generation.
+
+Helm unit tests run without a Kubernetes cluster. Install the plugin once:
+
+```bash
+helm plugin install https://github.com/helm-unittest/helm-unittest --version v0.8.2
+```
+
+
 ## Tech Stack
 
-**Backend**: Go 1.25 · Echo v4 · SQLite / PostgreSQL (`pgx/v5`, CGO-free) · gorilla/websocket
-
-**Frontend**: React 19 · TypeScript 5.8 · Vite 6 · Tailwind CSS v4 · Zustand v5 · TanStack Query v5
-
-**Infrastructure**: Podman multi-stage build · distroless/static-debian12
+- **Backend**: Go 1.25 · Echo v4 · SQLite / PostgreSQL (`pgx/v5`, CGO-free) · gorilla/websocket
+- **Frontend**: React 19 · TypeScript 6 · Vite 8 · Tailwind CSS v4 · Zustand v5 · TanStack Query v5
+- **Infrastructure**: Podman multi-stage build · distroless/static-debian12
 
 ## Documentation
 

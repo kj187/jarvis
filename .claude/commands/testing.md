@@ -281,6 +281,7 @@ e2e:
 
 ---
 
-## `docs/testing.md`
+## E2E Documentation
 
-Full guide for contributors — prerequisites, setup, local execution, coverage reports.
+`docs/testing-e2e.md` — isolated container stack, fixture setup, screenshot generation, auth modes, troubleshooting.
+`docs/testing.md` — deprecated stub (points here).
