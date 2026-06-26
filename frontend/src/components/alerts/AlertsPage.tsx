@@ -83,13 +83,10 @@ function useURLState() {
 export function AlertsPage() {
   useURLState()
 
-  const isResolvedMode = useUIStore((s) => s.filters.state === 'resolved')
   const providerInfo = useAuthStore((s) => s.providerInfo)
 
   const { data: liveAlerts = [], isLoading: liveLoading } = useAlerts()
   const { data: resolvedAlerts = [], isLoading: resolvedLoading } = useAlerts({ state: 'resolved' })
-  const alerts = isResolvedMode ? resolvedAlerts : liveAlerts
-  const isLoading = isResolvedMode ? resolvedLoading : liveLoading
 
   const { data: silences = [] } = useSilences()
 
@@ -106,6 +103,11 @@ export function AlertsPage() {
     isFullscreen,
     setIsFullscreen,
   } = useUIStore()
+  const isResolvedMode = filters.state === 'resolved'
+  const isSuppressedMode = filters.state === 'suppressed'
+  const isActiveMode = !isResolvedMode && !isSuppressedMode
+  const alerts = isResolvedMode ? resolvedAlerts : liveAlerts
+  const isLoading = isResolvedMode ? resolvedLoading : liveLoading
 
   // Search panel — auto-open when URL contains a search param
   const [searchOpen, setSearchOpen] = useState(() => Boolean(filters.search))
@@ -183,7 +185,7 @@ export function AlertsPage() {
       alerts.find((a) => a.fingerprint === selected.fingerprint) ??
       null
   })()
-  const showsCardGrid = viewMode === 'card' && filters.state !== 'resolved' && filters.state !== 'suppressed'
+  const showsCardGrid = viewMode === 'card' && !isResolvedMode
   const canToggleGrouping = !isResolvedMode
 
   return (
@@ -217,10 +219,18 @@ export function AlertsPage() {
                 <button
                   onClick={() => { setFilter('state', 'active'); setViewMode(activeViewMode) }}
                   className={`cursor-pointer px-2.5 h-7 text-xs font-medium transition-colors ${
-                    !isResolvedMode ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground'
+                    isActiveMode ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
                   Active
+                </button>
+                <button
+                  onClick={() => { setFilter('state', 'suppressed'); setViewMode(activeViewMode) }}
+                  className={`cursor-pointer px-2.5 h-7 text-xs font-medium transition-colors ${
+                    isSuppressedMode ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  Suppressed
                 </button>
                 <button
                   onClick={() => { if (!isResolvedMode) setActiveViewMode(viewMode); setFilter('state', 'resolved'); setViewMode('list') }}
@@ -317,7 +327,7 @@ export function AlertsPage() {
             onSelectAlert={setSelectedFingerprint}
             selectedFingerprint={selectedFingerprint}
             stateFilter={filters.state}
-            resolvedMode={filters.state === 'resolved'}
+            resolvedMode={isResolvedMode}
             groupingEnabled={cardGroupingEnabled}
           />
         </div>
