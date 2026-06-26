@@ -1,3 +1,114 @@
+<a name="v1.5.0"></a>
+## [v1.5.0](https://github.com/kj187/jarvis/compare/v1.4.0...v1.5.0) (2026-06-26)
+
+### Bug Fixes
+
+* **alerts:** keep silence result visible after creating from a card
+* **alerts:** scope history, claims, and comments by cluster
+* **claims:** scope claims by cluster to prevent cross-cluster claim bleed
+* **docker:** relabel gitleaks config mount for SELinux
+* **e2e:** fix two screenshot spec selectors
+* **e2e:** use e2e cluster for all silences in screenshot spec
+* **e2e:** fix auth-login-page and auth-admin-panel screenshot specs
+* **e2e:** remove ensureInternalAdmin from auth-login-page to avoid /setup rate limit
+* **e2e:** fix auth-login-page firstRunRedirect and add 429 retry to ensureInternalAdmin
+* **e2e:** stabilize CI image build for pnpm
+* **e2e:** correct SSO button label in auth-login-oidc screenshot spec
+* **e2e:** use alert-group-row testid to expand list view groups in screenshot spec
+* **frontend:** remove creator name setting
+* **frontend:** polish alert detail panel display
+* **frontend:** improve claim badge in alert detail header
+* **frontend:** restore Server icon on cluster chip in alert detail
+* **frontend:** restore animated snake border on Claim button in alert detail
+* **frontend:** simplify resolved list severity display
+* **frontend:** use explicit Tailwind classes for link color in linkUtils
+* **frontend:** widen empty matcher filter inputs
+* **frontend:** stabilize detail prompt caching
+* **frontend:** align nav tab labels and lower their vertical position
+* **frontend:** restore active tab view mode after switching tabs
+* **silences:** align card sections and compact list view
+* **silences:** show add-filter control on Silences page
+
+### Chores
+
+* **deps:** bump github.com/coreos/go-oidc/v3 in /backend
+* **deps:** bump modernc.org/sqlite from 1.52.0 to 1.53.0 in /backend
+* **deps:** bump github.com/labstack/echo/v4 in /backend
+* **deps:** bump actions/setup-node from 4.4.0 to 6.4.0
+* **deps:** bump docker/login-action from 3.7.0 to 4.2.0
+* **deps:** bump docker/metadata-action from 5.10.0 to 6.1.0
+* **deps:** bump actions/upload-artifact from 4.6.2 to 7.0.1
+* **deps:** bump actions/checkout from 4.3.1 to 6.0.3
+* **deps-dev:** bump [@vitejs](https://github.com/vitejs)/plugin-react in /frontend
+* **docker:** move Containerfile.dev to repo root, rename dev-dependencies compose
+
+### Code Refactoring
+
+* **frontend:** split alert detail history sections
+* **frontend:** extract filter controls into chip-based MatcherChipsBar
+* **frontend:** move filter and search controls out of Header into pages
+
+### Documentation
+
+* refresh README, CONTRIBUTING, testing docs, and screenshots
+* extract feature documentation to docs/features.md
+* **assets:** refresh screenshots after spec and selector fixes
+* **assets:** fix screenshots that previously showed empty/broken state
+* **assets:** add screenshots for fullscreen and dark/light theme
+* **commands:** align command docs with current test, release and config setup
+* **helm:** clarify PostgreSQL recommendation for Kubernetes
+
+### Features
+
+* **alerts:** simplify affected-alerts display and open detail on click
+* **alerts:** replace No alerts text with large empty-state icon
+* **alerts:** show last-fired time in detail header
+* **claims:** let claim owner edit note with immutable history
+* **docker:** add healthcheck for backend service and ensure frontend waits for backend readiness
+* **docs:** add Dark/Light Theme comparison and Fullscreen section
+* **e2e:** add backend test fixtures for silences, comments, claims, templates
+* **frontend:** add grouped toggle for card and list alerts
+* **frontend:** add configurable alert grouping controls
+* **frontend:** add UI store nav state and shared silence-count logic
+* **frontend:** add suppressed alerts mode toggle
+* **frontend:** make sheet dialogs accessible
+* **frontend:** improve login and authenticated user icons
+* **frontend:** add Silences page grouping, list view and fullscreen
+* **frontend:** show login modal on all write actions when unauthenticated
+* **silences:** add search functionality and fullscreen toggle to SilencesPage
+* **silences:** show expired silence info box in card view
+* **silences:** improve silence cards with re-create, label colors and duration formatting
+* **silences:** make matcher and label chips truncatable
+* **testing:** add E2E testing with Playwright and isolated Podman stack
+
+### Performance Improvements
+
+* **alerts:** paginate detail timeline on server
+* **poll:** reuse connections, batch claim lookups, dedup broadcasts
+
+### Tests
+
+* **api:** broadcast claim over WS in e2e test endpoint
+* **api:** relax poll rate limit in e2e builds
+* **e2e:** align screenshot specs with docs image references
+* **e2e:** fix alerts-views specs B4/B5/B9
+* **e2e:** extend silences and search functional coverage
+* **e2e:** cover silence actions and stabilize C11 filters
+* **e2e:** add silences functional specs for page and templates
+* **e2e:** add E2E specs for alerts views, detail panel, and filters
+* **e2e:** fix screenshot specs and update docs for current UI
+* **e2e:** add rich README hero screenshot spec in oidc mode
+* **e2e:** add new spec files for extended functional coverage
+* **e2e:** add Group 3 auth screenshot specs (login page, user menu, admin panel)
+* **e2e:** fix detail-panel specs D2/D5/D9/D10
+* **e2e:** cover silence expiry and recreate flows
+* **e2e:** fix filters specs C10/C11
+* **e2e:** harden silences page and complete F1 close flows
+* **e2e:** fix flaky timing and extend write_protect coverage in existing specs
+* **frontend:** add data-testid attributes for E2E selectors
+* **frontend:** remove unit-test stack in favor of functional e2e
+* **silences:** align SilenceCard and App tests with current behavior
+
 <a name="v1.4.0"></a>
 ## [v1.4.0](https://github.com/kj187/jarvis/compare/v1.3.1...v1.4.0) (2026-06-22)
 
@@ -15,6 +126,7 @@
 
 ### Documentation
 
+* update CHANGELOG and README for v1.4.0
 * **frontend:** add silence templates docs, screenshots, and fix test suite
 
 ### Features
