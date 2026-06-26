@@ -12,11 +12,20 @@ services:
       - jarvis_gomodcache:/go/pkg/mod
     env_file: .env
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/health || exit 1"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+      start_period: 2s
 
   frontend:
     image: node:22-alpine
     working_dir: /app
     command: sh -c "npm install -g pnpm --prefix /usr/local && pnpm config set store-dir /pnpm-store && pnpm install --ignore-scripts && pnpm dev --host"
+    depends_on:
+      backend:
+        condition: service_healthy
     ports:
       - "5173:5173"
     volumes:
