@@ -1,3 +1,10 @@
+<a name="v1.5.1"></a>
+## [v1.5.1](https://github.com/kj187/jarvis/compare/v1.5.0...v1.5.1) (2026-06-29)
+
+### Bug Fixes
+
+* **silences:** skip @receiver pseudo-label when filtering silences
+
 <a name="v1.5.0"></a>
 ## [v1.5.0](https://github.com/kj187/jarvis/compare/v1.4.0...v1.5.0) (2026-06-26)
 
@@ -50,6 +57,7 @@
 
 ### Documentation
 
+* update CHANGELOG and README for v1.5.0
 * refresh README, CONTRIBUTING, testing docs, and screenshots
 * extract feature documentation to docs/features.md
 * **assets:** refresh screenshots after spec and selector fixes
