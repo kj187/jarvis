@@ -203,7 +203,7 @@ export function AlertCard({
   onCreateSilence,
   showSeverityBadge = true,
 }: AlertCardProps) {
-  const [page, setPage] = useState(0)
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
 
   const primary = alerts[0]
   const count = alerts.length
@@ -211,10 +211,7 @@ export function AlertCard({
   const severity = primary.labels['severity'] ?? 'none'
   const alertname = primary.labels['alertname'] ?? 'Unknown'
 
-  const totalPages = Math.ceil(count / PAGE_SIZE)
-  const start = page * PAGE_SIZE
-  const end = Math.min(start + PAGE_SIZE, count)
-  const visible = alerts.slice(start, end)
+  const visible = alerts.slice(0, visibleCount)
 
   const commonLabels = getCommonLabels(alerts)
   const commonLabelKeys = new Set(Object.keys(commonLabels))
@@ -272,31 +269,6 @@ export function AlertCard({
         </div>
       )}
 
-      {/* Pagination */}
-      {count > PAGE_SIZE && (
-        <div className="border-b border-border px-4 py-2">
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <button
-              onClick={() => setPage((p) => Math.max(0, p - 1))}
-              disabled={page === 0}
-              className="flex h-6 w-6 items-center justify-center rounded border border-border font-bold hover:bg-accent disabled:opacity-30"
-            >
-              −
-            </button>
-            <span>
-              {start + 1}–{end} of {count}
-            </span>
-            <button
-              onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-              disabled={page === totalPages - 1}
-              className="flex h-6 w-6 items-center justify-center rounded border border-border font-bold hover:bg-accent disabled:opacity-30"
-            >
-              +
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* Alert entries */}
       <div className="divide-y divide-border bg-muted/10">
         {visible.map((alert) => (
@@ -310,6 +282,27 @@ export function AlertCard({
           />
         ))}
       </div>
+
+      {/* Show more / less */}
+      {count > PAGE_SIZE && (
+        <div className="flex items-center justify-between border-t border-border px-4 py-2 text-xs text-muted-foreground">
+          <button
+            onClick={() => setVisibleCount((n) => Math.max(PAGE_SIZE, n - PAGE_SIZE))}
+            disabled={visibleCount <= PAGE_SIZE}
+            className="flex h-6 w-6 cursor-pointer items-center justify-center rounded border border-border font-bold hover:bg-accent disabled:cursor-default disabled:opacity-30"
+          >
+            −
+          </button>
+          <span>{visibleCount} of {count}</span>
+          <button
+            onClick={() => setVisibleCount((n) => Math.min(count, n + PAGE_SIZE))}
+            disabled={visibleCount >= count}
+            className="flex h-6 w-6 cursor-pointer items-center justify-center rounded border border-border font-bold hover:bg-accent disabled:cursor-default disabled:opacity-30"
+          >
+            +
+          </button>
+        </div>
+      )}
     </div>
   )
 }
