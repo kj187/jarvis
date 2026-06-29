@@ -102,7 +102,7 @@ func NewRecorder(
 		prevSnapshot:      make(map[string]string),
 		prevSilenceInfo:   make(map[string]silenceInfoEntry),
 		prevAlertSilences: make(map[string][]string),
-		claimReleaseDelay: 65 * time.Second,
+		claimReleaseDelay: 20 * time.Minute,
 	}
 }
 

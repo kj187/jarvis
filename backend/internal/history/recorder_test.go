@@ -326,3 +326,41 @@ func TestRecorder_ClaimNotReleasedOnGracePeriodRefire(t *testing.T) {
 		t.Error("claim must survive a grace-period re-fire")
 	}
 }
+
+// TestRecorder_ClaimNotReleasedOnLateRefire is a regression test for the bug
+// where a claim was released after genuine resolution (claimReleaseDelay elapsed)
+// but the alert re-fired *after* the grace period — e.g. 5 minutes later. The
+// delayed goroutine must see the new firing row and skip the release.
+func TestRecorder_ClaimNotReleasedOnLateRefire(t *testing.T) {
+	rec, _ := newTestRecorder(t)
+	ctx := context.Background()
+
+	rec.processAlerts(ctx, alert("fp1", "active"))
+	if _, err := rec.store.SetClaim("fp1", "homelab", nil, "alice", ""); err != nil {
+		t.Fatalf("SetClaim: %v", err)
+	}
+
+	// Alert resolves — goroutine starts with claimReleaseDelay (10ms in tests).
+	rec.processAlerts(ctx, noAlerts())
+
+	// Simulate a late re-fire: backdate the resolved row past the 60s grace period
+	// so the next processAlerts inserts a genuine new firing row instead of
+	// triggering the grace-period delete path.
+	if _, err := rec.store.db.ExecContext(ctx,
+		`UPDATE alert_events SET recorded_at = ? WHERE status = 'resolved' AND fingerprint = 'fp1'`,
+		time.Now().UTC().Add(-61*time.Second),
+	); err != nil {
+		t.Fatalf("backdate resolved row: %v", err)
+	}
+
+	// Alert re-fires after grace period — a real new firing event is recorded.
+	rec.processAlerts(ctx, alert("fp1", "active"))
+
+	// Wait past the claim release delay; goroutine must detect the re-fire and skip.
+	time.Sleep(5 * rec.claimReleaseDelay)
+
+	c, _ := rec.store.GetActiveClaim("fp1", "homelab")
+	if c == nil {
+		t.Error("claim must survive a late re-fire (alert resolved then came back after grace period)")
+	}
+}
