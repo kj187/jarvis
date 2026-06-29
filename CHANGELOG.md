@@ -1,9 +1,25 @@
+<a name="v1.5.2"></a>
+## [v1.5.2](https://github.com/kj187/jarvis/compare/v1.5.1...v1.5.2) (2026-06-29)
+
+### Bug Fixes
+
+* **claims:** increase claimReleaseDelay from 65 s to 20 min
+
+### Features
+
+* **frontend:** collapse/expand AlertCard body and show claimed count badge
+* **frontend:** replace pagination with expand/collapse in grouped alert cards
+
 <a name="v1.5.1"></a>
 ## [v1.5.1](https://github.com/kj187/jarvis/compare/v1.5.0...v1.5.1) (2026-06-29)
 
 ### Bug Fixes
 
-* **silences:** skip @receiver pseudo-label when filtering silences
+* **silences:** skip [@receiver](https://github.com/receiver) pseudo-label when filtering silences
+
+### Documentation
+
+* update CHANGELOG and README for v1.5.1
 
 <a name="v1.5.0"></a>
 ## [v1.5.0](https://github.com/kj187/jarvis/compare/v1.4.0...v1.5.0) (2026-06-26)
