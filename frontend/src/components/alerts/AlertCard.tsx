@@ -210,8 +210,22 @@ export function AlertCard({
   const severityRaw = primary.labels['severity']
   const severity = primary.labels['severity'] ?? 'none'
   const alertname = primary.labels['alertname'] ?? 'Unknown'
+  const storageKey = `jarvis:collapsed:${alertname}:${primary.labels['@cluster'] ?? ''}`
+
+  const [collapsed, setCollapsed] = useState(() => {
+    try { return localStorage.getItem(storageKey) === 'true' } catch { return false }
+  })
+
+  const toggleCollapsed = () => {
+    setCollapsed((c) => {
+      const next = !c
+      try { localStorage.setItem(storageKey, String(next)) } catch {}
+      return next
+    })
+  }
 
   const visible = alerts.slice(0, visibleCount)
+  const claimedCount = alerts.filter((a) => a.activeClaim != null).length
 
   const commonLabels = getCommonLabels(alerts)
   const commonLabelKeys = new Set(Object.keys(commonLabels))
@@ -237,13 +251,26 @@ export function AlertCard({
       )}
     >
       {/* Card header */}
-      <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
+      <div
+        className="flex items-center justify-between gap-2 border-b border-border px-3 py-2 select-none"
+        onDoubleClick={toggleCollapsed}
+        title="Double-click to collapse"
+      >
         <span className="break-all font-semibold leading-tight text-foreground">{alertname}</span>
         <div className="flex shrink-0 items-center gap-2">
           {showSeverityBadge && severityRaw && <AlertBadge severity={severity} />}
           {count > 1 && (
             <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-accent px-1.5 text-xs font-bold">
               ×{count}
+            </span>
+          )}
+          {claimedCount > 0 && (
+            <span
+              className="flex h-5 items-center gap-0.5 rounded-full bg-blue-500/20 px-1.5 text-xs font-medium text-blue-400"
+              title={`${claimedCount} of ${count} claimed`}
+            >
+              <User className="h-2.5 w-2.5" />
+              {count === 1 ? 'Claimed' : `Claimed ${claimedCount}/${count}`}
             </span>
           )}
           <button
@@ -260,8 +287,8 @@ export function AlertCard({
         </div>
       </div>
 
-      {/* Common labels (shared by all alerts in group) */}
-      {sortedCommonLabels.length > 0 && (
+      {/* Body — hidden when collapsed */}
+      {!collapsed && sortedCommonLabels.length > 0 && (
         <div className="flex flex-wrap gap-1 px-3 py-1.5">
           {sortedCommonLabels.map(([key, value]) => (
             <LabelChip key={key} labelKey={key} value={value} />
@@ -270,21 +297,23 @@ export function AlertCard({
       )}
 
       {/* Alert entries */}
-      <div className="divide-y divide-border bg-muted/10">
-        {visible.map((alert) => (
-          <AlertEntry
-            key={`${alert.clusterName}:${alert.fingerprint}:${alert.startsAt}`}
-            alert={alert}
-            silences={silences}
-            onClick={onClick}
-            isSelected={matchesAlertSelectionKey(alert, selectedFingerprint)}
-            commonLabelKeys={commonLabelKeys}
-          />
-        ))}
-      </div>
+      {!collapsed && (
+        <div className="divide-y divide-border bg-muted/10">
+          {visible.map((alert) => (
+            <AlertEntry
+              key={`${alert.clusterName}:${alert.fingerprint}:${alert.startsAt}`}
+              alert={alert}
+              silences={silences}
+              onClick={onClick}
+              isSelected={matchesAlertSelectionKey(alert, selectedFingerprint)}
+              commonLabelKeys={commonLabelKeys}
+            />
+          ))}
+        </div>
+      )}
 
       {/* Show more / less */}
-      {count > PAGE_SIZE && (
+      {!collapsed && count > PAGE_SIZE && (
         <div className="flex items-center justify-between border-t border-border px-4 py-2 text-xs text-muted-foreground">
           <button
             onClick={() => setVisibleCount((n) => Math.max(PAGE_SIZE, n - PAGE_SIZE))}
