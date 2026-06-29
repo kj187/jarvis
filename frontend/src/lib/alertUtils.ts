@@ -144,6 +144,8 @@ export function filterSilences(
             case '!~': return !(safeRegex(fm.value)?.test(v) ?? false)
           }
         }
+        // @receiver / receiver are alert pseudo-labels — silences have no receiver field, skip
+        if (fm.name === '@receiver' || fm.name === 'receiver') return true
         return s.matchers.some((m) => {
           if (m.name !== fm.name) return false
           switch (fm.operator) {
