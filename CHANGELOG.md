@@ -5,6 +5,10 @@
 
 * **claims:** increase claimReleaseDelay from 65 s to 20 min
 
+### Documentation
+
+* update CHANGELOG and README for v1.5.2
+
 ### Features
 
 * **frontend:** collapse/expand AlertCard body and show claimed count badge
