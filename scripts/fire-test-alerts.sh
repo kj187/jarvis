@@ -377,6 +377,29 @@ post '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=job_duration_seconds%7Bjob%3D%22s3-export%22%7D"
 }]'
 
+pause
+printf " [17/17] SpecialCharLabelAlert — label value with dots + label value with hyphens..."
+post '[{
+  "labels": {
+    "alertname": "SpecialCharLabelAlert",
+    "severity": "warning",
+    "namespace": "prod",
+    "cluster": "eu-west-1-prod",
+    "team": "platform",
+    "kubernetes_version": "v1.28.4",
+    "image_tag": "payment-api-v2-3-1-rc",
+    "secret_path": "v1/b2b/cert/web-tuadev",
+    "runbook": "'"${RUNBOOKS}"'/SpecialCharLabelAlert",
+    "test_suite": "jarvis"
+  },
+  "annotations": {
+    "summary": "Alert with special characters in label values",
+    "description": "Tests label rendering and silence-recreate filtering for values containing dots (kubernetes_version=v1.28.4), hyphens (image_tag=payment-api-v2-3-1-rc) and slashes+hyphens in a path (secret_path=v1/b2b/cert/web-tuadev). To reproduce the recreate bug: silence this alert with a regex (=~) matcher on secret_path, then recreate the silence and confirm the chip stays v1/b2b/cert/web-tuadev (no backslashes) and still matches 1 alert.",
+    "dashboard": "'"${GRAFANA}"'/d/platform-overview?orgId=1"
+  },
+  "generatorURL": "'"${PROM}"'/graph?g0.expr=up%7Bjob%3D%22platform%22%7D"
+}]'
+
 echo ""
-echo "==> Done. 16 Kubernetes test alerts active (test_suite=jarvis)."
+echo "==> Done. 17 Kubernetes test alerts active (test_suite=jarvis)."
 echo "    Alerts persist until you run 'make alerts-resolve' (endsAt: ${ENDS_AT})."
