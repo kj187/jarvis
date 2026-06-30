@@ -42,13 +42,15 @@ logs: ## Follow dev logs
 ps: ## Show status of all running containers (dev + test deps)
 	podman compose ps
 
-up-alertmanager: ## Start test Alertmanager (port 9094) — requires dev stack running
+up-alertmanager: ## Start test Alertmanager (port 9094) — auto-creates network if needed
+	podman network create jarvis_default 2>/dev/null || true
 	$(COMPOSE_TEST_DEPS) up -d test-alertmanager
 
 down-alertmanager: ## Stop test Alertmanager
 	$(COMPOSE_TEST_DEPS) stop test-alertmanager
 
-up-postgres: ## Start test PostgreSQL (port 5432, jarvis/jarvis/jarvis) — requires dev stack running
+up-postgres: ## Start test PostgreSQL (port 5432, jarvis/jarvis/jarvis) — auto-creates network if needed
+	podman network create jarvis_default 2>/dev/null || true
 	$(COMPOSE_TEST_DEPS) up -d test-postgres
 
 down-postgres: ## Stop test PostgreSQL

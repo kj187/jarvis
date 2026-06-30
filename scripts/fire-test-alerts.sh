@@ -6,9 +6,9 @@ set -euo pipefail
 
 command -v jq >/dev/null 2>&1 || { echo "ERROR: jq is required but not installed."; exit 1; }
 
-AM="${ALERTMANAGER_URL:-https://alertmanager.lan.kj187.de}"
-GRAFANA="https://grafana.lan.kj187.de"
-PROM="https://prometheus.lan.kj187.de"
+AM="${ALERTMANAGER_URL:-http://localhost:9094}"
+GRAFANA="https://grafana.example.com"
+PROM="https://prometheus.example.com"
 RUNBOOKS="https://runbooks.example.com/alerts"
 
 # Explicit startsAt=now + far-future endsAt keeps alerts alive.

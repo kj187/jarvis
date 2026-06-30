@@ -4,9 +4,9 @@
 
 set -euo pipefail
 
-AM="${ALERTMANAGER_URL:-https://alertmanager.lan.kj187.de}"
-GRAFANA="https://grafana.lan.kj187.de"
-PROM="https://prometheus.lan.kj187.de"
+AM="${ALERTMANAGER_URL:-http://localhost:9094}"
+GRAFANA="https://grafana.example.com"
+PROM="https://prometheus.example.com"
 RUNBOOKS="https://runbooks.example.com/alerts"
 
 ENDS_AT="$(date -u -d '1 minute ago' '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null \
