@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -96,6 +97,7 @@ func (s *Server) createSilence(c echo.Context) error {
 	}
 	id, err := cl.Client.CreateSilence(ctx, postable)
 	if err != nil {
+		slog.Error("create silence failed", "cluster", body.Cluster, "err", err)
 		return echo.NewHTTPError(http.StatusBadGateway, "alertmanager request failed")
 	}
 
@@ -142,6 +144,7 @@ func (s *Server) deleteSilence(c echo.Context) error {
 	defer cancel()
 
 	if err := cl.Client.DeleteSilence(ctx, silenceID); err != nil {
+		slog.Error("delete silence failed", "cluster", clusterName, "id", silenceID, "err", err)
 		return echo.NewHTTPError(http.StatusBadGateway, "alertmanager request failed")
 	}
 
