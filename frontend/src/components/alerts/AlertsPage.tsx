@@ -67,8 +67,12 @@ function useURLState() {
     const params = new URLSearchParams()
     if (filters.state) params.set('state', filters.state)
     if (filters.search) params.set('q', filters.search)
-    if (filters.labelMatchers.length > 0) {
-      params.set('matchers', JSON.stringify(filters.labelMatchers.map(
+    // Only persist user-added (unlocked) matchers to the URL. Locked matchers are
+    // derived from Settings on every mount — persisting them would cause duplicates
+    // when the component remounts (e.g. switching between Alerts and Silences tabs).
+    const unlockedMatchers = filters.labelMatchers.filter((m) => !m.locked)
+    if (unlockedMatchers.length > 0) {
+      params.set('matchers', JSON.stringify(unlockedMatchers.map(
         ({ name, operator, value }) => ({ name, operator, value }),
       )))
     }
