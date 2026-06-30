@@ -54,7 +54,12 @@ function escapeRegex(s: string): string {
 }
 
 function unescapeRegex(s: string): string {
-  return s.replace(/\\([.*+?^${}()|[\]\\])/g, '$1')
+  // A backslash escape always means "literal next character", so strip the
+  // backslash before ANY character — not just the regex metacharacter set.
+  // This also cleans up escapes like \/ or \- that some Alertmanager setups or
+  // external tools add, which would otherwise survive recreate, get re-escaped
+  // to \\/ on submit, and break the matcher (0 affected alerts).
+  return s.replace(/\\(.)/g, '$1')
 }
 
 // ── TagValueInput ─────────────────────────────────────────────────────────────
