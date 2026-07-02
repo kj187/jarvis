@@ -11,10 +11,12 @@ tests:
           of: Deployment
 
   - it: uses chart appVersion as image tag by default
+    chart:
+      appVersion: 9.9.9-test
     asserts:
       - equal:
           path: spec.template.spec.containers[0].image
-          value: ghcr.io/kj187/jarvis:0.0.0
+          value: ghcr.io/kj187/jarvis:9.9.9-test
 
   - it: uses custom image tag when set
     set:

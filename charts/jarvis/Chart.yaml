@@ -2,8 +2,12 @@ apiVersion: v2
 name: jarvis
 description: Web frontend for Prometheus Alertmanager with persistent alert history
 type: application
-version: 0.0.0
-appVersion: "0.0.0"
+# Chart version — decoupled from the app version. Bump it manually in the same
+# commit as any chart change; a push to main publishes it (chart-release.yml).
+version: 1.5.3
+# App version — the image tag deployed by default. Bumped as part of the app
+# release process (see .agents/release.md).
+appVersion: "1.5.3"
 keywords:
   - alertmanager
   - prometheus
@@ -16,3 +20,13 @@ sources:
 maintainers:
   - name: kj187
     url: https://github.com/kj187
+annotations:
+  artifacthub.io/category: monitoring-logging
+  artifacthub.io/license: Apache-2.0
+  artifacthub.io/links: |
+    - name: Documentation
+      url: https://github.com/kj187/jarvis/tree/main/docs
+    - name: Changelog
+      url: https://github.com/kj187/jarvis/blob/main/CHANGELOG.md
+    - name: Chart source
+      url: https://github.com/kj187/jarvis/tree/main/charts/jarvis

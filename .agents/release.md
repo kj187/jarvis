@@ -43,20 +43,31 @@ git push && gh pr create        → CI runs on PR
    sed -i "s|ghcr.io/kj187/jarvis:${PREV_CLEAN}|ghcr.io/kj187/jarvis:X.Y.Z|g" README.md
    sed -i "s|--version ${PREV_CLEAN}|--version X.Y.Z|g" README.md
    ```
-   Verify the two occurrences changed (image tag + helm `--version`), then commit together with CHANGELOG:
-   ```bash
-   git add CHANGELOG.md README.md
-   git commit -m "docs: update CHANGELOG for vX.Y.Z"
-   ```
-10. **Create annotated tag**:
+   Verify the two occurrences changed (image tag + helm `--version`).
+10. **Bump chart versions** in `charts/jarvis/Chart.yaml` — the chart version is
+    **decoupled** from the app version, but an app release must ship a chart
+    that deploys it:
+    - `appVersion`: set to the new app version (`"X.Y.Z"`, quoted)
+    - `version`: bump according to the impact of the chart change itself
+      (appVersion-only bump → patch)
+
+    Commit everything together with the CHANGELOG:
+    ```bash
+    git add CHANGELOG.md README.md charts/jarvis/Chart.yaml
+    git commit -m "docs: update CHANGELOG for vX.Y.Z"
+    ```
+11. **Create annotated tag**:
     ```bash
     git tag -a vX.Y.Z -m "Release vX.Y.Z"
     ```
-11. **Push tag**:
+12. **Push tag first, then main** (order matters: the tag triggers the image
+    build; the main push triggers the chart publish, which references the new
+    image via `appVersion`):
     ```bash
     git push origin vX.Y.Z
+    git push origin main
     ```
-12. **Generate GitHub Release Description** (show to user, do not post automatically):
+13. **Generate GitHub Release Description** (show to user, do not post automatically):
 
     **Rule: is this `v1.0.0` or a new major version (e.g. `v2.0.0`)?**
     → Yes: write an **announcement-style** description (see template A below)
@@ -144,11 +155,11 @@ git push && gh pr create        → CI runs on PR
     → Present the filled-out description to the user and ask: *"Does this look good? I'll copy it to your clipboard / you can paste it into the GitHub Release."*
     → Do **not** post it to GitHub automatically.
 
-13. **Inform about next steps**:
+14. **Inform about next steps**:
     - GitHub Actions is now running: https://github.com/kj187/jarvis/actions
     - Release will be created at: https://github.com/kj187/jarvis/releases
     - Container image will be pushed to: `ghcr.io/kj187/jarvis:X.Y.Z` + `ghcr.io/kj187/jarvis:X.Y` (no `v` prefix, no `:latest` image tag — the GitHub Release itself is marked "latest")
-    - A signed (cosign) multi-arch image (amd64 + arm64) and the Helm chart are published automatically
+    - A signed (cosign) multi-arch image (amd64 + arm64) is published automatically; the Helm chart is published and signed by `chart-release.yml` when the main push lands
 
 ---
 
@@ -185,9 +196,16 @@ From `.github/workflows/release.yml`:
 4. Build the release body by extracting this version's section from `CHANGELOG.md` (awk) and appending pull/cosign-verify instructions.
 5. Create the GitHub Release via `gh release create --notes-file release-body.md --latest` (the `--latest` flag marks the *GitHub Release* as latest, not a Docker tag). Releases are immutable: if a release for the tag already exists, the job fails — never overwrite a published release; delete it manually first if a re-release is really intended.
 
-**Job `helm-publish`:**
-6. Patch `charts/jarvis/Chart.yaml` (`version` + `appVersion`) to the release version.
-7. Package and push the Helm chart to `oci://ghcr.io/kj187/charts`.
+**Helm chart** (separate workflow `.github/workflows/chart-release.yml`, *not*
+part of `release.yml`):
+- Triggers on every push to `main` that touches `charts/**` (and via
+  `workflow_dispatch`).
+- Reads `version` from `charts/jarvis/Chart.yaml` — chart versioning is
+  **decoupled** from the app version and maintained manually in the repo.
+- Existence guard: if that chart version is already in the registry, the run
+  skips publishing (published chart versions are immutable, never overwritten).
+- Otherwise: `helm lint` → `helm package` → `helm push` to
+  `oci://ghcr.io/kj187/charts` → keyless **cosign** signature (GitHub OIDC).
 
 ---
 

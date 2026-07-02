@@ -29,6 +29,25 @@ helm upgrade jarvis oci://ghcr.io/kj187/charts/jarvis --version <version> -f val
 helm uninstall jarvis
 ```
 
+## Versioning
+
+The chart version is **decoupled** from the app version. `appVersion` in
+`Chart.yaml` pins the default image tag; the chart `version` is bumped
+whenever the chart itself changes (including appVersion-only bumps). The chart
+is published automatically by `.github/workflows/chart-release.yml` when a
+change under `charts/` lands on `main` — published versions are immutable.
+
+## Verify the chart signature
+
+Charts are signed keylessly with [cosign](https://github.com/sigstore/cosign)
+(GitHub OIDC):
+
+```bash
+cosign verify ghcr.io/kj187/charts/jarvis:<version> \
+  --certificate-identity-regexp="https://github.com/kj187/jarvis/.*" \
+  --certificate-oidc-issuer="https://token.actions.githubusercontent.com"
+```
+
 ## Testing
 
 The chart ships unit tests via [helm-unittest](https://github.com/helm-unittest/helm-unittest). No Kubernetes cluster is needed.

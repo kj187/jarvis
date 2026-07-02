@@ -1,0 +1,82 @@
+name: Chart Release
+
+# Publishes the Helm chart when charts/ changes on main and the version in
+# Chart.yaml has not been published yet. Chart versioning is decoupled from
+# the app version: bump `version` in Chart.yaml in the same commit as the
+# chart change. Published versions are immutable — the existence guard skips
+# re-publishing instead of overwriting.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'charts/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Publish Helm Chart
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write # required for keyless cosign signing via GitHub OIDC
+
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # ratchet:actions/checkout@v6.0.3
+
+      - name: Install Helm
+        uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # ratchet:azure/setup-helm@v4
+        with:
+          version: v3.21.0
+
+      - name: Read chart version
+        id: chart
+        run: |
+          VERSION=$(awk '/^version:/{print $2}' charts/jarvis/Chart.yaml)
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Chart version: ${VERSION}"
+
+      - name: Log in to GHCR
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | \
+            helm registry login ghcr.io --username "${{ github.actor }}" --password-stdin
+
+      - name: Check whether version is already published
+        id: guard
+        run: |
+          if helm pull oci://ghcr.io/kj187/charts/jarvis \
+               --version "${{ steps.chart.outputs.version }}" \
+               --destination /tmp/chart-check 2>/dev/null; then
+            echo "published=true" >> "$GITHUB_OUTPUT"
+            echo "Chart ${{ steps.chart.outputs.version }} already published — skipping."
+          else
+            echo "published=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Lint chart
+        if: steps.guard.outputs.published == 'false'
+        run: helm lint charts/jarvis/
+
+      - name: Package and push chart
+        if: steps.guard.outputs.published == 'false'
+        id: push
+        run: |
+          VERSION="${{ steps.chart.outputs.version }}"
+          helm package charts/jarvis --version "${VERSION}"
+          helm push "jarvis-${VERSION}.tgz" oci://ghcr.io/kj187/charts 2>&1 | tee push.log
+          DIGEST=$(awk '/^Digest:/{print $2}' push.log)
+          echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
+
+      - name: Install cosign
+        if: steps.guard.outputs.published == 'false'
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # ratchet:sigstore/cosign-installer@v4.1.2
+
+      - name: Sign chart with keyless signing (GitHub OIDC)
+        if: steps.guard.outputs.published == 'false'
+        run: |
+          cosign sign --yes \
+            ghcr.io/kj187/charts/jarvis@${{ steps.push.outputs.digest }}

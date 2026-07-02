@@ -217,7 +217,7 @@ Playwright E2E runs **only in CI** (too slow for pre-commit).
 
 ## CI Pipeline
 
-Split across four workflows.
+Split across five workflows.
 
 ### `.github/workflows/ci.yml`
 
@@ -259,6 +259,12 @@ weekly (Monday cron).
 
 OpenSSF Scorecard — on push to `main` and weekly (Monday cron). Publishes
 results to the OpenSSF API (README badge) and uploads SARIF to code scanning.
+
+### `.github/workflows/chart-release.yml`
+
+Publishes + cosign-signs the Helm chart when `charts/**` changes on `main`
+and the `version` in `Chart.yaml` is not yet in the registry (chart versioning
+is decoupled from the app version — see `.agents/release.md`).
 
 Screenshots are **not** run in CI (documentation artifact; binary PNGs would
 create noisy diffs). Regenerate locally and commit the PNGs when the UI
