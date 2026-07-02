@@ -5,6 +5,9 @@ on:
     tags:
       - 'v*.*.*'
 
+permissions:
+  contents: read
+
 jobs:
   build-and-push:
     name: Build & Push
@@ -90,34 +93,3 @@ jobs:
             --title "${{ github.ref_name }}" \
             --notes-file release-body.md \
             --latest
-
-  helm-publish:
-    name: Helm Chart
-    needs: build-and-push
-    runs-on: ubuntu-latest
-    permissions:
-      packages: write
-      contents: read
-
-    steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # ratchet:actions/checkout@v6.0.3
-
-      - name: Install Helm
-        uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # ratchet:azure/setup-helm@v4
-
-      - name: Patch Chart versions
-        run: |
-          VERSION=${GITHUB_REF_NAME#v}
-          sed -i "s/^version:.*/version: ${VERSION}/" charts/jarvis/Chart.yaml
-          sed -i "s/^appVersion:.*/appVersion: \"${VERSION}\"/" charts/jarvis/Chart.yaml
-
-      - name: Log in to GHCR (Helm)
-        run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | \
-            helm registry login ghcr.io --username "${{ github.actor }}" --password-stdin
-
-      - name: Package and push chart
-        run: |
-          VERSION=${GITHUB_REF_NAME#v}
-          helm package charts/jarvis --version "${VERSION}"
-          helm push "jarvis-${VERSION}.tgz" oci://ghcr.io/kj187/charts

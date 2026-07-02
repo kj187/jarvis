@@ -6,6 +6,9 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: read
+
 # Functional E2E across all three auth modes (none / internal / oidc) against
 # the isolated stack (compose.e2e.yml). Screenshots are NOT generated in CI —
 # they are a documentation artifact regenerated manually (see docs/testing-e2e.md).

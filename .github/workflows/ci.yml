@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
   pin-check:
     name: Action Pin Check
@@ -16,7 +19,7 @@ jobs:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # ratchet:actions/checkout@v6.0.3
       - name: Install ratchet
         run: |
-          go install github.com/sethvargo/ratchet@latest
+          go install github.com/sethvargo/ratchet@v0.11.4
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
       - name: Verify all Actions are SHA-pinned
         run: ratchet check .github/workflows/*.yml
@@ -137,7 +140,7 @@ jobs:
           node-version: '22'
 
       - name: Install pnpm
-        run: npm install -g pnpm
+        run: npm install -g pnpm@11.9.0
 
       - name: Install dependencies
         run: pnpm install --ignore-scripts
