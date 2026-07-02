@@ -1,0 +1,42 @@
+name: Feature Request
+description: Propose a new feature or improvement
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What problem does this feature solve? What is currently missing?
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: How should the feature work?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives
+      description: Any other approaches you considered?
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected Area
+      multiple: true
+      options:
+        - Alerts
+        - Silences
+        - Claims
+        - Comments
+        - Filters
+        - WebSocket / realtime
+        - Multi-cluster
+        - Authentication
+        - Helm chart / deployment
+        - Other

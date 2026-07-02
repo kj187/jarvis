@@ -1,0 +1,103 @@
+name: Bug Report
+description: Report a bug in Jarvis
+labels: [bug]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: A clear and concise description of what is going wrong.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to Reproduce
+      placeholder: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What should happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behavior
+      description: What happens instead?
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Jarvis Version
+      placeholder: "v1.5.3"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: auth-provider
+    attributes:
+      label: Auth Provider
+      options:
+        - none
+        - internal
+        - oidc
+    validations:
+      required: true
+
+  - type: dropdown
+    id: database
+    attributes:
+      label: Database Backend
+      options:
+        - SQLite
+        - PostgreSQL
+    validations:
+      required: true
+
+  - type: input
+    id: alertmanager-version
+    attributes:
+      label: Alertmanager Version
+      placeholder: "0.28.x"
+
+  - type: input
+    id: clusters
+    attributes:
+      label: Number of Clusters
+      placeholder: "1"
+
+  - type: input
+    id: browser
+    attributes:
+      label: Browser
+      placeholder: "Firefox 140, Chrome 138, …"
+
+  - type: textarea
+    id: alert-state
+    attributes:
+      label: Alert State
+      description: >
+        Which alert state is affected (active / suppressed / resolved /
+        claimed)? Are there active silences?
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: >
+        Backend logs (`docker logs jarvis`), browser console errors,
+        WebSocket errors (devtools → Network → WS). Automatically formatted
+        as code — no backticks needed.
+      render: shell
