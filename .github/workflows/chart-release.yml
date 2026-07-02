@@ -40,14 +40,22 @@ jobs:
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "Chart version: ${VERSION}"
 
-      - name: Log in to GHCR
+      - name: Log in to GHCR (Helm)
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | \
             helm registry login ghcr.io --username "${{ github.actor }}" --password-stdin
 
+      - name: Log in to GHCR (Docker config, used by cosign)
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # ratchet:docker/login-action@v4.2.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Check whether version is already published
         id: guard
         run: |
+          mkdir -p /tmp/chart-check
           if helm pull oci://ghcr.io/kj187/charts/jarvis \
                --version "${{ steps.chart.outputs.version }}" \
                --destination /tmp/chart-check 2>/dev/null; then
@@ -72,11 +80,23 @@ jobs:
           echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
 
       - name: Install cosign
-        if: steps.guard.outputs.published == 'false'
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # ratchet:sigstore/cosign-installer@v4.1.2
 
+      # Runs on every execution (not only after a push) so a re-run or
+      # workflow_dispatch can heal a published-but-unsigned version.
       - name: Sign chart with keyless signing (GitHub OIDC)
-        if: steps.guard.outputs.published == 'false'
         run: |
-          cosign sign --yes \
-            ghcr.io/kj187/charts/jarvis@${{ steps.push.outputs.digest }}
+          DIGEST="${{ steps.push.outputs.digest }}"
+          if [ -n "${DIGEST}" ]; then
+            REF="ghcr.io/kj187/charts/jarvis@${DIGEST}"
+          else
+            REF="ghcr.io/kj187/charts/jarvis:${{ steps.chart.outputs.version }}"
+          fi
+          if cosign verify "${REF}" \
+               --certificate-identity-regexp="https://github.com/kj187/jarvis/.*" \
+               --certificate-oidc-issuer="https://token.actions.githubusercontent.com" \
+               >/dev/null 2>&1; then
+            echo "${REF} is already signed — nothing to do."
+          else
+            cosign sign --yes "${REF}"
+          fi

@@ -206,6 +206,8 @@ part of `release.yml`):
   skips publishing (published chart versions are immutable, never overwritten).
 - Otherwise: `helm lint` → `helm package` → `helm push` to
   `oci://ghcr.io/kj187/charts` → keyless **cosign** signature (GitHub OIDC).
+- The signing step runs on every execution and verifies before signing, so a
+  `workflow_dispatch` re-run heals a published-but-unsigned version.
 
 ---
 
