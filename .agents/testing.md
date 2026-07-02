@@ -217,12 +217,12 @@ Playwright E2E runs **only in CI** (too slow for pre-commit).
 
 ## CI Pipeline
 
-Split across three workflows.
+Split across four workflows.
 
 ### `.github/workflows/ci.yml`
 
 ```yaml
-pin-check:           # ratchet: verify all GitHub Actions are SHA-pinned
+pin-check:           # ratchet: verify all GitHub Actions are SHA-pinned (globs .github/workflows/*.yml)
 secrets:             # gitleaks secret scanning
 
 backend:
@@ -254,6 +254,11 @@ e2e:
 
 CodeQL analysis for `go` and `javascript-typescript` — on push/PR to `main` and
 weekly (Monday cron).
+
+### `.github/workflows/scorecard.yml`
+
+OpenSSF Scorecard — on push to `main` and weekly (Monday cron). Publishes
+results to the OpenSSF API (README badge) and uploads SARIF to code scanning.
 
 Screenshots are **not** run in CI (documentation artifact; binary PNGs would
 create noisy diffs). Regenerate locally and commit the PNGs when the UI
