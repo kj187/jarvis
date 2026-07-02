@@ -30,6 +30,26 @@ podman compose -f compose.dev.yml up
 # Backend:  http://localhost:8080 (air hot-reload)
 ```
 
+## Pull Request Process
+
+1. For anything beyond a trivial fix, please **open an issue first** so we can
+   discuss the approach before you invest time.
+2. Fork the repository and create a branch from `main`
+   (e.g. `feat/silence-templates`, `fix/ws-reconnect`).
+3. Make your change — tests belong in the **same commit** as the
+   implementation (see [AGENTS.md](AGENTS.md#workflow-rules--always-follow)).
+4. Run the full test suite locally before opening the PR:
+   ```bash
+   make test-all
+   ```
+5. Open the PR against `main`. Use a Conventional Commit title
+   (e.g. `feat(silences): add template export`) and fill in the PR template.
+6. CI must be green. Keep one logical change per PR — smaller PRs get
+   reviewed faster.
+
+You will normally get a first response within a few days. This project is
+maintained by a single person, so please be patient with reviews.
+
 ## Commits
 
 Conventional Commits — format, types, and scopes are defined in
