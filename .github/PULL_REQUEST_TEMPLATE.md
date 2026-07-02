@@ -28,3 +28,4 @@ Closes #
 - [ ] Conventional Commit format (`feat(alerts): ...`)
 - [ ] Go model change → TypeScript types mirrored (`frontend/src/types/index.ts`)
 - [ ] New API route registered before `/:fingerprint/*` (if applicable)
+- [ ] AI context files updated (`AGENTS.md` / `.agents/*.md` / `docs/testing-e2e.md`) — or nothing they document was touched
