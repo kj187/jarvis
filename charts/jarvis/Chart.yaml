@@ -18,7 +18,7 @@ home: https://github.com/kj187/jarvis
 sources:
   - https://github.com/kj187/jarvis
 maintainers:
-  - name: kj187
+  - name: Julian Kleinhans
     url: https://github.com/kj187
 annotations:
   artifacthub.io/category: monitoring-logging
