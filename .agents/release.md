@@ -183,7 +183,7 @@ From `.github/workflows/release.yml`:
 2. Build multi-arch image (`linux/amd64` + `linux/arm64`) from `Containerfile` (multi-stage), with SBOM + provenance, push to GHCR.
 3. Sign the image keylessly with **cosign** (GitHub OIDC).
 4. Build the release body by extracting this version's section from `CHANGELOG.md` (awk) and appending pull/cosign-verify instructions.
-5. Create the GitHub Release via `gh release create --notes-file release-body.md --latest` (the `--latest` flag marks the *GitHub Release* as latest, not a Docker tag).
+5. Create the GitHub Release via `gh release create --notes-file release-body.md --latest` (the `--latest` flag marks the *GitHub Release* as latest, not a Docker tag). Releases are immutable: if a release for the tag already exists, the job fails — never overwrite a published release; delete it manually first if a re-release is really intended.
 
 **Job `helm-publish`:**
 6. Patch `charts/jarvis/Chart.yaml` (`version` + `appVersion`) to the release version.
