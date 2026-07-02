@@ -2,6 +2,11 @@
 
 Thank you for your interest in contributing!
 
+Jarvis is developed 100% with AI coding agents. All project conventions —
+workflow rules, critical invariants, commit format, and the map of deeper
+reference docs — live in [AGENTS.md](AGENTS.md). That file is the single
+source of truth for humans and AI agents alike; please read it first.
+
 ## Prerequisites
 
 - [Podman](https://podman.io/) + podman-compose (or Docker Compose)
@@ -25,28 +30,16 @@ podman compose -f compose.dev.yml up
 # Backend:  http://localhost:8080 (air hot-reload)
 ```
 
-## Commit Conventions
+## Commits
 
-Format: [Conventional Commits](https://www.conventionalcommits.org/)
-
-```
-<type>(<scope>): <description>
-```
-
-Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`, `security`
-
-Scopes: `alerts` `silences` `claims` `comments` `ws` `api` `db` `config` `frontend` `docker`
-
-Examples:
-```
-feat(alerts): add claim history endpoint
-fix(frontend): resolve filter state not persisting across navigation
-security(api): add gosec and govulncheck to pre-commit hooks
-```
+Conventional Commits — format, types, and scopes are defined in
+[AGENTS.md](AGENTS.md#commit-format--conventional-commits).
 
 ## Testing
 
-See [docs/testing.md](docs/testing.md) for full instructions.
+See [.agents/testing.md](.agents/testing.md) for the full test strategy and
+commands, and [docs/testing-e2e.md](docs/testing-e2e.md) for the E2E /
+screenshot container stack.
 
 Pre-commit hooks run Go unit tests, gosec, govulncheck, and golangci-lint
 automatically before each commit.

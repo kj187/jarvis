@@ -281,7 +281,7 @@ podman compose up --build -d
 
 ### Running tests
 
-Quick reference — for the full test strategy, matrix, utilities, and CI pipeline, see `/project:testing`.
+Quick reference — for the full test strategy, matrix, utilities, and CI pipeline, see [.agents/testing.md](.agents/testing.md).
 
 ```bash
 make test-all        # backend (go test -race) + frontend functional E2E + helm lint + helm unittest
@@ -310,7 +310,8 @@ helm plugin install https://github.com/helm-unittest/helm-unittest --version v0.
 
 - [docs/authentication-user.md](docs/authentication-user.md) — user login: providers (none / internal / OIDC), first-run wizard, roles, sessions, Helm
 - [docs/authentication-alertmanager.md](docs/authentication-alertmanager.md) — Alertmanager upstream auth: OAuth2 client credentials, bearer token, basic auth, custom headers
-- [.claude/commands/testing.md](.claude/commands/testing.md) — slash command `/project:testing` for full test strategy, matrix, and CI pipeline
+- [AGENTS.md](AGENTS.md) — AI-agent entry point: conventions, critical invariants, task router
+- [.agents/testing.md](.agents/testing.md) — full test strategy, matrix, and CI pipeline
 - [docs/security.md](docs/security.md) — security measures
 - [CONTRIBUTING.md](CONTRIBUTING.md) — contribution guidelines
 - [SECURITY.md](SECURITY.md) — responsible disclosure
