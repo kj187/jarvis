@@ -9,9 +9,13 @@ import (
 	"testing"
 	"time"
 
-	idb "github.com/kj187/jarvis/backend/internal/db"
+	"github.com/prometheus/client_golang/prometheus/testutil"
+
 	"github.com/kj187/jarvis/backend/internal/alertmanager"
 	"github.com/kj187/jarvis/backend/internal/cluster"
+	"github.com/kj187/jarvis/backend/internal/config"
+	idb "github.com/kj187/jarvis/backend/internal/db"
+	"github.com/kj187/jarvis/backend/internal/metrics"
 	"github.com/kj187/jarvis/backend/internal/models"
 )
 
@@ -49,9 +53,11 @@ func newTestRecorder(t *testing.T) (*Recorder, *mockHub) {
 		hub:               hub,
 		interval:          time.Minute,
 		logger:            slog.Default(),
+		metrics:           metrics.New("test"),
 		prevSnapshot:      make(map[string]string),
 		prevSilenceInfo:   make(map[string]silenceInfoEntry),
 		prevAlertSilences: make(map[string][]string),
+		clusterUp:         make(map[string]bool),
 		claimReleaseDelay: 10 * time.Millisecond,
 	}
 	return rec, hub
@@ -362,5 +368,88 @@ func TestRecorder_ClaimNotReleasedOnLateRefire(t *testing.T) {
 	c, _ := rec.store.GetActiveClaim("fp1", "homelab")
 	if c == nil {
 		t.Error("claim must survive a late re-fire (alert resolved then came back after grace period)")
+	}
+}
+
+// TestRecorder_Poll_InstrumentsMetrics drives a full poll() across one healthy
+// and one failing cluster, verifying poll cycle/error counters and the
+// scrape-time up-state derived from them (Critical: Collect() must never call
+// upstream itself — this is why the state is cached here instead).
+func TestRecorder_Poll_InstrumentsMetrics(t *testing.T) {
+	healthy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v2/alerts":
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode([]alertmanager.GettableAlert{
+				{
+					Fingerprint: "fp1",
+					Status:      alertmanager.GettableAlertStatus{State: "active"},
+					Labels:      map[string]string{"alertname": "TestAlert"},
+					Annotations: map[string]string{},
+					StartsAt:    time.Now().UTC(),
+				},
+			})
+		case "/api/v2/silences":
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode([]alertmanager.GettableSilence{})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer healthy.Close()
+
+	failing := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "boom", http.StatusInternalServerError)
+	}))
+	defer failing.Close()
+
+	rec, _ := newTestRecorder(t)
+	rec.registry = cluster.NewRegistry([]config.ClusterConfig{
+		{Name: "good", AlertmanagerURL: healthy.URL, AlertmanagerLinkURL: healthy.URL},
+		{Name: "bad", AlertmanagerURL: failing.URL, AlertmanagerLinkURL: failing.URL},
+	})
+
+	rec.poll(context.Background())
+
+	if got := testutil.ToFloat64(rec.metrics.PollCyclesTotal.WithLabelValues("good")); got != 1 {
+		t.Errorf("PollCyclesTotal[good] = %v, want 1", got)
+	}
+	if got := testutil.ToFloat64(rec.metrics.PollCyclesTotal.WithLabelValues("bad")); got != 1 {
+		t.Errorf("PollCyclesTotal[bad] = %v, want 1", got)
+	}
+	if got := testutil.ToFloat64(rec.metrics.PollErrorsTotal.WithLabelValues("bad", "alerts")); got != 1 {
+		t.Errorf("PollErrorsTotal[bad,alerts] = %v, want 1", got)
+	}
+	if got := testutil.ToFloat64(rec.metrics.AlertEventsTotal.WithLabelValues(models.EventStatusFiring)); got != 1 {
+		t.Errorf("AlertEventsTotal[firing] = %v, want 1", got)
+	}
+
+	up := rec.ClusterUpStates()
+	if !up["good"] {
+		t.Error("ClusterUpStates()[good] = false, want true")
+	}
+	if up["bad"] {
+		t.Error("ClusterUpStates()[bad] = true, want false")
+	}
+
+	if n := testutil.CollectAndCount(rec.metrics.PollDurationSeconds); n != 1 {
+		t.Errorf("PollDurationSeconds series count = %d, want 1", n)
+	}
+}
+
+// TestRecorder_Poll_IdempotentPollDoesNotDoubleCountEvents verifies that
+// polling the same unchanged alert twice only counts one lifecycle event —
+// RecordStatusChange itself is idempotent, so the second poll must not
+// increment jarvis_alert_events_total again.
+func TestRecorder_Poll_IdempotentPollDoesNotDoubleCountEvents(t *testing.T) {
+	rec, _ := newTestRecorder(t)
+	ctx := context.Background()
+
+	alerts := []models.EnrichedAlert{makeEnrichedAlert("fp1", "active", "homelab")}
+	rec.processAlerts(ctx, alerts)
+	rec.processAlerts(ctx, alerts)
+
+	if got := testutil.ToFloat64(rec.metrics.AlertEventsTotal.WithLabelValues(models.EventStatusFiring)); got != 1 {
+		t.Errorf("AlertEventsTotal[firing] = %v, want 1 (second identical poll must not double-count)", got)
 	}
 }

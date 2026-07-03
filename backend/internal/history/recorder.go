@@ -11,6 +11,7 @@ import (
 
 	"github.com/kj187/jarvis/backend/internal/alertmanager"
 	"github.com/kj187/jarvis/backend/internal/cluster"
+	"github.com/kj187/jarvis/backend/internal/metrics"
 	"github.com/kj187/jarvis/backend/internal/models"
 )
 
@@ -28,12 +29,19 @@ type Recorder struct {
 	interval   time.Duration
 	logger     *slog.Logger
 	triggerCh  chan struct{}
+	metrics    *metrics.Metrics
 
 	// prevSnapshot holds the alert instance (fingerprint+cluster) from the last poll for diff computation.
 	prevMu            sync.Mutex
 	prevSnapshot      map[string]string           // fingerprint+cluster → status
 	prevSilenceInfo   map[string]silenceInfoEntry // cluster+silenceID → {state, cluster, comment}
 	prevAlertSilences map[string][]string         // fingerprint+cluster → []cluster+silenceID
+
+	// clusterUpMu guards clusterUp, the last-poll-success flag per cluster.
+	// Read at scrape time by the metrics collector — never issues an upstream
+	// HTTP call itself, so a slow/unreachable Alertmanager cannot stall a scrape.
+	clusterUpMu sync.Mutex
+	clusterUp   map[string]bool
 
 	// claimReleaseDelay is how long to wait after detecting a resolution before
 	// releasing claims. Must exceed the 60s grace period so grace-period re-fires
@@ -90,6 +98,7 @@ func NewRecorder(
 	hub broadcaster,
 	interval time.Duration,
 	logger *slog.Logger,
+	m *metrics.Metrics,
 ) *Recorder {
 	return &Recorder{
 		registry:          registry,
@@ -98,12 +107,33 @@ func NewRecorder(
 		hub:               hub,
 		interval:          interval,
 		logger:            logger,
+		metrics:           m,
 		triggerCh:         make(chan struct{}, 1),
 		prevSnapshot:      make(map[string]string),
 		prevSilenceInfo:   make(map[string]silenceInfoEntry),
 		prevAlertSilences: make(map[string][]string),
+		clusterUp:         make(map[string]bool),
 		claimReleaseDelay: 20 * time.Minute,
 	}
+}
+
+// ClusterUpStates returns a copy of the last-poll-success flag per cluster.
+// Used by the metrics collector at scrape time — reads cached state only,
+// never performs an upstream HTTP call.
+func (r *Recorder) ClusterUpStates() map[string]bool {
+	r.clusterUpMu.Lock()
+	defer r.clusterUpMu.Unlock()
+	out := make(map[string]bool, len(r.clusterUp))
+	for k, v := range r.clusterUp {
+		out[k] = v
+	}
+	return out
+}
+
+func (r *Recorder) setClusterUp(clusterName string, up bool) {
+	r.clusterUpMu.Lock()
+	r.clusterUp[clusterName] = up
+	r.clusterUpMu.Unlock()
 }
 
 // Trigger signals the recorder to run an immediate poll.
@@ -142,13 +172,21 @@ func (r *Recorder) Start(ctx context.Context) {
 // poll fetches alerts from all clusters, persists lifecycle events, and
 // broadcasts the updated alert list.
 func (r *Recorder) poll(ctx context.Context) {
+	start := time.Now()
+	defer func() {
+		if r.metrics != nil {
+			r.metrics.PollDurationSeconds.Observe(time.Since(start).Seconds())
+		}
+	}()
+
 	clusters := r.registry.All()
 
 	type clusterResult struct {
-		alerts   []models.EnrichedAlert
-		silences []alertmanager.GettableSilence
-		name     string
-		err      error
+		alerts      []models.EnrichedAlert
+		silences    []alertmanager.GettableSilence
+		name        string
+		err         error
+		silencesErr error
 	}
 	results := make([]clusterResult, len(clusters))
 	var wg sync.WaitGroup
@@ -156,6 +194,9 @@ func (r *Recorder) poll(ctx context.Context) {
 		wg.Add(1)
 		go func(idx int, cl *cluster.Cluster) {
 			defer wg.Done()
+			if r.metrics != nil {
+				r.metrics.PollCyclesTotal.WithLabelValues(cl.Name).Inc()
+			}
 			alerts, err := r.fetchCluster(ctx, cl)
 			if err != nil {
 				results[idx] = clusterResult{name: cl.Name, err: err}
@@ -165,7 +206,7 @@ func (r *Recorder) poll(ctx context.Context) {
 			if serr != nil {
 				r.logger.Warn("fetch silences failed", "cluster", cl.Name, "err", serr)
 			}
-			results[idx] = clusterResult{alerts: alerts, silences: silences, name: cl.Name}
+			results[idx] = clusterResult{alerts: alerts, silences: silences, name: cl.Name, silencesErr: serr}
 		}(i, cl)
 	}
 	wg.Wait()
@@ -175,7 +216,15 @@ func (r *Recorder) poll(ctx context.Context) {
 	for _, res := range results {
 		if res.err != nil {
 			r.logger.Error("poll cluster failed", "cluster", res.name, "err", res.err)
+			r.setClusterUp(res.name, false)
+			if r.metrics != nil {
+				r.metrics.PollErrorsTotal.WithLabelValues(res.name, "alerts").Inc()
+			}
 			continue
+		}
+		r.setClusterUp(res.name, true)
+		if res.silencesErr != nil && r.metrics != nil {
+			r.metrics.PollErrorsTotal.WithLabelValues(res.name, "silences").Inc()
 		}
 		allAlerts = append(allAlerts, res.alerts...)
 		for _, s := range res.silences {
@@ -300,9 +349,16 @@ func (r *Recorder) applyPollResults(
 			}
 		}
 
+		prevState, hadPrevState := prev[alertKey]
+		stateChanged := !hadPrevState || prevState != a.Status.State
+
 		if _, err := r.store.RecordStatusChange(a.Fingerprint, a.ClusterName, a.AlertmanagerURL,
 			eventStatus, a.StartsAt, a.Annotations); err != nil {
 			r.logger.Error("record status change", "fp", a.Fingerprint, "err", err)
+		} else if stateChanged && r.metrics != nil {
+			// RecordStatusChange is idempotent (same status → no-op); only count
+			// actual lifecycle transitions, matching the DB's own idempotency check.
+			r.metrics.AlertEventsTotal.WithLabelValues(eventStatus).Inc()
 		}
 	}
 
@@ -311,6 +367,8 @@ func (r *Recorder) applyPollResults(
 		for _, ra := range resolvedAlerts {
 			if err := r.store.RecordResolvedForCluster(ra.fingerprint, ra.clusterName, now); err != nil {
 				r.logger.Error("record resolved", "fp", ra.fingerprint, "cluster", ra.clusterName, "err", err)
+			} else if r.metrics != nil {
+				r.metrics.AlertEventsTotal.WithLabelValues(models.EventStatusResolved).Inc()
 			}
 		}
 		for _, ra := range resolvedAlerts {

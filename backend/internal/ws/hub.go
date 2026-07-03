@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/kj187/jarvis/backend/internal/metrics"
 	"github.com/kj187/jarvis/backend/internal/models"
 )
 
@@ -28,10 +29,11 @@ type Hub struct {
 	unregister chan *Client
 	logger     *slog.Logger
 	upgrader   websocket.Upgrader
+	metrics    *metrics.Metrics
 }
 
 // NewHub creates a new Hub.
-func NewHub(allowedOrigins []string, logger *slog.Logger) *Hub {
+func NewHub(allowedOrigins []string, logger *slog.Logger, m *metrics.Metrics) *Hub {
 	originSet := make(map[string]struct{}, len(allowedOrigins))
 	for _, o := range allowedOrigins {
 		originSet[o] = struct{}{}
@@ -43,6 +45,7 @@ func NewHub(allowedOrigins []string, logger *slog.Logger) *Hub {
 		register:   make(chan *Client, 16),
 		unregister: make(chan *Client, 16),
 		logger:     logger,
+		metrics:    m,
 	}
 	h.upgrader = websocket.Upgrader{
 		ReadBufferSize:  1024,
@@ -108,6 +111,9 @@ func (h *Hub) BroadcastJSON(eventType string, payload interface{}) {
 	if err != nil {
 		h.logger.Error("marshal ws event", "err", err)
 		return
+	}
+	if h.metrics != nil {
+		h.metrics.WSBroadcastsTotal.WithLabelValues(eventType).Inc()
 	}
 	h.broadcast <- data
 }

@@ -86,16 +86,16 @@ func main() {
 		logger.Info("auth provider: none (write actions blocked)")
 	}
 
-	// ── WebSocket Hub ─────────────────────────────────────────────────────────
-	hub := ws.NewHub(cfg.AllowedOrigins, logger)
-	go hub.Run()
-
 	// ── Metrics ───────────────────────────────────────────────────────────────
 	m := metrics.New(version.Version)
-	m.MustRegister(metrics.NewCollector(alertStore, hub, nil, len(registry.All())))
+
+	// ── WebSocket Hub ─────────────────────────────────────────────────────────
+	hub := ws.NewHub(cfg.AllowedOrigins, logger, m)
+	go hub.Run()
 
 	// ── Recorder ──────────────────────────────────────────────────────────────
-	recorder := history.NewRecorder(registry, alertStore, store, hub, cfg.PollInterval, logger)
+	recorder := history.NewRecorder(registry, alertStore, store, hub, cfg.PollInterval, logger, m)
+	m.MustRegister(metrics.NewCollector(alertStore, hub, recorder.ClusterUpStates, len(registry.All())))
 
 	// ── HTTP Router ───────────────────────────────────────────────────────────
 	router := api.NewRouter(alertStore, store, hub, registry, cfg, static.StaticFiles, recorder, authProvider, userStore, m)

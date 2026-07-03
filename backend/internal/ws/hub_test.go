@@ -8,11 +8,14 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/prometheus/client_golang/prometheus/testutil"
+
+	"github.com/kj187/jarvis/backend/internal/metrics"
 )
 
 func newTestHub(t *testing.T) *Hub {
 	t.Helper()
-	hub := NewHub([]string{"http://localhost:5173"}, slog.Default())
+	hub := NewHub([]string{"http://localhost:5173"}, slog.Default(), nil)
 	go hub.Run()
 	return hub
 }
@@ -79,5 +82,22 @@ func TestHub_ClientCountAfterDisconnect(t *testing.T) {
 
 	if hub.ClientCount() != 0 {
 		t.Errorf("ClientCount = %d, want 0 after disconnect", hub.ClientCount())
+	}
+}
+
+func TestHub_BroadcastJSON_IncrementsMetric(t *testing.T) {
+	m := metrics.New("test")
+	hub := NewHub(nil, slog.Default(), m)
+	go hub.Run()
+
+	hub.BroadcastJSON("alerts_update", map[string]string{"k": "v"})
+	hub.BroadcastJSON("alerts_update", map[string]string{"k": "v"})
+	hub.BroadcastJSON("comment_added", map[string]string{"k": "v"})
+
+	if got := testutil.ToFloat64(m.WSBroadcastsTotal.WithLabelValues("alerts_update")); got != 2 {
+		t.Errorf("alerts_update broadcasts = %v, want 2", got)
+	}
+	if got := testutil.ToFloat64(m.WSBroadcastsTotal.WithLabelValues("comment_added")); got != 1 {
+		t.Errorf("comment_added broadcasts = %v, want 1", got)
 	}
 }

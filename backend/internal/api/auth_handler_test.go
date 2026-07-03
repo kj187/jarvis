@@ -16,6 +16,7 @@ import (
 	"github.com/kj187/jarvis/backend/internal/config"
 	idb "github.com/kj187/jarvis/backend/internal/db"
 	"github.com/kj187/jarvis/backend/internal/history"
+	"github.com/kj187/jarvis/backend/internal/metrics"
 	"github.com/kj187/jarvis/backend/internal/users"
 	"github.com/kj187/jarvis/backend/internal/ws"
 )
@@ -38,7 +39,7 @@ func newAuthServer(t *testing.T) (*Server, *users.Store) {
 	provider := auth.NewInternalProvider(userStore)
 	alertStore := &history.AlertStore{}
 	store := history.NewStore(database, dialect)
-	hub := ws.NewHub(nil, nil)
+	hub := ws.NewHub(nil, nil, metrics.New("test"))
 	go hub.Run()
 	registry := cluster.NewRegistry(nil)
 	cfg := &config.Config{AuthProvider: "internal", SecretKey: testSecretKey}

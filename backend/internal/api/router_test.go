@@ -33,7 +33,7 @@ func newTestRouter(t *testing.T, origins []string) *httptest.Server {
 	alertStore := &history.AlertStore{}
 	store := history.NewStore(database, dialect)
 	userStore := users.NewStore(database, dialect)
-	hub := ws.NewHub(nil, nil)
+	hub := ws.NewHub(nil, nil, metrics.New("test"))
 	go hub.Run()
 	registry := cluster.NewRegistry(nil)
 	cfg := &config.Config{AllowedOrigins: origins}
@@ -186,7 +186,7 @@ func newTestRouterWithAuthMode(t *testing.T, authMode string) *httptest.Server {
 	provider := auth.NewInternalProvider(userStore)
 	alertStore := &history.AlertStore{}
 	store := history.NewStore(database, dialect)
-	hub := ws.NewHub(nil, nil)
+	hub := ws.NewHub(nil, nil, metrics.New("test"))
 	go hub.Run()
 	registry := cluster.NewRegistry(nil)
 	cfg := &config.Config{

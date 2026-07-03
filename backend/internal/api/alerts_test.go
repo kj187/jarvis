@@ -14,6 +14,7 @@ import (
 	"github.com/kj187/jarvis/backend/internal/config"
 	idb "github.com/kj187/jarvis/backend/internal/db"
 	"github.com/kj187/jarvis/backend/internal/history"
+	"github.com/kj187/jarvis/backend/internal/metrics"
 	"github.com/kj187/jarvis/backend/internal/models"
 	"github.com/kj187/jarvis/backend/internal/users"
 	"github.com/kj187/jarvis/backend/internal/ws"
@@ -33,7 +34,7 @@ func newTestServer(t *testing.T) (*Server, *history.AlertStore) {
 	alertStore := &history.AlertStore{}
 	store := history.NewStore(database, dialect)
 	userStore := users.NewStore(database, dialect)
-	hub := ws.NewHub(nil, nil)
+	hub := ws.NewHub(nil, nil, metrics.New("test"))
 	go hub.Run()
 	registry := cluster.NewRegistry(nil)
 	cfg := &config.Config{}
