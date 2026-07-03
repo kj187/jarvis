@@ -85,6 +85,11 @@ Tests cover four suites (`deployment`, `configmap`, `secret`, `ingress`) and run
 | `securityContext` | object | `{allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, ...}` | Container-level security context |
 | `service.type` | string | `ClusterIP` | Kubernetes Service type |
 | `service.port` | int | `80` | Service port |
+| `metrics.serviceMonitor.enabled` | bool | `false` | Create a Prometheus Operator `ServiceMonitor` for `/metrics` (requires the `monitoring.coreos.com/v1` CRDs) |
+| `metrics.serviceMonitor.interval` | string | `30s` | Scrape interval |
+| `metrics.serviceMonitor.scrapeTimeout` | string | `10s` | Scrape timeout |
+| `metrics.serviceMonitor.labels` | object | `{}` | Extra labels on the `ServiceMonitor` (e.g. to match a `kube-prometheus-stack` release selector) |
+| `metrics.podAnnotations` | bool | `false` | Add `prometheus.io/scrape`, `prometheus.io/port`, `prometheus.io/path` pod annotations instead (annotation-based scraping) |
 | `ingress.enabled` | bool | `false` | Enable Ingress |
 | `ingress.className` | string | `""` | Ingress class name |
 | `ingress.annotations` | object | `{}` | Ingress annotations |

@@ -305,6 +305,38 @@ tests:
                     expirationSeconds: 3600
                     audience: vault
 
+  - it: renders no pod annotations by default
+    asserts:
+      - notExists:
+          path: spec.template.metadata.annotations
+
+  - it: renders prometheus.io annotations when metrics.podAnnotations is enabled
+    set:
+      metrics.podAnnotations: true
+    asserts:
+      - equal:
+          path: spec.template.metadata.annotations["prometheus.io/scrape"]
+          value: "true"
+      - equal:
+          path: spec.template.metadata.annotations["prometheus.io/port"]
+          value: "8080"
+      - equal:
+          path: spec.template.metadata.annotations["prometheus.io/path"]
+          value: /metrics
+
+  - it: merges user podAnnotations with prometheus.io annotations
+    set:
+      metrics.podAnnotations: true
+      podAnnotations:
+        team: sre
+    asserts:
+      - equal:
+          path: spec.template.metadata.annotations["team"]
+          value: sre
+      - equal:
+          path: spec.template.metadata.annotations["prometheus.io/scrape"]
+          value: "true"
+
   - it: respects custom volumeName and mountPath for projected token
     set:
       serviceAccountTokenProjection.enabled: true

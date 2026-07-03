@@ -1,0 +1,60 @@
+suite: servicemonitor
+templates:
+  - templates/servicemonitor.yaml
+
+tests:
+  - it: does not render ServiceMonitor by default
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: renders ServiceMonitor when enabled
+    set:
+      metrics.serviceMonitor.enabled: true
+    asserts:
+      - hasDocuments:
+          count: 1
+      - isKind:
+          of: ServiceMonitor
+      - equal:
+          path: spec.endpoints[0].port
+          value: http
+      - equal:
+          path: spec.endpoints[0].path
+          value: /metrics
+      - equal:
+          path: spec.endpoints[0].interval
+          value: 30s
+      - equal:
+          path: spec.endpoints[0].scrapeTimeout
+          value: 10s
+
+  - it: selects pods via the chart's selector labels
+    set:
+      metrics.serviceMonitor.enabled: true
+    asserts:
+      - isNotNullOrEmpty:
+          path: spec.selector.matchLabels["app.kubernetes.io/name"]
+
+  - it: respects custom interval and scrapeTimeout
+    set:
+      metrics.serviceMonitor.enabled: true
+      metrics.serviceMonitor.interval: 15s
+      metrics.serviceMonitor.scrapeTimeout: 5s
+    asserts:
+      - equal:
+          path: spec.endpoints[0].interval
+          value: 15s
+      - equal:
+          path: spec.endpoints[0].scrapeTimeout
+          value: 5s
+
+  - it: applies custom labels
+    set:
+      metrics.serviceMonitor.enabled: true
+      metrics.serviceMonitor.labels:
+        release: kube-prometheus-stack
+    asserts:
+      - equal:
+          path: metadata.labels.release
+          value: kube-prometheus-stack

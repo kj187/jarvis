@@ -35,6 +35,19 @@ service:
   type: ClusterIP
   port: 80
 
+# Prometheus metrics. The /metrics endpoint itself is always exposed by the
+# app (public, like /health) — this section only controls how a Prometheus
+# instance discovers and scrapes it.
+metrics:
+  serviceMonitor:
+    # Requires the Prometheus Operator CRDs (monitoring.coreos.com/v1) in the cluster.
+    enabled: false
+    interval: 30s
+    scrapeTimeout: 10s
+    labels: {}
+  # Alternative to serviceMonitor for annotation-based scraping setups.
+  podAnnotations: false
+
 ingress:
   enabled: false
   className: ""
