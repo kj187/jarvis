@@ -31,15 +31,15 @@ test('B4 severity ordering starts with critical section', async ({ page, am, jar
   await expect(firstSeverityHeader).toHaveText(/critical/i)
 })
 
-test('B5 card pagination shows "x-y of n" and +/- boundaries', async ({ page, am, jarvis }) => {
+test('B5 card expand/collapse shows "n of m" and +/- boundaries', async ({ page, am, jarvis }) => {
   await dismissNoAuthNotice(page)
   await am.fire(crashLoopBurst)
   await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, crashLoopBurst.length)
 
   await page.goto('/?state=active')
-  // Wait for alerts to render before checking pagination
+  // Wait for alerts to render before checking expand/collapse controls
   await expect(page.getByTestId('alert-card').first()).toBeVisible({ timeout: 10_000 })
-  await expect(page.getByText(/\d+–\d+ of \d+/).first()).toBeVisible({ timeout: 10_000 })
+  await expect(page.getByText(/\d+ of \d+/).first()).toBeVisible({ timeout: 10_000 })
 
   const minus = page.getByRole('button', { name: '−' }).first()
   const plus = page.getByRole('button', { name: '+' }).first()
