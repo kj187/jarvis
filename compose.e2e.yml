@@ -76,7 +76,7 @@ services:
       - jarvis_e2e
 
   e2e-playwright:
-    image: mcr.microsoft.com/playwright:v1.60.0-noble
+    image: mcr.microsoft.com/playwright:v1.61.1-noble
     container_name: jarvis_e2e_playwright
     working_dir: /work/frontend
     environment:
