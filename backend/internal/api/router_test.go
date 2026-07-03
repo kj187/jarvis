@@ -3,8 +3,10 @@ package api
 import (
 	"context"
 	"embed"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/kj187/jarvis/backend/internal/auth"
@@ -12,6 +14,7 @@ import (
 	"github.com/kj187/jarvis/backend/internal/config"
 	idb "github.com/kj187/jarvis/backend/internal/db"
 	"github.com/kj187/jarvis/backend/internal/history"
+	"github.com/kj187/jarvis/backend/internal/metrics"
 	"github.com/kj187/jarvis/backend/internal/users"
 	"github.com/kj187/jarvis/backend/internal/ws"
 )
@@ -35,7 +38,7 @@ func newTestRouter(t *testing.T, origins []string) *httptest.Server {
 	registry := cluster.NewRegistry(nil)
 	cfg := &config.Config{AllowedOrigins: origins}
 
-	e := NewRouter(alertStore, store, hub, registry, cfg, embed.FS{}, nil, auth.NoneProvider{}, userStore)
+	e := NewRouter(alertStore, store, hub, registry, cfg, embed.FS{}, nil, auth.NoneProvider{}, userStore, metrics.New("test"))
 	return httptest.NewServer(e)
 }
 
@@ -52,6 +55,7 @@ func TestRoutes(t *testing.T) {
 		"/api/v1/silences",
 		"/api/v1/clusters",
 		"/health",
+		"/metrics",
 	}
 
 	var client http.Client
@@ -191,8 +195,48 @@ func newTestRouterWithAuthMode(t *testing.T, authMode string) *httptest.Server {
 		SecretKey:    []byte("aaaabbbbccccddddeeeeffffgggghhhh"),
 	}
 
-	e := NewRouter(alertStore, store, hub, registry, cfg, embed.FS{}, nil, provider, userStore)
+	e := NewRouter(alertStore, store, hub, registry, cfg, embed.FS{}, nil, provider, userStore, metrics.New("test"))
 	return httptest.NewServer(e)
+}
+
+func TestMetricsRoute_ExposesBuildInfo(t *testing.T) {
+	srv := newTestRouter(t, nil)
+	defer srv.Close()
+
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, srv.URL+"/metrics", nil)
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("GET /metrics: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	if ct := resp.Header.Get("Content-Type"); !strings.HasPrefix(ct, "text/plain") {
+		t.Errorf("content-type = %q, want text/plain prefix", ct)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	if !strings.Contains(string(body), "jarvis_build_info") {
+		t.Error("expected jarvis_build_info in /metrics output")
+	}
+}
+
+func TestMetricsRoute_PublicUnderFullProtect(t *testing.T) {
+	srv := newTestRouterWithAuthMode(t, "full_protect")
+	defer srv.Close()
+
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, srv.URL+"/metrics", nil)
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("GET /metrics: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("status = %d, want 200 (no session required)", resp.StatusCode)
+	}
 }
 
 func TestAuthMode_ReadRoutes(t *testing.T) {

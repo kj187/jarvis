@@ -16,6 +16,7 @@ import (
 	"github.com/kj187/jarvis/backend/internal/cluster"
 	"github.com/kj187/jarvis/backend/internal/config"
 	"github.com/kj187/jarvis/backend/internal/history"
+	"github.com/kj187/jarvis/backend/internal/metrics"
 	"github.com/kj187/jarvis/backend/internal/users"
 	"github.com/kj187/jarvis/backend/internal/ws"
 )
@@ -52,6 +53,7 @@ func NewRouter(
 	recorder pollTriggerer,
 	authProvider auth.Provider,
 	userStore *users.Store,
+	m *metrics.Metrics,
 ) *echo.Echo {
 	e := echo.New()
 	e.HideBanner = true
@@ -152,8 +154,9 @@ func NewRouter(
 		apiV1.Use(auth.RequireAuth(authProvider))
 	}
 
-	// Health
+	// Health / Metrics — public, bypasses full_protect like /health.
 	e.GET("/health", srv.getHealth)
+	e.GET("/metrics", echo.WrapHandler(m.Handler()))
 	apiV1.GET("/status", srv.getStatus)
 	apiV1.GET("/info", srv.getInfo)
 

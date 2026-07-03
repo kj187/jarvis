@@ -16,8 +16,10 @@ import (
 	"github.com/kj187/jarvis/backend/internal/config"
 	"github.com/kj187/jarvis/backend/internal/db"
 	"github.com/kj187/jarvis/backend/internal/history"
+	"github.com/kj187/jarvis/backend/internal/metrics"
 	"github.com/kj187/jarvis/backend/internal/static"
 	"github.com/kj187/jarvis/backend/internal/users"
+	"github.com/kj187/jarvis/backend/internal/version"
 	"github.com/kj187/jarvis/backend/internal/ws"
 )
 
@@ -88,11 +90,15 @@ func main() {
 	hub := ws.NewHub(cfg.AllowedOrigins, logger)
 	go hub.Run()
 
+	// ── Metrics ───────────────────────────────────────────────────────────────
+	m := metrics.New(version.Version)
+	m.MustRegister(metrics.NewCollector(alertStore, hub, nil, len(registry.All())))
+
 	// ── Recorder ──────────────────────────────────────────────────────────────
 	recorder := history.NewRecorder(registry, alertStore, store, hub, cfg.PollInterval, logger)
 
 	// ── HTTP Router ───────────────────────────────────────────────────────────
-	router := api.NewRouter(alertStore, store, hub, registry, cfg, static.StaticFiles, recorder, authProvider, userStore)
+	router := api.NewRouter(alertStore, store, hub, registry, cfg, static.StaticFiles, recorder, authProvider, userStore, m)
 
 	server := &http.Server{
 		Addr:         ":" + cfg.Port,
