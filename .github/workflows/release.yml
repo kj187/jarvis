@@ -67,20 +67,92 @@ jobs:
           cosign sign --yes \
             ghcr.io/kj187/jarvis@${{ steps.build.outputs.digest }}
 
+      # Publishes SLSA provenance to the GitHub attestations API so consumers
+      # can run `gh attestation verify` (in addition to the BuildKit provenance
+      # already embedded in the image manifest).
+      - name: Attest build provenance (GitHub)
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # ratchet:actions/attest-build-provenance@v4.1.1
+        with:
+          subject-name: ghcr.io/kj187/jarvis
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+      # Standalone SPDX SBOM attached to the GitHub Release as an asset, so
+      # users can inspect dependencies without pulling the image.
+      - name: Generate SBOM (SPDX)
+        uses: anchore/sbom-action@f6c3d0fe42c3cf876e3462574e4c9416b5e0f07a # ratchet:anchore/sbom-action@v0.9.0
+        with:
+          image: ghcr.io/kj187/jarvis@${{ steps.build.outputs.digest }}
+          registry-username: ${{ github.actor }}
+          registry-password: ${{ secrets.GITHUB_TOKEN }}
+          format: spdx-json
+          output-file: sbom.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+
       - name: Build release body
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           DIGEST="${{ steps.build.outputs.digest }}"
-          printf '## Changelog\n\n' > release-body.md
-          awk "/^## \[${GITHUB_REF_NAME}\]/{found=1; next} found && /^## \[/{exit} found{print}" CHANGELOG.md >> release-body.md
-          printf '\n---\n\n' >> release-body.md
-          printf '## Container Image\n\n```shell\n' >> release-body.md
-          printf 'docker pull ghcr.io/kj187/jarvis:%s\n' "${VERSION}" >> release-body.md
-          printf '```\n\n## Verify with Cosign\n\n```shell\n' >> release-body.md
-          printf 'cosign verify ghcr.io/kj187/jarvis@%s \\\n' "${DIGEST}" >> release-body.md
-          printf '  --certificate-identity-regexp="https://github.com/kj187/jarvis/.*" \\\n' >> release-body.md
-          printf '  --certificate-oidc-issuer="https://token.actions.githubusercontent.com"\n' >> release-body.md
-          printf '```\n' >> release-body.md
+          CHART_VERSION=$(awk '/^version:/{print $2}' charts/jarvis/Chart.yaml)
+
+          # Prefer curated release notes committed by the release process;
+          # fall back to extracting this version's CHANGELOG section.
+          NOTES_FILE=".github/release-notes/${GITHUB_REF_NAME}.md"
+          if [ -f "${NOTES_FILE}" ]; then
+            cp "${NOTES_FILE}" release-body.md
+          else
+            printf '## Changelog\n\n' > release-body.md
+            awk "/^## \[${GITHUB_REF_NAME}\]/{found=1; next} found && /^## \[/{exit} found{print}" CHANGELOG.md >> release-body.md
+          fi
+
+          cat >> release-body.md <<'EOF'
+
+          ---
+
+          ## Container image
+
+          ```shell
+          docker pull ghcr.io/kj187/jarvis:@VERSION@
+          ```
+
+          Digest: `@DIGEST@`
+
+          ### Verify image signature (cosign)
+
+          ```shell
+          cosign verify ghcr.io/kj187/jarvis@@DIGEST@ \
+            --certificate-identity-regexp="https://github.com/kj187/jarvis/.*" \
+            --certificate-oidc-issuer="https://token.actions.githubusercontent.com"
+          ```
+
+          ### Verify build provenance (GitHub attestation)
+
+          ```shell
+          gh attestation verify oci://ghcr.io/kj187/jarvis:@VERSION@ --repo kj187/jarvis
+          ```
+
+          ## Helm chart
+
+          ```shell
+          helm install jarvis oci://ghcr.io/kj187/charts/jarvis --version @CHART_VERSION@
+          ```
+
+          ### Verify chart signature (cosign)
+
+          ```shell
+          cosign verify ghcr.io/kj187/charts/jarvis:@CHART_VERSION@ \
+            --certificate-identity-regexp="https://github.com/kj187/jarvis/.*" \
+            --certificate-oidc-issuer="https://token.actions.githubusercontent.com"
+          ```
+
+          ## SBOM
+
+          The SPDX SBOM is attached to this release (`sbom.spdx.json`) and also
+          embedded in the image manifest (`docker buildx imagetools inspect`).
+          EOF
+
+          sed -i "s|@VERSION@|${VERSION}|g; s|@DIGEST@|${DIGEST}|g; s|@CHART_VERSION@|${CHART_VERSION}|g" release-body.md
           cat release-body.md
 
       - name: Create GitHub Release
@@ -92,4 +164,6 @@ jobs:
           gh release create "${{ github.ref_name }}" \
             --title "${{ github.ref_name }}" \
             --notes-file release-body.md \
-            --latest
+            --verify-tag \
+            --latest \
+            sbom.spdx.json

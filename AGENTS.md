@@ -95,7 +95,7 @@ Tool-specific entry points map to the same files (no duplicated content):
    `frontend/src/types/index.ts` (exact camelCase field names matching the
    JSON tags).
 3. **Pre-commit hook** (`.githooks/pre-commit`) runs checks based on staged
-   paths: Go tests + gosec + govulncheck + golangci-lint (backend), pnpm audit +
+   paths: Go tests + golangci-lint incl. gosec (backend), pnpm audit +
    jscpd (frontend, needs running dev container), helm lint/unittest (charts),
    and a gitleaks secret scan (always). **Never `--no-verify`.**
 4. **Frontend checklist**: `cursor: pointer` on all clickable elements · no
@@ -133,9 +133,10 @@ Tool-specific entry points map to the same files (no duplicated content):
    `pnpm build`). For larger or cross-cutting changes run `make test-all`.
    If a check cannot be run or fails for pre-existing reasons, say so
    explicitly with the command and output — do not claim green.
-8. **Releases**: Never trigger a release automatically. Only when the user
-   explicitly says "release": load `.agents/release.md` and follow it
-   step-by-step.
+8. **Releases**: Never trigger a release without an explicit user request.
+   Only when the user explicitly asks (e.g. `/release 1.6.0`): load
+   `.agents/release.md` and run its flow end-to-end — it is fully
+   non-interactive, do not stop for confirmations.
 9. **Dependabot** runs every Monday (Go deps, npm/pnpm grouped, GitHub
    Actions). Its PRs run through CI — green CI → merge, no manual
    intervention needed.

@@ -1,165 +1,176 @@
 # Jarvis — Creating a Release
 
-Full release process: generate changelog, set tag, trigger GitHub Actions.
+Fully automated release: `/release X.Y.Z` runs end-to-end without further
+questions — preflight, changelog, curated release notes, version bumps, tag,
+push, CI monitoring.
 
-**Never trigger a release automatically.** Load and follow this file only when
-the user explicitly asks for a release (root `AGENTS.md` → Workflow Rules #8).
-
----
-
-## Branch Context
-
-```
-# Option A: work on main
-git push                        → CI runs (tests, lint, security, build)
-
-# Option B: feature branch → merge first, then release
-git checkout -b feature/my-feature
-git push && gh pr create        → CI runs on PR
-# merge PR → back on main, then release from main
-```
+**Never trigger a release without an explicit user request.** Load and follow
+this file only when the user explicitly asks for a release (root `AGENTS.md`
+→ Workflow Rules #8). Once the user has asked, run the whole flow without
+stopping for confirmations.
 
 ---
 
-## Step-by-Step
+## Input
 
-1. **Check `git status`** — must be clean (no uncommitted changes)
-2. **Check current branch** — must be `main` (`git branch --show-current`)
-3. **Run tests** in `backend/`: `go test ./...` — must be green
-4. **Ask the user**: major / minor / patch or a direct version number (e.g. `v1.2.0`)?
-5. **Get last version**: `git describe --tags --abbrev=0`
-6. **Calculate new version** using Semver:
-   - `patch`: e.g. `v1.2.0` → `v1.2.1`
-   - `minor`: e.g. `v1.2.0` → `v1.3.0`
-   - `major`: e.g. `v1.2.0` → `v2.0.0`
-7. **Generate CHANGELOG**: `git-chglog --output CHANGELOG.md`
-8. **Show release notes** for this specific version to the user:
-   `git-chglog --output /dev/stdout vX.Y.Z`
-   → **Wait for confirmation** before proceeding
-9. **Bump version in README** — update the two version occurrences in the Getting Started block:
+The user provides the target version as argument (`/release 1.6.0`) or in
+prose. Accept `X.Y.Z` or `vX.Y.Z`; normalize to tag `vX.Y.Z`. If **no**
+version is given, derive the bump from the commits since the last tag
+(Conventional Commits → semver table below) and state the derived version in
+the final report — do not ask.
+
+---
+
+## Step-by-Step (non-interactive)
+
+### Phase 1 — Preflight (abort on any failure, report why)
+
+1. `git status --porcelain` — working tree must be clean.
+2. `git branch --show-current` — must be `main`.
+3. Version sanity: valid semver, strictly greater than
+   `git describe --tags --abbrev=0`, tag `vX.Y.Z` does not exist yet
+   (`git tag -l vX.Y.Z` and `git ls-remote --tags origin vX.Y.Z`).
+4. HEAD is pushed and CI is green:
+   ```bash
+   git fetch origin && git status -sb   # must not be ahead/behind
+   gh run list --commit "$(git rev-parse HEAD)" --json workflowName,conclusion
+   ```
+   All completed runs must have `conclusion: success`. If CI is still
+   running, wait (`gh run watch`). If red, abort.
+5. Local backend tests: `cd backend && go test ./...` — must be green.
+
+### Phase 2 — Prepare release commit
+
+6. **Generate CHANGELOG** (tag does not exist yet → `--next-tag`):
+   ```bash
+   git-chglog --next-tag vX.Y.Z --output CHANGELOG.md
+   ```
+7. **Write curated release notes** to `.github/release-notes/vX.Y.Z.md`.
+   The release workflow uses this file as the release body and **appends**
+   the artifact sections itself (image digest, cosign/attestation verify,
+   Helm install, SBOM) — do **not** include those in the notes file.
+   - `vX.0.0` (first or new major) → Template A below
+   - otherwise → Template B below
+8. **Bump versions in README** — the two occurrences in the Getting Started
+   block:
    ```bash
    PREV=$(git describe --tags --abbrev=0)
    PREV_CLEAN="${PREV#v}"
    sed -i "s|ghcr.io/kj187/jarvis:${PREV_CLEAN}|ghcr.io/kj187/jarvis:X.Y.Z|g" README.md
    sed -i "s|--version ${PREV_CLEAN}|--version X.Y.Z|g" README.md
    ```
-   Verify the two occurrences changed (image tag + helm `--version`).
-10. **Bump chart versions** in `charts/jarvis/Chart.yaml` — the chart version is
-    **decoupled** from the app version, but an app release must ship a chart
-    that deploys it:
-    - `appVersion`: set to the new app version (`"X.Y.Z"`, quoted)
-    - `version`: bump according to the impact of the chart change itself
-      (appVersion-only bump → patch)
-
-    Commit everything together with the CHANGELOG:
+   Verify both occurrences changed (image tag + helm `--version`).
+9. **Bump chart versions** in `charts/jarvis/Chart.yaml` — chart version is
+   **decoupled** from the app version, but an app release must ship a chart
+   that deploys it:
+   - `appVersion`: new app version (`"X.Y.Z"`, quoted)
+   - `version`: bump by the impact of the chart change itself
+     (appVersion-only bump → patch)
+10. **Commit everything together**:
     ```bash
-    git add CHANGELOG.md README.md charts/jarvis/Chart.yaml
-    git commit -m "docs: update CHANGELOG for vX.Y.Z"
+    git add CHANGELOG.md README.md charts/jarvis/Chart.yaml .github/release-notes/vX.Y.Z.md
+    git commit -m "chore(release): prepare vX.Y.Z"
     ```
+
+### Phase 3 — Tag & push
+
 11. **Create annotated tag**:
     ```bash
     git tag -a vX.Y.Z -m "Release vX.Y.Z"
     ```
 12. **Push tag first, then main** (order matters: the tag triggers the image
-    build; the main push triggers the chart publish, which references the new
-    image via `appVersion`):
+    build + GitHub Release; the main push triggers the chart publish, which
+    references the new image via `appVersion`):
     ```bash
     git push origin vX.Y.Z
     git push origin main
     ```
-13. **Generate GitHub Release Description** (show to user, do not post automatically):
 
-    **Rule: is this `v1.0.0` or a new major version (e.g. `v2.0.0`)?**
-    → Yes: write an **announcement-style** description (see template A below)
-    → No: write a **structured release note** derived from the CHANGELOG (see template B below)
+### Phase 4 — Monitor & verify (done-gate)
 
-    ---
-
-    **Template A — Initial / major release (v1.0.0, v2.0.0, …)**
-
-    ```markdown
-    # 🎉 <Project Name> vX.0.0 — First Public Release
-
-    <One punchy sentence: what this is and why it exists.>
-
-    ---
-
-    ## Why <Project Name>?
-
-    <2-3 sentence problem statement: what existing tools lack, what prompted this.>
-
-    - **<Feature>** — <one-line why it matters>
-    - **<Feature>** — <one-line why it matters>
-    - *(mirror the "Why Jarvis?" section from README)*
-
-    ---
-
-    ## What's in this release
-
-    <Narrative paragraph — not a bullet dump. Highlight the 3-5 most important capabilities and what makes them interesting.>
-
-    Full feature list → [README](README.md)
-
-    ---
-
-    ## Getting started
-
-    \`\`\`bash
-    # paste the quickstart snippet from README
-    \`\`\`
-
-    Full docs → [README](README.md) · [Configuration](.env.example) · [Helm chart](charts/)
-
-    ---
-
-    ## Tech stack
-
-    <single line: languages, frameworks, key libs>
-
-    ---
-
-    > **Built with AI** — <copy the "Built with AI" note from README if applicable>
-
-    ---
-
-    *Feedback and contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md).*
+13. Watch both workflows to completion:
+    ```bash
+    gh run list --workflow=release.yml --limit 1
+    gh run watch <run-id> --exit-status
+    gh run list --workflow=chart-release.yml --limit 1   # only runs if chart version is new
     ```
-
-    ---
-
-    **Template B — Regular patch / minor / major release**
-
-    ```markdown
-    ## What's changed
-
-    <One sentence summarising the theme of this release (e.g. "Focus on stability and PostgreSQL reliability").>
-
-    ### Added
-    - <item from CHANGELOG>
-
-    ### Fixed
-    - <item from CHANGELOG>
-
-    ### Security
-    - <item from CHANGELOG>
-
-    ### Changed
-    - <item from CHANGELOG> *(only if relevant to users — skip pure dep bumps)*
-
-    ---
-
-    **Full diff:** [vPREV...vNEW](https://github.com/kj187/jarvis/compare/vPREV...vNEW)
-    **Container image:** `ghcr.io/kj187/jarvis:X.Y.Z`
+14. Verify the release exists and report to the user:
+    ```bash
+    gh release view vX.Y.Z --json url,assets
     ```
+    Final report must include: release URL, image ref
+    `ghcr.io/kj187/jarvis:X.Y.Z`, chart version, and whether the SBOM asset
+    is attached. If any workflow failed, report the failing step and log
+    excerpt — never claim success.
 
-    → Present the filled-out description to the user and ask: *"Does this look good? I'll copy it to your clipboard / you can paste it into the GitHub Release."*
-    → Do **not** post it to GitHub automatically.
+---
 
-14. **Inform about next steps**:
-    - GitHub Actions is now running: https://github.com/kj187/jarvis/actions
-    - Release will be created at: https://github.com/kj187/jarvis/releases
-    - Container image will be pushed to: `ghcr.io/kj187/jarvis:X.Y.Z` + `ghcr.io/kj187/jarvis:X.Y` (no `v` prefix, no `:latest` image tag — the GitHub Release itself is marked "latest")
-    - A signed (cosign) multi-arch image (amd64 + arm64) is published automatically; the Helm chart is published and signed by `chart-release.yml` when the main push lands
+## Release-Notes Templates
+
+Write the notes file in English, derived from the CHANGELOG section and the
+actual commits (read them — don't just reformat commit subjects). No
+artifact/verify sections — the workflow appends those.
+
+**Template A — Initial / major release (v1.0.0, v2.0.0, …)**
+
+```markdown
+# 🎉 <Project Name> vX.0.0 — <headline>
+
+<One punchy sentence: what this is and why it exists.>
+
+---
+
+## Why <Project Name>?
+
+<2-3 sentence problem statement: what existing tools lack, what prompted this.>
+
+- **<Feature>** — <one-line why it matters>
+- *(mirror the "Why Jarvis?" section from README)*
+
+---
+
+## What's in this release
+
+<Narrative paragraph — not a bullet dump. Highlight the 3-5 most important
+capabilities and what makes them interesting.>
+
+Full feature list → [README](https://github.com/kj187/jarvis#readme)
+
+---
+
+## Tech stack
+
+<single line: languages, frameworks, key libs>
+
+---
+
+*Feedback and contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md).*
+```
+
+**Template B — Regular patch / minor release**
+
+```markdown
+## What's changed
+
+<One sentence summarising the theme of this release
+(e.g. "Focus on stability and PostgreSQL reliability").>
+
+### Added
+- <item — user-facing phrasing, not commit subject>
+
+### Fixed
+- <item>
+
+### Security
+- <item>
+
+### Changed
+- <item — only if relevant to users; skip pure dep bumps>
+
+**Full diff:** [vPREV...vNEW](https://github.com/kj187/jarvis/compare/vPREV...vNEW)
+```
+
+Omit empty sections.
 
 ---
 
@@ -177,11 +188,9 @@ First stable release: `v1.0.0`. Before that: `v0.x.y` (no stability guarantee).
 
 ## Hotfix Release
 
-```bash
-# Patch bump directly (e.g. v1.2.0 → v1.2.1)
-git tag -a v1.2.1 -m "fix: <short description>"
-git push origin v1.2.1
-```
+Same flow — `/release X.Y.(Z+1)` from `main` after the fix is merged. There
+is no separate fast path: the notes file and CHANGELOG are cheap and keep the
+release history consistent.
 
 ---
 
@@ -190,11 +199,26 @@ git push origin v1.2.1
 From `.github/workflows/release.yml`:
 
 **Job `build-and-push`:**
-1. Derive image tags via `docker/metadata-action` → `{{version}}` (e.g. `1.2.3`) + `{{major}}.{{minor}}` (e.g. `1.2`). **No `v` prefix, no `:latest` image tag.**
-2. Build multi-arch image (`linux/amd64` + `linux/arm64`) from `Containerfile` (multi-stage), with SBOM + provenance, push to GHCR.
+1. Derive image tags via `docker/metadata-action` → `{{version}}` (e.g.
+   `1.2.3`) + `{{major}}.{{minor}}` (e.g. `1.2`). **No `v` prefix, no
+   `:latest` image tag.**
+2. Build multi-arch image (`linux/amd64` + `linux/arm64`) from `Containerfile`
+   (multi-stage), with BuildKit SBOM + provenance (`mode=max`), push to GHCR.
 3. Sign the image keylessly with **cosign** (GitHub OIDC).
-4. Build the release body by extracting this version's section from `CHANGELOG.md` (awk) and appending pull/cosign-verify instructions.
-5. Create the GitHub Release via `gh release create --notes-file release-body.md --latest` (the `--latest` flag marks the *GitHub Release* as latest, not a Docker tag). Releases are immutable: if a release for the tag already exists, the job fails — never overwrite a published release; delete it manually first if a re-release is really intended.
+4. Publish **SLSA build provenance** to the GitHub attestations API
+   (`actions/attest-build-provenance`, also pushed to the registry) →
+   consumers can `gh attestation verify oci://ghcr.io/kj187/jarvis:X.Y.Z --repo kj187/jarvis`.
+5. Generate a standalone **SPDX SBOM** (`anchore/sbom-action` / syft) →
+   attached to the GitHub Release as `sbom.spdx.json`.
+6. Build the release body: uses `.github/release-notes/vX.Y.Z.md` if present
+   (fallback: awk-extract this version's CHANGELOG section), then appends
+   image pull + digest, cosign verify, `gh attestation verify`, Helm install
+   + chart cosign verify, and SBOM pointers.
+7. Create the GitHub Release via `gh release create --notes-file
+   release-body.md --verify-tag --latest` with the SBOM as asset. Releases
+   are immutable: if a release for the tag already exists, the job fails —
+   never overwrite a published release; delete it manually first if a
+   re-release is really intended.
 
 **Helm chart** (separate workflow `.github/workflows/chart-release.yml`, *not*
 part of `release.yml`):
@@ -214,5 +238,6 @@ part of `release.yml`):
 ## Prerequisites
 
 - `git-chglog` must be installed: `go install github.com/git-chglog/git-chglog/cmd/git-chglog@latest`
+- `gh` CLI authenticated (used for CI checks, run watching, release verify)
 - `.chglog/config.yml` must exist
 - `GITHUB_TOKEN` in GitHub Actions secrets (injected automatically)
