@@ -54,6 +54,16 @@ Request bodies are limited to **1 MB**.
 
 ---
 
+## Metrics Endpoint
+
+`GET /metrics` is public by design, like `/health` — it stays reachable even
+when `JARVIS_AUTH_MODE=full_protect` is set, so external Prometheus scrapers
+never need a login. It exposes only aggregate alert counts, poll/event
+counters, and configured cluster names — never alert names, labels, or
+annotations. See [docs/metrics.md](metrics.md) for the full metric reference.
+
+---
+
 ## Container Security
 
 ```dockerfile

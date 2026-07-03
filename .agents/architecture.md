@@ -307,8 +307,9 @@ X-Frame-Options SAMEORIGIN, HSTS, CSP `default-src 'self'; …`), body limit 1 M
 CORS from `JARVIS_ALLOWED_ORIGINS` (credentials allowed).
 
 ```
-# ── Health / Auth / Setup ────────────────────────────────────────────────────
+# ── Health / Metrics / Auth / Setup ──────────────────────────────────────────
 GET    /health                                   None        → { status: "ok" }
+GET    /metrics                                  None        → Prometheus exposition format (see internal/metrics below)
 GET    /auth/info                                None        → { mode, loginUrl, setupRequired, runbookBaseUrl }
 POST   /auth/login                               None  (RL)  Body: { username, password } → user + Set-Cookie
 POST   /auth/logout                              None        → clears session cookie
@@ -380,6 +381,33 @@ POST   /api/v1/test/comment                      (e2e only)  add comment, bypass
 GET    /*                                         None        → embed.FS (Vite build); SPA fallback to index.html
                                                               firstRunRedirect → /setup when internal mode + no users
 ```
+
+---
+
+## Metrics (`internal/metrics`)
+
+Prometheus metrics on an injected `*prometheus.Registry` (never the global
+default one — that would panic on duplicate registration across parallel Go
+tests). `metrics.New(version)` builds it, including the standard Go/process
+collectors and `jarvis_build_info`. `Metrics.Handler()` serves `GET /metrics`.
+
+- `collector.go` — `storeCollector` (`prometheus.Collector`): computes
+  `jarvis_alerts`, `jarvis_alerts_by_severity`, `jarvis_ws_clients`,
+  `jarvis_clusters_configured`, and `jarvis_alertmanager_up` at scrape time
+  from the in-memory `AlertStore`, the WS `Hub`, and the recorder's cached
+  `ClusterUpStates()` — `Collect()` never makes an upstream HTTP call itself.
+- `echo.go` — `Metrics.EchoMiddleware()`: records `jarvis_http_requests_total`
+  / `jarvis_http_request_duration_seconds`, labeled by Echo route pattern
+  (`c.Path()`, never the raw URL) to keep cardinality bounded. Skips
+  `/metrics`, `/health`, `/ws`.
+- Event counters `jarvis_poll_cycles_total`, `jarvis_poll_errors_total`,
+  `jarvis_poll_duration_seconds`, `jarvis_alert_events_total` live on
+  `history.Recorder`; `jarvis_ws_broadcasts_total` lives on `ws.Hub`. Both
+  `history.NewRecorder(...)` and `ws.NewHub(...)` take a trailing
+  `*metrics.Metrics` argument that is nil-safe (same pattern as the existing
+  `pollTrigger` nil-check in `triggerPoll`) — most tests construct the
+  Recorder/Hub via other paths and don't need to pass one.
+- Full metric reference for operators: `docs/metrics.md`.
 
 ---
 

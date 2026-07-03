@@ -99,6 +99,16 @@ tmpfs:
 
 ---
 
+## Metrics Endpoint
+
+`GET /metrics` is intentionally public — it bypasses `full_protect`, same as
+`/health` (see `isSkippedPath` in `internal/api/setup_handler.go`). It leaks
+only aggregate counts and configured cluster names, never alertnames, labels,
+or annotations. If that trade-off is ever unacceptable for a given
+deployment, the mitigation is network policy / ingress rules, not app auth.
+
+---
+
 ## CORS + WebSocket Origin
 
 The backend validates the `Origin` header for both HTTP CORS and the WebSocket

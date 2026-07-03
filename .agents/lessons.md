@@ -9,6 +9,20 @@ instead of duplicating.
 
 ---
 
+## New public routes must be added to `isSkippedPath`, not just registered outside `apiV1`
+
+**Symptom**: A new route registered globally (like `/health`) returns 404
+under `JARVIS_AUTH_PROVIDER=internal` with zero users, even though it's
+outside the `apiV1` group and no auth middleware applies to it.
+**Cause**: `firstRunRedirect` (`internal/api/setup_handler.go`) 302-redirects
+any path not in `isSkippedPath` to `/setup` whenever internal-mode has no
+users yet — being outside `apiV1` only skips the *auth* middleware, not this
+one. A client that follows redirects then hits `/setup`, and in a test with
+an empty `embed.FS{}` the SPA catch-all isn't registered, so it 404s instead
+of showing a redirect.
+**Rule**: Every route meant to be reachable pre-setup (like `/metrics`) must
+be added to the `isSkippedPath` switch alongside `/health`, `/ws`, `/setup`.
+
 ## Silence recreate: strip backslashes before ANY character, not just regex metacharacters
 
 **Symptom**: Re-creating an expired silence with regex matchers shows

@@ -93,7 +93,9 @@ make fixtures-unsilence            # expire test silences
 | `internal/api` | `router_test.go` | Route registration, `/groups` before `/:fingerprint/*`, protection modes |
 | `internal/auth` | `jwt_test.go` `internal_provider_test.go` `middleware_test.go` | JWT sign/verify, RequireAuth/RequireAdmin |
 | `internal/users` | `store_test.go` | User CRUD, OIDC upsert, bcrypt |
-| `internal/ws` | `hub_test.go` | Broadcast, client register/unregister, slow client drop |
+| `internal/ws` | `hub_test.go` | Broadcast, client register/unregister, slow client drop, `jarvis_ws_broadcasts_total` |
+| `internal/metrics` | `collector_test.go` | `storeCollector` scrape-time output (`testutil.CollectAndCompare`), nil `clusterUp`, `jarvis_build_info`, duplicate-registration panic |
+| `internal/metrics` | `echo_test.go` | HTTP middleware: route-pattern label (not raw path), 404 → `unmatched`, skip list (`/metrics`/`/health`/`/ws`) |
 
 ---
 
