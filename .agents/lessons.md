@@ -9,6 +9,20 @@ instead of duplicating.
 
 ---
 
+## E2E Playwright image pin must match `@playwright/test` version
+
+**Symptom**: Every E2E test fails in ~2ms with
+`browserType.launch: Executable doesn't exist at /ms-playwright/chromium_headless_shell-<rev>/...`
+— typically on a Dependabot PR that bumps `@playwright/test`.
+**Cause**: `compose.e2e.yml` pins `mcr.microsoft.com/playwright:vX.Y.Z-noble`.
+The container's pre-installed browsers live under revision paths tied to that
+image version; a newer `@playwright/test` from `frontend/package.json` looks
+for a newer browser revision that isn't in the image. Dependabot only bumps
+package.json/lockfile, never the compose image.
+**Rule**: Whenever `@playwright/test` changes version, update the image tag in
+`compose.e2e.yml` to the same version in the same commit. Mass 2ms E2E
+failures = environment/browser mismatch, not test regressions.
+
 ## New public routes must be added to `isSkippedPath`, not just registered outside `apiV1`
 
 **Symptom**: A new route registered globally (like `/health`) returns 404
