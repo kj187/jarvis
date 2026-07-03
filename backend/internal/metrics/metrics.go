@@ -18,13 +18,14 @@ import (
 type Metrics struct {
 	reg *prometheus.Registry
 
-	PollCyclesTotal     *prometheus.CounterVec
-	PollErrorsTotal     *prometheus.CounterVec
-	PollDurationSeconds prometheus.Histogram
-	AlertEventsTotal    *prometheus.CounterVec
-	WSBroadcastsTotal   *prometheus.CounterVec
-	HTTPRequestsTotal   *prometheus.CounterVec
-	HTTPRequestDuration *prometheus.HistogramVec
+	PollCyclesTotal             *prometheus.CounterVec
+	PollErrorsTotal             *prometheus.CounterVec
+	PollDurationSeconds         prometheus.Histogram
+	ClusterFetchDurationSeconds *prometheus.HistogramVec
+	AlertEventsTotal            *prometheus.CounterVec
+	WSBroadcastsTotal           *prometheus.CounterVec
+	HTTPRequestsTotal           *prometheus.CounterVec
+	HTTPRequestDuration         *prometheus.HistogramVec
 }
 
 // New creates a Metrics instance on a fresh registry, including the standard
@@ -55,13 +56,18 @@ func New(version string) *Metrics {
 		}, []string{"cluster", "endpoint"}),
 		PollDurationSeconds: f.NewHistogram(prometheus.HistogramOpts{
 			Name:    "jarvis_poll_duration_seconds",
-			Help:    "Duration of a full poll cycle across all clusters.",
+			Help:    "Duration of a full poll cycle across all clusters, including DB persistence.",
 			Buckets: []float64{0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10},
 		}),
+		ClusterFetchDurationSeconds: f.NewHistogramVec(prometheus.HistogramOpts{
+			Name:    "jarvis_cluster_fetch_duration_seconds",
+			Help:    "Duration of fetching alerts and silences from a single cluster's Alertmanager.",
+			Buckets: []float64{0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10},
+		}, []string{"cluster"}),
 		AlertEventsTotal: f.NewCounterVec(prometheus.CounterOpts{
 			Name: "jarvis_alert_events_total",
-			Help: "Total number of alert lifecycle events recorded, by status.",
-		}, []string{"status"}),
+			Help: "Total number of alert lifecycle events recorded, by cluster and status.",
+		}, []string{"cluster", "status"}),
 		WSBroadcastsTotal: f.NewCounterVec(prometheus.CounterOpts{
 			Name: "jarvis_ws_broadcasts_total",
 			Help: "Total number of WebSocket broadcasts, by event type.",

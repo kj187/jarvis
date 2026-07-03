@@ -420,8 +420,8 @@ func TestRecorder_Poll_InstrumentsMetrics(t *testing.T) {
 	if got := testutil.ToFloat64(rec.metrics.PollErrorsTotal.WithLabelValues("bad", "alerts")); got != 1 {
 		t.Errorf("PollErrorsTotal[bad,alerts] = %v, want 1", got)
 	}
-	if got := testutil.ToFloat64(rec.metrics.AlertEventsTotal.WithLabelValues(models.EventStatusFiring)); got != 1 {
-		t.Errorf("AlertEventsTotal[firing] = %v, want 1", got)
+	if got := testutil.ToFloat64(rec.metrics.AlertEventsTotal.WithLabelValues("good", models.EventStatusFiring)); got != 1 {
+		t.Errorf("AlertEventsTotal[good,firing] = %v, want 1", got)
 	}
 
 	up := rec.ClusterUpStates()
@@ -434,6 +434,9 @@ func TestRecorder_Poll_InstrumentsMetrics(t *testing.T) {
 
 	if n := testutil.CollectAndCount(rec.metrics.PollDurationSeconds); n != 1 {
 		t.Errorf("PollDurationSeconds series count = %d, want 1", n)
+	}
+	if n := testutil.CollectAndCount(rec.metrics.ClusterFetchDurationSeconds); n != 2 {
+		t.Errorf("ClusterFetchDurationSeconds series count = %d, want 2 (one per cluster)", n)
 	}
 }
 
@@ -449,7 +452,7 @@ func TestRecorder_Poll_IdempotentPollDoesNotDoubleCountEvents(t *testing.T) {
 	rec.processAlerts(ctx, alerts)
 	rec.processAlerts(ctx, alerts)
 
-	if got := testutil.ToFloat64(rec.metrics.AlertEventsTotal.WithLabelValues(models.EventStatusFiring)); got != 1 {
-		t.Errorf("AlertEventsTotal[firing] = %v, want 1 (second identical poll must not double-count)", got)
+	if got := testutil.ToFloat64(rec.metrics.AlertEventsTotal.WithLabelValues("homelab", models.EventStatusFiring)); got != 1 {
+		t.Errorf("AlertEventsTotal[homelab,firing] = %v, want 1 (second identical poll must not double-count)", got)
 	}
 }

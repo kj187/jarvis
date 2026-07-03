@@ -27,8 +27,9 @@ sync with reality.
 |---|---|---|
 | `jarvis_poll_cycles_total` | `cluster` | Every poll attempt of a cluster |
 | `jarvis_poll_errors_total` | `cluster`, `endpoint` (`alerts`/`silences`) | A poll of a cluster's alerts or silences endpoint fails |
-| `jarvis_poll_duration_seconds` | — | Histogram of full poll-cycle duration across all clusters |
-| `jarvis_alert_events_total` | `status` (`firing`/`suppressed`/`expired`/`resolved`) | A genuine alert lifecycle transition is recorded |
+| `jarvis_poll_duration_seconds` | — | Histogram of the full poll cycle across all clusters, including DB persistence — use this to see whether Jarvis overall is keeping up with its poll interval |
+| `jarvis_cluster_fetch_duration_seconds` | `cluster` | Histogram of a single cluster's Alertmanager response time (alerts + silences) — use this to find *which* cluster is slow |
+| `jarvis_alert_events_total` | `cluster`, `status` (`firing`/`suppressed`/`expired`/`resolved`) | A genuine alert lifecycle transition is recorded |
 | `jarvis_ws_broadcasts_total` | `type` | A WebSocket event is broadcast to clients |
 | `jarvis_http_requests_total` | `method`, `path`, `status` | Every HTTP request (labeled by route pattern, not raw URL) |
 | `jarvis_http_request_duration_seconds` | `method`, `path`, `status` | Histogram of HTTP request duration |
@@ -76,6 +77,9 @@ rate(jarvis_poll_errors_total[5m]) > 0
 
 # Alert volume by cluster and state
 sum by (cluster, state) (jarvis_alerts)
+
+# Which cluster's Alertmanager is slow
+histogram_quantile(0.95, sum by (le, cluster) (rate(jarvis_cluster_fetch_duration_seconds_bucket[5m])))
 
 # API latency p95
 histogram_quantile(0.95, sum by (le, path) (rate(jarvis_http_request_duration_seconds_bucket[5m])))

@@ -196,6 +196,10 @@ func (r *Recorder) poll(ctx context.Context) {
 			defer wg.Done()
 			if r.metrics != nil {
 				r.metrics.PollCyclesTotal.WithLabelValues(cl.Name).Inc()
+				fetchStart := time.Now()
+				defer func() {
+					r.metrics.ClusterFetchDurationSeconds.WithLabelValues(cl.Name).Observe(time.Since(fetchStart).Seconds())
+				}()
 			}
 			alerts, err := r.fetchCluster(ctx, cl)
 			if err != nil {
@@ -358,7 +362,7 @@ func (r *Recorder) applyPollResults(
 		} else if stateChanged && r.metrics != nil {
 			// RecordStatusChange is idempotent (same status → no-op); only count
 			// actual lifecycle transitions, matching the DB's own idempotency check.
-			r.metrics.AlertEventsTotal.WithLabelValues(eventStatus).Inc()
+			r.metrics.AlertEventsTotal.WithLabelValues(a.ClusterName, eventStatus).Inc()
 		}
 	}
 
@@ -368,7 +372,7 @@ func (r *Recorder) applyPollResults(
 			if err := r.store.RecordResolvedForCluster(ra.fingerprint, ra.clusterName, now); err != nil {
 				r.logger.Error("record resolved", "fp", ra.fingerprint, "cluster", ra.clusterName, "err", err)
 			} else if r.metrics != nil {
-				r.metrics.AlertEventsTotal.WithLabelValues(models.EventStatusResolved).Inc()
+				r.metrics.AlertEventsTotal.WithLabelValues(ra.clusterName, models.EventStatusResolved).Inc()
 			}
 		}
 		for _, ra := range resolvedAlerts {

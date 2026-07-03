@@ -401,12 +401,21 @@ collectors and `jarvis_build_info`. `Metrics.Handler()` serves `GET /metrics`.
   (`c.Path()`, never the raw URL) to keep cardinality bounded. Skips
   `/metrics`, `/health`, `/ws`.
 - Event counters `jarvis_poll_cycles_total`, `jarvis_poll_errors_total`,
-  `jarvis_poll_duration_seconds`, `jarvis_alert_events_total` live on
-  `history.Recorder`; `jarvis_ws_broadcasts_total` lives on `ws.Hub`. Both
+  `jarvis_poll_duration_seconds`, `jarvis_cluster_fetch_duration_seconds`,
+  `jarvis_alert_events_total` live on `history.Recorder`;
+  `jarvis_ws_broadcasts_total` lives on `ws.Hub`. Both
   `history.NewRecorder(...)` and `ws.NewHub(...)` take a trailing
   `*metrics.Metrics` argument that is nil-safe (same pattern as the existing
   `pollTrigger` nil-check in `triggerPoll`) — most tests construct the
   Recorder/Hub via other paths and don't need to pass one.
+- Every metric that can meaningfully be attributed to one Alertmanager cluster
+  carries a `cluster` label (`jarvis_poll_cycles_total`, `_errors_total`,
+  `_alert_events_total`, `_cluster_fetch_duration_seconds`, `jarvis_alerts*`,
+  `jarvis_alertmanager_up`). `jarvis_poll_duration_seconds` is the one
+  deliberate exception — it measures the *whole* poll cycle (all clusters in
+  parallel + the shared DB write in `applyPollResults`), so a per-cluster
+  label would misrepresent it; `jarvis_cluster_fetch_duration_seconds` is the
+  per-cluster counterpart for isolating a slow upstream Alertmanager.
 - Full metric reference for operators: `docs/metrics.md`.
 
 ---
