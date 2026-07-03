@@ -61,6 +61,7 @@ func NewRouter(
 
 	// ── Middleware ────────────────────────────────────────────────────────────
 	e.Use(middleware.Recover())
+	e.Use(m.EchoMiddleware())
 	e.Use(middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
 		LogMethod:   true,
 		LogURI:      true,
