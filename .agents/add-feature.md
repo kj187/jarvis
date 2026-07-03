@@ -15,7 +15,7 @@ surface, and component tree, load `.agents/architecture.md`.
 3. Implement handler in internal/api/<area>.go → test passes (Green)
 4. Register route in internal/api/router.go — static segments before wildcard
    parameters (Critical Invariant #5 in AGENTS.md)
-5. Pre-commit hook runs automatically: tests + gosec + govulncheck + golangci-lint
+5. Pre-commit hook runs automatically: tests + golangci-lint (incl. gosec)
 ```
 
 ### Input Validation (REQUIRED)

@@ -202,7 +202,7 @@ troubleshooting are documented in **`docs/testing-e2e.md`**.
 
 | Staged paths | Checks |
 |---|---|
-| `backend/**` | `go test ./... -count=1 -timeout 60s` + gosec + govulncheck + golangci-lint |
+| `backend/**` | `go test ./... -count=1 -timeout 60s` + golangci-lint (incl. gosec; govulncheck runs in CI only) |
 | `frontend/**` | `pnpm audit --audit-level=high` + `pnpm duplication` (jscpd) — executed **inside the running dev container** (`jarvis_frontend_1`); hook fails if the container is not running |
 | `charts/**` | `helm lint` + `helm unittest` |
 | always | **gitleaks** secret scan of the staged diff (via podman, config `.gitleaks.toml`) |
@@ -230,9 +230,8 @@ backend:
   - Coverage summary → GITHUB_STEP_SUMMARY (go tool cover -func)
   - dorny/test-reporter uploads report.xml as "Backend Test Results"
   - upload-artifact: coverage.out + report.xml; coverage upload to Codecov
-  - gosec ./...
   - govulncheck ./...
-  - golangci-lint run
+  - golangci-lint run   # includes gosec (enabled in .golangci.yml)
 
 frontend:
   - pnpm audit --audit-level=high

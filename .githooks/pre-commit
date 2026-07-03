@@ -8,12 +8,9 @@ if git diff --cached --name-only | grep -q "^backend/"; then
   echo "  [Go] Running unit tests..."
   (cd backend && go test ./... -count=1 -timeout 60s)
 
-  echo "  [Go] Running gosec..."
-  (cd backend && gosec ./... 2>&1)
-
-  echo "  [Go] Running govulncheck..."
-  (cd backend && govulncheck ./...)
-
+  # gosec runs as part of golangci-lint (enabled in .golangci.yml).
+  # govulncheck runs in CI only: its result depends on the vulnerability DB,
+  # not on the staged changes, and it needs network access.
   echo "  [Go] Running golangci-lint..."
   (cd backend && golangci-lint run ./...)
 fi

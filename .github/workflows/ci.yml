@@ -105,11 +105,6 @@ jobs:
           flags: backend
           fail_ci_if_error: false
 
-      - name: Run gosec
-        run: |
-          go install github.com/securego/gosec/v2/cmd/gosec@v2.27.1
-          gosec ./...
-
       - name: Run govulncheck
         run: |
           go install golang.org/x/vuln/cmd/govulncheck@v1.3.0

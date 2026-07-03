@@ -12,9 +12,9 @@ This document describes the security measures built into the application itself.
 
 | Tool | Purpose | When |
 |---|---|---|
-| `gosec` | Hardcoded credentials, SQL injection, path traversal, weak crypto | Pre-Commit + CI |
-| `govulncheck` | Checks dependencies against the Go Vulnerability DB (CVEs) | Pre-Commit + CI |
-| `golangci-lint` | Aggregator: `errcheck`, `bodyclose`, `noctx`, `staticcheck` | Pre-Commit + CI |
+| `gosec` | Hardcoded credentials, SQL injection, path traversal, weak crypto | Pre-Commit + CI (via `golangci-lint`) |
+| `govulncheck` | Checks dependencies against the Go Vulnerability DB (CVEs) | CI |
+| `golangci-lint` | Aggregator: `gosec`, `errcheck`, `bodyclose`, `noctx`, `staticcheck` | Pre-Commit + CI |
 
 Run manually:
 
@@ -78,7 +78,7 @@ cap_drop:
 ## Dependency Security
 
 - `go mod verify` — validates module checksums against `go.sum`
-- `govulncheck ./...` — CVE check on every pre-commit and in CI
+- `govulncheck ./...` — CVE check in CI on every push and pull request
 - `pnpm audit` — frontend dependency CVE check in CI
 - Renovate / Dependabot recommended for automated dependency update PRs
 

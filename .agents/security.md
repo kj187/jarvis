@@ -39,8 +39,10 @@ make scan-all           # all three
 make security-all       # gosec + govulncheck + pnpm audit
 ```
 
-All these tools also run automatically in the **pre-commit hook**
-(`.githooks/pre-commit`) and in **CI** (`.github/workflows/ci.yml`). If any
+Automation split: the **pre-commit hook** (`.githooks/pre-commit`) runs Go
+tests, golangci-lint (which includes gosec via `.golangci.yml`), pnpm audit,
+and gitleaks. govulncheck runs **only in CI** (`.github/workflows/ci.yml`) —
+its result depends on the vulnerability DB, not on staged changes. If any
 hook step fails, the commit is aborted — never use `--no-verify`.
 
 ---
