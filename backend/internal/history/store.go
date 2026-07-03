@@ -147,19 +147,22 @@ func (s *Store) UpsertFingerprint(fingerprint, alertname, clusterName string, la
 // Grace Period (60s): if the alert re-fires within 60 s of a resolved row, that
 // resolved row is deleted and the prior firing row is returned — no new insert.
 // occurrence_count is incremented only when re-firing after a full resolution.
+// The bool return reports whether a new event row was actually inserted —
+// callers that count lifecycle events (metrics) must rely on it instead of
+// re-deriving the idempotency/grace-period decision themselves.
 func (s *Store) RecordStatusChange(
 	fingerprint, clusterName, amURL, status string,
 	startsAt time.Time,
 	annotations map[string]string,
-) (*models.AlertEvent, error) {
+) (*models.AlertEvent, bool, error) {
 	last, err := s.getLastEventForCluster(fingerprint, clusterName)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	// Idempotency: same status → return existing row unchanged.
 	if last != nil && last.Status == status {
-		return last, nil
+		return last, false, nil
 	}
 
 	lastStatus := ""
@@ -171,14 +174,14 @@ func (s *Store) RecordStatusChange(
 	if status == models.EventStatusFiring && lastStatus == models.EventStatusResolved {
 		if time.Since(last.RecordedAt) < 60*time.Second {
 			if _, err := s.exec(context.Background(), `DELETE FROM alert_events WHERE id = ?`, last.ID); err != nil {
-				return nil, fmt.Errorf("grace period delete resolved: %w", err)
+				return nil, false, fmt.Errorf("grace period delete resolved: %w", err)
 			}
 			prev, err := s.getLastEventForCluster(fingerprint, clusterName)
 			if err != nil {
-				return nil, err
+				return nil, false, err
 			}
 			if prev != nil {
-				return prev, nil
+				return prev, false, nil
 			}
 			// No prior row after deletion — fall through to insert a fresh firing row.
 			// Reset lastStatus so occurrence_count is not incremented.
@@ -188,7 +191,7 @@ func (s *Store) RecordStatusChange(
 
 	annJSON, err := json.Marshal(annotations)
 	if err != nil {
-		return nil, fmt.Errorf("marshal annotations: %w", err)
+		return nil, false, fmt.Errorf("marshal annotations: %w", err)
 	}
 	now := time.Now().UTC()
 	id, err := s.insertReturningID(context.Background(), `
@@ -196,7 +199,7 @@ func (s *Store) RecordStatusChange(
 		VALUES (?, ?, ?, ?, ?, ?, ?)
 	`, fingerprint, clusterName, amURL, status, startsAt.UTC(), string(annJSON), now)
 	if err != nil {
-		return nil, fmt.Errorf("insert status change: %w", err)
+		return nil, false, fmt.Errorf("insert status change: %w", err)
 	}
 
 	// Increment occurrence_count only on genuine re-fire after full resolution.
@@ -205,7 +208,7 @@ func (s *Store) RecordStatusChange(
 			`UPDATE alert_fingerprints SET occurrence_count = occurrence_count + 1 WHERE fingerprint = ? AND cluster_name = ?`,
 			fingerprint, clusterName,
 		); err != nil {
-			return nil, fmt.Errorf("increment occurrence_count: %w", err)
+			return nil, false, fmt.Errorf("increment occurrence_count: %w", err)
 		}
 	}
 
@@ -217,7 +220,7 @@ func (s *Store) RecordStatusChange(
 		Status:          status,
 		StartsAt:        startsAt.UTC(),
 		RecordedAt:      now,
-	}, nil
+	}, true, nil
 }
 
 // RecordResolved inserts a resolved row for a fingerprint, inheriting cluster

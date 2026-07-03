@@ -86,7 +86,7 @@ func TestGetAlerts_ResolvedFromDB(t *testing.T) {
 	if err := srv.store.UpsertFingerprint("aabbccddeeff0011", "DBAlert", "homelab", map[string]string{"alertname": "DBAlert"}); err != nil {
 		t.Fatalf("UpsertFingerprint: %v", err)
 	}
-	if _, err := srv.store.RecordStatusChange("aabbccddeeff0011", "homelab", "http://am:9093", "firing", time.Now(), nil); err != nil {
+	if _, _, err := srv.store.RecordStatusChange("aabbccddeeff0011", "homelab", "http://am:9093", "firing", time.Now(), nil); err != nil {
 		t.Fatalf("RecordStatusChange: %v", err)
 	}
 	if err := srv.store.RecordResolved("aabbccddeeff0011", time.Now()); err != nil {
@@ -117,14 +117,14 @@ func TestGetAlerts_ResolvedFromDB_ExcludesRefired(t *testing.T) {
 	if err := srv.store.UpsertFingerprint("aabbccddeeff0022", "RefiredAlert", "homelab", map[string]string{"alertname": "RefiredAlert"}); err != nil {
 		t.Fatalf("UpsertFingerprint: %v", err)
 	}
-	if _, err := srv.store.RecordStatusChange("aabbccddeeff0022", "homelab", "http://am:9093", "firing", time.Now(), nil); err != nil {
+	if _, _, err := srv.store.RecordStatusChange("aabbccddeeff0022", "homelab", "http://am:9093", "firing", time.Now(), nil); err != nil {
 		t.Fatalf("RecordStatusChange: %v", err)
 	}
 	if err := srv.store.RecordResolved("aabbccddeeff0022", time.Now()); err != nil {
 		t.Fatalf("RecordResolved: %v", err)
 	}
 	// Re-fire
-	if _, err := srv.store.RecordStatusChange("aabbccddeeff0022", "homelab", "http://am:9093", "firing", time.Now(), nil); err != nil {
+	if _, _, err := srv.store.RecordStatusChange("aabbccddeeff0022", "homelab", "http://am:9093", "firing", time.Now(), nil); err != nil {
 		t.Fatalf("RecordStatusChange re-fire: %v", err)
 	}
 

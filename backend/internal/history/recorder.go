@@ -353,15 +353,12 @@ func (r *Recorder) applyPollResults(
 			}
 		}
 
-		prevState, hadPrevState := prev[alertKey]
-		stateChanged := !hadPrevState || prevState != a.Status.State
-
-		if _, err := r.store.RecordStatusChange(a.Fingerprint, a.ClusterName, a.AlertmanagerURL,
+		if _, created, err := r.store.RecordStatusChange(a.Fingerprint, a.ClusterName, a.AlertmanagerURL,
 			eventStatus, a.StartsAt, a.Annotations); err != nil {
 			r.logger.Error("record status change", "fp", a.Fingerprint, "err", err)
-		} else if stateChanged && r.metrics != nil {
-			// RecordStatusChange is idempotent (same status → no-op); only count
-			// actual lifecycle transitions, matching the DB's own idempotency check.
+		} else if created && r.metrics != nil {
+			// Count exactly the events the store persisted — the store owns the
+			// idempotency and grace-period decisions, so the metric can't drift.
 			r.metrics.AlertEventsTotal.WithLabelValues(a.ClusterName, eventStatus).Inc()
 		}
 	}

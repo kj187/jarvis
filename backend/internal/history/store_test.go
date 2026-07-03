@@ -81,7 +81,7 @@ func TestGetStats_LastFiredAt(t *testing.T) {
 		t.Errorf("LastFiredAt = %v, want nil before any firing event", st0.LastFiredAt)
 	}
 
-	if _, err := s.RecordStatusChange("fp1", "homelab", "http://am:9093", models.EventStatusFiring, time.Now(), nil); err != nil {
+	if _, _, err := s.RecordStatusChange("fp1", "homelab", "http://am:9093", models.EventStatusFiring, time.Now(), nil); err != nil {
 		t.Fatalf("record firing: %v", err)
 	}
 
@@ -91,7 +91,7 @@ func TestGetStats_LastFiredAt(t *testing.T) {
 	}
 
 	// Resolving must not clear LastFiredAt (it reflects the last firing event).
-	if _, err := s.RecordStatusChange("fp1", "homelab", "http://am:9093", models.EventStatusResolved, time.Now(), nil); err != nil {
+	if _, _, err := s.RecordStatusChange("fp1", "homelab", "http://am:9093", models.EventStatusResolved, time.Now(), nil); err != nil {
 		t.Fatalf("record resolved: %v", err)
 	}
 	st2, _ := s.GetStats("fp1")
@@ -107,7 +107,7 @@ func TestGetStatsForCluster_AggregatedTimesSQLite(t *testing.T) {
 	if err := s.UpsertFingerprint("fp1", "TestAlert", "homelab", labels); err != nil {
 		t.Fatalf("upsert: %v", err)
 	}
-	if _, err := s.RecordStatusChange("fp1", "homelab", "http://am:9093", models.EventStatusFiring, time.Now().UTC(), nil); err != nil {
+	if _, _, err := s.RecordStatusChange("fp1", "homelab", "http://am:9093", models.EventStatusFiring, time.Now().UTC(), nil); err != nil {
 		t.Fatalf("record firing: %v", err)
 	}
 
@@ -131,7 +131,7 @@ func TestRecordStatusChange_CreatesNew(t *testing.T) {
 		t.Fatalf("upsert: %v", err)
 	}
 
-	ev, err := s.RecordStatusChange("fp1", "homelab", "http://am:9093", models.EventStatusFiring, time.Now(), nil)
+	ev, _, err := s.RecordStatusChange("fp1", "homelab", "http://am:9093", models.EventStatusFiring, time.Now(), nil)
 	if err != nil {
 		t.Fatalf("RecordStatusChange: %v", err)
 	}
@@ -148,11 +148,11 @@ func TestRecordStatusChange_Idempotent(t *testing.T) {
 
 	s.UpsertFingerprint("fp1", "TestAlert", "homelab", nil) //nolint:errcheck
 
-	ev1, err := s.RecordStatusChange("fp1", "homelab", "http://am:9093", models.EventStatusFiring, time.Now(), nil)
+	ev1, _, err := s.RecordStatusChange("fp1", "homelab", "http://am:9093", models.EventStatusFiring, time.Now(), nil)
 	if err != nil {
 		t.Fatalf("first call: %v", err)
 	}
-	ev2, err := s.RecordStatusChange("fp1", "homelab", "http://am:9093", models.EventStatusFiring, time.Now(), nil)
+	ev2, _, err := s.RecordStatusChange("fp1", "homelab", "http://am:9093", models.EventStatusFiring, time.Now(), nil)
 	if err != nil {
 		t.Fatalf("second call: %v", err)
 	}
@@ -167,7 +167,7 @@ func TestRecordStatusChange_GracePeriod(t *testing.T) {
 	s.UpsertFingerprint("fp1", "TestAlert", "homelab", nil) //nolint:errcheck
 
 	// Create firing event, then immediately resolve it.
-	ev1, err := s.RecordStatusChange("fp1", "homelab", "http://am:9093", models.EventStatusFiring, time.Now(), nil)
+	ev1, _, err := s.RecordStatusChange("fp1", "homelab", "http://am:9093", models.EventStatusFiring, time.Now(), nil)
 	if err != nil {
 		t.Fatalf("firing: %v", err)
 	}
@@ -177,7 +177,7 @@ func TestRecordStatusChange_GracePeriod(t *testing.T) {
 
 	// Re-fire within grace period (< 60s) — must return the original firing row,
 	// not create a new one, and the resolved row must be deleted.
-	ev2, err := s.RecordStatusChange("fp1", "homelab", "http://am:9093", models.EventStatusFiring, time.Now(), nil)
+	ev2, _, err := s.RecordStatusChange("fp1", "homelab", "http://am:9093", models.EventStatusFiring, time.Now(), nil)
 	if err != nil {
 		t.Fatalf("refire: %v", err)
 	}
@@ -215,7 +215,7 @@ func TestRecordStatusChange_GracePeriodExpired(t *testing.T) {
 	)
 
 	// Re-fire outside grace period → new firing row + occurrence_count increment.
-	ev, err := s.RecordStatusChange("fp1", "homelab", "http://am:9093", models.EventStatusFiring, time.Now(), nil)
+	ev, _, err := s.RecordStatusChange("fp1", "homelab", "http://am:9093", models.EventStatusFiring, time.Now(), nil)
 	if err != nil {
 		t.Fatalf("refire: %v", err)
 	}
@@ -246,7 +246,7 @@ func TestRecordStatusChange_Transitions(t *testing.T) {
 	}
 	var ids []int64
 	for _, status := range transitions {
-		ev, err := s.RecordStatusChange("fp1", "homelab", "http://am:9093", status, now, nil)
+		ev, _, err := s.RecordStatusChange("fp1", "homelab", "http://am:9093", status, now, nil)
 		if err != nil {
 			t.Fatalf("RecordStatusChange(%s): %v", status, err)
 		}

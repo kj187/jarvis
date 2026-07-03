@@ -456,3 +456,48 @@ func TestRecorder_Poll_IdempotentPollDoesNotDoubleCountEvents(t *testing.T) {
 		t.Errorf("AlertEventsTotal[homelab,firing] = %v, want 1 (second identical poll must not double-count)", got)
 	}
 }
+
+// TestRecorder_Metrics_CountsRefireAfterSilenceExpiry covers the
+// suppressed → expired → firing sequence: the poll after the expired event
+// sees no snapshot state change (active → active), but the store creates a
+// new firing event because the last row is "expired". The metric must count
+// exactly what the store persists.
+func TestRecorder_Metrics_CountsRefireAfterSilenceExpiry(t *testing.T) {
+	rec, _ := newTestRecorder(t)
+	ctx := context.Background()
+
+	rec.processAlerts(ctx, []models.EnrichedAlert{makeEnrichedAlert("fp1", "active", "homelab")})
+	rec.processAlerts(ctx, []models.EnrichedAlert{makeEnrichedAlert("fp1", "suppressed", "homelab")})
+	// Silence expired: suppressed → active writes an "expired" event.
+	rec.processAlerts(ctx, []models.EnrichedAlert{makeEnrichedAlert("fp1", "active", "homelab")})
+	// Next poll: still active — snapshot unchanged, but the store now inserts
+	// a new firing event (last row is "expired").
+	rec.processAlerts(ctx, []models.EnrichedAlert{makeEnrichedAlert("fp1", "active", "homelab")})
+
+	if got := testutil.ToFloat64(rec.metrics.AlertEventsTotal.WithLabelValues("homelab", models.EventStatusExpired)); got != 1 {
+		t.Errorf("AlertEventsTotal[homelab,expired] = %v, want 1", got)
+	}
+	if got := testutil.ToFloat64(rec.metrics.AlertEventsTotal.WithLabelValues("homelab", models.EventStatusFiring)); got != 2 {
+		t.Errorf("AlertEventsTotal[homelab,firing] = %v, want 2 (initial firing + re-fire after expiry)", got)
+	}
+}
+
+// TestRecorder_Metrics_NoCountOnRestartWithExistingEvents simulates a restart:
+// the DB already holds a firing event, the in-memory snapshot is empty. The
+// first poll must not count an event — the store's idempotency check returns
+// the existing row without inserting.
+func TestRecorder_Metrics_NoCountOnRestartWithExistingEvents(t *testing.T) {
+	rec, _ := newTestRecorder(t)
+	ctx := context.Background()
+
+	rec.processAlerts(ctx, []models.EnrichedAlert{makeEnrichedAlert("fp1", "active", "homelab")})
+
+	// Simulate restart: fresh snapshot, same store.
+	rec.prevSnapshot = make(map[string]string)
+
+	rec.processAlerts(ctx, []models.EnrichedAlert{makeEnrichedAlert("fp1", "active", "homelab")})
+
+	if got := testutil.ToFloat64(rec.metrics.AlertEventsTotal.WithLabelValues("homelab", models.EventStatusFiring)); got != 1 {
+		t.Errorf("AlertEventsTotal[homelab,firing] = %v, want 1 (restart must not re-count existing events)", got)
+	}
+}

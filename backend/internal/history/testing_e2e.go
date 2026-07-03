@@ -38,7 +38,7 @@ func (s *Store) SeedResolvedForTesting(
 	if err := s.UpsertFingerprint(fingerprint, alertname, clusterName, labels); err != nil {
 		return err
 	}
-	if _, err := s.RecordStatusChange(fingerprint, clusterName, amURL, models.EventStatusFiring, startsAt, annotations); err != nil {
+	if _, _, err := s.RecordStatusChange(fingerprint, clusterName, amURL, models.EventStatusFiring, startsAt, annotations); err != nil {
 		return err
 	}
 	return s.RecordResolvedForCluster(fingerprint, clusterName, resolvedAt)

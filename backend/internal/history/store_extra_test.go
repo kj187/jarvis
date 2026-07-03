@@ -232,7 +232,7 @@ func TestGetRecentResolved_WithRecentResolved(t *testing.T) {
 	if err := rec.store.UpsertFingerprint("fp1", "TestAlert", "homelab", map[string]string{"alertname": "TestAlert"}); err != nil {
 		t.Fatalf("UpsertFingerprint: %v", err)
 	}
-	_, err := rec.store.RecordStatusChange("fp1", "homelab", "http://am:9093", "firing", time.Now().UTC(), nil)
+	_, _, err := rec.store.RecordStatusChange("fp1", "homelab", "http://am:9093", "firing", time.Now().UTC(), nil)
 	if err != nil {
 		t.Fatalf("RecordStatusChange: %v", err)
 	}
@@ -261,7 +261,7 @@ func TestGetRecentResolved_ExcludesOldResolved(t *testing.T) {
 	if err := rec.store.UpsertFingerprint("fp1", "TestAlert", "homelab", map[string]string{"alertname": "TestAlert"}); err != nil {
 		t.Fatalf("UpsertFingerprint: %v", err)
 	}
-	_, err := rec.store.RecordStatusChange("fp1", "homelab", "http://am:9093", "firing", time.Now().UTC(), nil)
+	_, _, err := rec.store.RecordStatusChange("fp1", "homelab", "http://am:9093", "firing", time.Now().UTC(), nil)
 	if err != nil {
 		t.Fatalf("RecordStatusChange: %v", err)
 	}
@@ -299,7 +299,7 @@ func TestGetAllResolved_ReturnsResolved(t *testing.T) {
 	if err := rec.store.UpsertFingerprint("fp1", "TestAlert", "homelab", map[string]string{"alertname": "TestAlert"}); err != nil {
 		t.Fatalf("UpsertFingerprint: %v", err)
 	}
-	if _, err := rec.store.RecordStatusChange("fp1", "homelab", "http://am:9093", "firing", time.Now().UTC(), nil); err != nil {
+	if _, _, err := rec.store.RecordStatusChange("fp1", "homelab", "http://am:9093", "firing", time.Now().UTC(), nil); err != nil {
 		t.Fatalf("RecordStatusChange: %v", err)
 	}
 	if err := rec.store.RecordResolved("fp1", time.Now().UTC()); err != nil {
@@ -328,13 +328,13 @@ func TestGetAllResolved_ExcludesRefired(t *testing.T) {
 		t.Fatalf("UpsertFingerprint: %v", err)
 	}
 	// Fire → resolve → fire again
-	if _, err := rec.store.RecordStatusChange("fp1", "homelab", "http://am:9093", "firing", time.Now().UTC(), nil); err != nil {
+	if _, _, err := rec.store.RecordStatusChange("fp1", "homelab", "http://am:9093", "firing", time.Now().UTC(), nil); err != nil {
 		t.Fatalf("RecordStatusChange firing: %v", err)
 	}
 	if err := rec.store.RecordResolved("fp1", time.Now().UTC()); err != nil {
 		t.Fatalf("RecordResolved: %v", err)
 	}
-	if _, err := rec.store.RecordStatusChange("fp1", "homelab", "http://am:9093", "firing", time.Now().UTC(), nil); err != nil {
+	if _, _, err := rec.store.RecordStatusChange("fp1", "homelab", "http://am:9093", "firing", time.Now().UTC(), nil); err != nil {
 		t.Fatalf("RecordStatusChange re-fire: %v", err)
 	}
 
@@ -354,7 +354,7 @@ func TestGetAllResolved_MultipleAlerts(t *testing.T) {
 		if err := rec.store.UpsertFingerprint(fp, "TestAlert", "homelab", map[string]string{"alertname": "TestAlert"}); err != nil {
 			t.Fatalf("UpsertFingerprint %s: %v", fp, err)
 		}
-		if _, err := rec.store.RecordStatusChange(fp, "homelab", "http://am:9093", "firing", time.Now().UTC(), nil); err != nil {
+		if _, _, err := rec.store.RecordStatusChange(fp, "homelab", "http://am:9093", "firing", time.Now().UTC(), nil); err != nil {
 			t.Fatalf("RecordStatusChange %s: %v", fp, err)
 		}
 		if err := rec.store.RecordResolved(fp, time.Now().UTC()); err != nil {
@@ -362,7 +362,7 @@ func TestGetAllResolved_MultipleAlerts(t *testing.T) {
 		}
 	}
 	// fp2 re-fires — must be excluded
-	if _, err := rec.store.RecordStatusChange("fp2", "homelab", "http://am:9093", "firing", time.Now().UTC(), nil); err != nil {
+	if _, _, err := rec.store.RecordStatusChange("fp2", "homelab", "http://am:9093", "firing", time.Now().UTC(), nil); err != nil {
 		t.Fatalf("RecordStatusChange re-fire fp2: %v", err)
 	}
 
