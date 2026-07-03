@@ -231,3 +231,18 @@ Quick reference: which spec file covers what. Use this to find the right place f
 | Spec file | Groups | What it covers |
 |---|---|---|
 | `login.spec.ts` | I3, I8–I9 | Full PKCE flow against mock IdP, admin-claim mapping, write_protect SSO modal on write attempt |
+
+### Known gaps (candidates for future cycles)
+
+Functional cases from the original test catalog that are **not** covered yet:
+
+- **E8** — Silences page auto-refresh (~30s interval).
+- **F18** — Precise/Broader/Pattern silence-matcher presets (remove label / `=` → `=~`).
+- **I5** — `full_protect` LoginPage gating the whole app (only a screenshot spec exists, no functional assertion).
+
+Partially covered / known caveats:
+
+- **D3** — annotation link interaction tested; full dynamic link-button matrix not exhaustive.
+- **D10** — own-comment delete green; two role-based delete cases are skipped.
+- **I6/I7** — setup+login happy path green; setup validation details and logout assertion not asserted.
+- **J3** — `claim_set`/`claim_released` live-patch is flaky (passes on retry).
