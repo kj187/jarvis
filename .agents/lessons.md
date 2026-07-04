@@ -9,6 +9,22 @@ instead of duplicating.
 
 ---
 
+## WS clients must be registered synchronously in ServeWS, not via the hub loop
+
+**Symptom**: J3 e2e tests (`claim_set` badge in open detail panel) flaky —
+fail on first run, pass on retry. The browser shows "WebSocket connected",
+but a WS event fired right after connect never arrives.
+**Cause**: The browser fires `onopen` when the 101 handshake completes, but
+registration went through a buffered `register` channel processed by the hub
+loop. A broadcast racing that registration iterated an empty client set —
+and the loop's `select` gives no ordering guarantee between a pending
+registration and a pending broadcast. Lost event = lost forever: claim/comment
+queries only refetch on WS invalidation.
+**Rule**: `ServeWS` adds the client to the map under the mutex *before*
+starting the pumps. Anything a client must be guaranteed to see after its
+handshake must not depend on event-loop scheduling. Regression test:
+`TestHub_ServeWSRegistersSynchronously` (runs without `hub.Run()`).
+
 ## E2E Playwright image pin must match `@playwright/test` version
 
 **Symptom**: Every E2E test fails in ~2ms with

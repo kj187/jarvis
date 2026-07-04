@@ -25,7 +25,6 @@ type Hub struct {
 	mu         sync.RWMutex
 	clients    map[*Client]struct{}
 	broadcast  chan []byte
-	register   chan *Client
 	unregister chan *Client
 	logger     *slog.Logger
 	upgrader   websocket.Upgrader
@@ -42,7 +41,6 @@ func NewHub(allowedOrigins []string, logger *slog.Logger, m *metrics.Metrics) *H
 	h := &Hub{
 		clients:    make(map[*Client]struct{}),
 		broadcast:  make(chan []byte, 256),
-		register:   make(chan *Client, 16),
 		unregister: make(chan *Client, 16),
 		logger:     logger,
 		metrics:    m,
@@ -71,11 +69,6 @@ func NewHub(allowedOrigins []string, logger *slog.Logger, m *metrics.Metrics) *H
 func (h *Hub) Run() {
 	for {
 		select {
-		case client := <-h.register:
-			h.mu.Lock()
-			h.clients[client] = struct{}{}
-			h.mu.Unlock()
-
 		case client := <-h.unregister:
 			h.mu.Lock()
 			if _, ok := h.clients[client]; ok {
@@ -126,7 +119,14 @@ func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	client := &Client{hub: h, conn: conn, send: make(chan []byte, clientBuffer)}
-	h.register <- client
+	// Register synchronously: the browser considers the socket open as soon as
+	// the 101 handshake completes, so a broadcast fired right after connect
+	// (e.g. claim_set) must already see this client. Routing registration
+	// through the hub loop loses such events — the loop's select gives no
+	// ordering guarantee between a pending registration and a broadcast.
+	h.mu.Lock()
+	h.clients[client] = struct{}{}
+	h.mu.Unlock()
 	go client.writePump()
 	go client.readPump()
 }

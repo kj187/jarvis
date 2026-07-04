@@ -57,6 +57,39 @@ func TestHub_BroadcastToClients(t *testing.T) {
 	}
 }
 
+// Registration must complete inside ServeWS, independent of the hub event
+// loop. If it goes through the loop, a broadcast racing the registration can
+// be delivered to an empty client set and the event is lost — the browser
+// already sees the socket as open (101 handshake) before the loop runs.
+// Regression test for the flaky J3 e2e case (claim_set arriving right after
+// connect). The hub loop is intentionally NOT started here.
+func TestHub_ServeWSRegistersSynchronously(t *testing.T) {
+	hub := NewHub([]string{"http://localhost:5173"}, slog.Default(), nil) // no hub.Run()
+
+	srv := httptest.NewServer(hub.upgraderHandler())
+	defer srv.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http")
+	conn, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("dial ws: %v", err)
+	}
+	if resp != nil && resp.Body != nil {
+		_ = resp.Body.Close()
+	}
+	defer func() { _ = conn.Close() }()
+
+	// Allow the server goroutine to finish ServeWS, but never the (stopped)
+	// hub loop — asynchronous registration keeps the count at 0 forever.
+	deadline := time.Now().Add(2 * time.Second)
+	for hub.ClientCount() == 0 && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+	}
+	if got := hub.ClientCount(); got != 1 {
+		t.Errorf("ClientCount = %d, want 1 (registration must not depend on the hub loop)", got)
+	}
+}
+
 func TestHub_ClientCountAfterDisconnect(t *testing.T) {
 	hub := newTestHub(t)
 
