@@ -20,6 +20,22 @@ Instead, please report it via one of the following channels:
   - Potential impact
   - (Optional) A suggested fix
 
+## Coordinated Vulnerability Disclosure
+
+- You will receive an **initial response within 14 days** of your report.
+- We will confirm the issue, work on a fix, and keep you informed about the
+  progress. Please keep the report confidential until a fixed release is
+  available.
+- A fix is targeted **within 90 days** of the initial report, depending on
+  severity and complexity.
+
+## Publication of Vulnerabilities
+
+Fixed vulnerabilities are published as
+[GitHub Security Advisories](https://github.com/kj187/jarvis/security/advisories)
+including affected versions, impact, and the fixed release. Reporters are
+credited unless they prefer to remain anonymous.
+
 ## Security Measures
 
 See [docs/security.md](docs/security.md) for a full description of:
