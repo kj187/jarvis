@@ -145,12 +145,43 @@ Tool-specific entry points map to the same files (no duplicated content):
 9. **Dependabot** runs every Monday (Go deps, npm/pnpm grouped, GitHub
    Actions). Its PRs run through CI — green CI → merge, no manual
    intervention needed.
-10. **`main` is PR-only.** The GitHub ruleset `protect-main` has no bypass
-    actors: direct pushes to `main` are rejected for everyone, including
-    admins. Ship every change as branch → PR → all required status checks
-    green → merge (`required_approving_review_count` is 0, so self-merge
-    without approval works). This applies to AI-driven changes and the
-    release prep commit alike (`.agents/release.md`).
+10. **`main` is PR-only — always work on a feature branch, with user gates.**
+    The GitHub ruleset `protect-main` has no bypass actors: direct pushes to
+    `main` are rejected for everyone, including admins. This applies to
+    AI-driven changes and the release prep commit alike (`.agents/release.md`).
+    The mandatory workflow for **every** code change (bug fix, feature,
+    refactor, docs) has three interactive gates — **ask, don't assume**:
+
+    1. **Branch gate — ask before starting new work.** When the user asks for
+       a new change, before writing code or committing, ask whether to create
+       a feature branch and propose a name (`git switch -c <type>/<slug>`,
+       e.g. `feat/silence-templates`, `fix/ws-reconnect`). On yes: start from
+       an up-to-date `main` (`git switch main && git pull --ff-only`), then
+       create the branch. **Never commit on local `main`.** If you already
+       committed on `main` by mistake, recover: create the branch at the
+       current commit, then `git reset --hard origin/main` on `main` — the
+       commit is preserved on the branch, nothing is lost.
+    2. Commit on the branch (`git commit -s`, tests in the same commit; run
+       the done-gate checks from rule 7 first).
+    3. **PR gate — ask before pushing.** When the user signals the change is
+       done and wants to push, ask whether to open a PR directly via `gh`. On
+       yes: `git push -u origin <branch>` and `gh pr create --base main`
+       with a Conventional Commit title + filled-in body. Report the branch
+       name and PR URL to the user.
+    4. **Watch the CI pipeline and fix failures directly.** After opening the
+       PR, watch its checks (`gh pr checks <pr> --watch --fail-fast`, or
+       `gh run watch`). If a check fails: pull the failing job's logs
+       (`gh run view --log-failed`), fix the cause on the branch, commit
+       (`-s`), push, and re-watch. Repeat until all required checks are green.
+    5. **Merge gate — only on explicit user go-ahead.** With green CI, ask
+       whether to merge (`required_approving_review_count` is 0, so self-merge
+       works). On yes: `gh pr merge --squash --delete-branch`. Never merge on
+       the user's behalf without an explicit request.
+    6. **Cleanup after merge.** Once the PR is merged: `git switch main`,
+       `git pull --ff-only`, and delete the now-merged local branch
+       (`git branch -d <branch>`). This leaves the user back on an up-to-date
+       `main` with no stale branches, so no unrelated follow-up work lands on
+       a merged branch.
 11. **Scope gate — check every new feature against `docs/scope.md` before
     building it.** Applies to user-requested and self-proposed features
     alike. If the feature is out of scope or borderline, say so and explain
