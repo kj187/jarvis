@@ -39,19 +39,24 @@ the final report — do not ask.
    running, wait (`gh run watch`). If red, abort.
 5. Local backend tests: `cd backend && go test ./...` — must be green.
 
-### Phase 2 — Prepare release commit
+### Phase 2 — Prepare release commit (on a release branch — `main` is PR-only)
 
-6. **Generate CHANGELOG** (tag does not exist yet → `--next-tag`):
+6. **Create the release branch** (direct pushes to `main` are rejected —
+   ruleset `protect-main`, AGENTS.md → Workflow Rules #10):
+   ```bash
+   git checkout -b release/vX.Y.Z
+   ```
+7. **Generate CHANGELOG** (tag does not exist yet → `--next-tag`):
    ```bash
    git-chglog --next-tag vX.Y.Z --output CHANGELOG.md
    ```
-7. **Write curated release notes** to `.github/release-notes/vX.Y.Z.md`.
+8. **Write curated release notes** to `.github/release-notes/vX.Y.Z.md`.
    The release workflow uses this file as the release body and **appends**
    the artifact sections itself (image digest, cosign/attestation verify,
    Helm install, SBOM) — do **not** include those in the notes file.
    - `vX.0.0` (first or new major) → Template A below
    - otherwise → Template B below
-8. **Bump versions in README** — the two occurrences in the Getting Started
+9. **Bump versions in README** — the two occurrences in the Getting Started
    block:
    ```bash
    PREV=$(git describe --tags --abbrev=0)
@@ -60,41 +65,53 @@ the final report — do not ask.
    sed -i "s|--version ${PREV_CLEAN}|--version X.Y.Z|g" README.md
    ```
    Verify both occurrences changed (image tag + helm `--version`).
-9. **Bump chart versions** in `charts/jarvis/Chart.yaml` — chart version is
-   **decoupled** from the app version, but an app release must ship a chart
-   that deploys it:
-   - `appVersion`: new app version (`"X.Y.Z"`, quoted)
-   - `version`: bump by the impact of the chart change itself
-     (appVersion-only bump → patch)
-10. **Commit everything together**:
+10. **Bump chart versions** in `charts/jarvis/Chart.yaml` — chart version is
+    **decoupled** from the app version, but an app release must ship a chart
+    that deploys it:
+    - `appVersion`: new app version (`"X.Y.Z"`, quoted)
+    - `version`: bump by the impact of the chart change itself
+      (appVersion-only bump → patch)
+11. **Commit everything together** (signed off — the DCO check runs on the PR):
     ```bash
     git add CHANGELOG.md README.md charts/jarvis/Chart.yaml .github/release-notes/vX.Y.Z.md
-    git commit -m "chore(release): prepare vX.Y.Z"
+    git commit -s -m "chore(release): prepare vX.Y.Z"
     ```
 
-### Phase 3 — Tag & push
+### Phase 3 — PR, merge, tag & push
 
-11. **Create annotated tag**:
+12. **Push the branch and open the PR**:
+    ```bash
+    git push -u origin release/vX.Y.Z
+    gh pr create --title "chore(release): prepare vX.Y.Z" \
+      --body "Release preparation for vX.Y.Z (changelog, release notes, README, chart bump)."
+    ```
+13. **Wait for all required checks, then merge** (merge commit, not squash —
+    keeps the signed-off prep commit intact) and update local `main`:
+    ```bash
+    gh pr checks release/vX.Y.Z --watch --fail-fast
+    gh pr merge release/vX.Y.Z --merge --delete-branch
+    git checkout main && git pull origin main
+    ```
+14. **Create the annotated tag on the merge commit and push it immediately**.
+    The merge to `main` already triggered the chart publish
+    (`chart-release.yml`, `charts/**` changed); the tag push triggers the
+    image build + GitHub Release. Pushing the tag right after the merge keeps
+    the chart-before-image window to seconds — acceptable, the published
+    chart only references the image, nothing pulls it at publish time:
     ```bash
     git tag -a vX.Y.Z -m "Release vX.Y.Z"
-    ```
-12. **Push tag first, then main** (order matters: the tag triggers the image
-    build + GitHub Release; the main push triggers the chart publish, which
-    references the new image via `appVersion`):
-    ```bash
     git push origin vX.Y.Z
-    git push origin main
     ```
 
 ### Phase 4 — Monitor & verify (done-gate)
 
-13. Watch both workflows to completion:
+15. Watch both workflows to completion:
     ```bash
     gh run list --workflow=release.yml --limit 1
     gh run watch <run-id> --exit-status
     gh run list --workflow=chart-release.yml --limit 1   # only runs if chart version is new
     ```
-14. Verify the release exists and report to the user:
+16. Verify the release exists and report to the user:
     ```bash
     gh release view vX.Y.Z --json url,assets
     ```
