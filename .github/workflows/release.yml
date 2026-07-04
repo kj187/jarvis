@@ -78,17 +78,20 @@ jobs:
           push-to-registry: true
 
       # Standalone SPDX SBOM attached to the GitHub Release as an asset, so
-      # users can inspect dependencies without pulling the image.
+      # users can inspect dependencies without pulling the image. syft is run
+      # directly because the sbom-action wrapper no longer supports writing to
+      # a workspace file (output-file/upload-* inputs were removed).
+      - name: Install syft
+        id: syft
+        uses: anchore/sbom-action/download-syft@f6c3d0fe42c3cf876e3462574e4c9416b5e0f07a # ratchet:anchore/sbom-action/download-syft@v0.9.0
+
       - name: Generate SBOM (SPDX)
-        uses: anchore/sbom-action@f6c3d0fe42c3cf876e3462574e4c9416b5e0f07a # ratchet:anchore/sbom-action@v0.9.0
-        with:
-          image: ghcr.io/kj187/jarvis@${{ steps.build.outputs.digest }}
-          registry-username: ${{ github.actor }}
-          registry-password: ${{ secrets.GITHUB_TOKEN }}
-          format: spdx-json
-          output-file: sbom.spdx.json
-          upload-artifact: false
-          upload-release-assets: false
+        run: |
+          SYFT="${{ steps.syft.outputs.cmd }}"
+          if [ -z "${SYFT}" ]; then SYFT=$(command -v syft); fi
+          "${SYFT}" "ghcr.io/kj187/jarvis@${{ steps.build.outputs.digest }}" \
+            -o spdx-json > sbom.spdx.json
+          test -s sbom.spdx.json
 
       - name: Build release body
         run: |
