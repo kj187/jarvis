@@ -25,6 +25,13 @@ go mod verify           # Verify module checksums against go.sum
 
 go test -race ./...     # Race detector — surfaces data races
 
+make fuzz-backend       # Go native fuzzing (FUZZTIME=30s per target):
+                        #   FuzzRedactDSN (internal/db) — password never leaks into logs
+                        #   FuzzParseNullableTimeString (internal/history) — no panics
+                        #   FuzzParseSecretKey (internal/config) — no panics/errors
+                        # Saved crash inputs land in internal/<pkg>/testdata/fuzz/
+                        # and run as regression seeds in every normal `go test`.
+
 # Frontend
 cd frontend
 pnpm audit              # Check frontend deps for known CVEs

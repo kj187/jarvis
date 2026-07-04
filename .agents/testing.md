@@ -24,6 +24,11 @@ go test ./internal/history/...     # Single package
 go test ./internal/api/...
 go test -run TestGracePeriod ./internal/history/...  # Single test
 
+# Fuzzing (Go native — fuzz funcs live in *_fuzz_test.go; seed corpus +
+# saved crash inputs under internal/<pkg>/testdata/fuzz/ run in normal go test)
+make fuzz-backend                  # All fuzz targets, FUZZTIME=30s each (override: FUZZTIME=5m)
+go test ./internal/db -run '^$' -fuzz '^FuzzRedactDSN$' -fuzztime 30s  # Single target
+
 # ── Frontend ─────────────────────────────────────────────────
 cd frontend
 
@@ -49,6 +54,7 @@ helm unittest charts/jarvis/       # Unit tests (deployment, configmap, secret, 
 # ── Everything via Makefile ──────────────────────────────────
 make test-all                      # backend + frontend + helm lint + helm unittest
 make test-backend                  # go test -race ./...
+make fuzz-backend                  # Go native fuzz targets (FUZZTIME=30s per target)
 make test-frontend                 # functional E2E (none + internal + oidc)
 make helm-lint                     # helm lint only
 make helm-test                     # helm unittest only
@@ -73,7 +79,9 @@ make fixtures-unsilence            # expire test silences
 | Package | Test file | What is tested |
 |---|---|---|
 | `internal/config` | `config_test.go` | Config parsing, cluster-N iteration, HOST_ALIAS logic |
+| `internal/config` | `config_fuzz_test.go` | Fuzz: `parseSecretKey` never panics/errors, hex round-trip |
 | `internal/db` | `db_test.go` | `Migrate` idempotent, PRAGMA settings |
+| `internal/db` | `db_fuzz_test.go` | Fuzz: `RedactDSN` never panics, password never leaks |
 | `internal/cluster` | `registry_test.go` | `NewRegistry`, `Get`, `All` — single/multi-cluster |
 | `internal/history` | `store_test.go` | `UpsertFingerprint`, `GetOrCreateActiveEvent`, grace period (60s), `occurrence_count` logic |
 | `internal/history` | `store_extra_test.go` | `GetClaimHistory`, `RecordSilenceEvent`, `GetSilenceEvents`, `GetRecentResolved`, `SeedResolved`, silence templates |
@@ -83,6 +91,7 @@ make fixtures-unsilence            # expire test silences
 | `internal/history` | `claim_cluster_test.go` | Cluster-scoped claim isolation (same fingerprint in multiple clusters) |
 | `internal/history` | `enrich_test.go` | Alert enrichment (active claim attachment) |
 | `internal/history` | `optimization_test.go` | Query/indexing optimizations |
+| `internal/history` | `time_fuzz_test.go` | Fuzz: `parseNullableTimeString` never panics, err/Valid contract |
 | `internal/alertmanager` | `client_test.go` | HTTP client against `httptest.NewServer` |
 | `internal/alertmanager` | `auth_test.go` `oauth2_test.go` | Per-cluster upstream auth (basic/bearer/OAuth2) |
 | `internal/api` | `alerts_test.go` | Alert list/detail handler |
@@ -237,6 +246,7 @@ backend:
   - upload-artifact: coverage.out + report.xml; coverage upload to Codecov
   - govulncheck ./...
   - golangci-lint run   # includes gosec (enabled in .golangci.yml)
+  - fuzz targets, 20s each (FuzzRedactDSN, FuzzParseNullableTimeString, FuzzParseSecretKey)
 
 frontend:
   - pnpm audit --audit-level=high

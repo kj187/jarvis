@@ -9,7 +9,7 @@ FRONTEND_CONTAINER = jarvis_frontend_1
         up up-build down logs ps \
         up-alertmanager down-alertmanager \
         up-postgres down-postgres \
-        test-all test-backend test-frontend \
+        test-all test-backend test-frontend fuzz-backend \
         helm-lint helm-test \
         lint gosec govulncheck audit security-all \
         scan scan-history scan-staged scan-all \
@@ -62,6 +62,13 @@ test-all: test-backend test-frontend helm-lint helm-test ## Run all tests (backe
 
 test-backend: ## Backend: go test -race ./...
 	cd backend && go test -v -race ./...
+
+FUZZTIME ?= 30s
+
+fuzz-backend: ## Backend: run all Go native fuzz targets (FUZZTIME=30s per target)
+	cd backend && go test ./internal/db -run '^$$' -fuzz '^FuzzRedactDSN$$' -fuzztime $(FUZZTIME)
+	cd backend && go test ./internal/history -run '^$$' -fuzz '^FuzzParseNullableTimeString$$' -fuzztime $(FUZZTIME)
+	cd backend && go test ./internal/config -run '^$$' -fuzz '^FuzzParseSecretKey$$' -fuzztime $(FUZZTIME)
 
 test-frontend: ## Frontend: functional E2E tests across all auth modes
 	$(E2E_RUN) test none

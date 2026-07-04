@@ -139,6 +139,12 @@ jobs:
           working-directory: backend
           version: v2.12.2
 
+      - name: Run fuzz targets (short)
+        run: |
+          go test ./internal/db -run '^$' -fuzz '^FuzzRedactDSN$' -fuzztime 20s
+          go test ./internal/history -run '^$' -fuzz '^FuzzParseNullableTimeString$' -fuzztime 20s
+          go test ./internal/config -run '^$' -fuzz '^FuzzParseSecretKey$' -fuzztime 20s
+
   frontend:
     name: Frontend
     runs-on: ubuntu-latest
