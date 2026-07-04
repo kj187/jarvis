@@ -30,7 +30,6 @@ test('J3 claim_set WS event shows claim badge in open detail panel', async ({ pa
   const res = await fetch(`${JARVIS_BASE_URL}/api/v1/alerts`)
   const alerts: any[] = await res.json()
   const fingerprint = alerts[0].fingerprint
-  const clusterName = alerts[0].clusterName
 
   // Open the detail panel
   await page.goto(`/?state=active&alert=${fingerprint}`)
@@ -57,7 +56,6 @@ test('J3 claim_released WS event removes claim badge from detail panel', async (
   const res = await fetch(`${JARVIS_BASE_URL}/api/v1/alerts`)
   const alerts: any[] = await res.json()
   const fingerprint = alerts[0].fingerprint
-  const clusterName = alerts[0].clusterName
 
   // Pre-seed a claim
   await jarvis.setClaim(fingerprint, 'ws-claimer')

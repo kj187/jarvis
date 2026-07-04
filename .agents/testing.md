@@ -31,7 +31,9 @@ pnpm test                          # Playwright functional E2E (alias for test:e
 pnpm test:e2e                      # Playwright functional E2E (browser must be installed)
 pnpm exec playwright install       # Install Playwright browsers (once)
 pnpm duplication                   # jscpd code duplication check
-pnpm lint                          # eslint src
+pnpm lint                          # eslint src e2e (flat config: eslint.config.js — typescript-eslint,
+                                   # react-hooks, react-refresh; react-hooks/purity + set-state-in-effect
+                                   # are warn-level adoption backlog, everything else errors)
 pnpm build                         # tsc -b && vite build (type-check + build)
 
 # ── Functional E2E via Makefile (isolated container stack) ───
@@ -205,7 +207,7 @@ troubleshooting are documented in **`docs/testing-e2e.md`**.
 | Staged paths | Checks |
 |---|---|
 | `backend/**` | `go test ./... -count=1 -timeout 60s` + golangci-lint (incl. gosec; govulncheck runs in CI only) |
-| `frontend/**` | `pnpm audit --audit-level=high` + `pnpm duplication` (jscpd) — executed **inside the running dev container** (`jarvis_frontend_1`); hook fails if the container is not running |
+| `frontend/**` | `pnpm audit --audit-level=high` + `pnpm lint` (eslint) + `pnpm duplication` (jscpd) — executed **inside the running dev container** (`jarvis_frontend_1`); hook fails if the container is not running |
 | `charts/**` | `helm lint` + `helm unittest` |
 | always | **gitleaks** secret scan of the staged diff (via podman, config `.gitleaks.toml`) |
 
@@ -237,6 +239,7 @@ backend:
 
 frontend:
   - pnpm audit --audit-level=high
+  - pnpm lint         # eslint (flat config)
   - pnpm build
   - pnpm duplication  # jscpd code duplication check
 

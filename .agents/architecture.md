@@ -450,13 +450,14 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
 │   ├── alertUtils.ts          → getFilterableLabels, matchesLabelMatchers, safeRegex,
 │   │                            getEffectiveAlertState, getSilenceState, silenceMatchesAlert,
 │   │                            getExpiredSilence, filterSilences, pickIdentifierLabel,
-│   │                            formatSilenceDuration, formatTime, severityOrder
+│   │                            formatSilenceDuration, formatTime, severityOrder,
+│   │                            HIDDEN_LABEL_KEYS, labelColorStyle
 │   │                            ← single source, never duplicate in components
 │   ├── alertSelection.ts      → makeAlertSelectionKey / parseAlertSelectionKey — selection key
 │   │                            format `<cluster>::<fingerprint>` (URL `alert=` param, cluster-safe)
 │   ├── linkUtils.tsx          → isUrl, extractLinkButtons (URL-valued labels/annotations + runbook
 │   │                            logic), renderTextWithLinks
-│   └── utils.ts               → cn() + misc helpers
+│   └── utils.ts               → cn(), formatDuration() + misc helpers
 └── components/
     ├── ui/                    → shadcn/ui: button, card, badge, dialog, sheet, select, input,
     │                            textarea, date-time-picker, tooltip, truncatable-chip
