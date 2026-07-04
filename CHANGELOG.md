@@ -1,3 +1,79 @@
+<a name="v1.6.0"></a>
+## [v1.6.0](https://github.com/kj187/jarvis/compare/v1.5.3...v1.6.0) (2026-07-04)
+
+### Bug Fixes
+
+* **api:** add cluster label to alert events, add per-cluster fetch duration
+* **db:** report event creation from RecordStatusChange, fix event metric drift
+* **docker:** chart-release guard and cosign auth
+
+### Chores
+
+* enforce DCO sign-off on all commits via CI check
+* add OpenSSF Scorecard workflow
+* fail release job instead of overwriting existing release
+* harden workflows, move chart publishing out of release.yml
+* decouple Helm chart versioning, publish and sign via own workflow
+* update maintainer in Chart.yaml
+* **ci:** replace unpinned pnpm npm-install with SHA-pinned pnpm/action-setup
+* **deps:** bump actions/checkout from 6.0.3 to 7.0.0 ([#42](https://github.com/kj187/jarvis/issues/42))
+* **deps:** bump azure/setup-helm from 4.3.1 to 5.0.1 ([#45](https://github.com/kj187/jarvis/issues/45))
+* **deps:** bump actions/setup-go from 6.4.0 to 6.5.0 ([#46](https://github.com/kj187/jarvis/issues/46))
+* **deps:** bump golangci/golangci-lint-action from 9.2.1 to 9.3.0 ([#47](https://github.com/kj187/jarvis/issues/47))
+* **deps:** bump gitleaks/gitleaks-action from 2.3.9 to 3.0.0 ([#43](https://github.com/kj187/jarvis/issues/43))
+* **deps:** bump the minor-patch group across 1 directory with 9 updates ([#52](https://github.com/kj187/jarvis/issues/52))
+* **deps-dev:** bump [@types](https://github.com/types)/node from 25.9.3 to 26.0.1 in /frontend ([#49](https://github.com/kj187/jarvis/issues/49))
+* **deps-dev:** bump jscpd from 4.2.5 to 5.0.11 in /frontend ([#51](https://github.com/kj187/jarvis/issues/51))
+* **deps-dev:** bump eslint from 9.39.4 to 10.6.0 in /frontend ([#50](https://github.com/kj187/jarvis/issues/50))
+* **security:** consolidate gosec into golangci-lint, move govulncheck to CI-only
+
+### Documentation
+
+* document PR-only main branch workflow
+* add maintainers list and coordinated vulnerability disclosure policy
+* add OpenSSF Baseline badge to README
+* document the prometheus metrics endpoint
+* add known gaps in E2E test coverage for future cycles
+* migrate issue templates to YAML issue forms
+* add code of conduct and PR process, fix README
+* replace LICENSE with canonical Apache-2.0 text, add NOTICE
+* add lessons.md and enforce doc-sync via PR checklist
+* restructure AI agent context into AI-agnostic AGENTS.md/.agents structure
+* **readme:** reorganize badges into header and tech stack sections
+* **security:** make CVD timeframes best-effort and add private reporting
+
+### Features
+
+* **api:** instrument HTTP requests with prometheus middleware
+* **api:** instrument poll cycle, error, duration and event metrics
+* **api:** add prometheus metrics endpoint skeleton
+* **docker:** add ServiceMonitor and prometheus.io annotations for /metrics
+* **frontend:** wire up ESLint flat config as lint gate ([#53](https://github.com/kj187/jarvis/issues/53))
+* **release:** fully automate /release flow with attestation and SBOM
+
+### Tests
+
+* add Go native fuzz targets for parser functions
+* **e2e:** fix B5 spec for expand/collapse card UX
+
+<a name="v1.5.3"></a>
+## [v1.5.3](https://github.com/kj187/jarvis/compare/v1.5.2...v1.5.3) (2026-06-30)
+
+### Bug Fixes
+
+* update Alertmanager, Grafana, and Prometheus URLs to use localhost for local testing
+* **alerts:** persist only unlocked label matchers to URL to prevent duplicates
+* **api:** log underlying alertmanager error on silence create/delete
+* **silences:** strip backslashes from regex matchers on silence recreate
+
+### Documentation
+
+* update CHANGELOG and README for v1.5.3
+
+### Tests
+
+* **silences:** add fixtures to reproduce silence recreate escaping
+
 <a name="v1.5.2"></a>
 ## [v1.5.2](https://github.com/kj187/jarvis/compare/v1.5.1...v1.5.2) (2026-06-29)
 
