@@ -55,6 +55,20 @@ maintained by a single person, so please be patient with reviews.
 Conventional Commits — format, types, and scopes are defined in
 [AGENTS.md](AGENTS.md#commit-format--conventional-commits).
 
+### Developer Certificate of Origin (DCO)
+
+Every commit must be signed off to certify the
+[Developer Certificate of Origin](https://developercertificate.org/) — i.e.
+that you are legally authorized to contribute the change:
+
+```bash
+git commit -s
+```
+
+This adds a `Signed-off-by: Your Name <your@email>` trailer to the commit
+message. The `DCO` check in CI fails any pull request containing commits
+without a sign-off.
+
 ## Testing
 
 See [.agents/testing.md](.agents/testing.md) for the full test strategy and

@@ -153,6 +153,9 @@ refactor / docs / chore → no bump
 Scopes: `alerts` `silences` `claims` `comments` `ws` `api` `db` `config`
 `frontend` `docker`
 
+**DCO**: Every commit must be signed off (`git commit -s`, adds a
+`Signed-off-by:` trailer) — enforced by the `DCO` check in CI on every PR.
+
 ## Quick Commands
 
 ```bash

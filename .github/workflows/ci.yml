@@ -24,6 +24,29 @@ jobs:
       - name: Verify all Actions are SHA-pinned
         run: ratchet check .github/workflows/*.yml
 
+  dco:
+    name: DCO
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # ratchet:actions/checkout@v7.0.0
+        with:
+          fetch-depth: 0
+      - name: Check Signed-off-by on all commits
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          missing=$(git log --no-merges --format='%h %s' \
+            --invert-grep --grep='^Signed-off-by: ' "${BASE_SHA}..${HEAD_SHA}")
+          if [ -n "$missing" ]; then
+            echo "Commits without Signed-off-by trailer (use 'git commit -s'):"
+            echo "$missing"
+            exit 1
+          fi
+
   secrets:
     name: Secret Scan
     runs-on: ubuntu-latest

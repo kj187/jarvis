@@ -227,6 +227,7 @@ Split across five workflows.
 
 ```yaml
 pin-check:           # ratchet: verify all GitHub Actions are SHA-pinned (globs .github/workflows/*.yml)
+dco:                 # PR-only: every commit must carry a Signed-off-by trailer (git commit -s)
 secrets:             # gitleaks secret scanning
 
 backend:
