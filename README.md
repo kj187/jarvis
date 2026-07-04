@@ -35,6 +35,8 @@ Most Alertmanager UIs are read-only dashboards. Jarvis is built for teams that n
 - **Single binary** — Go backend embeds the Vite build; one container
 - **User authentication** — optional UI login, three modes: `none` (open), `internal` (built-in user management with admin panel), `oidc` (Keycloak, Authentik, Dex, any OIDC provider)
 
+Worried about feature creep? Jarvis has a deliberately focused scope — what it is and what it will never become is written down in **[docs/scope.md](docs/scope.md)**.
+
 ### Built with AI
 > Jarvis was developed entirely using AI coding assistants. This is an intentional workflow choice, not a shortcut: the codebase follows established Go and React best practices, enforces security standards through automated tooling (gosec, govulncheck, golangci-lint, pnpm audit) on every commit and in CI, and applies defense-in-depth measures (strict CSP, read-only container filesystem, no-new-privileges). See [SECURITY.md](SECURITY.md) for details.
 
