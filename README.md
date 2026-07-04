@@ -53,7 +53,7 @@ All you need is Podman or Docker — no installation, no build step. Create a `c
 ```yaml
 services:
   jarvis:
-    image: ghcr.io/kj187/jarvis:1.5.3
+    image: ghcr.io/kj187/jarvis:1.6.0
     ports:
       - "8080:8080"
     volumes:
@@ -87,7 +87,7 @@ Now open http://localhost:8080
 
 ```bash
 helm install jarvis oci://ghcr.io/kj187/charts/jarvis \
-  --version 1.5.3 \
+  --version 1.6.0 \
   --set clusters[0].name=dev \
   --set clusters[0].alertmanagerUrl=http://alertmanager:9093 \
   --set database.dsn='postgres://jarvis:secret@postgres.monitoring.svc:5432/jarvis?sslmode=require'
