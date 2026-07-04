@@ -103,6 +103,160 @@ func TestLoad_HostAlias(t *testing.T) {
 	}
 }
 
+func TestLoad_ClusterSingleMember(t *testing.T) {
+	t.Setenv("JARVIS_CLUSTER_1_NAME", "homelab")
+	t.Setenv("JARVIS_CLUSTER_1_ALERTMANAGER_URL", "http://am:9093")
+	t.Setenv("JARVIS_CLUSTER_2_NAME", "")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+
+	members := cfg.Clusters[0].Members
+	if len(members) != 1 {
+		t.Fatalf("len(Members) = %d, want 1", len(members))
+	}
+	if members[0].Name != "am:9093" {
+		t.Errorf("Members[0].Name = %q, want am:9093", members[0].Name)
+	}
+	if members[0].URL != "http://am:9093" {
+		t.Errorf("Members[0].URL = %q", members[0].URL)
+	}
+	if members[0].LinkURL != "http://am:9093" {
+		t.Errorf("Members[0].LinkURL = %q", members[0].LinkURL)
+	}
+}
+
+func TestLoad_ClusterMultipleMembers(t *testing.T) {
+	t.Setenv("JARVIS_CLUSTER_1_NAME", "prod")
+	t.Setenv("JARVIS_CLUSTER_1_ALERTMANAGER_URL", "http://am1:9093,http://am2:9093,http://am3:9093")
+	t.Setenv("JARVIS_CLUSTER_2_NAME", "")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+
+	c := cfg.Clusters[0]
+	if len(c.Members) != 3 {
+		t.Fatalf("len(Members) = %d, want 3", len(c.Members))
+	}
+	wantNames := []string{"am1:9093", "am2:9093", "am3:9093"}
+	for i, want := range wantNames {
+		if c.Members[i].Name != want {
+			t.Errorf("Members[%d].Name = %q, want %q", i, c.Members[i].Name, want)
+		}
+	}
+	// Back-compat single-URL fields mirror the first member.
+	if c.AlertmanagerURL != "http://am1:9093" {
+		t.Errorf("AlertmanagerURL = %q, want http://am1:9093 (first member)", c.AlertmanagerURL)
+	}
+}
+
+func TestLoad_ClusterMultipleMembers_WhitespaceTolerant(t *testing.T) {
+	t.Setenv("JARVIS_CLUSTER_1_NAME", "prod")
+	t.Setenv("JARVIS_CLUSTER_1_ALERTMANAGER_URL", " http://am1:9093 , http://am2:9093 ")
+	t.Setenv("JARVIS_CLUSTER_2_NAME", "")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+
+	c := cfg.Clusters[0]
+	if len(c.Members) != 2 {
+		t.Fatalf("len(Members) = %d, want 2", len(c.Members))
+	}
+	if c.Members[0].URL != "http://am1:9093" || c.Members[1].URL != "http://am2:9093" {
+		t.Errorf("Members URLs not trimmed: %+v", c.Members)
+	}
+}
+
+func TestLoad_ClusterMultipleMembers_HostAliasAppliesToAll(t *testing.T) {
+	t.Setenv("JARVIS_CLUSTER_1_NAME", "prod")
+	t.Setenv("JARVIS_CLUSTER_1_ALERTMANAGER_URL", "http://am1:9093,http://am2:9093")
+	t.Setenv("JARVIS_CLUSTER_1_HOST_ALIAS", "https://am.example.com")
+	t.Setenv("JARVIS_CLUSTER_2_NAME", "")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+
+	c := cfg.Clusters[0]
+	for i, m := range c.Members {
+		if m.LinkURL != "https://am.example.com" {
+			t.Errorf("Members[%d].LinkURL = %q, want https://am.example.com", i, m.LinkURL)
+		}
+	}
+}
+
+func TestLoad_ClusterMultipleMembers_HostAliasPerMember(t *testing.T) {
+	t.Setenv("JARVIS_CLUSTER_1_NAME", "prod")
+	t.Setenv("JARVIS_CLUSTER_1_ALERTMANAGER_URL", "http://test-alertmanager:9093,http://test-alertmanager-2:9093")
+	t.Setenv("JARVIS_CLUSTER_1_HOST_ALIAS", "http://localhost:9094,http://localhost:9095")
+	t.Setenv("JARVIS_CLUSTER_2_NAME", "")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+
+	c := cfg.Clusters[0]
+	if len(c.Members) != 2 {
+		t.Fatalf("len(Members) = %d, want 2", len(c.Members))
+	}
+	if c.Members[0].LinkURL != "http://localhost:9094" {
+		t.Errorf("Members[0].LinkURL = %q, want http://localhost:9094", c.Members[0].LinkURL)
+	}
+	if c.Members[1].LinkURL != "http://localhost:9095" {
+		t.Errorf("Members[1].LinkURL = %q, want http://localhost:9095", c.Members[1].LinkURL)
+	}
+}
+
+func TestLoad_ClusterMultipleMembers_HostAliasCountMismatch(t *testing.T) {
+	t.Setenv("JARVIS_CLUSTER_1_NAME", "prod")
+	t.Setenv("JARVIS_CLUSTER_1_ALERTMANAGER_URL", "http://am1:9093,http://am2:9093,http://am3:9093")
+	t.Setenv("JARVIS_CLUSTER_1_HOST_ALIAS", "http://localhost:9094,http://localhost:9095")
+	t.Setenv("JARVIS_CLUSTER_2_NAME", "")
+
+	_, err := Load()
+	if err == nil {
+		t.Error("expected error when HOST_ALIAS count matches neither 1 nor member count")
+	}
+}
+
+func TestLoad_ClusterDuplicateMemberURL(t *testing.T) {
+	t.Setenv("JARVIS_CLUSTER_1_NAME", "prod")
+	t.Setenv("JARVIS_CLUSTER_1_ALERTMANAGER_URL", "http://am1:9093,http://am1:9093")
+	t.Setenv("JARVIS_CLUSTER_2_NAME", "")
+
+	_, err := Load()
+	if err == nil {
+		t.Error("expected error for duplicate member URL, got nil")
+	}
+}
+
+func TestLoad_ClusterAuthAppliesToAllMembers(t *testing.T) {
+	t.Setenv("JARVIS_CLUSTER_1_NAME", "prod")
+	t.Setenv("JARVIS_CLUSTER_1_ALERTMANAGER_URL", "http://am1:9093,http://am2:9093")
+	t.Setenv("JARVIS_CLUSTER_1_BEARER_TOKEN", "tok")
+	t.Setenv("JARVIS_CLUSTER_2_NAME", "")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	// Auth lives on ClusterConfig, not per-member — applies to all members alike.
+	if cfg.Clusters[0].Auth.BearerToken != "tok" {
+		t.Errorf("BearerToken = %q, want tok", cfg.Clusters[0].Auth.BearerToken)
+	}
+	if len(cfg.Clusters[0].Members) != 2 {
+		t.Fatalf("len(Members) = %d, want 2", len(cfg.Clusters[0].Members))
+	}
+}
+
 func TestLoad_InvalidPollInterval(t *testing.T) {
 	t.Setenv("JARVIS_POLL_INTERVAL", "notaduration")
 	_, err := Load()

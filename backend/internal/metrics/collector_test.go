@@ -24,7 +24,12 @@ func TestStoreCollector_Collect(t *testing.T) {
 		{ClusterName: "prod", Status: models.AlertStatus{State: "suppressed"}, Labels: map[string]string{}},
 	}}
 	clients := fakeClientCounter{count: 3}
-	clusterUp := func() map[string]bool { return map[string]bool{"prod": true, "staging": false} }
+	clusterUp := func() map[string]map[string]bool {
+		return map[string]map[string]bool{
+			"prod":    {"am1:9093": true},
+			"staging": {"am2:9093": false},
+		}
+	}
 
 	c := NewCollector(alerts, clients, clusterUp, 2)
 
@@ -37,10 +42,10 @@ func TestStoreCollector_Collect(t *testing.T) {
 		# TYPE jarvis_alerts_by_severity gauge
 		jarvis_alerts_by_severity{cluster="prod",severity="critical"} 2
 		jarvis_alerts_by_severity{cluster="prod",severity="none"} 1
-		# HELP jarvis_alertmanager_up Whether the last poll of a cluster succeeded (1) or failed (0).
+		# HELP jarvis_alertmanager_up Whether the last poll of a cluster member succeeded (1) or failed (0).
 		# TYPE jarvis_alertmanager_up gauge
-		jarvis_alertmanager_up{cluster="prod"} 1
-		jarvis_alertmanager_up{cluster="staging"} 0
+		jarvis_alertmanager_up{cluster="prod",member="am1:9093"} 1
+		jarvis_alertmanager_up{cluster="staging",member="am2:9093"} 0
 		# HELP jarvis_clusters_configured Number of configured Alertmanager clusters.
 		# TYPE jarvis_clusters_configured gauge
 		jarvis_clusters_configured 2
@@ -59,7 +64,7 @@ func TestStoreCollector_NilClusterUp(t *testing.T) {
 	c := NewCollector(fakeAlertSource{}, fakeClientCounter{}, nil, 0)
 
 	if err := testutil.CollectAndCompare(c, strings.NewReader(`
-		# HELP jarvis_alertmanager_up Whether the last poll of a cluster succeeded (1) or failed (0).
+		# HELP jarvis_alertmanager_up Whether the last poll of a cluster member succeeded (1) or failed (0).
 		# TYPE jarvis_alertmanager_up gauge
 	`), "jarvis_alertmanager_up"); err != nil {
 		t.Fatalf("expected no jarvis_alertmanager_up samples when clusterUp is nil: %v", err)

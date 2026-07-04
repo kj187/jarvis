@@ -59,15 +59,28 @@ type ClusterAuth struct {
 	OAuth2 *OAuth2Config
 }
 
-// ClusterConfig holds configuration for a single Alertmanager cluster.
+// MemberConfig holds one Alertmanager HA-cluster member. A ClusterConfig
+// with a single member is exactly today's one-cluster-one-URL setup.
+type MemberConfig struct {
+	Name    string // host:port, used for display/metrics/tags
+	URL     string // internal polling URL
+	LinkURL string // browser-visible URL (HOST_ALIAS-rewritten)
+}
+
+// ClusterConfig holds configuration for a single Alertmanager cluster. A
+// cluster may have multiple Members when it is an Alertmanager HA gossip
+// cluster — see Members.
 type ClusterConfig struct {
-	Name            string
-	AlertmanagerURL string
-	// AlertmanagerLinkURL is the browser-visible URL (may differ from AlertmanagerURL
-	// when HOST_ALIAS is set).
+	Name string
+	// AlertmanagerURL / AlertmanagerLinkURL mirror the first member (Members[0])
+	// for single-member back-compat call sites. Always set when Members is set.
+	AlertmanagerURL     string
 	AlertmanagerLinkURL string
 	PrometheusURL       string
 	Auth                ClusterAuth
+	// Members holds every HA member parsed from a comma-separated
+	// ALERTMANAGER_URL. Len 1 for a classic single-URL cluster.
+	Members []MemberConfig
 }
 
 // Load reads configuration from environment variables, optionally loading a
@@ -168,12 +181,15 @@ func parseClusters() ([]ClusterConfig, error) {
 		if name == "" {
 			break
 		}
-		amURL := os.Getenv(prefix + "ALERTMANAGER_URL")
-		if amURL == "" {
+		amURLRaw := os.Getenv(prefix + "ALERTMANAGER_URL")
+		if amURLRaw == "" {
 			return nil, fmt.Errorf("JARVIS_CLUSTER_%d_ALERTMANAGER_URL is required when NAME is set", i)
 		}
 		hostAlias := os.Getenv(prefix + "HOST_ALIAS")
-		linkURL := resolveAlertmanagerLinkURL(amURL, hostAlias)
+		members, err := parseMembers(amURLRaw, hostAlias, i)
+		if err != nil {
+			return nil, err
+		}
 
 		auth := ClusterAuth{
 			BearerToken: os.Getenv(prefix + "BEARER_TOKEN"),
@@ -204,13 +220,92 @@ func parseClusters() ([]ClusterConfig, error) {
 
 		clusters = append(clusters, ClusterConfig{
 			Name:                name,
-			AlertmanagerURL:     amURL,
-			AlertmanagerLinkURL: linkURL,
+			AlertmanagerURL:     members[0].URL,
+			AlertmanagerLinkURL: members[0].LinkURL,
 			PrometheusURL:       os.Getenv(prefix + "PROMETHEUS_URL"),
 			Auth:                auth,
+			Members:             members,
 		})
 	}
 	return clusters, nil
+}
+
+// parseMembers splits a (possibly comma-separated) ALERTMANAGER_URL into one
+// MemberConfig per HA member. A single URL (no comma) produces exactly one
+// member — today's behavior, unchanged. Whitespace around each URL is
+// trimmed; empty parts are skipped. Duplicate member URLs are a startup error.
+func parseMembers(rawURLs, rawHostAliases string, clusterIdx int) ([]MemberConfig, error) {
+	seen := make(map[string]bool)
+	var urls []string
+	for _, part := range strings.Split(rawURLs, ",") {
+		u := strings.TrimSpace(part)
+		if u == "" {
+			continue
+		}
+		if seen[u] {
+			return nil, fmt.Errorf("JARVIS_CLUSTER_%d_ALERTMANAGER_URL: duplicate member URL %q", clusterIdx, u)
+		}
+		seen[u] = true
+		urls = append(urls, u)
+	}
+	if len(urls) == 0 {
+		return nil, fmt.Errorf("JARVIS_CLUSTER_%d_ALERTMANAGER_URL is required when NAME is set", clusterIdx)
+	}
+
+	aliases, err := splitHostAliases(rawHostAliases, len(urls), clusterIdx)
+	if err != nil {
+		return nil, err
+	}
+
+	members := make([]MemberConfig, len(urls))
+	for i, u := range urls {
+		members[i] = MemberConfig{
+			Name:    DeriveMemberName(u),
+			URL:     u,
+			LinkURL: resolveAlertmanagerLinkURL(u, aliases[i]),
+		}
+	}
+	return members, nil
+}
+
+// splitHostAliases parses HOST_ALIAS into one alias per member. Empty input
+// means no alias for any member. A single value applies to every member —
+// today's single-member behavior, and a convenient default for an HA
+// cluster fronted by one shared alias/load balancer. A comma-separated list
+// must match the member count exactly, index for index, so each member can
+// get its own browser-visible URL (e.g. distinct ports on localhost).
+func splitHostAliases(raw string, memberCount, clusterIdx int) ([]string, error) {
+	if raw == "" {
+		return make([]string, memberCount), nil
+	}
+	var aliases []string
+	for _, part := range strings.Split(raw, ",") {
+		aliases = append(aliases, strings.TrimSpace(part))
+	}
+	if len(aliases) == 1 {
+		out := make([]string, memberCount)
+		for i := range out {
+			out[i] = aliases[0]
+		}
+		return out, nil
+	}
+	if len(aliases) != memberCount {
+		return nil, fmt.Errorf(
+			"JARVIS_CLUSTER_%d_HOST_ALIAS: %d alias(es) for %d member(s) — must be 1 (applies to all) or exactly %d (one per member)",
+			clusterIdx, len(aliases), memberCount, memberCount,
+		)
+	}
+	return aliases, nil
+}
+
+// DeriveMemberName returns the display name for an Alertmanager member URL —
+// its host:port. Falls back to the raw URL if it fails to parse.
+func DeriveMemberName(rawURL string) string {
+	u, err := url.Parse(rawURL)
+	if err != nil || u.Host == "" {
+		return rawURL
+	}
+	return u.Host
 }
 
 // parseClusterHeaders scans os.Environ for JARVIS_CLUSTER_N_HEADER_<name>=<value> entries

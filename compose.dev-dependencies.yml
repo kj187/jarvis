@@ -3,15 +3,18 @@
 #
 # Usage (via Makefile):
 #   make up-alertmanager / make down-alertmanager
+#   make up-alertmanager-ha / make down-alertmanager-ha   (2-member HA gossip pair)
 #   make up-postgres / make down-postgres
 #
 # Reachable from backend container:
-#   Alertmanager: http://test-alertmanager:9093
-#   PostgreSQL:   postgres://jarvis:jarvis@test-postgres:5432/jarvis?sslmode=disable
+#   Alertmanager:    http://test-alertmanager:9093
+#   Alertmanager HA: http://test-alertmanager:9093,http://test-alertmanager-2:9093
+#   PostgreSQL:      postgres://jarvis:jarvis@test-postgres:5432/jarvis?sslmode=disable
 #
 # Reachable from host:
-#   Alertmanager: http://localhost:9094
-#   PostgreSQL:   postgres://jarvis:jarvis@localhost:5432/jarvis?sslmode=disable
+#   Alertmanager:      http://localhost:9094
+#   Alertmanager HA-2: http://localhost:9095
+#   PostgreSQL:        postgres://jarvis:jarvis@localhost:5432/jarvis?sslmode=disable
 #
 # NOTE: sslmode=disable is intentional here — this is a local ephemeral test
 # container with no TLS configured. Never use sslmode=disable in production.
@@ -24,11 +27,32 @@ services:
       - '--config.file=/etc/alertmanager/alertmanager.yml'
       - '--storage.path=/alertmanager'
       - '--web.listen-address=0.0.0.0:9093'
+      - '--cluster.listen-address=0.0.0.0:9094'
+      - '--cluster.peer=test-alertmanager-2:9094'
     ports:
       - "9094:9093"
     volumes:
       - ./scripts/test-alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro,z
     restart: unless-stopped
+
+  # Second HA gossip member — same config, peers with test-alertmanager over
+  # Alertmanager's mesh protocol so silences created against either instance
+  # replicate to both. Started only via `make up-alertmanager-ha`.
+  test-alertmanager-2:
+    image: docker.io/prom/alertmanager:latest
+    container_name: jarvis_test_alertmanager_2
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+      - '--web.listen-address=0.0.0.0:9093'
+      - '--cluster.listen-address=0.0.0.0:9094'
+      - '--cluster.peer=test-alertmanager:9094'
+    ports:
+      - "9095:9093"
+    volumes:
+      - ./scripts/test-alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro,z
+    restart: unless-stopped
+    profiles: ["ha"]
 
   test-postgres:
     image: docker.io/postgres:16-alpine

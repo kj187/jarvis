@@ -57,8 +57,8 @@ func newTestRecorder(t *testing.T) (*Recorder, *mockHub) {
 		prevSnapshot:      make(map[string]string),
 		prevSilenceInfo:   make(map[string]silenceInfoEntry),
 		prevAlertSilences: make(map[string][]string),
-		clusterUp:         make(map[string]bool),
 		claimReleaseDelay: 10 * time.Millisecond,
+		registry:          cluster.NewRegistry(nil),
 	}
 	return rec, hub
 }
@@ -250,6 +250,9 @@ func TestFetchCluster_InjectsReceiverLabel(t *testing.T) {
 		AlertmanagerURL:     srv.URL,
 		AlertmanagerLinkURL: srv.URL,
 		Client:              alertmanager.NewClient(srv.URL),
+		Members: []*cluster.Member{
+			{Name: "test-member", URL: srv.URL, LinkURL: srv.URL, Client: alertmanager.NewClient(srv.URL)},
+		},
 	}
 
 	enriched, err := rec.fetchCluster(context.Background(), cl)
@@ -293,6 +296,9 @@ func TestFetchCluster_NoReceiverLabelWhenReceiversEmpty(t *testing.T) {
 		AlertmanagerURL:     srv.URL,
 		AlertmanagerLinkURL: srv.URL,
 		Client:              alertmanager.NewClient(srv.URL),
+		Members: []*cluster.Member{
+			{Name: "test-member", URL: srv.URL, LinkURL: srv.URL, Client: alertmanager.NewClient(srv.URL)},
+		},
 	}
 
 	enriched, err := rec.fetchCluster(context.Background(), cl)
@@ -425,11 +431,11 @@ func TestRecorder_Poll_InstrumentsMetrics(t *testing.T) {
 	}
 
 	up := rec.ClusterUpStates()
-	if !up["good"] {
-		t.Error("ClusterUpStates()[good] = false, want true")
+	if !up["good"][config.DeriveMemberName(healthy.URL)] {
+		t.Error("ClusterUpStates()[good][member] = false, want true")
 	}
-	if up["bad"] {
-		t.Error("ClusterUpStates()[bad] = true, want false")
+	if up["bad"][config.DeriveMemberName(failing.URL)] {
+		t.Error("ClusterUpStates()[bad][member] = true, want false")
 	}
 
 	if n := testutil.CollectAndCount(rec.metrics.PollDurationSeconds); n != 1 {
@@ -479,6 +485,66 @@ func TestRecorder_Metrics_CountsRefireAfterSilenceExpiry(t *testing.T) {
 	}
 	if got := testutil.ToFloat64(rec.metrics.AlertEventsTotal.WithLabelValues("homelab", models.EventStatusFiring)); got != 2 {
 		t.Errorf("AlertEventsTotal[homelab,firing] = %v, want 2 (initial firing + re-fire after expiry)", got)
+	}
+}
+
+// TestRecorder_Poll_HACluster_NoDoubledHistoryEvents drives a full poll()
+// across a 2-member HA cluster where both members report the same
+// fingerprint. The merge in cluster.Cluster.FetchAlerts must collapse this to
+// one alert *before* the recorder ever sees the snapshot, so history stays
+// keyed by exactly (fingerprint, cluster) — one event row, not two.
+func TestRecorder_Poll_HACluster_NoDoubledHistoryEvents(t *testing.T) {
+	member := func() *httptest.Server {
+		return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch r.URL.Path {
+			case "/api/v2/alerts":
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode([]alertmanager.GettableAlert{
+					{
+						Fingerprint: "fp1",
+						Status:      alertmanager.GettableAlertStatus{State: "active"},
+						Labels:      map[string]string{"alertname": "TestAlert"},
+						Annotations: map[string]string{},
+						StartsAt:    time.Now().UTC(),
+						UpdatedAt:   time.Now().UTC(),
+					},
+				})
+			case "/api/v2/silences":
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode([]alertmanager.GettableSilence{})
+			default:
+				http.NotFound(w, r)
+			}
+		}))
+	}
+	am1 := member()
+	defer am1.Close()
+	am2 := member()
+	defer am2.Close()
+
+	rec, _ := newTestRecorder(t)
+	rec.registry = cluster.NewRegistry([]config.ClusterConfig{
+		{
+			Name: "homelab",
+			Members: []config.MemberConfig{
+				{Name: config.DeriveMemberName(am1.URL), URL: am1.URL, LinkURL: am1.URL},
+				{Name: config.DeriveMemberName(am2.URL), URL: am2.URL, LinkURL: am2.URL},
+			},
+		},
+	})
+
+	rec.poll(context.Background())
+	rec.poll(context.Background())
+
+	events, total, err := rec.store.GetHistoryForCluster("fp1", "homelab", 100, 0)
+	if err != nil {
+		t.Fatalf("GetHistoryForCluster: %v", err)
+	}
+	if total != 1 || len(events) != 1 {
+		t.Fatalf("total = %d, len(events) = %d, want 1 (both members report the same alert — merge must collapse it before the recorder sees it)", total, len(events))
+	}
+	if got := testutil.ToFloat64(rec.metrics.AlertEventsTotal.WithLabelValues("homelab", models.EventStatusFiring)); got != 1 {
+		t.Errorf("AlertEventsTotal[homelab,firing] = %v, want 1 (second poll of the same merged alert must not double-count)", got)
 	}
 }
 

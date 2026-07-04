@@ -143,7 +143,7 @@ func (s *Server) testCreateSilence(c echo.Context) error {
 		Comment:   req.Comment,
 	}
 
-	silenceID, err := cl.Client.CreateSilence(c.Request().Context(), postable)
+	silenceID, err := cl.CreateSilence(c.Request().Context(), postable)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}

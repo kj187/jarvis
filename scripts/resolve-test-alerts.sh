@@ -236,5 +236,88 @@ resolve '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=rate(coredns_dns_responses_total%7Brcode%3D%22SERVFAIL%22%7D%5B5m%5D)"
 }]'
 
+printf " [13/17] LinkRichAlert..."
+resolve '[{
+  "labels": {
+    "alertname": "LinkRichAlert",
+    "severity": "warning",
+    "namespace": "prod",
+    "cluster": "eu-west-1-prod",
+    "team": "platform",
+    "runbook": "'"${RUNBOOKS}"'/LinkRichAlert",
+    "wiki": "https://wiki.example.com/alerts/link-rich",
+    "docs": "https://docs.example.com/platform/alerts/link-rich",
+    "source_code": "https://github.com/example/platform/blob/main/alerts/link-rich.yml",
+    "playbook": "https://playbooks.example.com/oncall/link-rich",
+    "test_suite": "jarvis"
+  },
+  "annotations": {"summary": "Alert with many link-type labels and annotations"},
+  "generatorURL": "'"${PROM}"'/graph?g0.expr=up%7Bjob%3D%22platform%22%7D"
+}]'
+
+printf " [14/17] InlineUrlsAlert..."
+resolve '[{
+  "labels": {
+    "alertname": "InlineUrlsAlert",
+    "severity": "info",
+    "namespace": "monitoring",
+    "cluster": "eu-west-1-prod",
+    "team": "observability",
+    "test_suite": "jarvis"
+  },
+  "annotations": {"summary": "Alert with inline URLs scattered across description text"},
+  "generatorURL": "'"${PROM}"'/graph?g0.expr=up%7Bjob%3D%22prometheus%22%7D"
+}]'
+
+printf " [15/17] LabelOnlyLinksAlert..."
+resolve '[{
+  "labels": {
+    "alertname": "LabelOnlyLinksAlert",
+    "severity": "info",
+    "namespace": "staging",
+    "cluster": "eu-west-1-staging",
+    "team": "frontend",
+    "runbook": "'"${RUNBOOKS}"'/LabelOnlyLinksAlert",
+    "wiki": "https://wiki.example.com/alerts/label-only",
+    "grafana": "'"${GRAFANA}"'/d/frontend-overview?orgId=1",
+    "github_issue": "https://github.com/example/frontend/issues/42",
+    "test_suite": "jarvis"
+  },
+  "annotations": {"summary": "Alert with links exclusively in labels"},
+  "generatorURL": "'"${PROM}"'/graph?g0.expr=http_requests_total%7Benv%3D%22staging%22%7D"
+}]'
+
+printf " [16/17] AnnotationOnlyLinksAlert..."
+resolve '[{
+  "labels": {
+    "alertname": "AnnotationOnlyLinksAlert",
+    "severity": "warning",
+    "namespace": "prod",
+    "cluster": "eu-west-1-prod",
+    "team": "data",
+    "test_suite": "jarvis"
+  },
+  "annotations": {"summary": "Alert with links exclusively in annotations"},
+  "generatorURL": "'"${PROM}"'/graph?g0.expr=job_duration_seconds%7Bjob%3D%22s3-export%22%7D"
+}]'
+
+printf " [17/17] SpecialCharLabelAlert..."
+resolve '[{
+  "labels": {
+    "alertname": "SpecialCharLabelAlert",
+    "severity": "warning",
+    "namespace": "prod",
+    "cluster": "eu-west-1-prod",
+    "team": "platform",
+    "kubernetes_version": "v1.28.4",
+    "image_tag": "payment-api-v2-3-1-rc",
+    "secret_path": "v1/b2b/cert/web-tuadev",
+    "runbook": "'"${RUNBOOKS}"'/SpecialCharLabelAlert",
+    "test_suite": "jarvis"
+  },
+  "annotations": {"summary": "Alert with special characters in label values"},
+  "generatorURL": "'"${PROM}"'/graph?g0.expr=up%7Bjob%3D%22platform%22%7D"
+}]'
+
 echo ""
-echo "==> All 12 Kubernetes test alerts resolved."
+echo "==> All 17 Kubernetes test alerts resolved."

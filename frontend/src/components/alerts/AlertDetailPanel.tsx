@@ -874,6 +874,16 @@ export function AlertDetailPanel({
             <div className="space-y-2">{renderLabelColumn(leftLabels)}</div>
             <div className="space-y-2">{renderLabelColumn(rightLabels)}</div>
           </div>
+          {alert.seenOn && alert.seenOn.length > 0 && (
+            <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-border pt-3" data-testid="detail-seen-on">
+              <span className="text-xs text-muted-foreground">seen on:</span>
+              {alert.seenOn.map((member) => (
+                <span key={member} className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
+                  {member}
+                </span>
+              ))}
+            </div>
+          )}
         </AlertDetailSection>
 
         {/* History */}

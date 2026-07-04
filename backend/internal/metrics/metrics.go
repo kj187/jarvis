@@ -61,9 +61,9 @@ func New(version string) *Metrics {
 		}),
 		ClusterFetchDurationSeconds: f.NewHistogramVec(prometheus.HistogramOpts{
 			Name:    "jarvis_cluster_fetch_duration_seconds",
-			Help:    "Duration of fetching alerts and silences from a single cluster's Alertmanager.",
+			Help:    "Duration of fetching alerts or silences from a single Alertmanager member.",
 			Buckets: []float64{0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10},
-		}, []string{"cluster"}),
+		}, []string{"cluster", "member"}),
 		AlertEventsTotal: f.NewCounterVec(prometheus.CounterOpts{
 			Name: "jarvis_alert_events_total",
 			Help: "Total number of alert lifecycle events recorded, by cluster and status.",

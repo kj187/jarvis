@@ -8,6 +8,7 @@ FRONTEND_CONTAINER = jarvis_frontend_1
         setup \
         up up-build down logs ps \
         up-alertmanager down-alertmanager \
+        up-alertmanager-ha down-alertmanager-ha \
         up-postgres down-postgres \
         test-all test-backend test-frontend fuzz-backend \
         helm-lint helm-test \
@@ -48,6 +49,13 @@ up-alertmanager: ## Start test Alertmanager (port 9094) — auto-creates network
 
 down-alertmanager: ## Stop test Alertmanager
 	$(COMPOSE_TEST_DEPS) stop test-alertmanager
+
+up-alertmanager-ha: ## Start a 2-member Alertmanager HA gossip pair (ports 9094 + 9095)
+	podman network create jarvis_default 2>/dev/null || true
+	$(COMPOSE_TEST_DEPS) --profile ha up -d test-alertmanager test-alertmanager-2
+
+down-alertmanager-ha: ## Stop the HA Alertmanager pair
+	$(COMPOSE_TEST_DEPS) --profile ha stop test-alertmanager test-alertmanager-2
 
 up-postgres: ## Start test PostgreSQL (port 5432, jarvis/jarvis/jarvis) — auto-creates network if needed
 	podman network create jarvis_default 2>/dev/null || true

@@ -25,7 +25,7 @@ func (s *Server) getSilences(c echo.Context) error {
 		if clusterFilter != "" && cl.Name != clusterFilter {
 			continue
 		}
-		raw, err := cl.Client.GetSilences(ctx)
+		raw, err := cl.FetchSilences(ctx, nil)
 		if err != nil {
 			continue // best-effort
 		}
@@ -95,7 +95,7 @@ func (s *Server) createSilence(c echo.Context) error {
 		CreatedBy: createdBy,
 		Comment:   body.Comment,
 	}
-	id, err := cl.Client.CreateSilence(ctx, postable)
+	id, err := cl.CreateSilence(ctx, postable)
 	if err != nil {
 		slog.Error("create silence failed", "cluster", body.Cluster, "err", err)
 		return echo.NewHTTPError(http.StatusBadGateway, "alertmanager request failed")
@@ -104,7 +104,7 @@ func (s *Server) createSilence(c echo.Context) error {
 	// Alertmanager may return a new ID instead of updating in-place.
 	// Expire the old silence to prevent duplicates.
 	if body.ID != "" && id != body.ID {
-		_ = cl.Client.DeleteSilence(ctx, body.ID)
+		_ = cl.DeleteSilence(ctx, body.ID)
 	}
 
 	if body.Fingerprint != "" {
@@ -143,7 +143,7 @@ func (s *Server) deleteSilence(c echo.Context) error {
 	ctx, cancel := context.WithTimeout(c.Request().Context(), 10*time.Second)
 	defer cancel()
 
-	if err := cl.Client.DeleteSilence(ctx, silenceID); err != nil {
+	if err := cl.DeleteSilence(ctx, silenceID); err != nil {
 		slog.Error("delete silence failed", "cluster", clusterName, "id", silenceID, "err", err)
 		return echo.NewHTTPError(http.StatusBadGateway, "alertmanager request failed")
 	}

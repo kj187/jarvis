@@ -1,4 +1,4 @@
-package history
+package cluster
 
 import (
 	"fmt"
@@ -18,7 +18,8 @@ func TestEnrichAlerts_SingleReceiver(t *testing.T) {
 		},
 	}
 
-	got := enrichAlerts(raw, "prod", "http://am.example")
+	merged := mergeAlerts(map[string][]alertmanager.GettableAlert{"m1": raw}, []string{"m1"})
+	got := enrichMerged(merged, "prod", map[string]string{"m1": "http://am.example"})
 	if len(got) != 1 {
 		t.Fatalf("len = %d, want 1", len(got))
 	}
@@ -49,7 +50,8 @@ func TestEnrichAlerts_MultipleReceiversJoinedInOrder(t *testing.T) {
 		},
 	}
 
-	got := enrichAlerts(raw, "prod", "http://am.example")
+	merged := mergeAlerts(map[string][]alertmanager.GettableAlert{"m1": raw}, []string{"m1"})
+	got := enrichMerged(merged, "prod", map[string]string{"m1": "http://am.example"})
 	if got[0].Labels["@receiver"] != "pagerduty,email,slack" {
 		t.Errorf("@receiver = %q, want pagerduty,email,slack", got[0].Labels["@receiver"])
 	}
@@ -72,7 +74,8 @@ func TestEnrichAlerts_NoReceiverLabelWhenEmpty(t *testing.T) {
 		},
 	}
 
-	got := enrichAlerts(raw, "prod", "http://am.example")
+	merged := mergeAlerts(map[string][]alertmanager.GettableAlert{"m1": raw}, []string{"m1"})
+	got := enrichMerged(merged, "prod", map[string]string{"m1": "http://am.example"})
 	if _, ok := got[0].Labels["@receiver"]; ok {
 		t.Errorf("@receiver label should be absent when there are no receivers")
 	}
@@ -91,9 +94,10 @@ func TestEnrichAlerts_DoesNotMutateSourceLabels(t *testing.T) {
 		},
 	}
 
-	_ = enrichAlerts(raw, "prod", "http://am.example")
+	merged := mergeAlerts(map[string][]alertmanager.GettableAlert{"m1": raw}, []string{"m1"})
+	_ = enrichMerged(merged, "prod", map[string]string{"m1": "http://am.example"})
 	if _, ok := srcLabels["@receiver"]; ok {
-		t.Errorf("enrichAlerts must not mutate the source labels map")
+		t.Errorf("enrichMerged must not mutate the source labels map")
 	}
 }
 
@@ -112,7 +116,8 @@ func TestEnrichAlerts_PreservesStatusAndTimes(t *testing.T) {
 		},
 	}
 
-	got := enrichAlerts(raw, "prod", "http://am.example")[0]
+	merged := mergeAlerts(map[string][]alertmanager.GettableAlert{"m1": raw}, []string{"m1"})
+	got := enrichMerged(merged, "prod", map[string]string{"m1": "http://am.example"})[0]
 	if got.Status.State != "suppressed" {
 		t.Errorf("State = %q", got.Status.State)
 	}
@@ -133,6 +138,35 @@ func TestEnrichAlerts_PreservesStatusAndTimes(t *testing.T) {
 	}
 }
 
+func TestEnrichAlerts_SingleMember_SeenOnAbsent(t *testing.T) {
+	raw := []alertmanager.GettableAlert{{Fingerprint: "abc123", Labels: map[string]string{"alertname": "TestAlert"}}}
+	merged := mergeAlerts(map[string][]alertmanager.GettableAlert{"am1:9093": raw}, []string{"am1:9093"})
+	// Single-member clusters must clear SeenOn for byte-identical JSON — this
+	// is done by the caller (Cluster.FetchAlerts), not enrichMerged itself, so
+	// simulate that here.
+	merged[0].seenOn = nil
+	got := enrichMerged(merged, "prod", map[string]string{"am1:9093": "http://am.example"})
+	if got[0].SeenOn != nil {
+		t.Errorf("SeenOn = %v, want nil for single-member cluster", got[0].SeenOn)
+	}
+}
+
+func TestEnrichAlerts_MultiMember_SeenOnListsAllReportingMembers(t *testing.T) {
+	t0 := time.Now().UTC()
+	raw := map[string][]alertmanager.GettableAlert{
+		"am1:9093": {{Fingerprint: "abc123", UpdatedAt: t0}},
+		"am2:9093": {{Fingerprint: "abc123", UpdatedAt: t0}},
+	}
+	merged := mergeAlerts(raw, []string{"am1:9093", "am2:9093"})
+	got := enrichMerged(merged, "prod", map[string]string{"am1:9093": "http://am1", "am2:9093": "http://am2"})
+	if len(got[0].SeenOn) != 2 {
+		t.Fatalf("SeenOn = %v, want 2 members", got[0].SeenOn)
+	}
+	if got[0].AlertmanagerURL != "http://am1" {
+		t.Errorf("AlertmanagerURL = %q, want http://am1 (winning member's link URL)", got[0].AlertmanagerURL)
+	}
+}
+
 func BenchmarkEnrichAlerts(b *testing.B) {
 	raw := make([]alertmanager.GettableAlert, 2000)
 	for i := range raw {
@@ -150,10 +184,13 @@ func BenchmarkEnrichAlerts(b *testing.B) {
 			Receivers:   []alertmanager.AMReceiver{{Name: "email"}, {Name: "slack"}},
 		}
 	}
+	byMember := map[string][]alertmanager.GettableAlert{"m1": raw}
+	linkURLs := map[string]string{"m1": "http://am.example"}
 
 	b.ReportAllocs()
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		_ = enrichAlerts(raw, "prod", "http://am.example")
+		merged := mergeAlerts(byMember, []string{"m1"})
+		_ = enrichMerged(merged, "prod", linkURLs)
 	}
 }

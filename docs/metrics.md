@@ -6,6 +6,12 @@ stack it fronts can also monitor Jarvis itself. The endpoint is **public**
 only aggregate counts and configured cluster names, never alert names,
 labels, or annotations.
 
+> **Breaking label change**: `jarvis_alertmanager_up` and
+> `jarvis_cluster_fetch_duration_seconds` gained a `member` label (HA-cluster
+> support). Existing dashboards/alerts that group only by `cluster` still
+> work with `sum by (cluster) (...)`; ones that assert on the exact label set
+> need the `member` label added.
+
 ## Scrape-time gauges
 
 Computed from the in-memory alert store, the WebSocket hub, and the poller's
@@ -17,7 +23,7 @@ sync with reality.
 | `jarvis_build_info` | `version` | Always `1`; join on `version` to track which build is running |
 | `jarvis_alerts` | `cluster`, `state` | Current alert count by state (`active`, `suppressed`, `unprocessed`, `resolved`) |
 | `jarvis_alerts_by_severity` | `cluster`, `severity` | Current alert count by severity label (`none` when unset) |
-| `jarvis_alertmanager_up` | `cluster` | `1` if the last poll of that cluster succeeded, else `0` |
+| `jarvis_alertmanager_up` | `cluster`, `member` | `1` if the last poll of that Alertmanager HA member succeeded, else `0`. Single-member clusters emit their one member; a cluster stays healthy overall as long as at least one member is up |
 | `jarvis_ws_clients` | — | Number of currently connected WebSocket clients |
 | `jarvis_clusters_configured` | — | Number of configured Alertmanager clusters |
 
@@ -28,7 +34,7 @@ sync with reality.
 | `jarvis_poll_cycles_total` | `cluster` | Every poll attempt of a cluster |
 | `jarvis_poll_errors_total` | `cluster`, `endpoint` (`alerts`/`silences`) | A poll of a cluster's alerts or silences endpoint fails |
 | `jarvis_poll_duration_seconds` | — | Histogram of the full poll cycle across all clusters, including DB persistence — use this to see whether Jarvis overall is keeping up with its poll interval |
-| `jarvis_cluster_fetch_duration_seconds` | `cluster` | Histogram of a single cluster's Alertmanager response time (alerts + silences) — use this to find *which* cluster is slow |
+| `jarvis_cluster_fetch_duration_seconds` | `cluster`, `member` | Histogram of a single Alertmanager HA member's response time (alerts or silences) — use this to find *which* member is slow |
 | `jarvis_alert_events_total` | `cluster`, `status` (`firing`/`suppressed`/`expired`/`resolved`) | A genuine alert lifecycle transition is recorded |
 | `jarvis_ws_broadcasts_total` | `type` | A WebSocket event is broadcast to clients |
 | `jarvis_http_requests_total` | `method`, `path`, `status` | Every HTTP request (labeled by route pattern, not raw URL) |
@@ -78,8 +84,8 @@ rate(jarvis_poll_errors_total[5m]) > 0
 # Alert volume by cluster and state
 sum by (cluster, state) (jarvis_alerts)
 
-# Which cluster's Alertmanager is slow
-histogram_quantile(0.95, sum by (le, cluster) (rate(jarvis_cluster_fetch_duration_seconds_bucket[5m])))
+# Which Alertmanager member is slow
+histogram_quantile(0.95, sum by (le, cluster, member) (rate(jarvis_cluster_fetch_duration_seconds_bucket[5m])))
 
 # API latency p95
 histogram_quantile(0.95, sum by (le, path) (rate(jarvis_http_request_duration_seconds_bucket[5m])))
