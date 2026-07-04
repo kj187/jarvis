@@ -245,4 +245,6 @@ Partially covered / known caveats:
 - **D3** — annotation link interaction tested; full dynamic link-button matrix not exhaustive.
 - **D10** — own-comment delete green; two role-based delete cases are skipped.
 - **I6/I7** — setup+login happy path green; setup validation details and logout assertion not asserted.
-- **J3** — `claim_set`/`claim_released` live-patch is flaky (passes on retry).
+- **J3** — was flaky (WS event lost when a broadcast raced the client
+  registration in the hub loop); fixed by registering clients synchronously
+  in `ServeWS` — see `.agents/lessons.md`.
