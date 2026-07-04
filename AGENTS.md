@@ -140,6 +140,12 @@ Tool-specific entry points map to the same files (no duplicated content):
 9. **Dependabot** runs every Monday (Go deps, npm/pnpm grouped, GitHub
    Actions). Its PRs run through CI — green CI → merge, no manual
    intervention needed.
+10. **`main` is PR-only.** The GitHub ruleset `protect-main` has no bypass
+    actors: direct pushes to `main` are rejected for everyone, including
+    admins. Ship every change as branch → PR → all required status checks
+    green → merge (`required_approving_review_count` is 0, so self-merge
+    without approval works). This applies to AI-driven changes and the
+    release prep commit alike (`.agents/release.md`).
 
 ## Commit Format — Conventional Commits
 
