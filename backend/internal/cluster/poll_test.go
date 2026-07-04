@@ -1,0 +1,300 @@
+package cluster
+
+import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"sync"
+	"testing"
+
+	"github.com/kj187/jarvis/backend/internal/alertmanager"
+	"github.com/kj187/jarvis/backend/internal/config"
+)
+
+func alertsServer(t *testing.T, alerts []alertmanager.GettableAlert) *httptest.Server {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v2/alerts":
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(alerts)
+		case "/api/v2/silences":
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode([]alertmanager.GettableSilence{})
+		case "/api/v2/status":
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(alertmanager.AMStatus{Status: "ready"})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+func downServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "boom", http.StatusInternalServerError)
+	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+func twoMemberCluster(name string, urls ...string) *Cluster {
+	members := make([]config.MemberConfig, len(urls))
+	for i, u := range urls {
+		members[i] = config.MemberConfig{Name: config.DeriveMemberName(u), URL: u, LinkURL: u}
+	}
+	return buildCluster(config.ClusterConfig{Name: name, Members: members})
+}
+
+func TestFetchAlerts_MemberDown_OtherMemberStillServesAlerts(t *testing.T) {
+	up := alertsServer(t, []alertmanager.GettableAlert{{Fingerprint: "fp1", Status: alertmanager.GettableAlertStatus{State: "active"}}})
+	down := downServer(t)
+
+	cl := twoMemberCluster("prod", up.URL, down.URL)
+	alerts, err := cl.FetchAlerts(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("FetchAlerts: %v (must not fail when only one member is down)", err)
+	}
+	if len(alerts) != 1 {
+		t.Fatalf("len(alerts) = %d, want 1", len(alerts))
+	}
+
+	upStates := cl.MemberUpStates()
+	if !upStates[config.DeriveMemberName(up.URL)] {
+		t.Error("up member must be marked up")
+	}
+	if upStates[config.DeriveMemberName(down.URL)] {
+		t.Error("down member must be marked down")
+	}
+}
+
+func TestFetchAlerts_AllMembersDown_ReturnsError(t *testing.T) {
+	down1 := downServer(t)
+	down2 := downServer(t)
+
+	cl := twoMemberCluster("prod", down1.URL, down2.URL)
+	_, err := cl.FetchAlerts(context.Background(), nil)
+	if err == nil {
+		t.Fatal("expected error when all members are down")
+	}
+}
+
+func TestFetchAlerts_SingleMember_NoSeenOn(t *testing.T) {
+	srv := alertsServer(t, []alertmanager.GettableAlert{{Fingerprint: "fp1"}})
+	cl := twoMemberCluster("dev", srv.URL)
+
+	alerts, err := cl.FetchAlerts(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("FetchAlerts: %v", err)
+	}
+	if len(alerts) != 1 {
+		t.Fatalf("len(alerts) = %d, want 1", len(alerts))
+	}
+	if alerts[0].SeenOn != nil {
+		t.Errorf("SeenOn = %v, want nil for single-member cluster (byte-identical payload guarantee)", alerts[0].SeenOn)
+	}
+}
+
+func TestFetchAlerts_MultiMember_SeenOnPopulated(t *testing.T) {
+	srv1 := alertsServer(t, []alertmanager.GettableAlert{{Fingerprint: "fp1"}})
+	srv2 := alertsServer(t, []alertmanager.GettableAlert{{Fingerprint: "fp1"}})
+	cl := twoMemberCluster("prod", srv1.URL, srv2.URL)
+
+	alerts, err := cl.FetchAlerts(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("FetchAlerts: %v", err)
+	}
+	if len(alerts) != 1 {
+		t.Fatalf("len(alerts) = %d, want 1 (deduplicated)", len(alerts))
+	}
+	if len(alerts[0].SeenOn) != 2 {
+		t.Errorf("SeenOn = %v, want 2 members", alerts[0].SeenOn)
+	}
+}
+
+func TestFetchAlerts_ObservesPerMemberDuration(t *testing.T) {
+	srv1 := alertsServer(t, nil)
+	srv2 := alertsServer(t, nil)
+	cl := twoMemberCluster("prod", srv1.URL, srv2.URL)
+
+	var mu sync.Mutex
+	observed := make(map[string]bool)
+	_, err := cl.FetchAlerts(context.Background(), func(member string, seconds float64) {
+		mu.Lock()
+		observed[member] = true
+		mu.Unlock()
+	})
+	if err != nil {
+		t.Fatalf("FetchAlerts: %v", err)
+	}
+	if len(observed) != 2 {
+		t.Errorf("observed durations for %d members, want 2: %v", len(observed), observed)
+	}
+}
+
+func TestFetchSilences_MergesAcrossMembers(t *testing.T) {
+	srv1 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode([]alertmanager.GettableSilence{{ID: "s1"}})
+	}))
+	defer srv1.Close()
+	srv2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode([]alertmanager.GettableSilence{{ID: "s2"}})
+	}))
+	defer srv2.Close()
+
+	cl := twoMemberCluster("prod", srv1.URL, srv2.URL)
+	silences, err := cl.FetchSilences(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("FetchSilences: %v", err)
+	}
+	if len(silences) != 2 {
+		t.Fatalf("len(silences) = %d, want 2", len(silences))
+	}
+}
+
+func TestFetchSilences_AllMembersDown_ReturnsError(t *testing.T) {
+	down1 := downServer(t)
+	down2 := downServer(t)
+	cl := twoMemberCluster("prod", down1.URL, down2.URL)
+
+	_, err := cl.FetchSilences(context.Background(), nil)
+	if err == nil {
+		t.Fatal("expected error when all members are down")
+	}
+}
+
+func TestPingAll_ReportsPerMemberHealth(t *testing.T) {
+	up := alertsServer(t, nil)
+	down := downServer(t)
+	cl := twoMemberCluster("prod", up.URL, down.URL)
+
+	statuses := cl.PingAll(context.Background())
+	if len(statuses) != 2 {
+		t.Fatalf("len(statuses) = %d, want 2", len(statuses))
+	}
+	byName := map[string]bool{}
+	for _, s := range statuses {
+		byName[s.Name] = s.Healthy
+	}
+	if !byName[config.DeriveMemberName(up.URL)] {
+		t.Error("up member must be healthy")
+	}
+	if byName[config.DeriveMemberName(down.URL)] {
+		t.Error("down member must be unhealthy")
+	}
+}
+
+func TestCreateSilence_FirstMemberSucceeds(t *testing.T) {
+	var hit string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hit = r.Host
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(alertmanager.PostSilenceResponse{SilenceID: "new-id"})
+	}))
+	defer srv.Close()
+	down := downServer(t)
+
+	cl := twoMemberCluster("prod", srv.URL, down.URL)
+	id, err := cl.CreateSilence(context.Background(), alertmanager.PostableSilence{Comment: "x"})
+	if err != nil {
+		t.Fatalf("CreateSilence: %v", err)
+	}
+	if id != "new-id" {
+		t.Errorf("id = %q, want new-id", id)
+	}
+	if hit == "" {
+		t.Error("expected the healthy member to receive the request")
+	}
+}
+
+func TestCreateSilence_FirstMemberDown_RetriesSecondMember(t *testing.T) {
+	down := downServer(t)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(alertmanager.PostSilenceResponse{SilenceID: "new-id"})
+	}))
+	defer srv.Close()
+
+	cl := twoMemberCluster("prod", down.URL, srv.URL)
+	id, err := cl.CreateSilence(context.Background(), alertmanager.PostableSilence{Comment: "x"})
+	if err != nil {
+		t.Fatalf("CreateSilence: %v (must retry against the next member on transport failure)", err)
+	}
+	if id != "new-id" {
+		t.Errorf("id = %q, want new-id", id)
+	}
+}
+
+func TestCreateSilence_AllMembersDown_ReturnsError(t *testing.T) {
+	down1 := downServer(t)
+	down2 := downServer(t)
+	cl := twoMemberCluster("prod", down1.URL, down2.URL)
+
+	_, err := cl.CreateSilence(context.Background(), alertmanager.PostableSilence{Comment: "x"})
+	if err == nil {
+		t.Fatal("expected error when all members are down")
+	}
+}
+
+func TestCreateSilence_PrefersKnownHealthyMemberFirst(t *testing.T) {
+	// Prime the cluster's cached health state: member 1 down, member 2 up.
+	down := downServer(t)
+	var hit bool
+	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hit = true
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/api/v2/alerts" {
+			_ = json.NewEncoder(w).Encode([]alertmanager.GettableAlert{})
+			return
+		}
+		_ = json.NewEncoder(w).Encode(alertmanager.PostSilenceResponse{SilenceID: "id"})
+	}))
+	defer up.Close()
+
+	cl := twoMemberCluster("prod", down.URL, up.URL)
+	if _, err := cl.FetchAlerts(context.Background(), nil); err != nil {
+		t.Fatalf("priming FetchAlerts: %v", err)
+	}
+
+	hit = false
+	if _, err := cl.CreateSilence(context.Background(), alertmanager.PostableSilence{}); err != nil {
+		t.Fatalf("CreateSilence: %v", err)
+	}
+	if !hit {
+		t.Error("expected the known-healthy member (2nd in config order) to be tried first")
+	}
+}
+
+func TestDeleteSilence_FirstMemberDown_RetriesSecondMember(t *testing.T) {
+	down := downServer(t)
+	var deleted bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		deleted = true
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	cl := twoMemberCluster("prod", down.URL, srv.URL)
+	if err := cl.DeleteSilence(context.Background(), "id1"); err != nil {
+		t.Fatalf("DeleteSilence: %v", err)
+	}
+	if !deleted {
+		t.Error("expected the next member to receive the delete")
+	}
+}
+
+func TestDeleteSilence_AllMembersDown_ReturnsError(t *testing.T) {
+	down1 := downServer(t)
+	down2 := downServer(t)
+	cl := twoMemberCluster("prod", down1.URL, down2.URL)
+
+	if err := cl.DeleteSilence(context.Background(), "id1"); err == nil {
+		t.Fatal("expected error when all members are down")
+	}
+}

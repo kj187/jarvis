@@ -205,7 +205,18 @@ export function Header() {
                       </div>
                       <span className="text-xs text-muted-foreground whitespace-nowrap">{c.alertCount} Alerts</span>
                     </div>
-                    <div className="mt-1 pl-[1.375rem] text-[10px] text-muted-foreground/60 break-all">{c.alertmanagerUrl}</div>
+                    {c.members && c.members.length > 0 ? (
+                      <div className="mt-1 pl-[1.375rem] space-y-0.5">
+                        {c.members.map((m) => (
+                          <div key={m.name} className="flex items-center gap-1.5 text-[10px]">
+                            <div className={`h-1.5 w-1.5 rounded-full shrink-0 ${m.healthy ? 'bg-green-500' : 'bg-red-500'}`} />
+                            <span className="break-all text-muted-foreground/60">{m.url}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="mt-1 pl-[1.375rem] text-[10px] text-muted-foreground/60 break-all">{c.alertmanagerUrl}</div>
+                    )}
                   </div>
                 ))}
               </div>

@@ -34,14 +34,28 @@ func (s *Server) getClusters(c echo.Context) error {
 	clusters := s.registry.All()
 	result := make([]models.ClusterInfo, 0, len(clusters))
 	for _, cl := range clusters {
-		healthy := cl.Client.Ping(ctx) == nil
-		result = append(result, models.ClusterInfo{
+		statuses := cl.PingAll(ctx)
+		healthy := false
+		members := make([]models.MemberInfo, 0, len(statuses))
+		for _, st := range statuses {
+			if st.Healthy {
+				healthy = true
+			}
+			members = append(members, models.MemberInfo{Name: st.Name, URL: st.URL, Healthy: st.Healthy})
+		}
+		info := models.ClusterInfo{
 			Name:            cl.Name,
 			AlertmanagerURL: cl.AlertmanagerLinkURL,
 			PrometheusURL:   cl.PrometheusURL,
 			Healthy:         healthy,
 			AlertCount:      clusterAlertCount[cl.Name],
-		})
+		}
+		// Members is only populated for HA clusters — single-member clusters
+		// keep the payload byte-identical to before.
+		if len(cl.Members) > 1 {
+			info.Members = members
+		}
+		result = append(result, info)
 	}
 	return c.JSON(http.StatusOK, result)
 }

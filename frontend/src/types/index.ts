@@ -23,6 +23,8 @@ export interface EnrichedAlert {
   clusterName: string
   alertmanagerUrl: string
   activeClaim?: Claim
+  /** HA member names (host:port) that reported this fingerprint in the last poll. Absent for single-member clusters. */
+  seenOn?: string[]
 }
 
 // ── Silence ──────────────────────────────────────────────────────────────────
@@ -134,6 +136,14 @@ export interface ClusterInfo {
   prometheusUrl: string
   healthy: boolean
   alertCount: number
+  /** Per-member health for HA clusters. Absent for single-member clusters. */
+  members?: MemberInfo[]
+}
+
+export interface MemberInfo {
+  name: string
+  url: string
+  healthy: boolean
 }
 
 // ── AlertGroup ───────────────────────────────────────────────────────────────

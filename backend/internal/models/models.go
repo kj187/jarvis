@@ -30,6 +30,10 @@ type EnrichedAlert struct {
 	ClusterName     string            `json:"clusterName"`
 	AlertmanagerURL string            `json:"alertmanagerUrl"` // Browser link URL
 	ActiveClaim     *Claim            `json:"activeClaim,omitempty"`
+	// SeenOn lists the HA member names (host:port) that reported this
+	// fingerprint in the last poll. Omitted for single-member clusters so
+	// existing payloads stay byte-identical.
+	SeenOn []string `json:"seenOn,omitempty"`
 }
 
 // ── Silence ──────────────────────────────────────────────────────────────────
@@ -190,6 +194,16 @@ type ClusterInfo struct {
 	PrometheusURL   string `json:"prometheusUrl"`
 	Healthy         bool   `json:"healthy"`
 	AlertCount      int    `json:"alertCount"`
+	// Members lists per-member health for HA clusters. Omitted for
+	// single-member clusters so existing payloads stay byte-identical.
+	Members []MemberInfo `json:"members,omitempty"`
+}
+
+// MemberInfo describes one Alertmanager HA-cluster member.
+type MemberInfo struct {
+	Name    string `json:"name"` // host:port
+	URL     string `json:"url"`  // browser-visible URL (HOST_ALIAS-rewritten)
+	Healthy bool   `json:"healthy"`
 }
 
 // ── AlertGroup ───────────────────────────────────────────────────────────────

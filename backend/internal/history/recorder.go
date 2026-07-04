@@ -37,12 +37,6 @@ type Recorder struct {
 	prevSilenceInfo   map[string]silenceInfoEntry // cluster+silenceID → {state, cluster, comment}
 	prevAlertSilences map[string][]string         // fingerprint+cluster → []cluster+silenceID
 
-	// clusterUpMu guards clusterUp, the last-poll-success flag per cluster.
-	// Read at scrape time by the metrics collector — never issues an upstream
-	// HTTP call itself, so a slow/unreachable Alertmanager cannot stall a scrape.
-	clusterUpMu sync.Mutex
-	clusterUp   map[string]bool
-
 	// claimReleaseDelay is how long to wait after detecting a resolution before
 	// releasing claims. Must exceed the 60s grace period so grace-period re-fires
 	// can cancel the release before it runs.
@@ -112,28 +106,20 @@ func NewRecorder(
 		prevSnapshot:      make(map[string]string),
 		prevSilenceInfo:   make(map[string]silenceInfoEntry),
 		prevAlertSilences: make(map[string][]string),
-		clusterUp:         make(map[string]bool),
 		claimReleaseDelay: 20 * time.Minute,
 	}
 }
 
-// ClusterUpStates returns a copy of the last-poll-success flag per cluster.
-// Used by the metrics collector at scrape time — reads cached state only,
-// never performs an upstream HTTP call.
-func (r *Recorder) ClusterUpStates() map[string]bool {
-	r.clusterUpMu.Lock()
-	defer r.clusterUpMu.Unlock()
-	out := make(map[string]bool, len(r.clusterUp))
-	for k, v := range r.clusterUp {
-		out[k] = v
+// ClusterUpStates returns the last-poll-success flag per cluster and member
+// (cluster name -> member name -> up). Used by the metrics collector at
+// scrape time — reads each cluster's cached state only, never performs an
+// upstream HTTP call.
+func (r *Recorder) ClusterUpStates() map[string]map[string]bool {
+	out := make(map[string]map[string]bool, len(r.registry.All()))
+	for _, cl := range r.registry.All() {
+		out[cl.Name] = cl.MemberUpStates()
 	}
 	return out
-}
-
-func (r *Recorder) setClusterUp(clusterName string, up bool) {
-	r.clusterUpMu.Lock()
-	r.clusterUp[clusterName] = up
-	r.clusterUpMu.Unlock()
 }
 
 // Trigger signals the recorder to run an immediate poll.
@@ -194,19 +180,19 @@ func (r *Recorder) poll(ctx context.Context) {
 		wg.Add(1)
 		go func(idx int, cl *cluster.Cluster) {
 			defer wg.Done()
+			var onDuration cluster.FetchDurationFunc
 			if r.metrics != nil {
 				r.metrics.PollCyclesTotal.WithLabelValues(cl.Name).Inc()
-				fetchStart := time.Now()
-				defer func() {
-					r.metrics.ClusterFetchDurationSeconds.WithLabelValues(cl.Name).Observe(time.Since(fetchStart).Seconds())
-				}()
+				onDuration = func(member string, seconds float64) {
+					r.metrics.ClusterFetchDurationSeconds.WithLabelValues(cl.Name, member).Observe(seconds)
+				}
 			}
-			alerts, err := r.fetchCluster(ctx, cl)
+			alerts, err := cl.FetchAlerts(ctx, onDuration)
 			if err != nil {
 				results[idx] = clusterResult{name: cl.Name, err: err}
 				return
 			}
-			silences, serr := cl.Client.GetSilences(ctx)
+			silences, serr := cl.FetchSilences(ctx, onDuration)
 			if serr != nil {
 				r.logger.Warn("fetch silences failed", "cluster", cl.Name, "err", serr)
 			}
@@ -220,13 +206,11 @@ func (r *Recorder) poll(ctx context.Context) {
 	for _, res := range results {
 		if res.err != nil {
 			r.logger.Error("poll cluster failed", "cluster", res.name, "err", res.err)
-			r.setClusterUp(res.name, false)
 			if r.metrics != nil {
 				r.metrics.PollErrorsTotal.WithLabelValues(res.name, "alerts").Inc()
 			}
 			continue
 		}
-		r.setClusterUp(res.name, true)
 		if res.silencesErr != nil && r.metrics != nil {
 			r.metrics.PollErrorsTotal.WithLabelValues(res.name, "silences").Inc()
 		}
@@ -458,71 +442,11 @@ func (r *Recorder) broadcastAlertsIfChanged() {
 	r.hub.BroadcastJSON(models.WSTypeAlertsUpdate, json.RawMessage(data))
 }
 
-// fetchCluster fetches and enriches alerts for a single cluster.
+// fetchCluster fetches and enriches (deduplicated, merged) alerts for a
+// single cluster. Thin wrapper around cluster.Cluster.FetchAlerts, kept so
+// tests can drive a single cluster fetch directly without going through poll().
 func (r *Recorder) fetchCluster(ctx context.Context, cl *cluster.Cluster) ([]models.EnrichedAlert, error) {
-	rawAlerts, err := cl.Client.GetAlerts(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return enrichAlerts(rawAlerts, cl.Name, cl.AlertmanagerLinkURL), nil
-}
-
-// enrichAlerts maps raw Alertmanager alerts to EnrichedAlert, injecting the
-// cluster metadata and the synthetic "@receiver" label (comma-separated list of
-// receiver names) used for filtering. It is a pure function so it can be unit
-// tested and benchmarked without an HTTP round-trip.
-//
-// The receiver names are gathered in a single pass that builds both the
-// Receivers slice and the "@receiver" join string, avoiding a second loop and a
-// throwaway slice per alert — this matters when enriching large alert sets.
-func enrichAlerts(rawAlerts []alertmanager.GettableAlert, clusterName, alertmanagerLinkURL string) []models.EnrichedAlert {
-	enriched := make([]models.EnrichedAlert, 0, len(rawAlerts))
-	for i := range rawAlerts {
-		a := &rawAlerts[i]
-
-		receivers := make([]models.Receiver, len(a.Receivers))
-		var receiverList strings.Builder
-		for j, rcv := range a.Receivers {
-			receivers[j] = models.Receiver{Name: rcv.Name}
-			if j > 0 {
-				receiverList.WriteByte(',')
-			}
-			receiverList.WriteString(rcv.Name)
-		}
-
-		labelCount := len(a.Labels)
-		if len(a.Receivers) > 0 {
-			labelCount++
-		}
-		labels := make(map[string]string, labelCount)
-		for k, v := range a.Labels {
-			labels[k] = v
-		}
-		// Store all receivers as comma-separated list for filtering.
-		// This allows filters to match any receiver that handles this alert.
-		if len(a.Receivers) > 0 {
-			labels["@receiver"] = receiverList.String()
-		}
-
-		enriched = append(enriched, models.EnrichedAlert{
-			Fingerprint: a.Fingerprint,
-			Status: models.AlertStatus{
-				InhibitedBy: a.Status.InhibitedBy,
-				SilencedBy:  a.Status.SilencedBy,
-				State:       a.Status.State,
-			},
-			Labels:          labels,
-			Annotations:     a.Annotations,
-			StartsAt:        a.StartsAt,
-			EndsAt:          a.EndsAt,
-			UpdatedAt:       a.UpdatedAt,
-			GeneratorURL:    a.GeneratorURL,
-			Receivers:       receivers,
-			ClusterName:     clusterName,
-			AlertmanagerURL: alertmanagerLinkURL,
-		})
-	}
-	return enriched
+	return cl.FetchAlerts(ctx, nil)
 }
 
 // buildWSPayload marshals a typed WS event payload (helper used in tests).

@@ -1,17 +1,35 @@
 package cluster
 
 import (
+	"sync"
+
 	"github.com/kj187/jarvis/backend/internal/alertmanager"
 	"github.com/kj187/jarvis/backend/internal/config"
 )
 
-// Cluster holds a configured Alertmanager cluster.
+// Member is one Alertmanager HA-cluster member.
+type Member struct {
+	Name    string // host:port, used for display/metrics/tags
+	URL     string // internal polling URL
+	LinkURL string // browser-visible URL (HOST_ALIAS-rewritten)
+	Client  *alertmanager.Client
+}
+
+// Cluster holds a configured Alertmanager cluster — one or more HA members
+// polled and merged into one logical alert/silence set.
 type Cluster struct {
-	Name                string
+	Name          string
+	PrometheusURL string
+	Members       []*Member
+
+	// AlertmanagerURL / AlertmanagerLinkURL / Client mirror the first member —
+	// back-compat convenience for single-member call sites and tests.
 	AlertmanagerURL     string
 	AlertmanagerLinkURL string
-	PrometheusURL       string
 	Client              *alertmanager.Client
+
+	upMu sync.Mutex
+	up   map[string]bool // member name -> last known up/down, from the last FetchAlerts
 }
 
 // Registry holds all configured clusters.
@@ -26,17 +44,50 @@ func NewRegistry(cfgs []config.ClusterConfig) *Registry {
 		byName: make(map[string]*Cluster, len(cfgs)),
 	}
 	for _, c := range cfgs {
-		cl := &Cluster{
-			Name:                c.Name,
-			AlertmanagerURL:     c.AlertmanagerURL,
-			AlertmanagerLinkURL: c.AlertmanagerLinkURL,
-			PrometheusURL:       c.PrometheusURL,
-			Client: alertmanager.NewClientWithAuth(c.AlertmanagerURL, buildAuth(c.Auth)),
-		}
+		cl := buildCluster(c)
 		r.clusters = append(r.clusters, cl)
 		r.byName[c.Name] = cl
 	}
 	return r
+}
+
+func buildCluster(c config.ClusterConfig) *Cluster {
+	memberCfgs := c.Members
+	if len(memberCfgs) == 0 && c.AlertmanagerURL != "" {
+		linkURL := c.AlertmanagerLinkURL
+		if linkURL == "" {
+			linkURL = c.AlertmanagerURL
+		}
+		memberCfgs = []config.MemberConfig{{
+			Name:    config.DeriveMemberName(c.AlertmanagerURL),
+			URL:     c.AlertmanagerURL,
+			LinkURL: linkURL,
+		}}
+	}
+
+	auth := buildAuth(c.Auth)
+	members := make([]*Member, 0, len(memberCfgs))
+	for _, mc := range memberCfgs {
+		members = append(members, &Member{
+			Name:    mc.Name,
+			URL:     mc.URL,
+			LinkURL: mc.LinkURL,
+			Client:  alertmanager.NewClientWithAuth(mc.URL, auth),
+		})
+	}
+
+	cl := &Cluster{
+		Name:          c.Name,
+		PrometheusURL: c.PrometheusURL,
+		Members:       members,
+		up:            make(map[string]bool),
+	}
+	if len(members) > 0 {
+		cl.AlertmanagerURL = members[0].URL
+		cl.AlertmanagerLinkURL = members[0].LinkURL
+		cl.Client = members[0].Client
+	}
+	return cl
 }
 
 // buildAuth maps a config.ClusterAuth to an alertmanager.Auth.

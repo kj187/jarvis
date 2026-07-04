@@ -42,6 +42,7 @@ type EnrichedAlert struct {
     ClusterName     string            `json:"clusterName"`
     AlertmanagerURL string            `json:"alertmanagerUrl"`
     ActiveClaim     *Claim            `json:"activeClaim,omitempty"`
+    SeenOn          []string          `json:"seenOn,omitempty"` // HA member names that reported this fingerprint; omitted for single-member clusters
 }
 
 // ── Silence ──────────────────────────────────────────────────────────────────
@@ -163,11 +164,17 @@ type SilenceTemplate struct {
 
 // ── Cluster ───────────────────────────────────────────────────────────────────
 type ClusterInfo struct {
-    Name            string `json:"name"`
-    AlertmanagerURL string `json:"alertmanagerUrl"`
-    PrometheusURL   string `json:"prometheusUrl"`
-    Healthy         bool   `json:"healthy"`
-    AlertCount      int    `json:"alertCount"`
+    Name            string       `json:"name"`
+    AlertmanagerURL string       `json:"alertmanagerUrl"` // first member's browser-visible URL
+    PrometheusURL   string       `json:"prometheusUrl"`
+    Healthy         bool         `json:"healthy"` // true when >=1 member is up
+    AlertCount      int          `json:"alertCount"`
+    Members         []MemberInfo `json:"members,omitempty"` // HA clusters only (2+ members); omitted for single-member clusters
+}
+type MemberInfo struct {
+    Name    string `json:"name"` // host:port
+    URL     string `json:"url"`  // browser-visible URL (HOST_ALIAS-rewritten)
+    Healthy bool   `json:"healthy"`
 }
 
 // ── AlertGroup ────────────────────────────────────────────────────────────────
@@ -393,9 +400,11 @@ collectors and `jarvis_build_info`. `Metrics.Handler()` serves `GET /metrics`.
 
 - `collector.go` — `storeCollector` (`prometheus.Collector`): computes
   `jarvis_alerts`, `jarvis_alerts_by_severity`, `jarvis_ws_clients`,
-  `jarvis_clusters_configured`, and `jarvis_alertmanager_up` at scrape time
-  from the in-memory `AlertStore`, the WS `Hub`, and the recorder's cached
-  `ClusterUpStates()` — `Collect()` never makes an upstream HTTP call itself.
+  `jarvis_clusters_configured`, and `jarvis_alertmanager_up` (labeled
+  `cluster`, `member`) at scrape time from the in-memory `AlertStore`, the WS
+  `Hub`, and the recorder's cached `ClusterUpStates() map[string]map[string]bool`
+  (cluster → member → up, sourced from each `cluster.Cluster.MemberUpStates()`)
+  — `Collect()` never makes an upstream HTTP call itself.
 - `echo.go` — `Metrics.EchoMiddleware()`: records `jarvis_http_requests_total`
   / `jarvis_http_request_duration_seconds`, labeled by Echo route pattern
   (`c.Path()`, never the raw URL) to keep cardinality bounded. Skips
@@ -410,12 +419,16 @@ collectors and `jarvis_build_info`. `Metrics.Handler()` serves `GET /metrics`.
   Recorder/Hub via other paths and don't need to pass one.
 - Every metric that can meaningfully be attributed to one Alertmanager cluster
   carries a `cluster` label (`jarvis_poll_cycles_total`, `_errors_total`,
-  `_alert_events_total`, `_cluster_fetch_duration_seconds`, `jarvis_alerts*`,
-  `jarvis_alertmanager_up`). `jarvis_poll_duration_seconds` is the one
-  deliberate exception — it measures the *whole* poll cycle (all clusters in
+  `_alert_events_total`, `jarvis_alerts*`). `jarvis_alertmanager_up` and
+  `jarvis_cluster_fetch_duration_seconds` additionally carry a `member` label
+  (HA-cluster support) — single-member clusters emit their one member, so
+  existing `sum by (cluster) (...)` queries are unaffected; only queries
+  asserting the exact label set need updating (see `docs/metrics.md`).
+  `jarvis_poll_duration_seconds` is the one deliberate exception with no
+  per-cluster label — it measures the *whole* poll cycle (all clusters in
   parallel + the shared DB write in `applyPollResults`), so a per-cluster
   label would misrepresent it; `jarvis_cluster_fetch_duration_seconds` is the
-  per-cluster counterpart for isolating a slow upstream Alertmanager.
+  per-member counterpart for isolating a slow upstream Alertmanager member.
 - Full metric reference for operators: `docs/metrics.md`.
 
 ---
@@ -609,10 +622,64 @@ interface UserSettings {
 | `JARVIS_SECRET_KEY` | JWT HMAC key, hex-decoded if valid hex, else raw bytes; **≥32 bytes required** when provider ≠ none |
 | `JARVIS_AUTH_OIDC_ISSUER` `…_CLIENT_ID` `…_CLIENT_SECRET` `…_REDIRECT_URL` `…_SCOPES` | OIDC (scopes default `openid,profile,email`) |
 | `JARVIS_OIDC_ADMIN_CLAIM` `JARVIS_OIDC_ADMIN_VALUE` | OIDC → admin role mapping |
-| `JARVIS_CLUSTER_N_NAME` `…_ALERTMANAGER_URL` `…_PROMETHEUS_URL` `…_HOST_ALIAS` | per-cluster; N iterated from 1 until NAME empty; HOST_ALIAS rewrites the browser-visible AM link URL |
+| `JARVIS_CLUSTER_N_NAME` `…_ALERTMANAGER_URL` `…_PROMETHEUS_URL` `…_HOST_ALIAS` | per-cluster; N iterated from 1 until NAME empty; `ALERTMANAGER_URL` accepts a comma-separated HA member list; `HOST_ALIAS` rewrites the browser-visible AM link URL — one value for all members, or a comma list index-matched to `ALERTMANAGER_URL` |
 | `JARVIS_CLUSTER_N_BASIC_AUTH_USER` `…_BASIC_AUTH_PASSWORD` `…_BEARER_TOKEN` | per-cluster upstream auth |
 | `JARVIS_CLUSTER_N_HEADER_<Name>` | arbitrary custom HTTP header sent with every upstream request (header name taken verbatim after `HEADER_`) |
 | `JARVIS_CLUSTER_N_OAUTH2_CLIENT_ID` `…_OAUTH2_CLIENT_SECRET` `…_OAUTH2_TOKEN_URL` `…_OAUTH2_SCOPES` | per-cluster OAuth2 client-credentials (takes priority over bearer/basic/headers) |
+
+---
+
+## Alertmanager HA Clusters (member deduplication)
+
+`JARVIS_CLUSTER_N_ALERTMANAGER_URL` accepts a **comma-separated list** of
+member URLs — one Jarvis cluster maps to N Alertmanager HA members (a gossip
+cluster). A single URL is exactly today's one-member behavior; existing
+single-URL configs and their API/WS payloads are unchanged (`members` /
+`seenOn` fields stay `omitempty`).
+
+**Config layer** (`internal/config/config.go`): `ClusterConfig.Members
+[]MemberConfig` holds one `{Name, URL, LinkURL}` per member (`Name` = the
+URL's `host:port`, via `DeriveMemberName`). `AlertmanagerURL` /
+`AlertmanagerLinkURL` on `ClusterConfig` always mirror `Members[0]` for
+single-member call sites. Duplicate member URLs within one cluster → startup
+error. Auth (`BASIC_AUTH`, `BEARER_TOKEN`, `HEADER_*`, `OAUTH2_*`) lives on
+`ClusterConfig` (not per-member) and applies to all members alike — HA
+members share auth setup in practice. `HOST_ALIAS` (`splitHostAliases` in
+`config.go`) is either one value (applies to all members) or a
+comma-separated list index-matched to `ALERTMANAGER_URL`, one alias per
+member — a count that is neither 1 nor exactly the member count is a
+startup error.
+
+**Cluster layer** (`internal/cluster/`): `Cluster.Members []*Member` (each
+with its own `*alertmanager.Client`); `Cluster.AlertmanagerURL` /
+`AlertmanagerLinkURL` / `Client` mirror `Members[0]` for back-compat.
+
+- `Cluster.FetchAlerts(ctx, onDuration)` polls all members in parallel,
+  merges by fingerprint via `mergeAlerts` (`merge.go`) — union semantics
+  (alert kept if ANY member reports it), freshest `UpdatedAt` wins on
+  conflict, `SeenOn` lists members in config order. Returns an error only
+  when **all** members fail (single-member failure ≠ cluster failure).
+  `SeenOn` is cleared when the cluster has exactly one configured member, so
+  single-member JSON payloads stay byte-identical.
+- `Cluster.FetchSilences(ctx, onDuration)` mirrors this for silences, merging
+  by ID via `mergeSilences` (freshest `UpdatedAt` wins); no `SeenOn` tracking
+  for silences.
+- `Cluster.PingAll(ctx)` live-pings every member in parallel (used by
+  `GET /api/v1/clusters`); cluster `Healthy` = any member healthy (UI shows
+  e.g. "2/2 members up", amber when degraded).
+- `Cluster.CreateSilence` / `DeleteSilence` send to the first healthy member
+  (config order, from the cached up-state set by the last `FetchAlerts`),
+  retrying once against the next member on transport failure — never to all
+  members, since gossip already replicates and posting to every member would
+  create duplicates.
+- Enrichment (`cluster/enrich.go`, `enrichMerged`) — moved here from
+  `history` — builds `EnrichedAlert` (incl. `@receiver` label) from merged
+  alerts; lives in `cluster` because `history` imports `cluster` (not the
+  reverse).
+- History recorder keying is untouched: events stay keyed by
+  `(fingerprint, cluster_name)`, since the merge happens *before* the
+  recorder sees the snapshot — grace period and occurrence counting
+  (Critical Invariants #1, #2) are unaffected by member count.
 
 ---
 

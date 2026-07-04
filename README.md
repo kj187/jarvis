@@ -30,6 +30,7 @@ Most Alertmanager UIs are read-only dashboards. Jarvis is built for teams that n
 - **Alert search** — full-text search across alert names and label values; results update as you type
 - **Dark / Light theme** — toggle between dark and light mode; preference is persisted in localStorage
 - **Multi-cluster** — poll multiple Alertmanager instances simultaneously
+- **Alertmanager HA** — point one cluster at all members of an Alertmanager HA gossip cluster; alerts are deduplicated by fingerprint and the cluster stays healthy as long as any member responds
 - **Per-cluster upstream auth** — authenticate against protected Alertmanagers via OAuth2 client credentials (auto-refresh), bearer token, basic auth or custom headers
 - **Grace period** — 60s ghost-resolve prevention
 - **Single binary** — Go backend embeds the Vite build; one container
@@ -134,9 +135,9 @@ See [.env.example](.env.example) for all options. Key settings:
 | Variable | Default | Description |
 |---|---|---|
 | `JARVIS_CLUSTER_1_NAME` | — | Cluster display name (**required**) |
-| `JARVIS_CLUSTER_1_ALERTMANAGER_URL` | — | Internal Alertmanager URL (**required**) |
+| `JARVIS_CLUSTER_1_ALERTMANAGER_URL` | — | Internal Alertmanager URL (**required**). Comma-separated list of member URLs for an Alertmanager HA gossip cluster — see [HA clusters](#ha-alertmanager-clusters) below |
 | `JARVIS_CLUSTER_1_PROMETHEUS_URL` | — | Internal Prometheus URL (optional) |
-| `JARVIS_CLUSTER_1_HOST_ALIAS` | — | Browser-visible AM URL when different from internal (optional) |
+| `JARVIS_CLUSTER_1_HOST_ALIAS` | — | Browser-visible AM URL when different from internal (optional). One value applies to all members; a comma-separated list matching the member count sets one alias per member (index-matched) |
 | `JARVIS_CLUSTER_1_OAUTH2_CLIENT_ID` | — | OAuth2 client ID (client_credentials grant — auto token refresh, optional) |
 | `JARVIS_CLUSTER_1_OAUTH2_CLIENT_SECRET` | — | OAuth2 client secret (never logged, required with `OAUTH2_CLIENT_ID`) |
 | `JARVIS_CLUSTER_1_OAUTH2_TOKEN_URL` | — | OAuth2 token endpoint URL (required with `OAUTH2_CLIENT_ID`) |
@@ -149,6 +150,39 @@ See [.env.example](.env.example) for all options. Key settings:
 Add additional clusters with `JARVIS_CLUSTER_2_*`, `JARVIS_CLUSTER_3_*`, etc.
 
 When Alertmanager sits behind an authentication proxy (e.g. oauth2-proxy), use `OAUTH2_*` for dynamic token management (recommended) or `BEARER_TOKEN` / `BASIC_AUTH_*` for static credentials. Priority: `OAuth2 > BEARER_TOKEN > BASIC_AUTH > HEADER_*`. For full details and Keycloak setup see [docs/authentication-alertmanager.md](docs/authentication-alertmanager.md).
+
+#### HA Alertmanager clusters
+
+Alertmanager's HA mode runs 2+ instances in a gossip cluster: Prometheus sends every alert to all members, and silences replicate between members via gossip. Point one Jarvis cluster at all members by passing a comma-separated list in `ALERTMANAGER_URL` — Jarvis polls every member, deduplicates alerts by fingerprint (freshest `updatedAt` wins), and keeps the cluster healthy as long as at least one member responds:
+
+```env
+# Cluster 1 — dev, single member (exactly today's syntax, unchanged)
+JARVIS_CLUSTER_1_NAME=dev
+JARVIS_CLUSTER_1_ALERTMANAGER_URL=http://am-dev.example.com:9093
+JARVIS_CLUSTER_1_PROMETHEUS_URL=http://prom-dev.example.com:9090
+
+# Cluster 2 — prod, HA cluster with 3 members (comma-separated list)
+JARVIS_CLUSTER_2_NAME=prod
+JARVIS_CLUSTER_2_ALERTMANAGER_URL=http://am1.prod.example.com:9093,http://am2.prod.example.com:9093,http://am3.prod.example.com:9093
+JARVIS_CLUSTER_2_PROMETHEUS_URL=http://prom.prod.example.com:9090
+JARVIS_CLUSTER_2_OAUTH2_CLIENT_ID=jarvis
+JARVIS_CLUSTER_2_OAUTH2_CLIENT_SECRET=<secret>
+JARVIS_CLUSTER_2_OAUTH2_TOKEN_URL=https://keycloak.example.com/realms/prod/protocol/openid-connect/token
+JARVIS_CLUSTER_2_OAUTH2_SCOPES=alertmanager.read alertmanager.write
+```
+
+Notes:
+
+- Auth (`OAUTH2_*`, `BEARER_TOKEN`, `BASIC_AUTH_*`, `HEADER_*`) is per **cluster** and applies to all members alike — HA members share the same auth setup in practice. OAuth2 settings describe the IdP, not the members: Jarvis fetches one token from `OAUTH2_TOKEN_URL` and presents it to every member, so all members must accept tokens from that IdP (true by default for real HA replicas behind the same ingress/proxy). Members with genuinely different auth are not supported in v1 — align the auth, or configure such a member as its own separate cluster (which reintroduces duplicate alerts).
+- `HOST_ALIAS` can be a single value (applies to all members — e.g. one shared load balancer/ingress URL) or a comma-separated list matching the member count, one alias per member in the same order as `ALERTMANAGER_URL`. Useful for local testing where each member is reachable on a different `localhost` port:
+  ```env
+  JARVIS_CLUSTER_2_ALERTMANAGER_URL=http://test-alertmanager:9093,http://test-alertmanager-2:9093
+  JARVIS_CLUSTER_2_HOST_ALIAS=http://localhost:9094,http://localhost:9095
+  ```
+  A mismatched count (not 1, not exactly the member count) is a startup error.
+- A member is identified by its `host:port` in the UI, metrics, and the alert's `seenOn` list.
+- Silence writes go to the first healthy member (config order), retrying once against the next member on transport failure — never to all members, since gossip already replicates and posting to every member would create duplicate silences.
+- Duplicate member URLs within one cluster are a startup error.
 
 ### Database
 
