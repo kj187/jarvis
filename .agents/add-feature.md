@@ -7,6 +7,15 @@ surface, and component tree, load `.agents/architecture.md`.
 
 ---
 
+## Step 0 — Scope Gate (before any code)
+
+Check the feature against `docs/scope.md` (litmus test: *"does this help
+someone sitting in front of a list of active alerts who has to decide what
+to do?"*). Out of scope or borderline → tell the user why and stop until
+they decide (AGENTS.md → Workflow Rules #11).
+
+---
+
 ## Backend — New Endpoint
 
 ```

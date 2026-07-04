@@ -27,7 +27,7 @@ Repository layout:
 - `backend/` — Go backend (`internal/api`, `internal/history`, `internal/alertmanager`, `internal/auth`, `internal/ws`, …)
 - `frontend/` — React app (`src/components`, `src/hooks`, `src/lib`, `src/store`, `e2e/`)
 - `charts/jarvis/` — Helm chart (+ helm-unittest tests under `tests/`)
-- `docs/` — user-facing documentation (not AI context, except `docs/testing-e2e.md`)
+- `docs/` — user-facing documentation (not AI context, except `docs/testing-e2e.md` and `docs/scope.md`)
 - `scripts/` — E2E runner, mock-OIDC config, manual test-alert/silence fixtures
 - `.agents/` — task-specific AI reference files (routed below)
 - `Makefile` — canonical entry for dev stack, tests, security scans, fixtures (`make help`)
@@ -41,6 +41,8 @@ details that these files own.
 |---|---|
 | Data model, DB schema, API endpoints, component tree, stores, WS events, auth, config env vars, alert state machine, technology decisions | `.agents/architecture.md` |
 | Adding a feature: new endpoint, new component, new WS event, new cluster parameter (TDD checklist) | `.agents/add-feature.md` |
+| Judging whether a feature idea fits the project scope (scope gate) | `docs/scope.md` |
+| Triaging a GitHub feature-request issue against the scope, drafting a reply | `.agents/scope-triage.md` |
 | Writing or running tests, test matrix, test utilities, CI pipeline | `.agents/testing.md` |
 | E2E / screenshot stack: Playwright specs, fixtures, auth modes, `compose.e2e.yml` | `docs/testing-e2e.md` |
 | Cutting a release — **only when the user explicitly asks** | `.agents/release.md` |
@@ -51,7 +53,8 @@ Tool-specific entry points map to the same files (no duplicated content):
 
 - **Claude Code**: `CLAUDE.md` includes this file; `/project:architecture`,
   `/project:add-feature`, `/project:testing`, `/project:release`,
-  `/project:security-check` include the corresponding `.agents/` file.
+  `/project:security-check`, `/project:scope-triage` include the
+  corresponding `.agents/` file.
 - **GitHub Copilot**: `.github/copilot-instructions.md` is a symlink to this file.
 - **Codex**: reads `AGENTS.md` natively.
 
@@ -119,6 +122,8 @@ Tool-specific entry points map to the same files (no duplicated content):
    | Security tooling, checklists, auth/origin behavior | `.agents/security.md` |
    | Feature-workflow conventions (validation rules, type-sync, checklists) | `.agents/add-feature.md` |
    | Release process, workflows in `release.yml`, versioning | `.agents/release.md` |
+   | Scope definition, in/out-of-scope boundaries, litmus test | `docs/scope.md` |
+   | Issue-triage workflow, reply guidelines | `.agents/scope-triage.md` |
    | Project description, invariants, workflow rules, commit format, repo layout | `AGENTS.md` itself |
    | E2E stack, specs, fixtures, auth modes | `docs/testing-e2e.md` |
    | Hard-won debugging insight or non-obvious gotcha | `.agents/lessons.md` |
@@ -146,6 +151,13 @@ Tool-specific entry points map to the same files (no duplicated content):
     green → merge (`required_approving_review_count` is 0, so self-merge
     without approval works). This applies to AI-driven changes and the
     release prep commit alike (`.agents/release.md`).
+11. **Scope gate — check every new feature against `docs/scope.md` before
+    building it.** Applies to user-requested and self-proposed features
+    alike. If the feature is out of scope or borderline, say so and explain
+    why (litmus test + the matching in/out-of-scope bullet) **before writing
+    any code** — the user decides whether to proceed anyway. Never silently
+    build an out-of-scope feature. Bug fixes, refactorings, and docs need no
+    scope check.
 
 ## Commit Format — Conventional Commits
 
