@@ -30,7 +30,7 @@ test('B7 responsive column binning: 1 column at xs width', async ({ page, am, ja
   await expect(firstColumnRow.locator('> .flex-1')).toHaveCount(1)
 })
 
-test('B8 empty state icon shown when no alerts', async ({ page, jarvis }) => {
+test('B8 empty state icon shown when no alerts', async ({ page }) => {
   await dismissNoAuthNotice(page)
   // No alerts fired — jarvis.reset() was called in fixture setup
 

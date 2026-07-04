@@ -1,6 +1,6 @@
-import { test, expect, freezeClock, waitForActiveAlerts, JARVIS_BASE_URL } from '../../support/fixtures'
+import { test, expect, waitForActiveAlerts, JARVIS_BASE_URL } from '../../support/fixtures'
 import { dismissNoAuthNotice } from '../../support/auth'
-import { kubernetesAlerts, manyAlerts } from '../../fixtures/alerts'
+import { kubernetesAlerts } from '../../fixtures/alerts'
 
 /**
  * Category D: Detail Panel (D1-D2, D5-D7, D9-D10)
@@ -141,10 +141,6 @@ test.describe('D2: Labels & annotations rendered', () => {
     const firstCard = page.getByTestId('alert-card').first()
     await firstCard.click()
     await page.waitForTimeout(500)
-    
-    // Find annotation with URL
-    const annotationItems = page.getByTestId('detail-annotation-item')
-    const annotationValues = page.getByTestId('detail-annotation-value')
     
     // Check for links
     const links = page.locator('a[href^="http"]')
@@ -554,7 +550,7 @@ test.describe('D10: Delete comment (author only)', () => {
     test.skip()
   })
 
-  test('admin/mod can delete any comment', async ({ page, am, jarvis }) => {
+  test('admin/mod can delete any comment', async () => {
     // This test would require auth system to be set up with role support
     // Skipping for now as e2e suite is 'none' auth mode
     test.skip()

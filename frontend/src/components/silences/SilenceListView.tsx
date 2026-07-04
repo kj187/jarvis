@@ -1,7 +1,7 @@
 import { BellMinus, Loader2, RotateCcw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { SilenceExpiry } from './SilenceExpiry'
-import { labelColorStyle } from '@/components/alerts/LabelChip'
+import { labelColorStyle } from '@/lib/alertUtils'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { TruncatableChip } from '@/components/ui/truncatable-chip'
 import type { Silence, EnrichedAlert } from '@/types'

@@ -95,7 +95,7 @@ Tool-specific entry points map to the same files (no duplicated content):
    `frontend/src/types/index.ts` (exact camelCase field names matching the
    JSON tags).
 3. **Pre-commit hook** (`.githooks/pre-commit`) runs checks based on staged
-   paths: Go tests + golangci-lint incl. gosec (backend), pnpm audit +
+   paths: Go tests + golangci-lint incl. gosec (backend), pnpm audit + eslint +
    jscpd (frontend, needs running dev container), helm lint/unittest (charts),
    and a gitleaks secret scan (always). **Never `--no-verify`.**
 4. **Frontend checklist**: `cursor: pointer` on all clickable elements · no

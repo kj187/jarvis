@@ -1,10 +1,33 @@
 import { formatDistanceToNow } from 'date-fns'
 import { enUS } from 'date-fns/locale'
+import type React from 'react'
 import type { EnrichedAlert, LabelMatcher, Silence } from '@/types'
 
 export const tzAbbr = new Date().toLocaleTimeString('en', { timeZoneName: 'short' }).split(' ').pop() ?? ''
 
 // ── Label utilities ────────────────────────────────────────────────────────
+
+/** Label keys rendered by dedicated UI elements instead of generic label chips. */
+export const HIDDEN_LABEL_KEYS = new Set(['alertname', 'severity', 'receiver', '@receiver'])
+
+/** Deterministic per-key chip colors (djb2 hash → hue). */
+export function labelColorStyle(key: string, theme: 'dark' | 'light' = 'dark'): React.CSSProperties {
+  let h = 5381
+  for (let i = 0; i < key.length; i++) h = ((h << 5) + h + key.charCodeAt(i)) >>> 0
+  const hue = h % 360
+  if (theme === 'light') {
+    return {
+      backgroundColor: `hsl(${hue} 50% 90%)`,
+      color: `hsl(${hue} 70% 28%)`,
+      borderColor: `hsl(${hue} 40% 70%)`,
+    }
+  }
+  return {
+    backgroundColor: `hsl(${hue} 40% 16%)`,
+    color: `hsl(${hue} 70% 72%)`,
+    borderColor: `hsl(${hue} 35% 30%)`,
+  }
+}
 
 /**
  * Returns an alert's labels augmented with pseudo-labels:
