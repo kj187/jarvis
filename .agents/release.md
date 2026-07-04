@@ -217,16 +217,17 @@ From `.github/workflows/release.yml`:
 
 **Job `build-and-push`:**
 1. Derive image tags via `docker/metadata-action` → `{{version}}` (e.g.
-   `1.2.3`) + `{{major}}.{{minor}}` (e.g. `1.2`). **No `v` prefix, no
-   `:latest` image tag.**
+   `1.2.3`) + `{{major}}.{{minor}}` (e.g. `1.2`) + `latest` (metadata-action
+   `latest=auto` default on semver tags). **No `v` prefix.**
 2. Build multi-arch image (`linux/amd64` + `linux/arm64`) from `Containerfile`
    (multi-stage), with BuildKit SBOM + provenance (`mode=max`), push to GHCR.
 3. Sign the image keylessly with **cosign** (GitHub OIDC).
 4. Publish **SLSA build provenance** to the GitHub attestations API
    (`actions/attest-build-provenance`, also pushed to the registry) →
    consumers can `gh attestation verify oci://ghcr.io/kj187/jarvis:X.Y.Z --repo kj187/jarvis`.
-5. Generate a standalone **SPDX SBOM** (`anchore/sbom-action` / syft) →
-   attached to the GitHub Release as `sbom.spdx.json`.
+5. Generate a standalone **SPDX SBOM** (syft, installed via
+   `anchore/sbom-action/download-syft`, run directly against the pushed image
+   digest) → attached to the GitHub Release as `sbom.spdx.json`.
 6. Build the release body: uses `.github/release-notes/vX.Y.Z.md` if present
    (fallback: awk-extract this version's CHANGELOG section), then appends
    image pull + digest, cosign verify, `gh attestation verify`, Helm install
