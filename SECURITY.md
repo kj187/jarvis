@@ -13,8 +13,13 @@ public GitHub issue.
 
 Instead, please report it via one of the following channels:
 
-- **Email**: mail@kj187.de  
-  Please include:
+- **GitHub Private Vulnerability Reporting** (preferred):
+  [Report a vulnerability](https://github.com/kj187/jarvis/security/advisories/new) —
+  the report is tracked privately in the repository and will not be lost.
+- **Email**: mail@kj187.de
+
+Please include:
+
   - A description of the vulnerability
   - Steps to reproduce
   - Potential impact
@@ -22,12 +27,15 @@ Instead, please report it via one of the following channels:
 
 ## Coordinated Vulnerability Disclosure
 
-- You will receive an **initial response within 14 days** of your report.
+- We **aim to** acknowledge your report **within 14 days**.
 - We will confirm the issue, work on a fix, and keep you informed about the
   progress. Please keep the report confidential until a fixed release is
   available.
 - A fix is targeted **within 90 days** of the initial report, depending on
   severity and complexity.
+- Jarvis is currently maintained by a single maintainer. Response times are
+  best-effort targets; reports submitted via GitHub Private Vulnerability
+  Reporting are tracked persistently and will be handled as soon as possible.
 
 ## Publication of Vulnerabilities
 
@@ -43,5 +51,5 @@ See [docs/security.md](docs/security.md) for a full description of:
 - Static analysis tooling (gosec, govulncheck, golangci-lint)
 - Container hardening (distroless, non-root, read-only FS)
 - Dependency update process
-- What is intentionally NOT implemented (e.g. authentication — deployment
-  behind a trusted reverse proxy is assumed)
+- User authentication options (`none`, `internal`, `oidc`) and the assumed
+  deployment model (e.g. behind a trusted reverse proxy)
