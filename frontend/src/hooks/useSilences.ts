@@ -1,5 +1,24 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { fetchSilences, fetchSilenceEvents, upsertSilence, deleteSilence, triggerPoll, type UpsertSilenceBody } from '@/api/client'
+import { buildAckSilenceBody } from '@/lib/alertUtils'
+import { useSettingsStore } from '@/store/useSettingsStore'
+import { useAuthStore } from '@/store/authStore'
+import type { EnrichedAlert } from '@/types'
+
+const USERNAME_KEY = 'jarvis-username'
+
+/**
+ * Resolves the silence creator name the same way `SilenceForm` does:
+ * session username when authenticated, otherwise the manually stored
+ * `jarvis-username` / `defaultCreatorName`. Falls back to `jarvis` so a
+ * one-click ack in `none` mode never sends an empty `createdBy` (which
+ * Alertmanager rejects).
+ */
+export function resolveCreatorName(): string {
+  const user = useAuthStore.getState().user
+  const stored = localStorage.getItem(USERNAME_KEY) ?? useSettingsStore.getState().defaultCreatorName
+  return (user?.username ?? stored ?? '').trim() || 'jarvis'
+}
 
 export function useSilenceEvents(fingerprint: string, cluster?: string) {
   return useQuery({
@@ -27,6 +46,18 @@ export function useUpsertSilence() {
       triggerPoll().catch(() => {})
     },
   })
+}
+
+/**
+ * One-click Fast-Silence: creates a short-lived exact-match silence for a
+ * single alert for the caller-supplied `durationMinutes`. Thin wrapper over
+ * `useUpsertSilence` — reuses its cache invalidation + poll trigger.
+ */
+export function useAckAlert() {
+  const upsert = useUpsertSilence()
+  const ack = (alert: EnrichedAlert, durationMinutes: number) =>
+    upsert.mutateAsync(buildAckSilenceBody(alert, durationMinutes, resolveCreatorName()))
+  return { ack, isPending: upsert.isPending }
 }
 
 export function useDeleteSilence() {

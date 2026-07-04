@@ -1,6 +1,7 @@
 import { formatDistanceToNow } from 'date-fns'
 import { enUS } from 'date-fns/locale'
 import type React from 'react'
+import type { UpsertSilenceBody } from '@/api/client'
 import type { EnrichedAlert, LabelMatcher, Silence } from '@/types'
 
 export const tzAbbr = new Date().toLocaleTimeString('en', { timeZoneName: 'short' }).split(' ').pop() ?? ''
@@ -333,4 +334,65 @@ const SEVERITY_ORDER: Record<string, number> = {
 
 export function severityOrder(severity: string): number {
   return SEVERITY_ORDER[severity] ?? 5
+}
+
+// ── One-click acknowledgement ─────────────────────────────────────────────
+
+/** Duration choices offered by the one-click Fast-Silence menu (shortest → longest). */
+export const FAST_SILENCE_DURATIONS: ReadonlyArray<{ label: string; minutes: number }> = [
+  { label: '30m', minutes: 30 },
+  { label: '1h', minutes: 60 },
+  { label: '4h', minutes: 240 },
+  { label: '1d', minutes: 1440 },
+  { label: '1w', minutes: 10080 },
+]
+
+/**
+ * Human-readable Fast-Silence duration. Exact multiples collapse to a single
+ * unit — `Xw` (weeks) → `Xd` (days) → `Xh` (hours) → `Xm` (minutes); mixed
+ * hour/minute values fall back to `Xh Ym`. Kept in sync with the labels in
+ * `FAST_SILENCE_DURATIONS` (30m, 1h, 4h, 1d, 1w).
+ */
+export function formatAckDuration(minutes: number): string {
+  if (minutes > 0 && minutes % 10080 === 0) return `${minutes / 10080}w`
+  if (minutes > 0 && minutes % 1440 === 0) return `${minutes / 1440}d`
+  if (minutes > 0 && minutes % 60 === 0) return `${minutes / 60}h`
+  if (minutes < 60) return `${minutes}m`
+  const hours = Math.floor(minutes / 60)
+  const rem = minutes % 60
+  return `${hours}h ${rem}m`
+}
+
+/**
+ * Builds the silence body for a one-click acknowledgement: an exact-match
+ * (isEqual/non-regex) silence on the alert's real labels, targeting exactly
+ * this one alert instance for `durationMinutes`. Pseudo-labels that do not
+ * exist on the real Alertmanager alert (`@receiver`, `@cluster`, `receiver`,
+ * and any other `@`-prefixed key) are skipped — including them would make the
+ * matchers never match in Alertmanager, so the silence would suppress nothing.
+ * Same skip set as SilenceForm's `buildPrefillMatchers`. Matchers are sorted by
+ * name for deterministic output. Passing `fingerprint` makes the backend record
+ * a SilenceEvent on the alert timeline.
+ */
+export function buildAckSilenceBody(
+  alert: EnrichedAlert,
+  durationMinutes: number,
+  createdBy: string,
+): UpsertSilenceBody {
+  const now = new Date()
+  const endsAt = new Date(now.getTime() + durationMinutes * 60_000)
+  const matchers = Object.entries(alert.labels)
+    .filter(([name, value]) => Boolean(value) && !name.startsWith('@') && name !== 'receiver')
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([name, value]) => ({ isEqual: true, isRegex: false, name, value }))
+  return {
+    cluster: alert.clusterName,
+    matchers,
+    startsAt: now.toISOString(),
+    endsAt: endsAt.toISOString(),
+    createdBy,
+    performedBy: createdBy,
+    comment: `Fast-Silence for ${formatAckDuration(durationMinutes)}`,
+    fingerprint: alert.fingerprint,
+  }
 }

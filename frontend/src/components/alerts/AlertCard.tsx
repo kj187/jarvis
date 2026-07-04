@@ -5,6 +5,7 @@ import { getFilterableLabels, getSilenceState, getExpiredSilence, formatSilenceD
 import { renderTextWithLinks } from '@/lib/linkUtils'
 import { AlertBadge } from './AlertBadge'
 import { LabelChip } from './LabelChip'
+import { AckButton } from './AckButton'
 import { HIDDEN_LABEL_KEYS } from '@/lib/alertUtils'
 import { useAlertStats } from '@/hooks/useAlerts'
 import { useFormatTime } from '@/hooks/useFormatTime'
@@ -91,6 +92,11 @@ function AlertEntry({
         Open
         <ArrowUpRight className="h-2.5 w-2.5" />
       </span>
+
+      {/* One-click acknowledge (active alerts only) */}
+      <div className="absolute right-2 top-8 z-10 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+        <AckButton alert={alert} silences={silences} variant="card" />
+      </div>
 
       {/* Claim banner */}
       {claim && (
