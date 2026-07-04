@@ -4,6 +4,7 @@
 [![CI](https://github.com/kj187/jarvis/actions/workflows/ci.yml/badge.svg)](https://github.com/kj187/jarvis/actions/workflows/ci.yml)
 [![Coverage](https://codecov.io/gh/kj187/jarvis/graph/badge.svg)](https://codecov.io/gh/kj187/jarvis)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/kj187/jarvis/badge)](https://scorecard.dev/viewer/?uri=github.com/kj187/jarvis)
+[![OpenSSF Baseline](https://www.bestpractices.dev/projects/13469/baseline)](https://www.bestpractices.dev/projects/13469)
 [![Release](https://img.shields.io/github/v/release/kj187/jarvis)](https://github.com/kj187/jarvis/releases/latest)
 [![Go Version](https://img.shields.io/badge/Go-1.25-00ADD8?logo=go)](backend/go.mod)
 
