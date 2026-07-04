@@ -1,12 +1,11 @@
 # Jarvis
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/kj187/jarvis)](https://github.com/kj187/jarvis/releases/latest)
 [![CI](https://github.com/kj187/jarvis/actions/workflows/ci.yml/badge.svg)](https://github.com/kj187/jarvis/actions/workflows/ci.yml)
-[![Coverage](https://codecov.io/gh/kj187/jarvis/graph/badge.svg)](https://codecov.io/gh/kj187/jarvis)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/kj187/jarvis/badge)](https://scorecard.dev/viewer/?uri=github.com/kj187/jarvis)
 [![OpenSSF Baseline](https://www.bestpractices.dev/projects/13469/baseline)](https://www.bestpractices.dev/projects/13469)
-[![Release](https://img.shields.io/github/v/release/kj187/jarvis)](https://github.com/kj187/jarvis/releases/latest)
-[![Go Version](https://img.shields.io/badge/Go-1.25-00ADD8?logo=go)](backend/go.mod)
+[![Coverage](https://codecov.io/gh/kj187/jarvis/graph/badge.svg)](https://codecov.io/gh/kj187/jarvis)
 
 **Jarvis** is an open source web frontend for Prometheus Alertmanager — interactive, realtime, and self-hosted.
 
@@ -304,6 +303,11 @@ helm plugin install https://github.com/helm-unittest/helm-unittest --version v0.
 
 
 ## Tech Stack
+[![Go Version](https://img.shields.io/badge/Go-1.25-00ADD8?logo=go)](backend/go.mod)
+[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](frontend/package.json)
+[![TypeScript](https://img.shields.io/badge/TypeScript-6-3178C6?logo=typescript&logoColor=white)](frontend/tsconfig.json)
+[![Helm](https://img.shields.io/badge/Helm-chart-0F1689?logo=helm&logoColor=white)](charts/jarvis/)
+
 
 - **Backend**: Go 1.25 · Echo v4 · SQLite / PostgreSQL (`pgx/v5`, CGO-free) · gorilla/websocket
 - **Frontend**: React 19 · TypeScript 6 · Vite 8 · Tailwind CSS v4 · Zustand v5 · TanStack Query v5
