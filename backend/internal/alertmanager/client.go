@@ -16,6 +16,19 @@ type Client struct {
 	httpClient *http.Client
 }
 
+// AMError wraps a non-2xx response from Alertmanager, preserving the status
+// code so callers can distinguish AM-side rejections (4xx — e.g. an invalid
+// matcher or a duplicate/expired silence ID; safe to relay to the user) from
+// transport/server failures (5xx, network errors — kept as a generic error).
+type AMError struct {
+	StatusCode int
+	Body       string
+}
+
+func (e *AMError) Error() string {
+	return fmt.Sprintf("alertmanager returned %d: %s", e.StatusCode, e.Body)
+}
+
 // NewClient creates a new Alertmanager API client without authentication.
 func NewClient(baseURL string) *Client {
 	return NewClientWithAuth(baseURL, Auth{})
@@ -83,7 +96,7 @@ func (c *Client) CreateSilence(ctx context.Context, s PostableSilence) (string, 
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		b, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("alertmanager returned %d: %s", resp.StatusCode, string(b))
+		return "", &AMError{StatusCode: resp.StatusCode, Body: string(b)}
 	}
 
 	var result PostSilenceResponse
@@ -108,7 +121,7 @@ func (c *Client) DeleteSilence(ctx context.Context, id string) error {
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
 		b, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("alertmanager returned %d: %s", resp.StatusCode, string(b))
+		return &AMError{StatusCode: resp.StatusCode, Body: string(b)}
 	}
 	return nil
 }

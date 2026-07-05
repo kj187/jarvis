@@ -144,6 +144,8 @@ jobs:
           go test ./internal/db -run '^$' -fuzz '^FuzzRedactDSN$' -fuzztime 20s
           go test ./internal/history -run '^$' -fuzz '^FuzzParseNullableTimeString$' -fuzztime 20s
           go test ./internal/config -run '^$' -fuzz '^FuzzParseSecretKey$' -fuzztime 20s
+          go test ./internal/api -run '^$' -fuzz '^FuzzValidateSilenceMatchers$' -fuzztime 20s
+          go test ./internal/api -run '^$' -fuzz '^FuzzSanitizeAMMessage$' -fuzztime 20s
 
   frontend:
     name: Frontend

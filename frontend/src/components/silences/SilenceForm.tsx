@@ -742,6 +742,10 @@ export function SilenceForm({
   const liveMatchCount = matchedAlerts.length
 
   const hasActiveMatchers = matchers.some((m) => m.name && m.value)
+  // A row with only the name or only the value filled in is neither a valid matcher nor an
+  // intentionally-blank placeholder row (which has both empty) — silently dropping it at submit
+  // (the old behavior) makes the silence broader than the user intended without any signal.
+  const incompleteMatchers = matchers.filter((m) => Boolean(m.name) !== Boolean(m.value))
   const hasUnevaluableRegex = useMemo(
     () => hasUnevaluableRegexMatcher(buildLabelMatchers()),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -823,7 +827,9 @@ export function SilenceForm({
     effectiveCreatedBy.trim() &&
     selectedClusters.length > 0 &&
     Boolean(startsAt) &&
-    Boolean(endsAt)
+    Boolean(endsAt) &&
+    hasActiveMatchers &&
+    incompleteMatchers.length === 0
 
   // ── Form step ────────────────────────────────────────────────────────────────
 
@@ -1050,6 +1056,19 @@ export function SilenceForm({
               <Plus className="mr-1 h-3 w-3" />
               Add matcher
             </Button>
+
+            {/* Incomplete-matcher warning — blocks submit (see canSubmit) rather than silently
+                dropping the row, which would make the silence broader than intended. */}
+            {incompleteMatchers.length > 0 && (
+              <div className="flex gap-2.5 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2.5 text-destructive">
+                <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+                <p className="text-xs">
+                  {incompleteMatchers.length === 1
+                    ? 'One matcher is missing a label name or a value — fill it in or remove the row.'
+                    : `${incompleteMatchers.length} matchers are missing a label name or a value — fill them in or remove the rows.`}
+                </p>
+              </div>
+            )}
 
             {/* Unevaluable regex warning — pattern doesn't compile in the browser (e.g. RE2-only
                 syntax like `(?i)`), so the affected-alerts count below can't be trusted: matchers
