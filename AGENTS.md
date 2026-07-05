@@ -65,9 +65,12 @@ Tool-specific entry points map to the same files (no duplicated content):
    poll misses.
 2. **Increment `occurrence_count` only on second firing**: Not on the very
    first occurrence — only when `hadPreviousEvent = true`.
-3. **`getEffectiveAlertState`**: Alert `suppressed` + silence ≤15 min until
-   expiry → returns `active`. This logic **only** in `lib/alertUtils.ts` —
-   never duplicate.
+3. **`getEffectiveAlertState`**: Alert `suppressed` + **all** active silences
+   covering it (`status.silencedBy` can hold more than one) have ≤15 min
+   until expiry → returns `active`. Must consider every covering silence, not
+   just the first one found in `silencedBy` — a longer-running second silence
+   still keeps the alert suppressed. This logic **only** in
+   `lib/alertUtils.ts` — never duplicate.
 4. **Filter functions exclusively in `lib/alertUtils.ts`**:
    `getFilterableLabels`, `matchesLabelMatchers`, `safeRegex` — no copy-paste
    into components.
@@ -89,6 +92,19 @@ Tool-specific entry points map to the same files (no duplicated content):
     time. Never write `$1` literals directly in query strings.
 11. **CORS/WS Origin**: No wildcard `*`. `JARVIS_ALLOWED_ORIGINS` is used as
     allow-list for both HTTP CORS and the WebSocket upgrade.
+12. **Silence-matching semantics must mirror Alertmanager, not UI-filter
+    semantics**: whether a silence *would actually match/cover* an alert
+    (affected-alerts preview, overlap detection, expired-silence lookup) is
+    decided exclusively by `silenceWouldMatchAlert` / `silenceMatchesAlert` in
+    `lib/alertUtils.ts` — anchored regex (`anchoredRegex`, `^(?:pattern)$`,
+    matching Alertmanager's RE2 compilation), evaluated only against the
+    alert's real labels (no `@cluster`/`@receiver`/`receiver` pseudo-labels).
+    `matchesLabelMatchers` (substring regex, pseudo-labels, comma-list
+    receivers) is a **separate, deliberately lenient** function for the
+    filter bar UI only — never use it to decide what a silence covers. Mixing
+    the two was the root cause of a preview showing "0 affected alerts" while
+    Alertmanager silenced alerts anyway (unanchored `!~` substring match
+    disagreeing with AM's anchored one).
 
 ## Workflow Rules — always follow
 

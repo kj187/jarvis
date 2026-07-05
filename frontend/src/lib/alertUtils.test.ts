@@ -8,21 +8,45 @@ import {
   getFilterableLabels,
   pickIdentifierLabel,
   safeRegex,
+  anchoredRegex,
   severityOrder,
   buildAckSilenceBody,
   FAST_SILENCE_DURATIONS,
+  matchesLabelMatchers,
+  silenceWouldMatchAlert,
+  hasUnevaluableRegexMatcher,
+  silenceMatchesAlert,
+  getEffectiveAlertState,
+  getSilenceState,
 } from './alertUtils'
-import type { EnrichedAlert } from '@/types'
+import type { EnrichedAlert, LabelMatcher, Silence } from '@/types'
 
 /**
- * Scope note: this file covers only the functions in `alertUtils.ts` that
- * the planned silence-matching rewrite (anchored regex, S-01/S-03/S-05/S-06/
- * S-14 — see tmp/fable/review_silence.md) does not touch. Matching functions
- * (`matchesLabelMatchers`, `silenceMatchesAlert`, `getEffectiveAlertState`,
- * `getSilenceState`, `getExpiredSilence`, `filterSilences`,
- * `computeGroupLabelValues`, `buildGroupAckSilenceBody`) get their tests
- * alongside that rewrite instead of locking in pre-fix behavior here.
+ * Scope note: `computeGroupLabelValues`, `buildGroupAckSilenceBody`,
+ * `getExpiredSilence`, and `filterSilences` get their tests alongside the
+ * group-silence fix (S-06 — see tmp/fable/review_silence.md), which touches
+ * their behavior directly.
  */
+
+function makeSilence(overrides: Partial<Silence> = {}): Silence {
+  return {
+    id: 'silence-1',
+    matchers: [],
+    startsAt: '2026-01-01T00:00:00Z',
+    endsAt: '2026-01-01T01:00:00Z',
+    createdBy: 'alice',
+    comment: 'test',
+    status: { state: 'active' },
+    updatedAt: '2026-01-01T00:00:00Z',
+    clusterName: 'cluster-a',
+    alertmanagerUrl: 'https://am.example.com',
+    ...overrides,
+  }
+}
+
+function lm(name: string, operator: LabelMatcher['operator'], value: string): LabelMatcher {
+  return { id: name, name, operator, value }
+}
 
 function makeAlert(overrides: Partial<EnrichedAlert> = {}): EnrichedAlert {
   return {
@@ -264,5 +288,250 @@ describe('buildAckSilenceBody', () => {
     const alert = makeAlert({ labels: { alertname: 'X', empty: '' } })
     const body = buildAckSilenceBody(alert, 30, 'alice')
     expect(body.matchers.map((m) => m.name)).not.toContain('empty')
+  })
+})
+
+describe('anchoredRegex', () => {
+  it('anchors the pattern to the full string', () => {
+    const re = anchoredRegex('web1')
+    expect(re?.test('web1')).toBe(true)
+    expect(re?.test('web10')).toBe(false)
+    expect(re?.test('myweb1')).toBe(false)
+  })
+
+  it('supports alternation without over-matching', () => {
+    const re = anchoredRegex('a|b')
+    expect(re?.test('a')).toBe(true)
+    expect(re?.test('b')).toBe(true)
+    expect(re?.test('ab')).toBe(false)
+  })
+
+  it('matches the empty string against .*', () => {
+    expect(anchoredRegex('.*')?.test('')).toBe(true)
+  })
+
+  it('returns null for a pattern that fails to compile', () => {
+    expect(anchoredRegex('[')).toBeNull()
+    expect(anchoredRegex('(')).toBeNull()
+  })
+})
+
+describe('matchesLabelMatchers (filter-bar semantics — S-14)', () => {
+  it('receiver != matches only when NONE of the alert receivers is the excluded value', () => {
+    const alert = makeAlert({ receivers: [{ name: 'a' }, { name: 'b' }] })
+    // Alert has receiver "a" among its receivers — "receiver != a" must NOT match,
+    // even though "b" (a different receiver) is also present.
+    expect(matchesLabelMatchers(alert, [lm('receiver', '!=', 'a')])).toBe(false)
+    expect(matchesLabelMatchers(alert, [lm('receiver', '!=', 'c')])).toBe(true)
+  })
+
+  it('is consistent between != and !~ for receivers (both use every)', () => {
+    const alert = makeAlert({ receivers: [{ name: 'a' }, { name: 'b' }] })
+    expect(matchesLabelMatchers(alert, [lm('receiver', '!~', 'a')])).toBe(false)
+  })
+
+  it('stays substring/unanchored by design (filter UX, not silence semantics)', () => {
+    const alert = makeAlert({ labels: { alertname: 'X', instance: 'web10' } })
+    expect(matchesLabelMatchers(alert, [lm('instance', '=~', 'web1')])).toBe(true)
+  })
+})
+
+describe('silenceWouldMatchAlert (Alertmanager-exact semantics — S-01/S-03)', () => {
+  it('anchors regex: "web1" does not match "web10"', () => {
+    const alert = makeAlert({ labels: { alertname: 'X', instance: 'web10' } })
+    expect(silenceWouldMatchAlert([lm('instance', '=~', 'web1')], alert)).toBe(false)
+  })
+
+  it('anchors regex: "web1" matches "web1"', () => {
+    const alert = makeAlert({ labels: { alertname: 'X', instance: 'web1' } })
+    expect(silenceWouldMatchAlert([lm('instance', '=~', 'web1')], alert)).toBe(true)
+  })
+
+  it('regression: instance!~"web" DOES match "web1" (the S-01 over-silencing case)', () => {
+    // This is the fatal case from the review: an unanchored implementation would
+    // report "no match" here (substring "web" found in "web1"), while Alertmanager's
+    // anchored ^(?:web)$ does not match "web1", so the negative matcher is true and
+    // Alertmanager silences it. The preview must agree with Alertmanager, not hide this.
+    const alert = makeAlert({ labels: { alertname: 'X', instance: 'web1' } })
+    expect(silenceWouldMatchAlert([lm('instance', '!~', 'web')], alert)).toBe(true)
+  })
+
+  it('missing label matches the empty string (AM matcher semantics)', () => {
+    const alert = makeAlert({ labels: { alertname: 'X' } })
+    expect(silenceWouldMatchAlert([lm('instance', '=', '')], alert)).toBe(true)
+    expect(silenceWouldMatchAlert([lm('instance', '!=', 'web1')], alert)).toBe(true)
+  })
+
+  it('ignores pseudo-labels: receiver/@receiver/@cluster never match real alert labels', () => {
+    const alert = makeAlert({ labels: { alertname: 'X' }, receivers: [{ name: 'team-x' }], clusterName: 'team-x' })
+    expect(silenceWouldMatchAlert([lm('receiver', '=', 'team-x')], alert)).toBe(false)
+    expect(silenceWouldMatchAlert([lm('@cluster', '=', 'team-x')], alert)).toBe(false)
+    // A matcher on a pseudo-label name with "!=" matches everything (label is always ""),
+    // which is exactly what Alertmanager would do too — not a bug, just a consequence of
+    // there being no real label with that name.
+    expect(silenceWouldMatchAlert([lm('receiver', '!=', 'team-x')], alert)).toBe(true)
+  })
+
+  it('respects real labels literally named "receiver" if present', () => {
+    const alert = makeAlert({ labels: { alertname: 'X', receiver: 'real-value' } })
+    expect(silenceWouldMatchAlert([lm('receiver', '=', 'real-value')], alert)).toBe(true)
+  })
+
+  it('ANDs multiple matchers, including duplicate names', () => {
+    const alert = makeAlert({ labels: { alertname: 'X', env: 'prod' } })
+    expect(silenceWouldMatchAlert([lm('env', '=', 'prod'), lm('env', '=', 'staging')], alert)).toBe(false)
+  })
+
+  it('conservatively treats an unparseable regex as a match (safe direction)', () => {
+    const alert = makeAlert({ labels: { alertname: 'X', instance: 'anything' } })
+    expect(silenceWouldMatchAlert([lm('instance', '=~', '(')], alert)).toBe(true)
+    expect(silenceWouldMatchAlert([lm('instance', '!~', '(')], alert)).toBe(true)
+  })
+
+  it('property: for literal (non-regex) matchers, agrees with a naive reference implementation', () => {
+    const referenceMatch = (matchers: LabelMatcher[], labels: Record<string, string>): boolean =>
+      matchers.every((m) => {
+        const value = labels[m.name] ?? ''
+        return m.operator === '=' ? value === m.value : value !== m.value
+      })
+
+    fc.assert(
+      fc.property(
+        fc.array(
+          fc.record({
+            name: fc.constantFrom('alertname', 'instance', 'env', 'pod', 'missing'),
+            operator: fc.constantFrom<'=' | '!='>('=', '!='),
+            value: fc.string(),
+          }),
+          { minLength: 1, maxLength: 4 },
+        ),
+        fc.dictionary(fc.constantFrom('alertname', 'instance', 'env', 'pod'), fc.string()),
+        (rawMatchers, labels) => {
+          const matchers: LabelMatcher[] = rawMatchers.map((m, i) => ({ id: String(i), ...m }))
+          const alert = makeAlert({ labels: { alertname: 'X', ...labels } })
+          expect(silenceWouldMatchAlert(matchers, alert)).toBe(referenceMatch(matchers, alert.labels))
+        },
+      ),
+    )
+  })
+})
+
+describe('hasUnevaluableRegexMatcher', () => {
+  it('is false when there are no regex matchers', () => {
+    expect(hasUnevaluableRegexMatcher([lm('instance', '=', 'web1')])).toBe(false)
+  })
+
+  it('is false for a compilable regex', () => {
+    expect(hasUnevaluableRegexMatcher([lm('instance', '=~', 'web.*')])).toBe(false)
+  })
+
+  it('is true for an uncompilable regex (e.g. RE2-only inline flag)', () => {
+    expect(hasUnevaluableRegexMatcher([lm('instance', '=~', '(?i)watchdog')])).toBe(true)
+  })
+
+  it('checks !~ matchers too', () => {
+    expect(hasUnevaluableRegexMatcher([lm('instance', '!~', '(')])).toBe(true)
+  })
+})
+
+describe('silenceMatchesAlert (Alertmanager-exact semantics on Silence.matchers)', () => {
+  it('anchors regex matching', () => {
+    const silence = makeSilence({ matchers: [{ name: 'instance', value: 'web1', isEqual: true, isRegex: true }] })
+    expect(silenceMatchesAlert(silence, makeAlert({ labels: { alertname: 'X', instance: 'web1' } }))).toBe(true)
+    expect(silenceMatchesAlert(silence, makeAlert({ labels: { alertname: 'X', instance: 'web10' } }))).toBe(false)
+  })
+
+  it('does not inject an @cluster pseudo-label', () => {
+    const silence = makeSilence({ matchers: [{ name: '@cluster', value: 'cluster-a', isEqual: true, isRegex: false }] })
+    const alert = makeAlert({ clusterName: 'cluster-a', labels: { alertname: 'X' } })
+    expect(silenceMatchesAlert(silence, alert)).toBe(false)
+  })
+
+  it('exact non-regex matching', () => {
+    const silence = makeSilence({ matchers: [{ name: 'env', value: 'prod', isEqual: true, isRegex: false }] })
+    expect(silenceMatchesAlert(silence, makeAlert({ labels: { alertname: 'X', env: 'prod' } }))).toBe(true)
+    expect(silenceMatchesAlert(silence, makeAlert({ labels: { alertname: 'X', env: 'staging' } }))).toBe(false)
+  })
+
+  it('negative regex matcher (isEqual: false) mirrors !~', () => {
+    const silence = makeSilence({ matchers: [{ name: 'instance', value: 'web', isEqual: false, isRegex: true }] })
+    expect(silenceMatchesAlert(silence, makeAlert({ labels: { alertname: 'X', instance: 'web1' } }))).toBe(true)
+  })
+})
+
+describe('getEffectiveAlertState (multi-silence — S-05)', () => {
+  it('returns the raw state when not suppressed', () => {
+    const alert = makeAlert({ status: { inhibitedBy: [], silencedBy: [], state: 'active' } })
+    expect(getEffectiveAlertState(alert, [])).toBe('active')
+  })
+
+  it('flips to active when the only covering silence expires within 15 minutes', () => {
+    const now = Date.now()
+    const silence = makeSilence({ id: 's1', endsAt: new Date(now + 5 * 60_000).toISOString() })
+    const alert = makeAlert({ status: { inhibitedBy: [], silencedBy: ['s1'], state: 'suppressed' } })
+    expect(getEffectiveAlertState(alert, [silence])).toBe('active')
+  })
+
+  it('regression: stays suppressed when a SECOND silence still has 3 days left, even if the first expires in 5 minutes', () => {
+    const now = Date.now()
+    const soon = makeSilence({ id: 's1', endsAt: new Date(now + 5 * 60_000).toISOString() })
+    const long = makeSilence({ id: 's2', endsAt: new Date(now + 3 * 86_400_000).toISOString() })
+    const alert = makeAlert({ status: { inhibitedBy: [], silencedBy: ['s1', 's2'], state: 'suppressed' } })
+    expect(getEffectiveAlertState(alert, [soon, long])).toBe('suppressed')
+    // Order must not matter — the max-remaining silence decides regardless of silencedBy order.
+    const alertReversed = makeAlert({ status: { inhibitedBy: [], silencedBy: ['s2', 's1'], state: 'suppressed' } })
+    expect(getEffectiveAlertState(alertReversed, [soon, long])).toBe('suppressed')
+  })
+
+  it('ignores pending and expired silences when computing remaining time', () => {
+    const now = Date.now()
+    const pending = makeSilence({ id: 's1', status: { state: 'pending' }, endsAt: new Date(now + 60_000).toISOString() })
+    const alert = makeAlert({ status: { inhibitedBy: [], silencedBy: ['s1'], state: 'suppressed' } })
+    expect(getEffectiveAlertState(alert, [pending])).toBe('suppressed')
+  })
+
+  it('stays suppressed when the covering silence id is unknown', () => {
+    const alert = makeAlert({ status: { inhibitedBy: [], silencedBy: ['missing'], state: 'suppressed' } })
+    expect(getEffectiveAlertState(alert, [])).toBe('suppressed')
+  })
+})
+
+describe('getSilenceState (multi-silence — S-05)', () => {
+  it('returns null type when there is no covering silence', () => {
+    const alert = makeAlert({ status: { inhibitedBy: [], silencedBy: [], state: 'active' } })
+    expect(getSilenceState(alert, []).type).toBeNull()
+  })
+
+  it('picks the active silence with the LATEST endsAt, not the first in silencedBy', () => {
+    const now = Date.now()
+    const soon = makeSilence({ id: 's1', endsAt: new Date(now + 5 * 60_000).toISOString() })
+    const long = makeSilence({ id: 's2', endsAt: new Date(now + 3 * 86_400_000).toISOString() })
+    const alert = makeAlert({ status: { inhibitedBy: [], silencedBy: ['s1', 's2'], state: 'suppressed' } })
+    const result = getSilenceState(alert, [soon, long])
+    expect(result.silence?.id).toBe('s2')
+    expect(result.type).toBe('active')
+  })
+
+  it('reports "expiring" when the longest-remaining active silence is still within 15 minutes', () => {
+    const now = Date.now()
+    const silence = makeSilence({ id: 's1', endsAt: new Date(now + 5 * 60_000).toISOString() })
+    const alert = makeAlert({ status: { inhibitedBy: [], silencedBy: ['s1'], state: 'suppressed' } })
+    expect(getSilenceState(alert, [silence]).type).toBe('expiring')
+  })
+
+  it('falls back to pending only when no active silence covers the alert', () => {
+    const pending = makeSilence({ id: 's1', status: { state: 'pending' } })
+    const alert = makeAlert({ status: { inhibitedBy: [], silencedBy: ['s1'], state: 'active' } })
+    expect(getSilenceState(alert, [pending]).type).toBe('pending')
+  })
+
+  it('prefers an active silence over a pending one when both cover the alert', () => {
+    const now = Date.now()
+    const pending = makeSilence({ id: 's1', status: { state: 'pending' } })
+    const active = makeSilence({ id: 's2', status: { state: 'active' }, endsAt: new Date(now + 3 * 86_400_000).toISOString() })
+    const alert = makeAlert({ status: { inhibitedBy: [], silencedBy: ['s1', 's2'], state: 'suppressed' } })
+    const result = getSilenceState(alert, [pending, active])
+    expect(result.type).toBe('active')
+    expect(result.silence?.id).toBe('s2')
   })
 })
