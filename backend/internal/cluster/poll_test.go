@@ -3,6 +3,7 @@ package cluster
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -296,5 +297,58 @@ func TestDeleteSilence_AllMembersDown_ReturnsError(t *testing.T) {
 
 	if err := cl.DeleteSilence(context.Background(), "id1"); err == nil {
 		t.Fatal("expected error when all members are down")
+	}
+}
+
+// badRequestServer returns a 4xx like Alertmanager's own validation rejection.
+func badRequestServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "invalid matcher", http.StatusBadRequest)
+	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+func TestCreateSilence_FirstMember4xx_DoesNotRetrySecondMember(t *testing.T) {
+	rejecting := badRequestServer(t)
+	secondCalled := false
+	second := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		secondCalled = true
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(alertmanager.PostSilenceResponse{SilenceID: "new-id"})
+	}))
+	defer second.Close()
+
+	cl := twoMemberCluster("prod", rejecting.URL, second.URL)
+	_, err := cl.CreateSilence(context.Background(), alertmanager.PostableSilence{Comment: "x"})
+	if err == nil {
+		t.Fatal("expected the 4xx to be returned, not retried away")
+	}
+	var amErr *alertmanager.AMError
+	if !errors.As(err, &amErr) || amErr.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected an AMError with status 400, got: %v", err)
+	}
+	if secondCalled {
+		t.Error("second member must not be called after a 4xx from the first — Alertmanager already rejected the request on its merits")
+	}
+}
+
+func TestDeleteSilence_FirstMember4xx_DoesNotRetrySecondMember(t *testing.T) {
+	rejecting := badRequestServer(t)
+	secondCalled := false
+	second := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		secondCalled = true
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer second.Close()
+
+	cl := twoMemberCluster("prod", rejecting.URL, second.URL)
+	err := cl.DeleteSilence(context.Background(), "id1")
+	if err == nil {
+		t.Fatal("expected the 4xx to be returned, not retried away")
+	}
+	if secondCalled {
+		t.Error("second member must not be called after a 4xx from the first")
 	}
 }

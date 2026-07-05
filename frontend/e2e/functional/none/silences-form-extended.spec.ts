@@ -249,7 +249,7 @@ test('F13 author field is editable in none auth mode', async ({ page }) => {
   await expect(authorInput).toHaveValue('test-author')
 })
 
-test('F15 preview step shows Start, Ende, Author, Reason, Cluster, Matcher', async ({ page, am, jarvis }) => {
+test('F15 preview step shows Start, End, Author, Reason, Cluster, Matcher', async ({ page, am, jarvis }) => {
   await dismissNoAuthNotice(page)
   await clearAllAMSilences()
   await am.fire(kubernetesAlerts)
@@ -280,7 +280,7 @@ test('F15 preview step shows Start, Ende, Author, Reason, Cluster, Matcher', asy
   // Use .text-muted-foreground spans for labels that are ONLY in the preview step
   // (to avoid false positives from the same text appearing in form-step field labels).
   await expect(dialog.getByText('Start').first()).toBeVisible({ timeout: 5_000 })
-  await expect(dialog.getByText('Ende').first()).toBeVisible()
+  await expect(dialog.getByText('End').first()).toBeVisible()
   await expect(dialog.getByText('Author').first()).toBeVisible()
   // "Reason" label — use exact span to avoid matching the value "Preview test reason"
   await expect(dialog.locator('.text-muted-foreground').filter({ hasText: /^Reason$/ }).first()).toBeVisible()

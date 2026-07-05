@@ -9,6 +9,31 @@ instead of duplicating.
 
 ---
 
+## A plausible-sounding Alertmanager validation rule can still be wrong — verify against a real instance
+
+**Symptom**: A new backend check (`validateSilenceMatchers`, added to reject
+matchers Alertmanager itself would reject) silently rejected a legitimate
+`instance!~"web"` silence with 400 "must not match the empty string" — no
+error surfaced anywhere except a differential E2E test noticing the silence
+was simply never created.
+**Cause**: The check ("at least one matcher must not match the empty
+string") was implemented symmetrically for positive AND negative matchers.
+Reasoning from first principles about what AM's rule "should" do (and even
+writing consistent unit tests around that reasoning) produced a self-coherent
+but factually wrong model: real Alertmanager (verified via direct API calls,
+bypassing Jarvis) only applies this check to positive matchers (`=`, `=~`) —
+negative matchers (`!=`, `!~`) are always accepted, since being broad/exclusionary
+is their entire point (e.g. `env!=kube-system`).
+**Rule**: For any check meant to mirror a rule enforced by an external system
+(Alertmanager, but the same applies to any upstream API), verify the actual
+behavior with direct calls to that system — `curl` it — rather than trusting
+a mental model, even one that produces passing self-consistent unit tests.
+Unit tests against your own reference implementation can only catch
+regressions from that implementation; they cannot catch the implementation
+itself being wrong. See `frontend/e2e/functional/none/silence-matching-semantics.spec.ts`
+(differential tests against a real Alertmanager) and
+`tmp/fable/review_silence.md` T-06 for the broader pattern this guards against.
+
 ## Silence matchers must exclude pseudo-labels (`@receiver`, `@cluster`, `receiver`)
 
 **Symptom**: One-click Fast-Silence created a silence, but the alert never
