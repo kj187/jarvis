@@ -507,37 +507,55 @@ const GROUP_MATCHER_SKIP = new Set(['receiver', '@receiver', '@cluster'])
  * Fast-Silence, so both default to the same silence scope. A label with a
  * single distinct value is common across the group (exact match); more than
  * one value means it varies per alert (regex OR match).
+ *
+ * Only labels present on EVERY alert in the group are included. A label that
+ * exists only on some alerts is dropped rather than turned into a matcher —
+ * the natural first instinct (an anchored regex OR-matching only the values
+ * that do exist) would silently exclude every alert lacking that label,
+ * since a missing label matches the empty string in Alertmanager and would
+ * never be one of the listed values. That would silence part of the group
+ * while the rest keeps firing, with nothing in the UI showing the gap for
+ * one-click Fast-Silence (no preview step). Dropping the label instead keeps
+ * the resulting matchers a strict superset of "still covers every alert
+ * actually in the group" — at the cost of being defined only by the labels
+ * alerts share, which can silence a broader class of alerts than just these
+ * (matching Alertmanager's and this form's own usual silence-by-label-set
+ * semantics, not a fingerprint-exact scope).
  */
 export function computeGroupLabelValues(alerts: EnrichedAlert[]): Array<{ name: string; values: string[] }> {
+  if (alerts.length === 0) return []
   const allKeys = new Set<string>()
-  for (const a of alerts) {
-    for (const k of Object.keys(a.labels)) {
-      if (!GROUP_MATCHER_SKIP.has(k)) allKeys.add(k)
-    }
+  for (const k of Object.keys(alerts[0].labels)) {
+    if (!GROUP_MATCHER_SKIP.has(k)) allKeys.add(k)
   }
   const result: Array<{ name: string; values: string[] }> = []
   for (const key of allKeys) {
-    const values = [...new Set(alerts.map((a) => a.labels[key]).filter(Boolean))]
-    if (values.length > 0) result.push({ name: key, values })
+    if (!alerts.every((a) => Boolean(a.labels[key]))) continue
+    const values = [...new Set(alerts.map((a) => a.labels[key]))]
+    result.push({ name: key, values })
   }
   return result
 }
 
 /**
- * Builds the silence body for a one-click *group* Fast-Silence: one silence
- * per cluster represented in `alerts` (normally just one), with matchers from
+ * Builds the silence body for a one-click *group* Fast-Silence covering all
+ * of `alerts`, which must belong to a single cluster (callers — currently
+ * only `useGroupAckAlert`, which pre-groups by `clusterName` — are
+ * responsible for that; see its per-cluster fan-out). Matchers come from
  * `computeGroupLabelValues` — exact match on labels shared by every alert in
- * the group, escaped-regex OR-match on labels that vary. This is exactly what
- * `SilenceForm`'s "Silence…" would default to for the same alerts, just
- * submitted immediately instead of opened for review. Firing one broader
- * silence per cluster (instead of one exact silence per alert) keeps this
- * reliable for large groups — no fan-out of dozens of concurrent writes.
+ * the group, escaped-regex OR-match on labels that additionally vary. This
+ * is exactly what `SilenceForm`'s "Silence…" would default to for the same
+ * alerts, just submitted immediately instead of opened for review.
  */
 export function buildGroupAckSilenceBody(
   alerts: EnrichedAlert[],
   durationMinutes: number,
   createdBy: string,
 ): UpsertSilenceBody {
+  const clusterNames = new Set(alerts.map((a) => a.clusterName))
+  if (clusterNames.size > 1) {
+    throw new Error(`buildGroupAckSilenceBody: alerts span multiple clusters (${[...clusterNames].join(', ')})`)
+  }
   const now = new Date()
   const endsAt = new Date(now.getTime() + durationMinutes * 60_000)
   const matchers = computeGroupLabelValues(alerts)

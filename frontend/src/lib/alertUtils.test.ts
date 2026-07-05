@@ -18,15 +18,13 @@ import {
   silenceMatchesAlert,
   getEffectiveAlertState,
   getSilenceState,
+  computeGroupLabelValues,
+  buildGroupAckSilenceBody,
+  filterSilences,
+  getExpiredSilence,
+  labelColorStyle,
 } from './alertUtils'
 import type { EnrichedAlert, LabelMatcher, Silence } from '@/types'
-
-/**
- * Scope note: `computeGroupLabelValues`, `buildGroupAckSilenceBody`,
- * `getExpiredSilence`, and `filterSilences` get their tests alongside the
- * group-silence fix (S-06 — see tmp/fable/review_silence.md), which touches
- * their behavior directly.
- */
 
 function makeSilence(overrides: Partial<Silence> = {}): Silence {
   return {
@@ -133,8 +131,16 @@ describe('formatSilenceDuration', () => {
     expect(formatSilenceDuration(26 * 3_600_000)).toBe('1d 2h')
   })
 
+  it('formats exact days without remainder', () => {
+    expect(formatSilenceDuration(24 * 3_600_000)).toBe('1d')
+  })
+
   it('formats months', () => {
     expect(formatSilenceDuration(35 * 86_400_000)).toBe('1mo 5d')
+  })
+
+  it('formats exact months without remainder', () => {
+    expect(formatSilenceDuration(30 * 86_400_000)).toBe('1mo')
   })
 
   it('formats years', () => {
@@ -222,6 +228,13 @@ describe('getFilterableLabels', () => {
     expect(labels['receiver']).toBe('fallback-team')
   })
 
+  it('falls back to an empty string when receivers is empty and no @receiver label exists', () => {
+    const alert = makeAlert({ receivers: [], labels: { alertname: 'X' } })
+    const labels = getFilterableLabels(alert)
+    expect(labels['@receiver']).toBe('')
+    expect(labels['receiver']).toBe('')
+  })
+
   it('preserves original alert labels alongside pseudo-labels', () => {
     const alert = makeAlert({ labels: { alertname: 'X', instance: 'web1' } })
     const labels = getFilterableLabels(alert)
@@ -241,6 +254,14 @@ describe('pickIdentifierLabel', () => {
       makeAlert({ labels: { alertname: 'X', severity: 'critical' } }),
     ]
     expect(pickIdentifierLabel(alerts)).toBeNull()
+  })
+
+  it('treats a label missing on some alerts as the empty string when counting distinct values', () => {
+    const alerts = [
+      makeAlert({ labels: { alertname: 'X', pod: 'p1' } }),
+      makeAlert({ labels: { alertname: 'X' } }), // no `pod` label at all
+    ]
+    expect(pickIdentifierLabel(alerts)).toBe('pod')
   })
 
   it('picks the label with the highest distinct-value count', () => {
@@ -330,9 +351,57 @@ describe('matchesLabelMatchers (filter-bar semantics — S-14)', () => {
     expect(matchesLabelMatchers(alert, [lm('receiver', '!~', 'a')])).toBe(false)
   })
 
+  it('receiver = matches if ANY of the alert receivers equals the value', () => {
+    const alert = makeAlert({ receivers: [{ name: 'a' }, { name: 'b' }] })
+    expect(matchesLabelMatchers(alert, [lm('receiver', '=', 'a')])).toBe(true)
+    expect(matchesLabelMatchers(alert, [lm('receiver', '=', 'c')])).toBe(false)
+  })
+
+  it('receiver =~ matches if ANY of the alert receivers matches the pattern', () => {
+    const alert = makeAlert({ receivers: [{ name: 'team-a' }, { name: 'team-b' }] })
+    expect(matchesLabelMatchers(alert, [lm('receiver', '=~', 'team-a')])).toBe(true)
+    expect(matchesLabelMatchers(alert, [lm('receiver', '=~', 'team-c')])).toBe(false)
+  })
+
+  it('receiver =~/!~ with an unparseable pattern: no match / matches everything', () => {
+    const alert = makeAlert({ receivers: [{ name: 'a' }, { name: 'b' }] })
+    expect(matchesLabelMatchers(alert, [lm('receiver', '=~', '(')])).toBe(false)
+    expect(matchesLabelMatchers(alert, [lm('receiver', '!~', '(')])).toBe(true)
+  })
+
   it('stays substring/unanchored by design (filter UX, not silence semantics)', () => {
     const alert = makeAlert({ labels: { alertname: 'X', instance: 'web10' } })
     expect(matchesLabelMatchers(alert, [lm('instance', '=~', 'web1')])).toBe(true)
+  })
+
+  it('standard (non-receiver) label: = operator', () => {
+    const alert = makeAlert({ labels: { alertname: 'X', env: 'prod' } })
+    expect(matchesLabelMatchers(alert, [lm('env', '=', 'prod')])).toBe(true)
+    expect(matchesLabelMatchers(alert, [lm('env', '=', 'staging')])).toBe(false)
+  })
+
+  it('standard (non-receiver) label: != and !~ operators', () => {
+    const alert = makeAlert({ labels: { alertname: 'X', env: 'prod' } })
+    expect(matchesLabelMatchers(alert, [lm('env', '!=', 'prod')])).toBe(false)
+    expect(matchesLabelMatchers(alert, [lm('env', '!=', 'staging')])).toBe(true)
+    expect(matchesLabelMatchers(alert, [lm('env', '!~', 'prod')])).toBe(false)
+    expect(matchesLabelMatchers(alert, [lm('env', '!~', 'staging')])).toBe(true)
+  })
+
+  it('empty matcher list matches everything', () => {
+    expect(matchesLabelMatchers(makeAlert(), [])).toBe(true)
+  })
+
+  it('missing label is treated as the empty string', () => {
+    const alert = makeAlert({ labels: { alertname: 'X' } })
+    expect(matchesLabelMatchers(alert, [lm('instance', '=', '')])).toBe(true)
+    expect(matchesLabelMatchers(alert, [lm('instance', '=', 'web1')])).toBe(false)
+  })
+
+  it('standard (non-receiver) label =~/!~ with an unparseable pattern: no match / matches everything', () => {
+    const alert = makeAlert({ labels: { alertname: 'X', env: 'prod' } })
+    expect(matchesLabelMatchers(alert, [lm('env', '=~', '(')])).toBe(false)
+    expect(matchesLabelMatchers(alert, [lm('env', '!~', '(')])).toBe(true)
   })
 })
 
@@ -457,6 +526,17 @@ describe('silenceMatchesAlert (Alertmanager-exact semantics on Silence.matchers)
     const silence = makeSilence({ matchers: [{ name: 'instance', value: 'web', isEqual: false, isRegex: true }] })
     expect(silenceMatchesAlert(silence, makeAlert({ labels: { alertname: 'X', instance: 'web1' } }))).toBe(true)
   })
+
+  it('exact non-regex negative matcher (isEqual: false)', () => {
+    const silence = makeSilence({ matchers: [{ name: 'env', value: 'prod', isEqual: false, isRegex: false }] })
+    expect(silenceMatchesAlert(silence, makeAlert({ labels: { alertname: 'X', env: 'prod' } }))).toBe(false)
+    expect(silenceMatchesAlert(silence, makeAlert({ labels: { alertname: 'X', env: 'staging' } }))).toBe(true)
+  })
+
+  it('conservatively treats an unparseable regex as a match', () => {
+    const silence = makeSilence({ matchers: [{ name: 'instance', value: '(', isEqual: true, isRegex: true }] })
+    expect(silenceMatchesAlert(silence, makeAlert({ labels: { alertname: 'X', instance: 'anything' } }))).toBe(true)
+  })
 })
 
 describe('getEffectiveAlertState (multi-silence — S-05)', () => {
@@ -510,6 +590,15 @@ describe('getSilenceState (multi-silence — S-05)', () => {
     const result = getSilenceState(alert, [soon, long])
     expect(result.silence?.id).toBe('s2')
     expect(result.type).toBe('active')
+
+    // Order must not matter — reversed silencedBy should pick the same (longest) silence.
+    const alertReversed = makeAlert({ status: { inhibitedBy: [], silencedBy: ['s2', 's1'], state: 'suppressed' } })
+    expect(getSilenceState(alertReversed, [soon, long]).silence?.id).toBe('s2')
+  })
+
+  it('ignores an unknown silence id in silencedBy', () => {
+    const alert = makeAlert({ status: { inhibitedBy: [], silencedBy: ['missing'], state: 'suppressed' } })
+    expect(getSilenceState(alert, []).type).toBeNull()
   })
 
   it('reports "expiring" when the longest-remaining active silence is still within 15 minutes', () => {
@@ -533,5 +622,249 @@ describe('getSilenceState (multi-silence — S-05)', () => {
     const result = getSilenceState(alert, [pending, active])
     expect(result.type).toBe('active')
     expect(result.silence?.id).toBe('s2')
+  })
+})
+
+describe('computeGroupLabelValues (S-06)', () => {
+  it('returns an empty array for an empty group', () => {
+    expect(computeGroupLabelValues([])).toEqual([])
+  })
+
+  it('exact-matches a label with the same value on every alert', () => {
+    const alerts = [
+      makeAlert({ labels: { alertname: 'X', env: 'prod' } }),
+      makeAlert({ labels: { alertname: 'X', env: 'prod' } }),
+    ]
+    const result = computeGroupLabelValues(alerts)
+    expect(result).toContainEqual({ name: 'env', values: ['prod'] })
+  })
+
+  it('OR-matches a label whose value varies, as long as EVERY alert has it', () => {
+    const alerts = [
+      makeAlert({ labels: { alertname: 'X', pod: 'p1' } }),
+      makeAlert({ labels: { alertname: 'X', pod: 'p2' } }),
+    ]
+    const result = computeGroupLabelValues(alerts)
+    const pod = result.find((r) => r.name === 'pod')
+    expect(pod?.values.sort()).toEqual(['p1', 'p2'])
+  })
+
+  it('regression (S-06): drops a label present on only SOME alerts instead of a partial OR-match', () => {
+    // Before the fix, this produced a `pod=~"p1"` matcher: it would silence the
+    // first alert but NOT the second, which has no `pod` label at all (a missing
+    // label matches the empty string in Alertmanager, not "p1") — a group
+    // Fast-Silence that silently failed to cover part of the selected group.
+    const alerts = [
+      makeAlert({ fingerprint: 'a', labels: { alertname: 'X', pod: 'p1' } }),
+      makeAlert({ fingerprint: 'b', labels: { alertname: 'X' } }),
+    ]
+    const result = computeGroupLabelValues(alerts)
+    expect(result.find((r) => r.name === 'pod')).toBeUndefined()
+    // alertname is on both, so it's still included.
+    expect(result).toContainEqual({ name: 'alertname', values: ['X'] })
+  })
+
+  it('excludes receiver/@receiver/@cluster even if literally present as raw labels', () => {
+    // These normally only exist as synthesized pseudo-labels (see getFilterableLabels), but
+    // computeGroupLabelValues reads alert.labels directly — this guards the skip-set itself.
+    const alerts = [makeAlert({ labels: { alertname: 'X', receiver: 'r', '@receiver': 'r', '@cluster': 'c' } })]
+    const names = computeGroupLabelValues(alerts).map((r) => r.name)
+    expect(names).not.toContain('receiver')
+    expect(names).not.toContain('@receiver')
+    expect(names).not.toContain('@cluster')
+    expect(names).toContain('alertname')
+  })
+
+  it('property: every returned label is present with a non-empty value on every input alert', () => {
+    fc.assert(
+      fc.property(
+        fc.array(fc.dictionary(fc.constantFrom('alertname', 'pod', 'env', 'instance'), fc.string({ minLength: 1 })), {
+          minLength: 1,
+          maxLength: 6,
+        }),
+        (labelSets) => {
+          const alerts = labelSets.map((labels, i) => makeAlert({ fingerprint: String(i), labels: { alertname: 'X', ...labels } }))
+          const result = computeGroupLabelValues(alerts)
+          for (const { name } of result) {
+            expect(alerts.every((a) => Boolean(a.labels[name]))).toBe(true)
+          }
+        },
+      ),
+    )
+  })
+})
+
+describe('buildGroupAckSilenceBody (S-06)', () => {
+  it('produces matchers that would match every alert in the group (anchored, real semantics)', () => {
+    const alerts = [
+      makeAlert({ fingerprint: 'a', labels: { alertname: 'X', pod: 'p1' } }),
+      makeAlert({ fingerprint: 'b', labels: { alertname: 'X', pod: 'p2' } }),
+    ]
+    const body = buildGroupAckSilenceBody(alerts, 30, 'alice')
+    const lm: LabelMatcher[] = body.matchers.map((m, i) => ({
+      id: String(i),
+      name: m.name,
+      operator: (m.isRegex ? (m.isEqual ? '=~' : '!~') : m.isEqual ? '=' : '!=') as LabelMatcher['operator'],
+      value: m.value,
+    }))
+    for (const alert of alerts) {
+      expect(silenceWouldMatchAlert(lm, alert)).toBe(true)
+    }
+  })
+
+  it('regression (S-06): covers an alert lacking a label that varies on the rest of the group', () => {
+    const alerts = [
+      makeAlert({ fingerprint: 'a', labels: { alertname: 'X', pod: 'p1' } }),
+      makeAlert({ fingerprint: 'b', labels: { alertname: 'X' } }), // no `pod` label at all
+    ]
+    const body = buildGroupAckSilenceBody(alerts, 30, 'alice')
+    const lm: LabelMatcher[] = body.matchers.map((m, i) => ({
+      id: String(i),
+      name: m.name,
+      operator: (m.isRegex ? (m.isEqual ? '=~' : '!~') : m.isEqual ? '=' : '!=') as LabelMatcher['operator'],
+      value: m.value,
+    }))
+    for (const alert of alerts) {
+      expect(silenceWouldMatchAlert(lm, alert)).toBe(true)
+    }
+  })
+
+  it('throws when alerts span more than one cluster', () => {
+    const alerts = [
+      makeAlert({ fingerprint: 'a', clusterName: 'cluster-a' }),
+      makeAlert({ fingerprint: 'b', clusterName: 'cluster-b' }),
+    ]
+    expect(() => buildGroupAckSilenceBody(alerts, 30, 'alice')).toThrow(/multiple clusters/)
+  })
+
+  it('carries duration, comment, and creator through', () => {
+    const alerts = [makeAlert({ labels: { alertname: 'X' } })]
+    const body = buildGroupAckSilenceBody(alerts, 60, 'alice')
+    expect(body.createdBy).toBe('alice')
+    expect(body.comment).toBe('Fast-Silence for 1h')
+    const diffMinutes = (new Date(body.endsAt).getTime() - new Date(body.startsAt).getTime()) / 60_000
+    expect(diffMinutes).toBeCloseTo(60, 5)
+  })
+})
+
+describe('labelColorStyle', () => {
+  it('is deterministic for the same key and theme', () => {
+    expect(labelColorStyle('instance', 'dark')).toEqual(labelColorStyle('instance', 'dark'))
+  })
+
+  it('differs between light and dark theme', () => {
+    expect(labelColorStyle('instance', 'light')).not.toEqual(labelColorStyle('instance', 'dark'))
+  })
+
+  it('defaults to dark theme', () => {
+    expect(labelColorStyle('instance')).toEqual(labelColorStyle('instance', 'dark'))
+  })
+})
+
+describe('filterSilences', () => {
+  const silences: Silence[] = [
+    makeSilence({ id: 's1', comment: 'planned maintenance', createdBy: 'alice', clusterName: 'cluster-a', matchers: [{ name: 'env', value: 'prod', isEqual: true, isRegex: false }] }),
+    makeSilence({ id: 's2', comment: 'noisy alert', createdBy: 'bob', clusterName: 'cluster-b', matchers: [{ name: 'instance', value: 'web1', isEqual: true, isRegex: false }] }),
+  ]
+
+  it('returns all silences when search and matchers are empty', () => {
+    expect(filterSilences(silences, '', [])).toEqual(silences)
+  })
+
+  it('filters by comment substring (case-insensitive)', () => {
+    expect(filterSilences(silences, 'PLANNED', []).map((s) => s.id)).toEqual(['s1'])
+  })
+
+  it('filters by createdBy substring', () => {
+    expect(filterSilences(silences, 'bob', []).map((s) => s.id)).toEqual(['s2'])
+  })
+
+  it('filters by matcher name or value substring', () => {
+    expect(filterSilences(silences, 'web1', []).map((s) => s.id)).toEqual(['s2'])
+  })
+
+  it.each([
+    ['=', 'cluster-a', ['s1']],
+    ['!=', 'cluster-a', ['s2']],
+    ['=~', 'cluster-.', ['s1', 's2']],
+    ['!~', 'cluster-a', ['s2']],
+  ] as const)('filters by @cluster pseudo-label with operator %s', (operator, value, wantIds) => {
+    const fm: LabelMatcher = { id: '1', name: '@cluster', operator, value }
+    expect(filterSilences(silences, '', [fm]).map((s) => s.id)).toEqual(wantIds)
+  })
+
+  it('treats an unparseable regex pattern on @cluster as no match (=~) / any match (!~)', () => {
+    expect(filterSilences(silences, '', [{ id: '1', name: '@cluster', operator: '=~', value: '(' }])).toEqual([])
+    expect(filterSilences(silences, '', [{ id: '1', name: '@cluster', operator: '!~', value: '(' }])).toEqual(silences)
+  })
+
+  it.each([
+    ['=', 'prod', ['s1']],
+    // Note: "!=" and "!~" require an actual matcher of that name on the silence to compare
+    // against — a silence with no "env" matcher at all doesn't satisfy either (it's a `some()`
+    // over the silence's own matchers, not "no env label means anything != is trivially true").
+    ['!=', 'prod', []],
+    ['=~', 'pro.', ['s1']],
+    ['!~', 'prod', []],
+  ] as const)('filters by a real matcher label on the silence with operator %s', (operator, value, wantIds) => {
+    const fm: LabelMatcher = { id: '1', name: 'env', operator, value }
+    expect(filterSilences(silences, '', [fm]).map((s) => s.id)).toEqual(wantIds)
+  })
+
+  it('treats an unparseable regex pattern on a real matcher label as no match (=~) / any match (!~)', () => {
+    expect(filterSilences(silences, '', [{ id: '1', name: 'env', operator: '=~', value: '(' }])).toEqual([])
+    expect(filterSilences(silences, '', [{ id: '1', name: 'env', operator: '!~', value: '(' }]).map((s) => s.id)).toEqual(['s1'])
+  })
+
+  it('treats receiver/@receiver label filters as a no-op (silences have no receiver)', () => {
+    const fm: LabelMatcher = { id: '1', name: 'receiver', operator: '=', value: 'team-a' }
+    expect(filterSilences(silences, '', [fm])).toEqual(silences)
+  })
+
+  it('combines search and label matchers with AND', () => {
+    const fm: LabelMatcher = { id: '1', name: '@cluster', operator: '=', value: 'cluster-a' }
+    expect(filterSilences(silences, 'web1', [fm])).toEqual([])
+  })
+})
+
+describe('getExpiredSilence', () => {
+  it('returns null when no silences are expired', () => {
+    const alert = makeAlert({ status: { inhibitedBy: [], silencedBy: [], state: 'active' } })
+    expect(getExpiredSilence(alert, [])).toBeNull()
+  })
+
+  it('returns null when an active/pending silence still covers the alert', () => {
+    const silence = makeSilence({ id: 's1', status: { state: 'active' } })
+    const alert = makeAlert({ status: { inhibitedBy: [], silencedBy: ['s1'], state: 'suppressed' } })
+    expect(getExpiredSilence(alert, [silence])).toBeNull()
+  })
+
+  it('returns the matching expired silence for the same cluster', () => {
+    const silence = makeSilence({
+      id: 's1',
+      status: { state: 'expired' },
+      clusterName: 'cluster-a',
+      matchers: [{ name: 'alertname', value: 'X', isEqual: true, isRegex: false }],
+    })
+    const alert = makeAlert({ clusterName: 'cluster-a', labels: { alertname: 'X' }, status: { inhibitedBy: [], silencedBy: [], state: 'active' } })
+    expect(getExpiredSilence(alert, [silence])?.id).toBe('s1')
+  })
+
+  it('ignores an expired silence from a different cluster', () => {
+    const silence = makeSilence({
+      id: 's1',
+      status: { state: 'expired' },
+      clusterName: 'cluster-b',
+      matchers: [{ name: 'alertname', value: 'X', isEqual: true, isRegex: false }],
+    })
+    const alert = makeAlert({ clusterName: 'cluster-a', labels: { alertname: 'X' }, status: { inhibitedBy: [], silencedBy: [], state: 'active' } })
+    expect(getExpiredSilence(alert, [silence])).toBeNull()
+  })
+
+  it('picks the most recently expired candidate when several match', () => {
+    const older = makeSilence({ id: 'old', status: { state: 'expired' }, clusterName: 'cluster-a', endsAt: '2026-01-01T00:00:00Z', matchers: [{ name: 'alertname', value: 'X', isEqual: true, isRegex: false }] })
+    const newer = makeSilence({ id: 'new', status: { state: 'expired' }, clusterName: 'cluster-a', endsAt: '2026-02-01T00:00:00Z', matchers: [{ name: 'alertname', value: 'X', isEqual: true, isRegex: false }] })
+    const alert = makeAlert({ clusterName: 'cluster-a', labels: { alertname: 'X' }, status: { inhibitedBy: [], silencedBy: [], state: 'active' } })
+    expect(getExpiredSilence(alert, [older, newer])?.id).toBe('new')
   })
 })
