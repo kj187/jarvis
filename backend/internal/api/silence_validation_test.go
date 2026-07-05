@@ -48,6 +48,16 @@ func TestValidateSilenceMatchers(t *testing.T) {
 			errSubstr: "invalid regular expression",
 		},
 		{
+			// Regression: an earlier version of matcherMatchesEmptyString returned
+			// early for negative matchers before ever compiling the regex, so an
+			// invalid pattern on a negative matcher slipped through uncaught. Found
+			// by FuzzValidateSilenceMatchers in CI.
+			name:      "invalid regex on a NEGATIVE matcher is still rejected",
+			matchers:  []models.SilenceMatcher{{Name: "instance", Value: "(00000000", IsEqual: false, IsRegex: true}},
+			wantErr:   true,
+			errSubstr: "invalid regular expression",
+		},
+		{
 			name: "valid RE2 syntax that JS RegExp rejects (inline flag)",
 			// (?i) is valid RE2 syntax (Go's regexp = RE2, same engine as Alertmanager)
 			// even though it fails to compile as a JS RegExp in the frontend preview.

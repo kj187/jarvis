@@ -43,27 +43,31 @@ func validateSilenceMatchers(matchers []models.SilenceMatcher) error {
 
 // matcherMatchesEmptyString reports whether the matcher would match a label
 // value of "" (i.e. a missing label), for the "at least one matcher must be
-// meaningful" check. Only evaluated for *positive* matchers (`=`, `=~`) —
-// negative matchers (`!=`, `!~`) are never flagged, regardless of whether
-// they'd also match an absent label: confirmed empirically against a running
-// Alertmanager that e.g. a lone `instance!~"web"` (which also matches a
-// missing `instance` label) is accepted, while a lone `instance=~".*"` is
-// rejected. Negative matchers are inherently broad/exclusionary by design
-// (e.g. `env!=kube-system`), which is exactly the pattern this check must
-// NOT reject — unlike the "positively matches literally everything" mistake
-// it exists to catch.
+// meaningful" check. The empty-string verdict only ever comes out true for
+// *positive* matchers (`=`, `=~`) — negative matchers (`!=`, `!~`) are never
+// flagged as trivial, regardless of whether they'd also match an absent
+// label: confirmed empirically against a running Alertmanager that e.g. a
+// lone `instance!~"web"` (which also matches a missing `instance` label) is
+// accepted, while a lone `instance=~".*"` is rejected. Negative matchers are
+// inherently broad/exclusionary by design (e.g. `env!=kube-system`), which
+// is exactly the pattern this check must NOT reject.
+//
+// Regex compilation, however, is checked for EVERY regex matcher regardless
+// of positive/negative — an uncompilable pattern is a genuine error
+// Alertmanager itself would reject, independent of this function's
+// "meaningful" verdict. A fuzz test caught an earlier version of this
+// function returning early for negative matchers before ever attempting to
+// compile the regex, silently letting invalid patterns like `!~"(00000000"`
+// through.
 func matcherMatchesEmptyString(m models.SilenceMatcher) (bool, error) {
-	if !m.IsEqual {
-		return false, nil
-	}
 	if m.IsRegex {
 		re, err := regexp.Compile("^(?:" + m.Value + ")$")
 		if err != nil {
 			return false, err
 		}
-		return re.MatchString(""), nil
+		return m.IsEqual && re.MatchString(""), nil
 	}
-	return m.Value == "", nil
+	return m.IsEqual && m.Value == "", nil
 }
 
 // isUniqueViolation reports whether err represents a unique-constraint
