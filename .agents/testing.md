@@ -35,6 +35,8 @@ cd frontend
 pnpm test                          # Playwright functional E2E (alias for test:e2e)
 pnpm test:e2e                      # Playwright functional E2E (browser must be installed)
 pnpm exec playwright install       # Install Playwright browsers (once)
+pnpm test:unit                     # Vitest — lib/alertUtils.ts matching/formatting logic only (see below)
+pnpm test:unit:coverage            # Same, with v8 coverage report
 pnpm duplication                   # jscpd code duplication check
 pnpm lint                          # eslint src e2e (flat config: eslint.config.js — typescript-eslint,
                                    # react-hooks, react-refresh; react-hooks/purity + set-state-in-effect
@@ -56,6 +58,7 @@ make test-all                      # backend + frontend + helm lint + helm unitt
 make test-backend                  # go test -race ./...
 make fuzz-backend                  # Go native fuzz targets (FUZZTIME=30s per target)
 make test-frontend                 # functional E2E (none + internal + oidc)
+make test-frontend-unit            # Vitest (lib/alertUtils.ts only, needs jarvis_frontend_1 running)
 make helm-lint                     # helm lint only
 make helm-test                     # helm unittest only
 
@@ -189,13 +192,37 @@ suppressed → resolved: directly resolved, no expired event
 
 ## Frontend Test Strategy
 
-There are **no frontend unit tests** (no Vitest). The unit-test stack was
-removed in favor of functional E2E (commit `test(frontend): remove unit-test
-stack in favor of functional e2e`). All frontend behaviour — including
-`alertUtils` logic (`getEffectiveAlertState`, `matchesLabelMatchers`,
-`safeRegex`, `getFilterableLabels`, regex matchers, `@cluster`/`@receiver`
-pseudo-labels) and Zustand store actions/filter state — is verified through
-Playwright functional E2E against a real running app.
+Frontend behaviour is verified through Playwright functional E2E against a
+real running app — Zustand store actions, filter state, and every component
+are covered this way, with **no general component/unit-test stack** (the
+Vitest setup that covered those was removed in favor of functional E2E,
+commit `test(frontend): remove unit-test stack in favor of functional e2e`).
+
+**Narrow, deliberate exception: `src/lib/alertUtils.ts`.** This file holds
+the silence-matching and effective-state logic (`matchesLabelMatchers`,
+`silenceMatchesAlert`, `getEffectiveAlertState`, `getSilenceState`,
+`getExpiredSilence`, `computeGroupLabelValues`, plus formatting/escaping
+helpers) — pure functions where a wrong Alertmanager-matching semantic can
+silence (or fail to silence) the wrong alerts. Playwright can assert what the
+*UI* shows, but property-based/fuzz testing across thousands of generated
+label/matcher combinations against a *reference implementation* of
+Alertmanager's matching semantics isn't practical to express as browser
+flows. This file therefore gets a minimal Vitest + fast-check setup, scoped
+to `src/lib/**` only:
+
+- `frontend/vitest.config.ts` — `include: ['src/lib/**/*.test.ts']`, coverage
+  restricted to `src/lib/alertUtils.ts`. No jsdom/component-testing
+  dependencies, no other directory is in scope.
+- `frontend/src/lib/alertUtils.test.ts` — example-based tests for
+  formatting/escaping helpers, plus `fast-check` property tests (e.g. "regex
+  built from `escapeRegexValue` matches only the original literal").
+- Matching-function tests (the ones directly tied to silence semantics) live
+  in the same file and are added alongside the anchored-regex rewrite (see
+  `tmp/fable/review_silence.md` S-01/S-03/S-05/S-06/S-14) — a 100%
+  branch-coverage gate on `alertUtils.ts` lands once that rewrite is done.
+
+This does **not** reopen the door to a general component-test stack —
+anything outside `src/lib/` stays E2E-only.
 
 Specs live under `frontend/e2e/`:
 
@@ -216,7 +243,7 @@ troubleshooting are documented in **`docs/testing-e2e.md`**.
 | Staged paths | Checks |
 |---|---|
 | `backend/**` | `go test ./... -count=1 -timeout 60s` + golangci-lint (incl. gosec; govulncheck runs in CI only) |
-| `frontend/**` | `pnpm audit --audit-level=high` + `pnpm lint` (eslint) + `pnpm duplication` (jscpd) — executed **inside the running dev container** (`jarvis_frontend_1`); hook fails if the container is not running |
+| `frontend/**` | `pnpm audit --audit-level=high` + `pnpm lint` (eslint) + `pnpm test:unit` (Vitest, `lib/alertUtils.ts`) + `pnpm duplication` (jscpd) — executed **inside the running dev container** (`jarvis_frontend_1`); hook fails if the container is not running |
 | `charts/**` | `helm lint` + `helm unittest` |
 | always | **gitleaks** secret scan of the staged diff (via podman, config `.gitleaks.toml`) |
 
@@ -251,6 +278,7 @@ backend:
 frontend:
   - pnpm audit --audit-level=high
   - pnpm lint         # eslint (flat config)
+  - pnpm test:unit    # Vitest (lib/alertUtils.ts only)
   - pnpm build
   - pnpm duplication  # jscpd code duplication check
 

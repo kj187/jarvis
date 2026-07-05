@@ -10,7 +10,7 @@ FRONTEND_CONTAINER = jarvis_frontend_1
         up-alertmanager down-alertmanager \
         up-alertmanager-ha down-alertmanager-ha \
         up-postgres down-postgres \
-        test-all test-backend test-frontend fuzz-backend \
+        test-all test-backend test-frontend test-frontend-unit fuzz-backend \
         helm-lint helm-test \
         lint gosec govulncheck audit security-all \
         scan scan-history scan-staged scan-all \
@@ -66,7 +66,7 @@ down-postgres: ## Stop test PostgreSQL
 
 # ── Tests ──────────────────────────────────────────────────────────────────────
 
-test-all: test-backend test-frontend helm-lint helm-test ## Run all tests (backend + frontend + helm)
+test-all: test-backend test-frontend-unit test-frontend helm-lint helm-test ## Run all tests (backend + frontend + helm)
 
 test-backend: ## Backend: go test -race ./...
 	cd backend && go test -v -race ./...
@@ -82,6 +82,9 @@ test-frontend: ## Frontend: functional E2E tests across all auth modes
 	$(E2E_RUN) test none
 	$(E2E_RUN) test internal
 	$(E2E_RUN) test oidc
+
+test-frontend-unit: ## Frontend: Vitest unit tests (lib/alertUtils.ts matching/formatting logic only)
+	podman exec $(FRONTEND_CONTAINER) sh -c "cd /app && pnpm test:unit"
 
 helm-lint: ## Helm: lint chart
 	helm lint charts/jarvis/
