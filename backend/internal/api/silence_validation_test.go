@@ -20,7 +20,7 @@ func TestValidateSilenceMatchers(t *testing.T) {
 		errSubstr string
 	}{
 		{
-			name:    "valid single matcher",
+			name:     "valid single matcher",
 			matchers: []models.SilenceMatcher{validMatcher()},
 		},
 		{
@@ -67,13 +67,17 @@ func TestValidateSilenceMatchers(t *testing.T) {
 			errSubstr: "must not match the empty string",
 		},
 		{
-			name:      "only a negative matcher matching empty (foo != x matches empty since x != \"\")",
-			matchers:  []models.SilenceMatcher{{Name: "instance", Value: "x", IsEqual: false, IsRegex: false}},
-			wantErr:   true,
-			errSubstr: "must not match the empty string",
+			// Empirically verified against a running Alertmanager (0.32.2): a lone
+			// `!=` matcher is ALWAYS accepted, even though it also matches a missing
+			// label (x != "" is true) — AM's "meaningful matcher" check only applies
+			// to positive (`=`/`=~`) matchers. See tmp/fable/review_silence.md T-06:
+			// this exact case was originally (wrongly) rejected here, and the mistake
+			// was only caught by an E2E test against real Alertmanager.
+			name:     "lone negative equal matcher is always accepted, regardless of empty-match",
+			matchers: []models.SilenceMatcher{{Name: "instance", Value: "x", IsEqual: false, IsRegex: false}},
 		},
 		{
-			name:     "negative matcher with empty value does NOT match empty (meaningful)",
+			name:     "negative matcher with empty value is accepted",
 			matchers: []models.SilenceMatcher{{Name: "instance", Value: "", IsEqual: false, IsRegex: false}},
 		},
 		{
@@ -83,18 +87,17 @@ func TestValidateSilenceMatchers(t *testing.T) {
 			errSubstr: "must not match the empty string",
 		},
 		{
-			// !~ "web1" is satisfied by almost everything, including a missing/empty
-			// label ("" doesn't match "web1" either) — so alone it's not meaningful.
-			name:      "negative regex whose pattern does not match empty is itself not meaningful",
-			matchers:  []models.SilenceMatcher{{Name: "instance", Value: "web1", IsEqual: false, IsRegex: true}},
-			wantErr:   true,
-			errSubstr: "must not match the empty string",
+			// Verified against real Alertmanager: `!~"web"` is accepted even though it
+			// also matches a missing `instance` label — same "negative matchers are
+			// never flagged" rule as the plain `!=` case above.
+			name:     "lone negative regex matcher is always accepted, regardless of empty-match",
+			matchers: []models.SilenceMatcher{{Name: "instance", Value: "web1", IsEqual: false, IsRegex: true}},
 		},
 		{
-			// !~ ".*" never matches anything (everything matches ".*", so its negation
-			// is never true) — including the empty string, which is exactly what makes
-			// this matcher "meaningful" per the same empty-string check.
-			name:     "negative regex whose pattern DOES match empty is meaningful",
+			// !~ ".*" never matches anything real either — also accepted, confirming
+			// the rule is "negative matchers are exempt", not "negative matchers that
+			// happen to also reject empty are exempt".
+			name:     "lone negative regex matching nothing at all is still accepted",
 			matchers: []models.SilenceMatcher{{Name: "instance", Value: ".*", IsEqual: false, IsRegex: true}},
 		},
 	}

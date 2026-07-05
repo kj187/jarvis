@@ -10,14 +10,14 @@ import (
 )
 
 // validateSilenceMatchers checks the matcher list against Alertmanager's own
-// silence-validation rules (silence/silence.go Validate in Alertmanager):
-// at least one matcher, no empty names, every regex must compile, and at
-// least one matcher must not match the empty string (a silence made only of
-// matchers that are trivially satisfied by an absent label silences nothing
-// meaningful, and Alertmanager rejects it). Go's regexp package is RE2 — the
-// same engine Alertmanager uses — so a pattern that compiles here is
-// guaranteed to compile in Alertmanager too, including syntax the frontend's
-// JS RegExp can't evaluate (e.g. inline flags like `(?i)`).
+// silence-validation rules (verified empirically against a running
+// Alertmanager 0.32.2 — see tmp/fable/review_silence.md T-06): at least one
+// matcher, no empty names, every regex must compile, and at least one
+// *positive* matcher (`=`/`=~`) must not match the empty string. Go's regexp
+// package is RE2 — the same engine Alertmanager uses — so a pattern that
+// compiles here is guaranteed to compile in Alertmanager too, including
+// syntax the frontend's JS RegExp can't evaluate (e.g. inline flags like
+// `(?i)`).
 func validateSilenceMatchers(matchers []models.SilenceMatcher) error {
 	if len(matchers) == 0 {
 		return fmt.Errorf("at least one matcher is required")
@@ -42,24 +42,28 @@ func validateSilenceMatchers(matchers []models.SilenceMatcher) error {
 }
 
 // matcherMatchesEmptyString reports whether the matcher would match a label
-// value of "" (i.e. a missing label) — matching Alertmanager's own matcher
-// semantics (anchored regex; a missing label is treated as "").
+// value of "" (i.e. a missing label), for the "at least one matcher must be
+// meaningful" check. Only evaluated for *positive* matchers (`=`, `=~`) —
+// negative matchers (`!=`, `!~`) are never flagged, regardless of whether
+// they'd also match an absent label: confirmed empirically against a running
+// Alertmanager that e.g. a lone `instance!~"web"` (which also matches a
+// missing `instance` label) is accepted, while a lone `instance=~".*"` is
+// rejected. Negative matchers are inherently broad/exclusionary by design
+// (e.g. `env!=kube-system`), which is exactly the pattern this check must
+// NOT reject — unlike the "positively matches literally everything" mistake
+// it exists to catch.
 func matcherMatchesEmptyString(m models.SilenceMatcher) (bool, error) {
+	if !m.IsEqual {
+		return false, nil
+	}
 	if m.IsRegex {
 		re, err := regexp.Compile("^(?:" + m.Value + ")$")
 		if err != nil {
 			return false, err
 		}
-		matches := re.MatchString("")
-		if m.IsEqual {
-			return matches, nil
-		}
-		return !matches, nil
+		return re.MatchString(""), nil
 	}
-	if m.IsEqual {
-		return m.Value == "", nil
-	}
-	return m.Value != "", nil
+	return m.Value == "", nil
 }
 
 // isUniqueViolation reports whether err represents a unique-constraint
