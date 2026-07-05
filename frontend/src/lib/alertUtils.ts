@@ -340,6 +340,9 @@ export function severityOrder(severity: string): number {
 
 /** Duration choices offered by the one-click Fast-Silence menu (shortest → longest). */
 export const FAST_SILENCE_DURATIONS: ReadonlyArray<{ label: string; minutes: number }> = [
+  { label: '5m', minutes: 5 },
+  { label: '10m', minutes: 10 },
+  { label: '15m', minutes: 15 },
   { label: '30m', minutes: 30 },
   { label: '1h', minutes: 60 },
   { label: '4h', minutes: 240 },
@@ -351,7 +354,7 @@ export const FAST_SILENCE_DURATIONS: ReadonlyArray<{ label: string; minutes: num
  * Human-readable Fast-Silence duration. Exact multiples collapse to a single
  * unit — `Xw` (weeks) → `Xd` (days) → `Xh` (hours) → `Xm` (minutes); mixed
  * hour/minute values fall back to `Xh Ym`. Kept in sync with the labels in
- * `FAST_SILENCE_DURATIONS` (30m, 1h, 4h, 1d, 1w).
+ * `FAST_SILENCE_DURATIONS` (5m, 10m, 15m, 30m, 1h, 4h, 1d, 1w).
  */
 export function formatAckDuration(minutes: number): string {
   if (minutes > 0 && minutes % 10080 === 0) return `${minutes / 10080}w`

@@ -70,6 +70,7 @@ function AlertEntry({
     })
   const summary = alert.annotations['summary']
   const description = alert.annotations['description']
+  const [ackActive, setAckActive] = useState(false)
 
   return (
     <div
@@ -94,8 +95,13 @@ function AlertEntry({
       </span>
 
       {/* One-click acknowledge (active alerts only) */}
-      <div className="absolute right-2 top-8 z-10 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
-        <AckButton alert={alert} silences={silences} variant="card" />
+      <div
+        className={cn(
+          'absolute right-2 top-8 z-10 transition-opacity focus-within:opacity-100 group-hover:opacity-100',
+          ackActive ? 'opacity-100' : 'opacity-0',
+        )}
+      >
+        <AckButton alert={alert} silences={silences} variant="card" onOpenChange={setAckActive} />
       </div>
 
       {/* Claim banner */}

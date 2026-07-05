@@ -250,6 +250,27 @@ The live preview updates as you modify matchers, so you always know exactly whic
 
 ---
 
+## Fast-Silence
+
+One-click, form-free silence on any active alert — hover the button, pick a duration.
+
+![Fast-Silence](assets/feature-fast-silence.png)
+
+[Silence from Alert](#silence-from-alert) still requires opening the form, reviewing matchers, and submitting — the right choice when you want control over scope. Fast-Silence is for the common case: you know exactly which single alert instance you want to quiet, right now, without leaving the alert list.
+
+**How it works:**
+1. Hover an active alert card (or open its detail panel) — a **Fast-Silence** button appears
+2. Hovering (or focusing/tapping) the button opens a small duration menu: `5m`, `10m`, `15m`, `30m`, `1h`, `4h`, `1d`, `1w`
+3. Pick a duration — Jarvis immediately creates an exact-match silence covering only that alert's real labels, no form involved
+
+The silence's comment is auto-filled as `Fast-Silence for <duration>` so its origin is clear later in the [Active Silence](#active-silence) view or Alertmanager itself. The button shows a transient "Silenced" confirmation immediately, before the next poll flips the alert to suppressed.
+
+Fast-Silence is only shown on alerts that are currently active (invariant: it disappears once an alert is suppressed or resolved) and respects the same authentication gate as every other write action — in `write_protect` mode, picking a duration prompts login first.
+
+Available in the card view, list view, and the alert detail panel.
+
+---
+
 ## Silence Templates
 
 Reusable matcher sets that pre-fill the silence form in one click — no manual re-entry for recurring silences.
