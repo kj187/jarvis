@@ -100,7 +100,9 @@ make fixtures-unsilence            # expire test silences
 | `internal/api` | `alerts_test.go` | Alert list/detail handler |
 | `internal/api` | `claims_test.go` | Claim set/release handler |
 | `internal/api` | `comments_test.go` | Comment create/delete handler (author-gated) |
-| `internal/api` | `silences_test.go` | Silence list/create handler + silence templates CRUD |
+| `internal/api` | `silences_test.go` | Silence list/create/delete handler + silence templates CRUD + backend validation (empty/invalid matchers, endsAt checks) + AM 4xx passthrough |
+| `internal/api` | `silence_validation_test.go` | `validateSilenceMatchers` (empty-string-match rule, RE2 compile), `sanitizeAMMessage`, `isUniqueViolation` |
+| `internal/api` | `silence_validation_fuzz_test.go` | Fuzz: `validateSilenceMatchers` accept/reject is consistent with its own regex compilation; `sanitizeAMMessage` never panics, always bounded and newline-free |
 | `internal/api` | `auth_handler_test.go` | login/logout/me/info, OIDC handlers |
 | `internal/api` | `setup_test.go` | first-run `/setup` handler (internal mode, 403 when users exist) |
 | `internal/api` | `admin_handler_test.go` | admin user CRUD + role/self guards |
@@ -273,7 +275,8 @@ backend:
   - upload-artifact: coverage.out + report.xml; coverage upload to Codecov
   - govulncheck ./...
   - golangci-lint run   # includes gosec (enabled in .golangci.yml)
-  - fuzz targets, 20s each (FuzzRedactDSN, FuzzParseNullableTimeString, FuzzParseSecretKey)
+  - fuzz targets, 20s each (FuzzRedactDSN, FuzzParseNullableTimeString, FuzzParseSecretKey,
+    FuzzValidateSilenceMatchers, FuzzSanitizeAMMessage)
 
 frontend:
   - pnpm audit --audit-level=high

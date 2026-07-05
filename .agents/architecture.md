@@ -357,15 +357,22 @@ GET    /api/v1/alerts/:fingerprint/claims/history full_protect? → []Claim  ?cl
 # ── Silences (proxy → Alertmanager) ──────────────────────────────────────────
 GET    /api/v1/silences                          full_protect?  → []Silence  ?cluster=
 POST   /api/v1/silences                          Auth  (write)  → { id }
+#        validated server-side before the AM call (silence_validation.go validateSilenceMatchers):
+#        ≥1 matcher, no empty matcher names, every regex must compile (Go regexp = RE2, same
+#        engine as AM — accepts syntax like `(?i)` that a browser's JS RegExp rejects), ≥1 matcher
+#        must not match the empty string, endsAt > startsAt, endsAt > now
+#        AM 4xx response (e.g. its own validation rejection) → relayed as 400 with a sanitized
+#        message (sanitizeAMMessage); AM 5xx/transport failure → generic 502
 #        id set → update (AM may return a NEW id; the old silence is then expired to avoid duplicates)
 #        fingerprint set → SilenceEvent recorded (action: created | updated | pending when startsAt is in the future)
 #        when auth mode ≠ none: createdBy/performedBy forced to the session username
 DELETE /api/v1/silences/:id                      Auth  (write)  ?cluster= (required) &fingerprint= &by=  → records "deleted" event
+#        AM 4xx response → relayed as 400 (sanitized); AM 5xx/transport failure → generic 502
 
 # ── Silence Templates (DB, shared) ───────────────────────────────────────────
 GET    /api/v1/silence-templates                 full_protect?  → []SilenceTemplate
-POST   /api/v1/silence-templates                 Auth  (write)  Body: { name, matchers[], reason? }
-PUT    /api/v1/silence-templates/:id             Auth  (write)  Body: { name, matchers[], reason? }
+POST   /api/v1/silence-templates                 Auth  (write)  Body: { name, matchers[], reason? }  — validateSilenceMatchers applies
+PUT    /api/v1/silence-templates/:id             Auth  (write)  Body: { name, matchers[], reason? }  — validateSilenceMatchers applies
 DELETE /api/v1/silence-templates/:id             Auth  (write)
 
 # ── Poll / Clusters ──────────────────────────────────────────────────────────

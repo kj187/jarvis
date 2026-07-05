@@ -10,6 +10,23 @@ async function clearAllTemplates(baseURL: string): Promise<void> {
   }
 }
 
+/**
+ * Fills the first (blank) matcher row with a complete name+value pair — a
+ * silence needs at least one such matcher before Preview can enable, so
+ * tests that assert Preview's enabled state for some OTHER reason (a
+ * missing reason, no cluster selected, ...) need this filled in first to
+ * isolate the thing they're actually testing.
+ */
+async function fillFirstMatcher(page: import('@playwright/test').Page, name: string, value: string) {
+  await page.getByRole('button', { name: 'label' }).first().click()
+  const searchInput = page.getByPlaceholder('Search…').first()
+  await searchInput.fill(name)
+  await searchInput.press('Enter')
+  const valueInput = page.getByPlaceholder('value').first()
+  await valueInput.fill(value)
+  await valueInput.press('Enter')
+}
+
 test('F1 silence form opens and closes via Cancel', async ({ page }) => {
   await dismissNoAuthNotice(page)
 
@@ -56,6 +73,7 @@ test('F14 reason is required before preview is enabled', async ({ page }) => {
   await expect(page.getByText('Create Silence').first()).toBeVisible()
 
   await page.getByPlaceholder('Your name').fill('e2e-user')
+  await fillFirstMatcher(page, 'alertname', 'Test')
 
   const previewButton = page.getByRole('button', { name: 'Preview' })
   await expect(previewButton).toBeDisabled()
@@ -73,6 +91,7 @@ test('F2 submit requires at least one selected cluster', async ({ page }) => {
 
   await page.getByPlaceholder('Your name').fill('e2e-user')
   await page.getByPlaceholder('Reason for the silence…').fill('Planned maintenance')
+  await fillFirstMatcher(page, 'alertname', 'Test')
 
   const previewButton = page.getByRole('button', { name: 'Preview' })
   await expect(previewButton).toBeEnabled()

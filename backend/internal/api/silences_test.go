@@ -160,7 +160,7 @@ func TestCreateSilence_HappyPath(t *testing.T) {
 	now := time.Now().UTC()
 	body := map[string]interface{}{
 		"cluster":   "testcluster",
-		"matchers":  []interface{}{},
+		"matchers":  []interface{}{map[string]interface{}{"name": "alertname", "isEqual": true, "isRegex": false, "value": "Test"}},
 		"startsAt":  now.Format(time.RFC3339),
 		"endsAt":    now.Add(time.Hour).Format(time.RFC3339),
 		"createdBy": "alice",
@@ -297,7 +297,7 @@ func TestCreateSilence_AMError(t *testing.T) {
 	now := time.Now().UTC()
 	body := map[string]interface{}{
 		"cluster":   "testcluster",
-		"matchers":  []interface{}{},
+		"matchers":  []interface{}{map[string]interface{}{"name": "alertname", "isEqual": true, "isRegex": false, "value": "Test"}},
 		"startsAt":  now.Format(time.RFC3339),
 		"endsAt":    now.Add(time.Hour).Format(time.RFC3339),
 		"createdBy": "alice",
@@ -440,7 +440,7 @@ func TestCreateSilence_ExpireOldSilenceWhenAMReturnsNewID(t *testing.T) {
 	body := map[string]interface{}{
 		"cluster":   "testcluster",
 		"id":        "old-silence-id",
-		"matchers":  []interface{}{},
+		"matchers":  []interface{}{map[string]interface{}{"name": "alertname", "isEqual": true, "isRegex": false, "value": "Test"}},
 		"startsAt":  now.Format(time.RFC3339),
 		"endsAt":    now.Add(time.Hour).Format(time.RFC3339),
 		"createdBy": "alice",
@@ -484,7 +484,7 @@ func TestCreateSilence_NoDeleteWhenSameIDReturned(t *testing.T) {
 	body := map[string]interface{}{
 		"cluster":   "testcluster",
 		"id":        "same-silence-id",
-		"matchers":  []interface{}{},
+		"matchers":  []interface{}{map[string]interface{}{"name": "alertname", "isEqual": true, "isRegex": false, "value": "Test"}},
 		"startsAt":  now.Format(time.RFC3339),
 		"endsAt":    now.Add(time.Hour).Format(time.RFC3339),
 		"createdBy": "alice",
@@ -519,7 +519,7 @@ func TestCreateSilence_AuthMode_UsesContextUserForAudit(t *testing.T) {
 	now := time.Now().UTC()
 	body := map[string]interface{}{
 		"cluster":     "testcluster",
-		"matchers":    []interface{}{},
+		"matchers":    []interface{}{map[string]interface{}{"name": "alertname", "isEqual": true, "isRegex": false, "value": "Test"}},
 		"startsAt":    now.Format(time.RFC3339),
 		"endsAt":      now.Add(time.Hour).Format(time.RFC3339),
 		"createdBy":   "spoofed",
@@ -547,5 +547,192 @@ func TestCreateSilence_AuthMode_UsesContextUserForAudit(t *testing.T) {
 	}
 	if events[0].PerformedBy != "real-user" {
 		t.Fatalf("performedBy = %q, want real-user", events[0].PerformedBy)
+	}
+}
+
+func TestCreateSilence_Validation(t *testing.T) {
+	now := time.Now().UTC()
+	validMatchers := []interface{}{map[string]interface{}{"name": "alertname", "isEqual": true, "isRegex": false, "value": "Test"}}
+
+	tests := []struct {
+		name string
+		body map[string]interface{}
+	}{
+		{
+			name: "empty matcher list",
+			body: map[string]interface{}{
+				"cluster": "testcluster", "matchers": []interface{}{},
+				"startsAt": now.Format(time.RFC3339), "endsAt": now.Add(time.Hour).Format(time.RFC3339),
+				"createdBy": "alice", "comment": "test",
+			},
+		},
+		{
+			name: "matcher with empty name",
+			body: map[string]interface{}{
+				"cluster":  "testcluster",
+				"matchers": []interface{}{map[string]interface{}{"name": "", "isEqual": true, "isRegex": false, "value": "x"}},
+				"startsAt": now.Format(time.RFC3339), "endsAt": now.Add(time.Hour).Format(time.RFC3339),
+				"createdBy": "alice", "comment": "test",
+			},
+		},
+		{
+			name: "matcher with invalid regex",
+			body: map[string]interface{}{
+				"cluster":  "testcluster",
+				"matchers": []interface{}{map[string]interface{}{"name": "instance", "isEqual": true, "isRegex": true, "value": "a("}},
+				"startsAt": now.Format(time.RFC3339), "endsAt": now.Add(time.Hour).Format(time.RFC3339),
+				"createdBy": "alice", "comment": "test",
+			},
+		},
+		{
+			name: "only a matcher matching the empty string",
+			body: map[string]interface{}{
+				"cluster":  "testcluster",
+				"matchers": []interface{}{map[string]interface{}{"name": "instance", "isEqual": true, "isRegex": false, "value": ""}},
+				"startsAt": now.Format(time.RFC3339), "endsAt": now.Add(time.Hour).Format(time.RFC3339),
+				"createdBy": "alice", "comment": "test",
+			},
+		},
+		{
+			name: "endsAt before startsAt",
+			body: map[string]interface{}{
+				"cluster": "testcluster", "matchers": validMatchers,
+				"startsAt": now.Format(time.RFC3339), "endsAt": now.Add(-time.Hour).Format(time.RFC3339),
+				"createdBy": "alice", "comment": "test",
+			},
+		},
+		{
+			name: "endsAt in the past",
+			body: map[string]interface{}{
+				"cluster": "testcluster", "matchers": validMatchers,
+				"startsAt": now.Add(-2 * time.Hour).Format(time.RFC3339), "endsAt": now.Add(-time.Hour).Format(time.RFC3339),
+				"createdBy": "alice", "comment": "test",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			am := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				t.Fatal("alertmanager should not be called when validation fails")
+			}))
+			defer am.Close()
+
+			srv := newTestServerWithAM(t, am.URL)
+			e := echo.New()
+			b, _ := json.Marshal(tt.body)
+			req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/silences", bytes.NewReader(b))
+			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+			rec := httptest.NewRecorder()
+			c := e.NewContext(req, rec)
+
+			err := srv.createSilence(c)
+			if err == nil {
+				t.Fatal("expected validation error")
+			}
+			he, ok := err.(*echo.HTTPError)
+			if !ok || he.Code != http.StatusBadRequest {
+				t.Errorf("expected 400, got %v", err)
+			}
+		})
+	}
+}
+
+// A valid RE2 pattern using inline-flag syntax (e.g. `(?i)`) that a browser's
+// JS RegExp can't compile must still be accepted server-side — Go's regexp
+// package is RE2, the same engine Alertmanager uses.
+func TestCreateSilence_AcceptsRE2OnlySyntax(t *testing.T) {
+	am := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(amclient.PostSilenceResponse{SilenceID: "new-silence"}) //nolint:errcheck
+	}))
+	defer am.Close()
+
+	srv := newTestServerWithAM(t, am.URL)
+	e := echo.New()
+
+	now := time.Now().UTC()
+	body := map[string]interface{}{
+		"cluster":   "testcluster",
+		"matchers":  []interface{}{map[string]interface{}{"name": "alertname", "isEqual": true, "isRegex": true, "value": "(?i)watchdog"}},
+		"startsAt":  now.Format(time.RFC3339),
+		"endsAt":    now.Add(time.Hour).Format(time.RFC3339),
+		"createdBy": "alice",
+		"comment":   "test silence",
+	}
+	b, _ := json.Marshal(body)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/silences", bytes.NewReader(b))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	if err := srv.createSilence(c); err != nil {
+		t.Fatalf("createSilence: %v", err)
+	}
+	if rec.Code != http.StatusCreated {
+		t.Errorf("status = %d, want 201", rec.Code)
+	}
+}
+
+func TestCreateSilence_AMValidationErrorPassthrough(t *testing.T) {
+	am := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"message": "silence must not match all alerts"}`))
+	}))
+	defer am.Close()
+
+	srv := newTestServerWithAM(t, am.URL)
+	e := echo.New()
+
+	now := time.Now().UTC()
+	body := map[string]interface{}{
+		"cluster":   "testcluster",
+		"matchers":  []interface{}{map[string]interface{}{"name": "alertname", "isEqual": true, "isRegex": false, "value": "Test"}},
+		"startsAt":  now.Format(time.RFC3339),
+		"endsAt":    now.Add(time.Hour).Format(time.RFC3339),
+		"createdBy": "alice",
+		"comment":   "test silence",
+	}
+	b, _ := json.Marshal(body)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/silences", bytes.NewReader(b))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	err := srv.createSilence(c)
+	if err == nil {
+		t.Fatal("expected error for AM 400")
+	}
+	he, ok := err.(*echo.HTTPError)
+	if !ok || he.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %v", err)
+	}
+	if !contains(he.Message.(string), "silence must not match all alerts") {
+		t.Errorf("expected AM message relayed, got: %v", he.Message)
+	}
+}
+
+func TestDeleteSilence_AMValidationErrorPassthrough(t *testing.T) {
+	am := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "silence already expired", http.StatusGone)
+	}))
+	defer am.Close()
+
+	srv := newTestServerWithAM(t, am.URL)
+	e := echo.New()
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodDelete, "/?cluster=testcluster", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues("silence-1")
+
+	err := srv.deleteSilence(c)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	he, ok := err.(*echo.HTTPError)
+	if !ok || he.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for AM 4xx passthrough, got %v", err)
 	}
 }

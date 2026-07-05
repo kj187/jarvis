@@ -77,6 +77,8 @@ fuzz-backend: ## Backend: run all Go native fuzz targets (FUZZTIME=30s per targe
 	cd backend && go test ./internal/db -run '^$$' -fuzz '^FuzzRedactDSN$$' -fuzztime $(FUZZTIME)
 	cd backend && go test ./internal/history -run '^$$' -fuzz '^FuzzParseNullableTimeString$$' -fuzztime $(FUZZTIME)
 	cd backend && go test ./internal/config -run '^$$' -fuzz '^FuzzParseSecretKey$$' -fuzztime $(FUZZTIME)
+	cd backend && go test ./internal/api -run '^$$' -fuzz '^FuzzValidateSilenceMatchers$$' -fuzztime $(FUZZTIME)
+	cd backend && go test ./internal/api -run '^$$' -fuzz '^FuzzSanitizeAMMessage$$' -fuzztime $(FUZZTIME)
 
 test-frontend: ## Frontend: functional E2E tests across all auth modes
 	$(E2E_RUN) test none

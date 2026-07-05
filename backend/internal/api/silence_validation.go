@@ -1,0 +1,105 @@
+package api
+
+import (
+	"encoding/json"
+	"fmt"
+	"regexp"
+	"strings"
+
+	"github.com/kj187/jarvis/backend/internal/models"
+)
+
+// validateSilenceMatchers checks the matcher list against Alertmanager's own
+// silence-validation rules (verified empirically against a running
+// Alertmanager 0.32.2 — see tmp/fable/review_silence.md T-06): at least one
+// matcher, no empty names, every regex must compile, and at least one
+// *positive* matcher (`=`/`=~`) must not match the empty string. Go's regexp
+// package is RE2 — the same engine Alertmanager uses — so a pattern that
+// compiles here is guaranteed to compile in Alertmanager too, including
+// syntax the frontend's JS RegExp can't evaluate (e.g. inline flags like
+// `(?i)`).
+func validateSilenceMatchers(matchers []models.SilenceMatcher) error {
+	if len(matchers) == 0 {
+		return fmt.Errorf("at least one matcher is required")
+	}
+	hasMeaningfulMatcher := false
+	for _, m := range matchers {
+		if m.Name == "" {
+			return fmt.Errorf("matcher name must not be empty")
+		}
+		matchesEmpty, err := matcherMatchesEmptyString(m)
+		if err != nil {
+			return fmt.Errorf("matcher %q: invalid regular expression", m.Name)
+		}
+		if !matchesEmpty {
+			hasMeaningfulMatcher = true
+		}
+	}
+	if !hasMeaningfulMatcher {
+		return fmt.Errorf("at least one matcher must not match the empty string")
+	}
+	return nil
+}
+
+// matcherMatchesEmptyString reports whether the matcher would match a label
+// value of "" (i.e. a missing label), for the "at least one matcher must be
+// meaningful" check. The empty-string verdict only ever comes out true for
+// *positive* matchers (`=`, `=~`) — negative matchers (`!=`, `!~`) are never
+// flagged as trivial, regardless of whether they'd also match an absent
+// label: confirmed empirically against a running Alertmanager that e.g. a
+// lone `instance!~"web"` (which also matches a missing `instance` label) is
+// accepted, while a lone `instance=~".*"` is rejected. Negative matchers are
+// inherently broad/exclusionary by design (e.g. `env!=kube-system`), which
+// is exactly the pattern this check must NOT reject.
+//
+// Regex compilation, however, is checked for EVERY regex matcher regardless
+// of positive/negative — an uncompilable pattern is a genuine error
+// Alertmanager itself would reject, independent of this function's
+// "meaningful" verdict. A fuzz test caught an earlier version of this
+// function returning early for negative matchers before ever attempting to
+// compile the regex, silently letting invalid patterns like `!~"(00000000"`
+// through.
+func matcherMatchesEmptyString(m models.SilenceMatcher) (bool, error) {
+	if m.IsRegex {
+		re, err := regexp.Compile("^(?:" + m.Value + ")$")
+		if err != nil {
+			return false, err
+		}
+		return m.IsEqual && re.MatchString(""), nil
+	}
+	return m.IsEqual && m.Value == "", nil
+}
+
+// isUniqueViolation reports whether err represents a unique-constraint
+// violation from either backing store dialect (SQLite or PostgreSQL) —
+// substring-matched rather than dialect-switched, so a driver upgrade or
+// wording change on either side doesn't silently stop this from firing.
+func isUniqueViolation(err error) bool {
+	msg := err.Error()
+	return strings.Contains(msg, "UNIQUE constraint failed") ||
+		strings.Contains(msg, "duplicate key value violates unique constraint")
+}
+
+// sanitizeAMMessage extracts a safe-to-display message from an Alertmanager
+// error response body: unwraps the common `{"message": "..."}` error shape,
+// collapses whitespace/newlines, and truncates to a bounded length so a
+// pathological AM response can't blow up the response body or leak binary
+// noise to the client.
+func sanitizeAMMessage(body string) string {
+	msg := body
+	var parsed struct {
+		Message string `json:"message"`
+	}
+	if err := json.Unmarshal([]byte(body), &parsed); err == nil && parsed.Message != "" {
+		msg = parsed.Message
+	}
+	msg = strings.Join(strings.Fields(msg), " ")
+	const maxLen = 300
+	if r := []rune(msg); len(r) > maxLen {
+		msg = string(r[:maxLen]) + "…"
+	}
+	if msg == "" {
+		msg = "alertmanager rejected the request"
+	}
+	return msg
+}

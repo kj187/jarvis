@@ -2,9 +2,9 @@ package api
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -73,6 +73,20 @@ func (s *Server) createSilence(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "unknown cluster")
 	}
 
+	modelMatchers := make([]models.SilenceMatcher, len(body.Matchers))
+	for i, m := range body.Matchers {
+		modelMatchers[i] = models.SilenceMatcher{IsEqual: m.IsEqual, IsRegex: m.IsRegex, Name: m.Name, Value: m.Value}
+	}
+	if err := validateSilenceMatchers(modelMatchers); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	}
+	if !body.EndsAt.After(body.StartsAt) {
+		return echo.NewHTTPError(http.StatusBadRequest, "endsAt must be after startsAt")
+	}
+	if !body.EndsAt.After(time.Now()) {
+		return echo.NewHTTPError(http.StatusBadRequest, "endsAt must be in the future")
+	}
+
 	ctx, cancel := context.WithTimeout(c.Request().Context(), 10*time.Second)
 	defer cancel()
 
@@ -86,6 +100,9 @@ func (s *Server) createSilence(c echo.Context) error {
 		createdBy = u.Username
 		performedBy = u.Username
 	}
+	if createdBy == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "createdBy is required")
+	}
 
 	postable := amclient.PostableSilence{
 		ID:        body.ID,
@@ -97,14 +114,23 @@ func (s *Server) createSilence(c echo.Context) error {
 	}
 	id, err := cl.CreateSilence(ctx, postable)
 	if err != nil {
+		var amErr *amclient.AMError
+		if errors.As(err, &amErr) && amErr.StatusCode >= 400 && amErr.StatusCode < 500 {
+			slog.Warn("alertmanager rejected silence", "cluster", body.Cluster, "status", amErr.StatusCode, "err", err)
+			return echo.NewHTTPError(http.StatusBadRequest, sanitizeAMMessage(amErr.Body))
+		}
 		slog.Error("create silence failed", "cluster", body.Cluster, "err", err)
 		return echo.NewHTTPError(http.StatusBadGateway, "alertmanager request failed")
 	}
 
-	// Alertmanager may return a new ID instead of updating in-place.
-	// Expire the old silence to prevent duplicates.
+	// Alertmanager may return a new ID instead of updating in-place (it does this
+	// itself whenever matchers or startsAt change on an update — see PostableSilence
+	// handling in Alertmanager's silence.Set). Expire the old silence defensively to
+	// prevent duplicates in case Alertmanager didn't already do so.
 	if body.ID != "" && id != body.ID {
-		_ = cl.DeleteSilence(ctx, body.ID)
+		if err := cl.DeleteSilence(ctx, body.ID); err != nil {
+			slog.Warn("expire old silence after id change failed", "cluster", body.Cluster, "old_id", body.ID, "err", err)
+		}
 	}
 
 	if body.Fingerprint != "" {
@@ -144,6 +170,11 @@ func (s *Server) deleteSilence(c echo.Context) error {
 	defer cancel()
 
 	if err := cl.DeleteSilence(ctx, silenceID); err != nil {
+		var amErr *amclient.AMError
+		if errors.As(err, &amErr) && amErr.StatusCode >= 400 && amErr.StatusCode < 500 {
+			slog.Warn("alertmanager rejected silence deletion", "cluster", clusterName, "id", silenceID, "status", amErr.StatusCode, "err", err)
+			return echo.NewHTTPError(http.StatusBadRequest, sanitizeAMMessage(amErr.Body))
+		}
 		slog.Error("delete silence failed", "cluster", clusterName, "id", silenceID, "err", err)
 		return echo.NewHTTPError(http.StatusBadGateway, "alertmanager request failed")
 	}
@@ -224,8 +255,8 @@ func (s *Server) createSilenceTemplate(c echo.Context) error {
 	if len([]rune(body.Reason)) > 2_000 {
 		return echo.NewHTTPError(http.StatusBadRequest, "reason too long (max 2000 characters)")
 	}
-	if len(body.Matchers) == 0 {
-		return echo.NewHTTPError(http.StatusBadRequest, "at least one matcher is required")
+	if err := validateSilenceMatchers(body.Matchers); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
 	// Generate a unique ID for the template.
@@ -233,9 +264,7 @@ func (s *Server) createSilenceTemplate(c echo.Context) error {
 
 	template, err := s.store.CreateSilenceTemplate(id, body.Name, body.Matchers, body.Reason)
 	if err != nil {
-		// Check for unique constraint violation (name already exists).
-		if err.Error() == "insert silence template: UNIQUE constraint failed: silence_templates.name" ||
-			err.Error() == "insert silence template: duplicate key value violates unique constraint \"silence_templates_name_key\"" {
+		if isUniqueViolation(err) {
 			return echo.NewHTTPError(http.StatusConflict, "template name already exists")
 		}
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to create template")
@@ -282,14 +311,13 @@ func (s *Server) updateSilenceTemplate(c echo.Context) error {
 	if len([]rune(body.Reason)) > 2_000 {
 		return echo.NewHTTPError(http.StatusBadRequest, "reason too long (max 2000 characters)")
 	}
-	if len(body.Matchers) == 0 {
-		return echo.NewHTTPError(http.StatusBadRequest, "at least one matcher is required")
+	if err := validateSilenceMatchers(body.Matchers); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
 	template, err := s.store.UpdateSilenceTemplate(id, body.Name, body.Matchers, body.Reason)
 	if err != nil {
-		// Check for unique constraint violation (name already exists for different template).
-		if strings.Contains(err.Error(), "UNIQUE constraint failed") || strings.Contains(err.Error(), "duplicate key value violates unique constraint") {
+		if isUniqueViolation(err) {
 			return echo.NewHTTPError(http.StatusConflict, "template name already exists")
 		}
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to update template")
