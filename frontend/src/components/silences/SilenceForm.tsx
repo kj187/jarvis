@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { format, addSeconds, parse, isValid } from 'date-fns'
 import { enUS } from 'date-fns/locale'
 import { DayPicker } from 'react-day-picker'
-import { Plus, X, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, ArrowLeft, Check, Loader2, CircleAlert, RotateCcw } from 'lucide-react'
+import { Plus, X, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, ArrowLeft, Check, Loader2, CircleAlert, RotateCcw, Code } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -13,7 +13,7 @@ import { DateTimePicker } from '@/components/ui/date-time-picker'
 import { useAlerts } from '@/hooks/useAlerts'
 import { useSilences } from '@/hooks/useSilences'
 import { useSilenceTemplates } from '@/hooks/useSilenceTemplates'
-import { silenceWouldMatchAlert, hasUnevaluableRegexMatcher, pickIdentifierLabel, tzAbbr, computeGroupLabelValues, escapeRegexValue } from '@/lib/alertUtils'
+import { silenceWouldMatchAlert, hasUnevaluableRegexMatcher, pickIdentifierLabel, tzAbbr, computeGroupLabelValues, escapeRegexValue, unescapeRegex, isRoundTrippableTagList } from '@/lib/alertUtils'
 import { upsertSilence, triggerPoll } from '@/api/client'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { useAuthStore } from '@/store/authStore'
@@ -44,18 +44,32 @@ interface SilenceMatcher {
   name: string
   operator: LabelMatcherOperator
   value: string
+  /**
+   * True for a regex matcher whose AM-side pattern isn't a Jarvis-style
+   * escaped-literal-OR-list (see `isRoundTrippableTagList`) — e.g. a real
+   * regex like `web-(1|2)\.example\.com` created via amtool or another
+   * tool. Edited as a single raw text field instead of `TagValueInput`, and
+   * submitted verbatim (not run through `toRegexValue`). Meaningless for
+   * `=`/`!=` operators.
+   */
+  raw?: boolean
 }
 
 let _id = 1
 const nextId = () => _id++
 
-function unescapeRegex(s: string): string {
-  // A backslash escape always means "literal next character", so strip the
-  // backslash before ANY character — not just the regex metacharacter set.
-  // This also cleans up escapes like \/ or \- that some Alertmanager setups or
-  // external tools add, which would otherwise survive recreate, get re-escaped
-  // to \\/ on submit, and break the matcher (0 affected alerts).
-  return s.replace(/\\(.)/g, '$1')
+/** Converts an AM-shaped silence matcher into the form's local editable shape. */
+function matcherFromAM(m: { name: string; value: string; isEqual: boolean; isRegex: boolean }): SilenceMatcher {
+  const operator = (m.isRegex ? (m.isEqual ? '=~' : '!~') : m.isEqual ? '=' : '!=') as LabelMatcherOperator
+  if (m.isRegex && !isRoundTrippableTagList(m.value)) {
+    return { id: nextId(), name: m.name, operator, value: m.value, raw: true }
+  }
+  return {
+    id: nextId(),
+    name: m.name,
+    operator,
+    value: m.isRegex ? m.value.split('|').map(unescapeRegex).join('|') : m.value,
+  }
 }
 
 // ── TagValueInput ─────────────────────────────────────────────────────────────
@@ -515,14 +529,7 @@ export function SilenceForm({
 
   const [matchers, setMatchers] = useState<SilenceMatcher[]>(() => {
     if (prefillSource?.matchers && !rebuildFromAlerts) {
-      return prefillSource.matchers.map((m) => ({
-        id: nextId(),
-        name: m.name,
-        operator: (
-          m.isRegex ? (m.isEqual ? '=~' : '!~') : m.isEqual ? '=' : '!='
-        ) as LabelMatcherOperator,
-        value: m.isRegex ? m.value.split('|').map(unescapeRegex).join('|') : m.value,
-      }))
+      return prefillSource.matchers.map(matcherFromAM)
     }
     if (prefillAlerts?.length) return buildPrefillMatchers(prefillAlerts)
     return [{ id: nextId(), name: '', operator: '=', value: '' }]
@@ -619,12 +626,20 @@ export function SilenceForm({
       m.map((x) => {
         if (x.id !== id) return x
         const updated = { ...x, [field]: value }
-        if (field === 'operator' && (value === '=' || value === '!=') && x.value.includes('|')) {
-          updated.value = x.value.split('|')[0]
+        if (field === 'operator' && (value === '=' || value === '!=')) {
+          // Leaving regex mode: `raw` only has meaning for =~/!~, and a raw pattern isn't a
+          // valid literal tag list — fall back to its first `|`-segment like the non-raw case.
+          if (x.value.includes('|') || x.raw) updated.value = x.value.split('|')[0]
+          updated.raw = false
         }
         return updated
       }),
     )
+  }
+
+  /** Toggles a regex matcher between the tag-list editor and a raw pattern text field. */
+  function toggleMatcherRaw(id: number) {
+    setMatchers((m) => m.map((x) => (x.id === id ? { ...x, raw: !x.raw } : x)))
   }
 
   // ── Clusters ────────────────────────────────────────────────────────────────
@@ -695,15 +710,7 @@ export function SilenceForm({
     setSelectedTemplate(templateId)
 
     // Replace matchers with template matchers
-    const newMatchers = template.matchers.map((m) => ({
-      id: nextId(),
-      name: m.name,
-      operator: (
-        m.isRegex ? (m.isEqual ? '=~' : '!~') : m.isEqual ? '=' : '!='
-      ) as LabelMatcherOperator,
-      value: m.value,
-    }))
-    setMatchers(newMatchers)
+    setMatchers(template.matchers.map(matcherFromAM))
 
     // Pre-fill comment with template reason if reason is not empty
     if (template.reason) {
@@ -724,7 +731,10 @@ export function SilenceForm({
         id: String(m.id),
         name: m.name,
         operator: m.operator,
-        value: m.operator === '=~' || m.operator === '!~' ? toRegexValue(m.value) : m.value,
+        // Raw regex matchers (S-09) are the actual AM pattern already — running them through
+        // toRegexValue (which escapes each pipe-separated segment as a literal) would corrupt
+        // a real regex like `web-(1|2)\.example\.com` into a literal-OR of its two halves.
+        value: (m.operator === '=~' || m.operator === '!~') && !m.raw ? toRegexValue(m.value) : m.value,
       }))
   }
 
@@ -771,7 +781,7 @@ export function SilenceForm({
         isEqual: m.operator === '=' || m.operator === '=~',
         isRegex: m.operator === '=~' || m.operator === '!~',
         name: m.name,
-        value: m.operator === '=~' || m.operator === '!~' ? toRegexValue(m.value) : m.value,
+        value: (m.operator === '=~' || m.operator === '!~') && !m.raw ? toRegexValue(m.value) : m.value,
       }))
 
     const initial = new Map<string, ClusterResult>(
@@ -1030,15 +1040,36 @@ export function SilenceForm({
                   <option value="=~">=~</option>
                   <option value="!~">!~</option>
                 </Select>
-                <div className="min-w-0">
-                  <TagValueInput
-                    value={m.value}
-                    onChange={(v) => updateMatcher(m.id, 'value', v)}
-                    suggestions={labelSuggestions.get(m.name) ?? []}
-                    placeholder="value"
-                    className="min-w-0"
-                    maxTags={m.operator === '=' || m.operator === '!=' ? 1 : undefined}
-                  />
+                <div className="flex min-w-0 items-center gap-1">
+                  {m.raw ? (
+                    <Input
+                      value={m.value}
+                      onChange={(e) => updateMatcher(m.id, 'value', e.target.value)}
+                      placeholder="raw regex pattern"
+                      className="min-w-0 font-mono text-xs"
+                    />
+                  ) : (
+                    <TagValueInput
+                      value={m.value}
+                      onChange={(v) => updateMatcher(m.id, 'value', v)}
+                      suggestions={labelSuggestions.get(m.name) ?? []}
+                      placeholder="value"
+                      className="min-w-0"
+                      maxTags={m.operator === '=' || m.operator === '!=' ? 1 : undefined}
+                    />
+                  )}
+                  {(m.operator === '=~' || m.operator === '!~') && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className={cn('h-8 w-8 shrink-0', m.raw && 'text-primary')}
+                      onClick={() => toggleMatcherRaw(m.id)}
+                      title={m.raw ? 'Switch to tag list (comma/pipe-separated literal values)' : 'Switch to raw regex pattern'}
+                    >
+                      <Code className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
                 </div>
                 <Button
                   type="button"
