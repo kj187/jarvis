@@ -215,13 +215,17 @@ to `src/lib/**` only:
 - `frontend/vitest.config.ts` — `include: ['src/lib/**/*.test.ts']`, coverage
   restricted to `src/lib/alertUtils.ts`. No jsdom/component-testing
   dependencies, no other directory is in scope.
-- `frontend/src/lib/alertUtils.test.ts` — example-based tests for
-  formatting/escaping helpers, plus `fast-check` property tests (e.g. "regex
-  built from `escapeRegexValue` matches only the original literal").
-- Matching-function tests (the ones directly tied to silence semantics) live
-  in the same file and are added alongside the anchored-regex rewrite (see
-  `tmp/fable/review_silence.md` S-01/S-03/S-05/S-06/S-14) — a 100%
-  branch-coverage gate on `alertUtils.ts` lands once that rewrite is done.
+- `frontend/src/lib/alertUtils.test.ts` — example-based tests for every
+  exported function (formatting/escaping helpers, matching/state functions),
+  plus `fast-check` property tests (e.g. "regex built from
+  `escapeRegexValue` matches only the original literal"; "every label
+  `computeGroupLabelValues` returns is present on every input alert").
+- **100% coverage gate on `alertUtils.ts`** (statements/lines/functions;
+  branches at 99% — the one excluded branch is `tzAbbr`'s `Intl`-dependent
+  fallback, not practically testable without mocking `Date`/`Intl` for a
+  cosmetic display value). Enforced by `pnpm test:unit:coverage` /
+  `make test-frontend-unit`, in pre-commit and CI — a new function or branch
+  added to this file needs a test in the same commit or the build fails.
 
 This does **not** reopen the door to a general component-test stack —
 anything outside `src/lib/` stays E2E-only.
@@ -245,7 +249,7 @@ troubleshooting are documented in **`docs/testing-e2e.md`**.
 | Staged paths | Checks |
 |---|---|
 | `backend/**` | `go test ./... -count=1 -timeout 60s` + golangci-lint (incl. gosec; govulncheck runs in CI only) |
-| `frontend/**` | `pnpm audit --audit-level=high` + `pnpm lint` (eslint) + `pnpm test:unit` (Vitest, `lib/alertUtils.ts`) + `pnpm duplication` (jscpd) — executed **inside the running dev container** (`jarvis_frontend_1`); hook fails if the container is not running |
+| `frontend/**` | `pnpm audit --audit-level=high` + `pnpm lint` (eslint) + `pnpm test:unit:coverage` (Vitest + 100% coverage gate, `lib/alertUtils.ts`) + `pnpm duplication` (jscpd) — executed **inside the running dev container** (`jarvis_frontend_1`); hook fails if the container is not running |
 | `charts/**` | `helm lint` + `helm unittest` |
 | always | **gitleaks** secret scan of the staged diff (via podman, config `.gitleaks.toml`) |
 
@@ -281,7 +285,7 @@ backend:
 frontend:
   - pnpm audit --audit-level=high
   - pnpm lint         # eslint (flat config)
-  - pnpm test:unit    # Vitest (lib/alertUtils.ts only)
+  - pnpm test:unit:coverage  # Vitest + 100% coverage gate (lib/alertUtils.ts only)
   - pnpm build
   - pnpm duplication  # jscpd code duplication check
 

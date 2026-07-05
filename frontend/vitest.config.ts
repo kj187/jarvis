@@ -20,9 +20,17 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: ['src/lib/alertUtils.ts'],
-      // 100% branch-coverage gate lands once the silence-matching rewrite
-      // (anchored regex, S-01/S-03/S-05/S-06/S-14) has full test coverage —
-      // enabling it now would fail on functions not yet under test.
+      thresholds: {
+        statements: 100,
+        lines: 100,
+        functions: 100,
+        // 99 rather than 100: the one remaining branch is the module-level
+        // `tzAbbr` constant's `?? ''` fallback for when `toLocaleTimeString`
+        // returns a timezone name with no trailing token — a real edge case,
+        // but only exercisable by mocking Intl/Date behavior, for a value
+        // that's cosmetic display text with no correctness stakes.
+        branches: 99,
+      },
     },
   },
 })

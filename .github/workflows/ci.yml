@@ -179,8 +179,8 @@ jobs:
       - name: Lint
         run: pnpm lint
 
-      - name: Unit tests (lib/alertUtils.ts)
-        run: pnpm test:unit
+      - name: Unit tests (lib/alertUtils.ts, with coverage gate)
+        run: pnpm test:unit:coverage
 
       - name: Build
         run: pnpm build
