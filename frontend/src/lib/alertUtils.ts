@@ -499,6 +499,42 @@ export function escapeRegexValue(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
+/**
+ * Inverse of `escapeRegexValue` for a single already-unescaped-boundary
+ * segment: a backslash always means "literal next character" in the
+ * pipe-separated-literal-tags model `SilenceForm` edits regex matchers with,
+ * so stripping it before ANY character (not just the regex metacharacter
+ * set) also cleans up escapes like `\/` or `\-` that some Alertmanager
+ * setups or external tools add — which would otherwise survive a
+ * recreate/edit round-trip, get re-escaped to `\\/` on submit, and break the
+ * matcher (0 affected alerts).
+ */
+export function unescapeRegex(s: string): string {
+  return s.replace(/\\(.)/g, '$1')
+}
+
+/**
+ * True if `amValue` (an Alertmanager regex matcher's raw pattern) is exactly
+ * what `SilenceForm` itself would produce from a pipe-separated list of
+ * literal values — i.e. splitting on `|`, unescaping each part, then
+ * re-escaping and re-joining reproduces the original string byte for byte.
+ * A real regex (alternation groups, character classes, quantifiers beyond a
+ * lone escaped metacharacter, …) will not round-trip: editing it as a
+ * literal-tag list and re-submitting silently corrupts it (S-09 — e.g.
+ * `web-(1|2)\.example\.com` becomes a literal-OR of `web-(1` and
+ * `2)\.example\.com`, matching neither of the original hosts). Callers
+ * should edit a non-round-tripping pattern as raw text instead.
+ */
+export function isRoundTrippableTagList(amValue: string): boolean {
+  const roundTripped = amValue
+    .split('|')
+    .filter(Boolean)
+    .map(unescapeRegex)
+    .map(escapeRegexValue)
+    .join('|')
+  return roundTripped === amValue
+}
+
 const GROUP_MATCHER_SKIP = new Set(['receiver', '@receiver', '@cluster'])
 
 /**

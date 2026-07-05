@@ -23,6 +23,8 @@ import {
   filterSilences,
   getExpiredSilence,
   labelColorStyle,
+  unescapeRegex,
+  isRoundTrippableTagList,
 } from './alertUtils'
 import type { EnrichedAlert, LabelMatcher, Silence } from '@/types'
 
@@ -94,6 +96,62 @@ describe('escapeRegexValue', () => {
       fc.property(fc.string(), (s) => {
         expect(() => new RegExp(escapeRegexValue(s))).not.toThrow()
       }),
+    )
+  })
+})
+
+describe('unescapeRegex', () => {
+  it('strips a backslash before any character, not just regex metacharacters', () => {
+    expect(unescapeRegex('web\\-prod')).toBe('web-prod')
+    expect(unescapeRegex('a\\/b')).toBe('a/b')
+    expect(unescapeRegex('a\\zb')).toBe('azb')
+  })
+
+  it('leaves a string with no backslashes untouched', () => {
+    expect(unescapeRegex('web1-prod')).toBe('web1-prod')
+  })
+
+  it('is the left inverse of escapeRegexValue for any string', () => {
+    fc.assert(
+      fc.property(fc.string(), (s) => {
+        expect(unescapeRegex(escapeRegexValue(s))).toBe(s)
+      }),
+    )
+  })
+})
+
+describe('isRoundTrippableTagList (S-09)', () => {
+  it('is true for a value SilenceForm itself would produce from literal tags', () => {
+    expect(isRoundTrippableTagList('web1')).toBe(true)
+    expect(isRoundTrippableTagList('web1|web2')).toBe(true)
+    expect(isRoundTrippableTagList(escapeRegexValue('10.0.0.1'))).toBe(true)
+  })
+
+  it('is false for a real regex with alternation groups (S-09 core case)', () => {
+    // web-(1|2)\.example\.com split on "|" gives "web-(1" / "2)\.example\.com" — re-escaping
+    // and rejoining produces a different string, so this must be flagged as non-round-trippable
+    // rather than silently edited (and corrupted) as a two-item literal tag list.
+    expect(isRoundTrippableTagList('web-(1|2)\\.example\\.com')).toBe(false)
+  })
+
+  it('is false for a power-user-typed regex like a character class or quantifier', () => {
+    expect(isRoundTrippableTagList('web-\\d+')).toBe(false)
+    expect(isRoundTrippableTagList('[a-z]+')).toBe(false)
+  })
+
+  it('is true for the empty string', () => {
+    expect(isRoundTrippableTagList('')).toBe(true)
+  })
+
+  it('property: always true for escapeRegexValue applied to arbitrary literal tags', () => {
+    fc.assert(
+      fc.property(
+        fc.array(fc.string({ minLength: 1 }).filter((s) => !s.includes('|')), { minLength: 1, maxLength: 5 }),
+        (tags) => {
+          const amValue = tags.map(escapeRegexValue).join('|')
+          expect(isRoundTrippableTagList(amValue)).toBe(true)
+        },
+      ),
     )
   })
 })

@@ -478,9 +478,17 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
 │   │                            silences in silencedBy, not just the first), getExpiredSilence,
 │   │                            filterSilences, pickIdentifierLabel, formatSilenceDuration,
 │   │                            formatTime, severityOrder, formatAckDuration, buildAckSilenceBody,
-│   │                            computeGroupLabelValues, buildGroupAckSilenceBody, escapeRegexValue,
+│   │                            computeGroupLabelValues (only labels present on EVERY alert in the
+│   │                            group — a partial label is dropped, never partially OR-matched),
+│   │                            buildGroupAckSilenceBody (throws on multi-cluster input),
+│   │                            escapeRegexValue, unescapeRegex, isRoundTrippableTagList (detects
+│   │                            whether an AM regex matcher is a Jarvis-style escaped-literal-OR-list
+│   │                            SilenceForm can safely edit as tags, vs. a real regex needing raw-text
+│   │                            editing — see SilenceForm's `raw` matcher mode),
 │   │                            FAST_SILENCE_DURATIONS, HIDDEN_LABEL_KEYS, labelColorStyle
 │   │                            ← single source, never duplicate in components
+│   │                            100% test coverage enforced (frontend/vitest.config.ts) — a narrow
+│   │                            exception to the functional-E2E-only strategy, see .agents/testing.md
 │   ├── alertSelection.ts      → makeAlertSelectionKey / parseAlertSelectionKey — selection key
 │   │                            format `<cluster>::<fingerprint>` (URL `alert=` param, cluster-safe)
 │   ├── linkUtils.tsx          → isUrl, extractLinkButtons (URL-valued labels/annotations + runbook
@@ -526,7 +534,11 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │   ├── SilenceExpiry.tsx  → "expired X ago" / "expires in X" / "starts in X"
     │   ├── SilenceExpireModal.tsx → expire/extend confirmation (silence-ID link → AM)
     │   ├── SilenceForm.tsx    → 3 steps: form (matchers, clusters, duration, live match count,
-    │   │                        overlap/zero-match warnings) → preview → per-cluster results
+    │   │                        overlap/zero-match/unevaluable-regex warnings) → preview → per-cluster results
+    │   │                        Regex matchers whose AM value isn't a literal-tag-OR-list
+    │   │                        (`isRoundTrippableTagList`) load in raw-text mode (`SilenceMatcher.raw`)
+    │   │                        instead of the tag editor, and submit verbatim — editing a real regex
+    │   │                        as tags would corrupt it on save
     │   ├── MatcherEditor.tsx  → matcher rows: operators + tag multi-value + suggestions
     │   └── SilenceTemplateTab.tsx → template CRUD + apply-to-form
     ├── settings/
