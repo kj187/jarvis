@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -146,9 +147,15 @@ func (c *Cluster) PingAll(ctx context.Context) []MemberStatus {
 }
 
 // CreateSilence sends the silence to the first healthy member (config
-// order); on transport failure, retries once against the next healthy
-// member. Never sent to all members — gossip replicates silences between
-// real HA members, so posting to every member would create duplicates.
+// order); on transport failure or a 5xx response, retries once against the
+// next healthy member. Never sent to all members — gossip replicates
+// silences between real HA members, so posting to every member would create
+// duplicates. Does NOT retry a 4xx response (see isRetryableWriteError) — the
+// request reached Alertmanager and was rejected on its merits (invalid
+// matcher, bad ID, …); a second member will reject it identically, so
+// retrying only adds latency and (for a non-idempotent create) risks a
+// duplicate if the first response was lost after Alertmanager had already
+// applied the write.
 func (c *Cluster) CreateSilence(ctx context.Context, s alertmanager.PostableSilence) (string, error) {
 	members := c.writeOrder()
 	if len(members) == 0 {
@@ -161,6 +168,9 @@ func (c *Cluster) CreateSilence(ctx context.Context, s alertmanager.PostableSile
 			return id, nil
 		}
 		lastErr = err
+		if !isRetryableWriteError(err) {
+			return "", err
+		}
 	}
 	return "", lastErr
 }
@@ -178,8 +188,24 @@ func (c *Cluster) DeleteSilence(ctx context.Context, id string) error {
 			return nil
 		}
 		lastErr = err
+		if !isRetryableWriteError(err) {
+			return err
+		}
 	}
 	return lastErr
+}
+
+// isRetryableWriteError reports whether a failed write is worth retrying
+// against another member: true for transport/network errors and 5xx
+// responses, false for a 4xx *alertmanager.AMError — Alertmanager received
+// and rejected the request on its merits, and every member enforces the
+// same validation.
+func isRetryableWriteError(err error) bool {
+	var amErr *alertmanager.AMError
+	if errors.As(err, &amErr) {
+		return amErr.StatusCode >= 500
+	}
+	return true
 }
 
 // attemptCount caps write retries at 2: the first healthy member, plus one retry.

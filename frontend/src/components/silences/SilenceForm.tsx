@@ -1161,11 +1161,11 @@ export function SilenceForm({
             <DateTimePicker value={startsAt} onChange={handleStartsAtChange} />
           </div>
 
-          {/* Ende — duration spinners and calendar side by side, always in sync */}
+          {/* End — duration spinners and calendar side by side, always in sync */}
           <div>
             <div className="mb-2 flex items-center justify-between">
               <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Ende
+                End
               </label>
               <Button
                 type="button"
@@ -1362,7 +1362,7 @@ export function SilenceForm({
           <div className="grid grid-cols-[80px_1fr] gap-y-1.5">
             <span className="text-muted-foreground">Start</span>
             <span className="font-mono">{startsAt ? `${format(new Date(startsAt), 'yyyy-MM-dd HH:mm')} ${tzAbbr}` : '—'}</span>
-            <span className="text-muted-foreground">Ende</span>
+            <span className="text-muted-foreground">End</span>
             <span className="font-mono">{previewEnd} {tzAbbr} <span className="text-muted-foreground ml-1">({previewDuration})</span></span>
             <span className="text-muted-foreground">Author</span>
             <span>{effectiveCreatedBy}</span>

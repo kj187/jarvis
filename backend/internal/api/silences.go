@@ -27,7 +27,11 @@ func (s *Server) getSilences(c echo.Context) error {
 		}
 		raw, err := cl.FetchSilences(ctx, nil)
 		if err != nil {
-			continue // best-effort
+			// Best-effort: a cluster's silences are simply missing from the response rather
+			// than failing the whole request, but log it — otherwise this shows up to users
+			// only as an unexplained gap (e.g. a silence badge that should be there isn't).
+			slog.Warn("fetch silences failed", "cluster", cl.Name, "err", err)
+			continue
 		}
 		for _, rs := range raw {
 			allSilences = append(allSilences, convertSilence(rs, cl.Name, cl.AlertmanagerLinkURL))
@@ -239,9 +243,9 @@ func (s *Server) getSilenceTemplates(c echo.Context) error {
 // POST /api/v1/silence-templates
 func (s *Server) createSilenceTemplate(c echo.Context) error {
 	var body struct {
-		Name    string                  `json:"name"`
+		Name     string                  `json:"name"`
 		Matchers []models.SilenceMatcher `json:"matchers"`
-		Reason  string                  `json:"reason"`
+		Reason   string                  `json:"reason"`
 	}
 	if err := c.Bind(&body); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
@@ -295,9 +299,9 @@ func (s *Server) updateSilenceTemplate(c echo.Context) error {
 	}
 
 	var body struct {
-		Name    string                  `json:"name"`
+		Name     string                  `json:"name"`
 		Matchers []models.SilenceMatcher `json:"matchers"`
-		Reason  string                  `json:"reason"`
+		Reason   string                  `json:"reason"`
 	}
 	if err := c.Bind(&body); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")

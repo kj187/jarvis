@@ -215,6 +215,7 @@ Quick reference: which spec file covers what. Use this to find the right place f
 | `silences-page.spec.ts` | E1–E7, G1, G3 | List view persist, grouping, show/hide expired, sort, matcher filter, expiry status, re-create, expire single/group |
 | `silences-form-extended.spec.ts` | F3–F16 | Operator switch, regex tags+escaping, live match count, overlap warning, zero-match warning, duration presets, spinner normalisation, inline calendar, Now/Reset, end-after-start validation, author editability, reason required, preview summary, results step |
 | `silences-form-templates.spec.ts` | F1–F2, F14–F15, F17, G4–G8 | Form open/close (Cancel/ESC/backdrop), cluster guard, templates CRUD (create/apply/edit/delete) |
+| `silence-matching-semantics.spec.ts` | — | Differential tests against the real Alertmanager instance: form preview's affected-alerts count and actual post-submit suppression must agree — anchored `=~`/`!~` regex (not substring), regex-OR matcher escaping with metacharacter label values |
 | `settings.spec.ts` | H1–H11 | All settings: timeFormat, defaultViewMode, resolvedPageSize, defaultFilters, silenceDuration, defaultCreatorName, pollInterval, claimAnimation, reset defaults, persistence |
 | `no-auth-notice.spec.ts` | I1 | NoAuth notice appears and dismiss persists |
 | `websocket.spec.ts` | J1–J4 | Reconnect indicator (force-close via patched WebSocket), `alerts_update` / `claim_set` / `claim_released` / `comment_added` live events |

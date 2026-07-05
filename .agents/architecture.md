@@ -356,6 +356,8 @@ GET    /api/v1/alerts/:fingerprint/claims/history full_protect? → []Claim  ?cl
 
 # ── Silences (proxy → Alertmanager) ──────────────────────────────────────────
 GET    /api/v1/silences                          full_protect?  → []Silence  ?cluster=
+#        a cluster whose silence fetch fails is skipped (best-effort, logged via slog.Warn)
+#        rather than failing the whole request — its silences are simply absent from the response
 POST   /api/v1/silences                          Auth  (write)  → { id }
 #        validated server-side before the AM call (silence_validation.go validateSilenceMatchers):
 #        ≥1 matcher, no empty matcher names, every regex must compile (Go regexp = RE2, same
@@ -700,9 +702,14 @@ with its own `*alertmanager.Client`); `Cluster.AlertmanagerURL` /
   e.g. "2/2 members up", amber when degraded).
 - `Cluster.CreateSilence` / `DeleteSilence` send to the first healthy member
   (config order, from the cached up-state set by the last `FetchAlerts`),
-  retrying once against the next member on transport failure — never to all
-  members, since gossip already replicates and posting to every member would
-  create duplicates.
+  retrying once against the next member on transport failure or a 5xx
+  response — never to all members, since gossip already replicates and
+  posting to every member would create duplicates. Does NOT retry a 4xx
+  (`isRetryableWriteError` in `poll.go`): Alertmanager already evaluated and
+  rejected the request on its merits, so a second member would reject it
+  identically — retrying only adds latency and, for the non-idempotent
+  create, risks a duplicate if the first response was lost after
+  Alertmanager had already applied the write.
 - Enrichment (`cluster/enrich.go`, `enrichMerged`) — moved here from
   `history` — builds `EnrichedAlert` (incl. `@receiver` label) from merged
   alerts; lives in `cluster` because `history` imports `cluster` (not the
