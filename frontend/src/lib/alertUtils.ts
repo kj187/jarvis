@@ -77,7 +77,7 @@ export function pickIdentifierLabel(
   return best
 }
 
-// ── Regex helper ──────────────────────────────────────────────────────────
+// ── Regex helpers ────────────────────────────────────────────────────────
 
 export function safeRegex(pattern: string): RegExp | null {
   try {
@@ -87,11 +87,35 @@ export function safeRegex(pattern: string): RegExp | null {
   }
 }
 
+/**
+ * Alertmanager-anchored regex: full-string match (`^(?:pattern)$`), matching
+ * how Alertmanager compiles a matcher's regex (RE2, fully anchored).
+ * `new RegExp(pattern).test(value)` is substring matching and diverges from
+ * AM in both directions — `instance=~"web1"` would appear to also match
+ * `web10`, and `instance!~"web"` would appear to NOT match `web1` even
+ * though AM's anchored negative match silences it (`^(?:web)$` doesn't match
+ * `web1`, so `!~` is true). Returns null for patterns that don't compile as
+ * a JS RegExp — such a pattern may still be valid RE2 (e.g. inline flags
+ * like `(?i)`); see `hasUnevaluableRegexMatcher` for surfacing that case.
+ */
+export function anchoredRegex(pattern: string): RegExp | null {
+  try {
+    return new RegExp(`^(?:${pattern})$`)
+  } catch {
+    return null
+  }
+}
+
 // ── Matcher logic ─────────────────────────────────────────────────────────
 
 /**
- * Returns true if the alert matches ALL of the given label matchers.
- * Special handling: receiver/@receiver labels are comma-separated and support partial matching.
+ * Returns true if the alert matches ALL of the given label matchers, for
+ * the alerts-page/silences-page **filter bar** — deliberately lenient UI
+ * filtering, not Alertmanager matching semantics: substring regex (not
+ * anchored) and receiver/@receiver pseudo-labels with comma-list partial
+ * matching. Do NOT use this to decide what a silence would actually cover —
+ * that is `silenceWouldMatchAlert`, which mirrors AM's anchored, pseudo-label-free
+ * semantics exactly.
  */
 export function matchesLabelMatchers(
   alert: EnrichedAlert,
@@ -109,7 +133,11 @@ export function matchesLabelMatchers(
         case '=':
           return receivers.includes(m.value)
         case '!=':
-          return receivers.some((r) => r !== m.value)
+          // Matches only if NONE of the alert's receivers is the excluded one —
+          // consistent with `!~` below (also `every`); `some` here would make
+          // `receiver!=a` match an alert whose receivers are [a, b] just
+          // because b !== a.
+          return receivers.every((r) => r !== m.value)
         case '=~': {
           const re = safeRegex(m.value)
           return re ? receivers.some((r) => re.test(r)) : false
@@ -132,6 +160,55 @@ export function matchesLabelMatchers(
       }
       case '!~': {
         const re = safeRegex(m.value)
+        return re ? !re.test(value) : true
+      }
+    }
+  })
+}
+
+/**
+ * True if any regex matcher's pattern doesn't compile as a JS RegExp (e.g.
+ * RE2-only syntax like `(?i)`), meaning `silenceWouldMatchAlert` couldn't
+ * evaluate it client-side and had to assume a match conservatively. Callers
+ * (the silence-preview UI) should surface this instead of trusting an
+ * "0 affected alerts" count at face value.
+ */
+export function hasUnevaluableRegexMatcher(matchers: LabelMatcher[]): boolean {
+  return matchers.some(
+    (m) => (m.operator === '=~' || m.operator === '!~') && anchoredRegex(m.value) === null,
+  )
+}
+
+/**
+ * True if the given matchers would match the alert in Alertmanager: anchored
+ * regex (not substring), evaluated only against the alert's real labels —
+ * no `@cluster`/`@receiver`/`receiver` pseudo-labels, since those don't
+ * exist as real Alertmanager labels (a matcher naming them targets the empty
+ * string there, not the UI's synthesized value). A missing label is treated
+ * as the empty string, matching AM's own matcher semantics. Used by
+ * `SilenceForm`'s affected-alerts preview and overlap detection — NOT the
+ * filter bar, which intentionally stays lenient (see `matchesLabelMatchers`).
+ *
+ * A regex matcher whose pattern doesn't compile in JS is conservatively
+ * treated as matching (see `hasUnevaluableRegexMatcher`): under-counting
+ * affected alerts is the dangerous direction (a silence created from a
+ * preview showing "0 affected" that actually silences alerts in
+ * Alertmanager); over-counting is not.
+ */
+export function silenceWouldMatchAlert(matchers: LabelMatcher[], alert: EnrichedAlert): boolean {
+  return matchers.every((m) => {
+    const value = alert.labels[m.name] ?? ''
+    switch (m.operator) {
+      case '=':
+        return value === m.value
+      case '!=':
+        return value !== m.value
+      case '=~': {
+        const re = anchoredRegex(m.value)
+        return re ? re.test(value) : true
+      }
+      case '!~': {
+        const re = anchoredRegex(m.value)
         return re ? !re.test(value) : true
       }
     }
@@ -189,9 +266,13 @@ export function filterSilences(
 // ── Effective alert state ─────────────────────────────────────────────────
 
 /**
- * Returns 'active' if the alert is suppressed but its silence expires within
- * 15 minutes (i.e. it will soon become active again).
- * Otherwise returns the raw alert state.
+ * Returns 'active' if the alert is suppressed but ALL active silences
+ * currently covering it (`status.silencedBy`) expire within 15 minutes —
+ * i.e. it will soon become active again regardless of which one runs out
+ * last. Otherwise returns the raw alert state. An alert can be covered by
+ * more than one silence at once; looking only at the first one found in
+ * `silencedBy` (as opposed to the one with the latest `endsAt`) could flip
+ * the effective state early while a longer-running silence still applies.
  */
 export function getEffectiveAlertState(
   alert: EnrichedAlert,
@@ -202,16 +283,14 @@ export function getEffectiveAlertState(
   const FIFTEEN_MIN = 15 * 60 * 1000
   const now = Date.now()
 
+  let maxRemaining: number | null = null
   for (const silenceId of alert.status.silencedBy) {
     const silence = silences.find((s) => s.id === silenceId)
-    if (silence && silence.status.state === 'active') {
-      const endsAt = new Date(silence.endsAt).getTime()
-      const remaining = endsAt - now
-      if (remaining <= FIFTEEN_MIN) {
-        return 'active'
-      }
-    }
+    if (!silence || silence.status.state !== 'active') continue
+    const remaining = new Date(silence.endsAt).getTime() - now
+    if (maxRemaining === null || remaining > maxRemaining) maxRemaining = remaining
   }
+  if (maxRemaining !== null && maxRemaining <= FIFTEEN_MIN) return 'active'
   return 'suppressed'
 }
 
@@ -223,37 +302,52 @@ export interface SilenceStateResult {
   remaining?: number
 }
 
+/**
+ * Picks the silence that best represents the alert's current suppression:
+ * among all ACTIVE silences in `silencedBy`, the one with the latest
+ * `endsAt` (the one that actually determines when the alert goes loud
+ * again) — checked before any pending silence, since a pending silence
+ * doesn't suppress anything yet.
+ */
 export function getSilenceState(alert: EnrichedAlert, silences: Silence[]): SilenceStateResult {
   const FIFTEEN_MIN = 15 * 60 * 1000
   const now = Date.now()
+
+  let best: { silence: Silence; remaining: number } | null = null
+  let pending: Silence | null = null
   for (const silenceId of alert.status.silencedBy) {
     const silence = silences.find((s) => s.id === silenceId)
     if (!silence) continue
-    const remaining = new Date(silence.endsAt).getTime() - now
-    if (silence.status.state === 'pending') return { type: 'pending', silence }
+    if (silence.status.state === 'pending' && !pending) pending = silence
     if (silence.status.state === 'active') {
-      if (remaining <= FIFTEEN_MIN) return { type: 'expiring', silence, remaining }
-      return { type: 'active', silence, remaining }
+      const remaining = new Date(silence.endsAt).getTime() - now
+      if (!best || remaining > best.remaining) best = { silence, remaining }
     }
   }
+  if (best) {
+    return best.remaining <= FIFTEEN_MIN
+      ? { type: 'expiring', silence: best.silence, remaining: best.remaining }
+      : { type: 'active', silence: best.silence, remaining: best.remaining }
+  }
+  if (pending) return { type: 'pending', silence: pending }
   return { type: null, silence: null }
 }
 
 /**
- * Returns true if the silence's matchers all match the given alert's labels
- * (including the @cluster pseudo-label).
+ * Returns true if the silence's matchers would match the alert in
+ * Alertmanager: anchored regex, evaluated only against the alert's real
+ * labels (no `@cluster` pseudo-label — no real Alertmanager label has that
+ * name, and cluster scoping is handled separately via `clusterName`
+ * comparisons at call sites). See `silenceWouldMatchAlert` for the
+ * equivalent used on the (differently-shaped) `LabelMatcher[]` the silence
+ * form works with, including the unparseable-regex rationale.
  */
 export function silenceMatchesAlert(silence: Silence, alert: EnrichedAlert): boolean {
-  const labels: Record<string, string> = { ...alert.labels, '@cluster': alert.clusterName }
   return silence.matchers.every((m) => {
-    const value = labels[m.name] ?? ''
+    const value = alert.labels[m.name] ?? ''
     if (m.isRegex) {
-      try {
-        const re = new RegExp(m.value)
-        return m.isEqual ? re.test(value) : !re.test(value)
-      } catch {
-        return false
-      }
+      const re = anchoredRegex(m.value)
+      return re ? (m.isEqual ? re.test(value) : !re.test(value)) : true
     }
     return m.isEqual ? value === m.value : value !== m.value
   })

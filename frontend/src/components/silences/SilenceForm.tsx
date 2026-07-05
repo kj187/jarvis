@@ -13,7 +13,7 @@ import { DateTimePicker } from '@/components/ui/date-time-picker'
 import { useAlerts } from '@/hooks/useAlerts'
 import { useSilences } from '@/hooks/useSilences'
 import { useSilenceTemplates } from '@/hooks/useSilenceTemplates'
-import { matchesLabelMatchers, pickIdentifierLabel, tzAbbr, computeGroupLabelValues, escapeRegexValue } from '@/lib/alertUtils'
+import { silenceWouldMatchAlert, hasUnevaluableRegexMatcher, pickIdentifierLabel, tzAbbr, computeGroupLabelValues, escapeRegexValue } from '@/lib/alertUtils'
 import { upsertSilence, triggerPoll } from '@/api/client'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { useAuthStore } from '@/store/authStore'
@@ -584,14 +584,10 @@ export function SilenceForm({
   const [results, setResults] = useState<Map<string, ClusterResult>>(new Map())
   const [affectedOpen, setAffectedOpen] = useState(false)
 
-  const formLabelMatchers = useMemo<LabelMatcher[]>(
-    () => matchers.filter((m) => m.name).map((m) => ({ id: String(m.id), name: m.name, operator: m.operator, value: m.value })),
-    [matchers],
-  )
-
   const silenceGroups = useMemo(() => {
     if (isEdit || !prefillAlerts?.length) return []
-    const matchedAlerts = prefillAlerts.filter((a) => matchesLabelMatchers(a, formLabelMatchers))
+    const lm = buildLabelMatchers()
+    const matchedAlerts = prefillAlerts.filter((a) => silenceWouldMatchAlert(lm, a))
     const map = new Map<string, { silence: Silence; alerts: EnrichedAlert[] }>()
     for (const alert of matchedAlerts) {
       for (const silenceId of alert.status.silencedBy) {
@@ -605,7 +601,8 @@ export function SilenceForm({
       }
     }
     return [...map.values()]
-  }, [isEdit, prefillAlerts, allSilences, formLabelMatchers])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEdit, prefillAlerts, allSilences, matchers])
 
   // ── Matchers ────────────────────────────────────────────────────────────────
 
@@ -736,7 +733,7 @@ export function SilenceForm({
   const previewMatched = useCallback((): EnrichedAlert[] => {
     const lm = buildLabelMatchers()
     return allAlerts.filter(
-      (a) => selectedClusters.includes(a.clusterName) && matchesLabelMatchers(a, lm),
+      (a) => selectedClusters.includes(a.clusterName) && silenceWouldMatchAlert(lm, a),
     )
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allAlerts, matchers, selectedClusters])
@@ -745,6 +742,11 @@ export function SilenceForm({
   const liveMatchCount = matchedAlerts.length
 
   const hasActiveMatchers = matchers.some((m) => m.name && m.value)
+  const hasUnevaluableRegex = useMemo(
+    () => hasUnevaluableRegexMatcher(buildLabelMatchers()),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [matchers],
+  )
   const parsedStartsAt = startsAt ? parse(startsAt, FMT, new Date()) : null
   const startsInFuture = Boolean(
     parsedStartsAt && isValid(parsedStartsAt) && parsedStartsAt.getTime() > Date.now(),
@@ -1048,6 +1050,21 @@ export function SilenceForm({
               <Plus className="mr-1 h-3 w-3" />
               Add matcher
             </Button>
+
+            {/* Unevaluable regex warning — pattern doesn't compile in the browser (e.g. RE2-only
+                syntax like `(?i)`), so the affected-alerts count below can't be trusted: matchers
+                using it are treated as matching everything rather than silently showing 0. */}
+            {hasUnevaluableRegex && (
+              <div className="flex gap-2.5 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-amber-700 dark:text-amber-400">
+                <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+                <div className="text-xs space-y-0.5">
+                  <p>
+                    One or more regex patterns can&apos;t be evaluated in the browser — the affected-alerts
+                    preview may be incomplete. Alertmanager decides the actual match when the silence is created.
+                  </p>
+                </div>
+              </div>
+            )}
 
             {/* Zero-match warning */}
             {hasActiveMatchers && liveMatchCount === 0 && (
