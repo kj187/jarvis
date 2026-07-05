@@ -16,7 +16,7 @@ The card view is the default landing page and the primary interface for active a
 - Claim banner — shows who has claimed the alert and since when, if anyone has
 
 **Actions available directly on the card:**
-- **Silence** — opens the silence form pre-filled with this alert's labels
+- **Silence / Fast-Silence** — a persistent bell icon in a narrow column on the right of each alert entry (and one for the whole group, in the card header) opens a menu with the full silence form and one-click Fast-Silence durations — see [Fast-Silence](#fast-silence)
 - **Detail** — click anywhere on the alert entry to slide open the full detail panel; claim and all other actions are available there
 
 Sections are grouped by the label selected in **Settings → Group alerts by label** (default: `severity`). You can collapse/expand each section and reorder sections via drag-and-drop (drag handle on the right). The section order and collapsed state are persisted in localStorage per grouping label.
@@ -256,18 +256,16 @@ One-click, form-free silence on any active alert — hover the button, pick a du
 
 ![Fast-Silence](assets/feature-fast-silence.png)
 
-[Silence from Alert](#silence-from-alert) still requires opening the form, reviewing matchers, and submitting — the right choice when you want control over scope. Fast-Silence is for the common case: you know exactly which single alert instance you want to quiet, right now, without leaving the alert list.
+[Silence from Alert](#silence-from-alert) still requires opening the form, reviewing matchers, and submitting — the right choice when you want control over scope. Fast-Silence is for the common case: you know exactly which alert (or group of alerts) you want to quiet, right now, without leaving the alert list.
 
 **How it works:**
-1. Hover an active alert card (or open its detail panel) — a **Fast-Silence** button appears
-2. Hovering (or focusing/tapping) the button opens a small duration menu: `5m`, `10m`, `15m`, `30m`, `1h`, `4h`, `1d`, `1w`
-3. Pick a duration — Jarvis immediately creates an exact-match silence covering only that alert's real labels, no form involved
+1. In card view, every alert entry has a small bell icon in its persistent action column on the right — no hovering needed to find it. The card header carries the same bell icon for the whole visible group.
+2. Hovering (or focusing/tapping) the bell opens a menu: **Silence…** at the top opens the full pre-filled form (see [Silence from Alert](#silence-from-alert)); below it, **Fast-Silence for…** lists durations — `5m`, `10m`, `15m`, `30m`, `1h`, `4h`, `1d`, `1w`.
+3. Picking a duration on a single alert's bell creates one exact-match silence for that alert's real labels, no form involved. Picking a duration on the **card header's** bell creates one broader silence per cluster represented in the group (normally just one) — matchers use the same common-vs-varying label logic as the "Silence…" form's own group prefill (exact match on labels shared by every alert, regex-OR match on labels that vary, e.g. `pod`), so it covers exactly the same scope a reviewed form submission would default to.
 
-The silence's comment is auto-filled as `Fast-Silence for <duration>` so its origin is clear later in the [Active Silence](#active-silence) view or Alertmanager itself. The button shows a transient "Silenced" confirmation immediately, before the next poll flips the alert to suppressed.
+The same bell + menu pattern is also available (without the group case) on list-view rows and in the alert detail panel. Each created silence's comment is auto-filled as `Fast-Silence for <duration>` so its origin is clear later in the [Active Silence](#active-silence) view or Alertmanager itself. The button shows a transient "Silenced" confirmation immediately, before the next poll flips the alert(s) to suppressed.
 
-Fast-Silence is only shown on alerts that are currently active (invariant: it disappears once an alert is suppressed or resolved) and respects the same authentication gate as every other write action — in `write_protect` mode, picking a duration prompts login first.
-
-Available in the card view, list view, and the alert detail panel.
+The per-alert bell is only shown while that alert is active (invariant: it disappears once suppressed or resolved); the card header's bell stays available regardless of state, since its "Silence…" form link is still useful for a resolved group, but its Fast-Silence section hides itself once nothing in the group is active. Every path respects the same authentication gate as other write actions — in `write_protect` mode, picking a duration prompts login first.
 
 ---
 

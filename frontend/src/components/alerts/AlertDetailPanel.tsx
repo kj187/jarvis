@@ -528,7 +528,7 @@ export function AlertDetailPanel({
                 <BellOff className="h-3.5 w-3.5" />
                 Silence
               </Button>
-              <AckButton alert={alert} silences={silences} variant="detail" />
+              <AckButton alerts={[alert]} silences={silences} variant="detail" />
             </div>
           </div>
 

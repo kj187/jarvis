@@ -196,7 +196,7 @@ export function AlertListRow({
       )}
       {showActionsColumn && <td className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center gap-1">
-          {silences && <AckButton alert={alert} silences={silences} variant="card" />}
+          {silences && <AckButton alerts={[alert]} silences={silences} variant="card" />}
           {silenceType === 'active' && silence && (
             <button
               type="button"

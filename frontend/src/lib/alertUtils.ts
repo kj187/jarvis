@@ -399,3 +399,67 @@ export function buildAckSilenceBody(
     fingerprint: alert.fingerprint,
   }
 }
+
+/** Escapes regex metacharacters so a raw label value is safe to embed in an Alertmanager regex matcher. */
+export function escapeRegexValue(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+const GROUP_MATCHER_SKIP = new Set(['receiver', '@receiver', '@cluster'])
+
+/**
+ * For a group of alerts, computes each real label's distinct value set —
+ * the shared basis for both `SilenceForm`'s group prefill and one-click group
+ * Fast-Silence, so both default to the same silence scope. A label with a
+ * single distinct value is common across the group (exact match); more than
+ * one value means it varies per alert (regex OR match).
+ */
+export function computeGroupLabelValues(alerts: EnrichedAlert[]): Array<{ name: string; values: string[] }> {
+  const allKeys = new Set<string>()
+  for (const a of alerts) {
+    for (const k of Object.keys(a.labels)) {
+      if (!GROUP_MATCHER_SKIP.has(k)) allKeys.add(k)
+    }
+  }
+  const result: Array<{ name: string; values: string[] }> = []
+  for (const key of allKeys) {
+    const values = [...new Set(alerts.map((a) => a.labels[key]).filter(Boolean))]
+    if (values.length > 0) result.push({ name: key, values })
+  }
+  return result
+}
+
+/**
+ * Builds the silence body for a one-click *group* Fast-Silence: one silence
+ * per cluster represented in `alerts` (normally just one), with matchers from
+ * `computeGroupLabelValues` — exact match on labels shared by every alert in
+ * the group, escaped-regex OR-match on labels that vary. This is exactly what
+ * `SilenceForm`'s "Silence…" would default to for the same alerts, just
+ * submitted immediately instead of opened for review. Firing one broader
+ * silence per cluster (instead of one exact silence per alert) keeps this
+ * reliable for large groups — no fan-out of dozens of concurrent writes.
+ */
+export function buildGroupAckSilenceBody(
+  alerts: EnrichedAlert[],
+  durationMinutes: number,
+  createdBy: string,
+): UpsertSilenceBody {
+  const now = new Date()
+  const endsAt = new Date(now.getTime() + durationMinutes * 60_000)
+  const matchers = computeGroupLabelValues(alerts)
+    .map(({ name, values }) =>
+      values.length === 1
+        ? { isEqual: true, isRegex: false, name, value: values[0] }
+        : { isEqual: true, isRegex: true, name, value: values.map(escapeRegexValue).join('|') },
+    )
+    .sort((a, b) => a.name.localeCompare(b.name))
+  return {
+    cluster: alerts[0].clusterName,
+    matchers,
+    startsAt: now.toISOString(),
+    endsAt: endsAt.toISOString(),
+    createdBy,
+    performedBy: createdBy,
+    comment: `Fast-Silence for ${formatAckDuration(durationMinutes)}`,
+  }
+}

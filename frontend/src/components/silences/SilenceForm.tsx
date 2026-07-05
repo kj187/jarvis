@@ -13,7 +13,7 @@ import { DateTimePicker } from '@/components/ui/date-time-picker'
 import { useAlerts } from '@/hooks/useAlerts'
 import { useSilences } from '@/hooks/useSilences'
 import { useSilenceTemplates } from '@/hooks/useSilenceTemplates'
-import { matchesLabelMatchers, pickIdentifierLabel, tzAbbr } from '@/lib/alertUtils'
+import { matchesLabelMatchers, pickIdentifierLabel, tzAbbr, computeGroupLabelValues, escapeRegexValue } from '@/lib/alertUtils'
 import { upsertSilence, triggerPoll } from '@/api/client'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { useAuthStore } from '@/store/authStore'
@@ -48,10 +48,6 @@ interface SilenceMatcher {
 
 let _id = 1
 const nextId = () => _id++
-
-function escapeRegex(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
 
 function unescapeRegex(s: string): string {
   // A backslash escape always means "literal next character", so strip the
@@ -261,29 +257,11 @@ function LabelNameInput({ value, onChange, suggestions, className }: LabelNameIn
 function buildPrefillMatchers(alerts: EnrichedAlert[]): SilenceMatcher[] {
   if (alerts.length === 0) return [{ id: nextId(), name: '', operator: '=', value: '' }]
 
-  const SKIP = new Set(['receiver', '@receiver', '@cluster'])
-  const allKeys = new Set<string>()
-  for (const a of alerts) {
-    for (const k of Object.keys(a.labels)) {
-      if (!SKIP.has(k)) allKeys.add(k)
-    }
-  }
-
-  const matchers: SilenceMatcher[] = []
-  for (const key of allKeys) {
-    const values = [...new Set(alerts.map((a) => a.labels[key]).filter(Boolean))]
-    if (values.length === 0) continue
-    if (values.length === 1) {
-      matchers.push({ id: nextId(), name: key, operator: '=', value: values[0] })
-    } else {
-      matchers.push({
-        id: nextId(),
-        name: key,
-        operator: '=~',
-        value: values.join('|'),
-      })
-    }
-  }
+  const matchers: SilenceMatcher[] = computeGroupLabelValues(alerts).map(({ name, values }) =>
+    values.length === 1
+      ? { id: nextId(), name, operator: '=', value: values[0] }
+      : { id: nextId(), name, operator: '=~', value: values.join('|') },
+  )
 
   return matchers.length > 0
     ? matchers
@@ -739,7 +717,7 @@ export function SilenceForm({
   // ── Helpers ──────────────────────────────────────────────────────────────────
 
   function toRegexValue(value: string): string {
-    return value.split('|').filter(Boolean).map(escapeRegex).join('|')
+    return value.split('|').filter(Boolean).map(escapeRegexValue).join('|')
   }
 
   function buildLabelMatchers(): LabelMatcher[] {

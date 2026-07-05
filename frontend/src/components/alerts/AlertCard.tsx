@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ArrowUpRight, Bell, BellOff, User } from 'lucide-react'
+import { ArrowUpRight, BellOff, User } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getFilterableLabels, getSilenceState, getExpiredSilence, formatSilenceDuration, tzAbbr } from '@/lib/alertUtils'
 import { renderTextWithLinks } from '@/lib/linkUtils'
@@ -45,12 +45,14 @@ function AlertEntry({
   onClick,
   isSelected,
   commonLabelKeys,
+  onCreateSilence,
 }: {
   alert: EnrichedAlert
   silences: Silence[]
   onClick: (selectionKey: string) => void
   isSelected: boolean
   commonLabelKeys: Set<string>
+  onCreateSilence?: (alerts: EnrichedAlert[]) => void
 }) {
   const { type: silenceType, silence, remaining } = getSilenceState(alert, silences)
   const expiredSilence = silenceType === null ? getExpiredSilence(alert, silences) : null
@@ -70,7 +72,6 @@ function AlertEntry({
     })
   const summary = alert.annotations['summary']
   const description = alert.annotations['description']
-  const [ackActive, setAckActive] = useState(false)
 
   return (
     <div
@@ -81,7 +82,7 @@ function AlertEntry({
       onClick={() => onClick(makeAlertSelectionKeyForAlert(alert))}
       onKeyDown={(e) => e.key === 'Enter' && onClick(makeAlertSelectionKeyForAlert(alert))}
       className={cn(
-        'group relative cursor-pointer border-l-2 border-transparent px-3 py-2.5 transition-colors focus:outline-none focus-visible:outline-none',
+        'group relative flex cursor-pointer items-start gap-1 border-l-2 border-transparent px-3 py-2.5 transition-colors focus:outline-none focus-visible:outline-none',
         claim
           ? 'bg-muted/30 hover:bg-muted/50'
           : 'hover:bg-accent/20',
@@ -89,121 +90,117 @@ function AlertEntry({
         isSelected && claim && 'bg-muted/50 hover:bg-muted/70',
       )}
     >
-      <span className="pointer-events-none absolute right-2 top-2 z-10 inline-flex items-center gap-0.5 rounded border border-transparent bg-transparent px-1 py-0.5 text-[10px] font-medium text-foreground opacity-0 shadow-none transition-all group-hover:border-border/80 group-hover:bg-card/95 group-hover:opacity-100 group-hover:shadow-sm">
-        Open
-        <ArrowUpRight className="h-2.5 w-2.5" />
-      </span>
-
-      {/* One-click acknowledge (active alerts only) */}
-      <div
-        className={cn(
-          'absolute right-2 top-8 z-10 transition-opacity focus-within:opacity-100 group-hover:opacity-100',
-          ackActive ? 'opacity-100' : 'opacity-0',
-        )}
-      >
-        <AckButton alert={alert} silences={silences} variant="card" onOpenChange={setAckActive} />
-      </div>
-
-      {/* Claim banner */}
-      {claim && (
-        <div className={cn(
-          'mb-2 flex items-start gap-2 rounded px-2 py-1.5 text-xs',
-          theme === 'light' ? 'bg-blue-50 border border-blue-200' : 'bg-blue-900/50',
-        )}>
-          <User className={cn('mt-0.5 h-3 w-3 shrink-0', theme === 'light' ? 'text-blue-600' : 'text-blue-300')} />
-          <div className="min-w-0 flex-1">
-            <div className={cn('font-semibold', theme === 'light' ? 'text-blue-800' : 'text-blue-200')}>
-              In progress: {claim.claimedBy}
-            </div>
-            <div className={theme === 'light' ? 'text-blue-600' : 'text-blue-400'}>
-              {formatTime(claim.claimedAt)}
-            </div>
-            {claim.note && (
-              <div className={cn('mt-0.5', theme === 'light' ? 'text-blue-700' : 'text-blue-300/80')}>
-                {claim.note}
+      <div className="min-w-0 flex-1">
+        {/* Claim banner */}
+        {claim && (
+          <div className={cn(
+            'mb-2 flex items-start gap-2 rounded px-2 py-1.5 text-xs',
+            theme === 'light' ? 'bg-blue-50 border border-blue-200' : 'bg-blue-900/50',
+          )}>
+            <User className={cn('mt-0.5 h-3 w-3 shrink-0', theme === 'light' ? 'text-blue-600' : 'text-blue-300')} />
+            <div className="min-w-0 flex-1">
+              <div className={cn('font-semibold', theme === 'light' ? 'text-blue-800' : 'text-blue-200')}>
+                In progress: {claim.claimedBy}
               </div>
-            )}
+              <div className={theme === 'light' ? 'text-blue-600' : 'text-blue-400'}>
+                {formatTime(claim.claimedAt)}
+              </div>
+              {claim.note && (
+                <div className={cn('mt-0.5', theme === 'light' ? 'text-blue-700' : 'text-blue-300/80')}>
+                  {claim.note}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Timestamp + maintainer */}
-      <div className="mb-1 flex flex-col gap-0.5 text-xs text-muted-foreground">
-        <div className="flex items-center gap-2">
-          <span title={new Date(alert.startsAt).toLocaleString('en-US')}>
-            {new Date(alert.startsAt) > new Date()
-              ? `Expires ${formatTime(alert.endsAt)}`
-              : formatTime(alert.startsAt)}
-          </span>
-          {stats && stats.occurrenceCount > 1 && (
-            <span title={`${stats.occurrenceCount}× occurred`}>↻{stats.occurrenceCount}×</span>
+        {/* Timestamp + maintainer */}
+        <div className="mb-1 flex flex-col gap-0.5 text-xs text-muted-foreground">
+          <div className="flex items-center gap-2">
+            <span title={new Date(alert.startsAt).toLocaleString('en-US')}>
+              {new Date(alert.startsAt) > new Date()
+                ? `Expires ${formatTime(alert.endsAt)}`
+                : formatTime(alert.startsAt)}
+            </span>
+            {stats && stats.occurrenceCount > 1 && (
+              <span title={`${stats.occurrenceCount}× occurred`}>↻{stats.occurrenceCount}×</span>
+            )}
+            {maintainer && <span>{maintainer}</span>}
+          </div>
+          {isResolved && stats?.lastResolvedAt && (
+            <span className="text-green-600/70" title={new Date(stats.lastResolvedAt).toLocaleString('en-US')}>
+              ✓ {formatTime(stats.lastResolvedAt)}
+            </span>
           )}
-          {maintainer && <span>{maintainer}</span>}
         </div>
-        {isResolved && stats?.lastResolvedAt && (
-          <span className="text-green-600/70" title={new Date(stats.lastResolvedAt).toLocaleString('en-US')}>
-            ✓ {formatTime(stats.lastResolvedAt)}
-          </span>
+
+        {/* Silence banner */}
+        {silenceType === 'active' && silence && remaining !== undefined && (
+          <div className="mb-2 flex items-center gap-1.5 rounded bg-muted px-2 py-1.5 text-xs">
+            <BellOff className="h-3 w-3 shrink-0 text-muted-foreground" />
+            <div>
+              <div className="font-semibold text-foreground">SILENCE ACTIVE</div>
+              <div className="text-muted-foreground">Ends in {formatSilenceDuration(remaining)}</div>
+            </div>
+          </div>
+        )}
+        {silenceType === 'expiring' && remaining !== undefined && (
+          <div className={cn(
+            'mb-2 flex items-center gap-1.5 rounded px-2 py-1.5 text-xs',
+            theme === 'light' ? 'bg-amber-50 border border-amber-200 text-amber-700' : 'bg-yellow-900/40 text-yellow-300',
+          )}>
+            <BellOff className="h-3 w-3 shrink-0" />
+            <span>Silence expires in {formatSilenceDuration(remaining)}</span>
+          </div>
+        )}
+        {silenceType === 'pending' && silence && (
+          <div className="mb-2 rounded bg-muted px-2 py-1.5 text-xs text-muted-foreground">
+            ⏳ Silence from{' '}
+            {new Date(silence.startsAt).toLocaleTimeString('en-US', {
+              hour: '2-digit',
+              minute: '2-digit',
+            })} {tzAbbr}
+          </div>
+        )}
+        {expiredSilence && (
+          <div className="mb-2 flex items-center gap-1.5 rounded border border-border bg-muted/50 px-2 py-1.5 text-xs text-muted-foreground">
+            <BellOff className="h-3 w-3 shrink-0" />
+            <span title={new Date(expiredSilence.endsAt).toLocaleString('en-US')}>
+              Silence expired {formatTime(expiredSilence.endsAt)}
+            </span>
+          </div>
+        )}
+
+        {/* Labels */}
+        {labels.length > 0 && (
+          <div className="mb-1.5 flex flex-wrap gap-1">
+            {labels.map(([key, value]) => (
+              <LabelChip key={key} labelKey={key} value={value} />
+            ))}
+          </div>
+        )}
+
+        {/* Summary / Description */}
+        {summary && (
+          <p className="text-xs text-muted-foreground">
+            <span className="text-muted-foreground/50">summary:</span> {renderTextWithLinks(summary)}
+          </p>
+        )}
+        {description && (
+          <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground/60">
+            <span className="text-muted-foreground/40">description:</span> {renderTextWithLinks(description)}
+          </p>
         )}
       </div>
 
-      {/* Silence banner */}
-      {silenceType === 'active' && silence && remaining !== undefined && (
-        <div className="mb-2 flex items-center gap-1.5 rounded bg-muted px-2 py-1.5 text-xs">
-          <BellOff className="h-3 w-3 shrink-0 text-muted-foreground" />
-          <div>
-            <div className="font-semibold text-foreground">SILENCE ACTIVE</div>
-            <div className="text-muted-foreground">Ends in {formatSilenceDuration(remaining)}</div>
-          </div>
-        </div>
-      )}
-      {silenceType === 'expiring' && remaining !== undefined && (
-        <div className={cn(
-          'mb-2 flex items-center gap-1.5 rounded px-2 py-1.5 text-xs',
-          theme === 'light' ? 'bg-amber-50 border border-amber-200 text-amber-700' : 'bg-yellow-900/40 text-yellow-300',
-        )}>
-          <BellOff className="h-3 w-3 shrink-0" />
-          <span>Silence expires in {formatSilenceDuration(remaining)}</span>
-        </div>
-      )}
-      {silenceType === 'pending' && silence && (
-        <div className="mb-2 rounded bg-muted px-2 py-1.5 text-xs text-muted-foreground">
-          ⏳ Silence from{' '}
-          {new Date(silence.startsAt).toLocaleTimeString('en-US', {
-            hour: '2-digit',
-            minute: '2-digit',
-          })} {tzAbbr}
-        </div>
-      )}
-      {expiredSilence && (
-        <div className="mb-2 flex items-center gap-1.5 rounded border border-border bg-muted/50 px-2 py-1.5 text-xs text-muted-foreground">
-          <BellOff className="h-3 w-3 shrink-0" />
-          <span title={new Date(expiredSilence.endsAt).toLocaleString('en-US')}>
-            Silence expired {formatTime(expiredSilence.endsAt)}
-          </span>
-        </div>
-      )}
-
-      {/* Labels */}
-      {labels.length > 0 && (
-        <div className="mb-1.5 flex flex-wrap gap-1">
-          {labels.map(([key, value]) => (
-            <LabelChip key={key} labelKey={key} value={value} />
-          ))}
-        </div>
-      )}
-
-      {/* Summary / Description */}
-      {summary && (
-        <p className="text-xs text-muted-foreground">
-          <span className="text-muted-foreground/50">summary:</span> {renderTextWithLinks(summary)}
-        </p>
-      )}
-      {description && (
-        <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground/60">
-          <span className="text-muted-foreground/40">description:</span> {renderTextWithLinks(description)}
-        </p>
-      )}
+      {/* Persistent action rail — always visible, deliberately subtle */}
+      <div className="flex shrink-0 flex-col items-center gap-0.5 pt-0.5">
+        <ArrowUpRight
+          className="h-3.5 w-3.5 text-muted-foreground/30 transition-colors group-hover:text-muted-foreground"
+          aria-hidden="true"
+        />
+        <AckButton alerts={[alert]} silences={silences} variant="icon" onCreateSilence={onCreateSilence} />
+      </div>
     </div>
   )
 }
@@ -286,17 +283,14 @@ export function AlertCard({
               {count === 1 ? 'Claimed' : `Claimed ${claimedCount}/${count}`}
             </span>
           )}
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation()
-              onCreateSilence?.(alerts)
-            }}
-            className="text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
-            title="Create silence"
-          >
-            <Bell className="h-3.5 w-3.5" />
-          </button>
+          <AckButton
+            alerts={alerts}
+            silences={silences}
+            variant="icon"
+            subtle={false}
+            requireActive={false}
+            onCreateSilence={onCreateSilence}
+          />
         </div>
       </div>
 
@@ -320,6 +314,7 @@ export function AlertCard({
               onClick={onClick}
               isSelected={matchesAlertSelectionKey(alert, selectedFingerprint)}
               commonLabelKeys={commonLabelKeys}
+              onCreateSilence={onCreateSilence}
             />
           ))}
         </div>

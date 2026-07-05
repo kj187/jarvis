@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { fetchSilences, fetchSilenceEvents, upsertSilence, deleteSilence, triggerPoll, type UpsertSilenceBody } from '@/api/client'
-import { buildAckSilenceBody } from '@/lib/alertUtils'
+import { buildAckSilenceBody, buildGroupAckSilenceBody } from '@/lib/alertUtils'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { useAuthStore } from '@/store/authStore'
 import type { EnrichedAlert } from '@/types'
@@ -58,6 +58,33 @@ export function useAckAlert() {
   const ack = (alert: EnrichedAlert, durationMinutes: number) =>
     upsert.mutateAsync(buildAckSilenceBody(alert, durationMinutes, resolveCreatorName()))
   return { ack, isPending: upsert.isPending }
+}
+
+/**
+ * One-click *group* Fast-Silence: creates one silence per cluster present in
+ * `alerts` (normally just one) using `buildGroupAckSilenceBody`'s
+ * common-vs-varying label matchers — the same scope `SilenceForm`'s group
+ * prefill would default to — instead of fanning out one exact-match silence
+ * per alert. Thin wrapper over `useUpsertSilence` — reuses its cache
+ * invalidation + poll trigger.
+ */
+export function useGroupAckAlert() {
+  const upsert = useUpsertSilence()
+  const ackGroup = (alerts: EnrichedAlert[], durationMinutes: number) => {
+    const byCluster = new Map<string, EnrichedAlert[]>()
+    for (const a of alerts) {
+      const list = byCluster.get(a.clusterName) ?? []
+      list.push(a)
+      byCluster.set(a.clusterName, list)
+    }
+    const createdBy = resolveCreatorName()
+    return Promise.all(
+      [...byCluster.values()].map((clusterAlerts) =>
+        upsert.mutateAsync(buildGroupAckSilenceBody(clusterAlerts, durationMinutes, createdBy)),
+      ),
+    )
+  }
+  return { ackGroup, isPending: upsert.isPending }
 }
 
 export function useDeleteSilence() {
