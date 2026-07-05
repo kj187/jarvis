@@ -200,7 +200,7 @@ test('D14 silence can be created from detail panel', async ({ page, am, jarvis }
   const panel = page.getByTestId('detail-panel')
   await expect(panel).toBeVisible()
 
-  const silenceBtn = panel.getByRole('button', { name: 'Silence' })
+  const silenceBtn = panel.getByRole('button', { name: 'Silence', exact: true })
   await expect(silenceBtn).toBeVisible()
   await silenceBtn.click()
 
@@ -226,7 +226,7 @@ test('D14 silence form from detail panel is pre-filled with alert matchers', asy
   const panel = page.getByTestId('detail-panel')
   await expect(panel).toBeVisible()
 
-  const silenceBtn = panel.getByRole('button', { name: 'Silence' })
+  const silenceBtn = panel.getByRole('button', { name: 'Silence', exact: true })
   await silenceBtn.click()
 
   await expect(page.getByPlaceholder('Reason for the silence…').first()).toBeVisible({ timeout: 5_000 })

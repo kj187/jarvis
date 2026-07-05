@@ -12,6 +12,7 @@ import { AlertComments } from './AlertComments'
 import { AlertDetailHistorySection } from './AlertDetailHistorySection'
 import { AlertDetailSection } from './AlertDetailSection'
 import { SilenceForm } from '@/components/silences/SilenceForm'
+import { AckButton } from './AckButton'
 import { useAlerts, useAlertTimeline, useAlertStats } from '@/hooks/useAlerts'
 import { useFormatTime } from '@/hooks/useFormatTime'
 import { useActiveClaim, useClaimController, USERNAME_KEY } from '@/hooks/useAlertClaim'
@@ -527,6 +528,7 @@ export function AlertDetailPanel({
                 <BellOff className="h-3.5 w-3.5" />
                 Silence
               </Button>
+              <AckButton alerts={[alert]} silences={silences} variant="detail" />
             </div>
           </div>
 

@@ -9,6 +9,25 @@ instead of duplicating.
 
 ---
 
+## Silence matchers must exclude pseudo-labels (`@receiver`, `@cluster`, `receiver`)
+
+**Symptom**: One-click Fast-Silence created a silence, but the alert never
+turned suppressed. The Silences list showed "0 affected alerts", yet opening
+the silence detail showed "1 affected alert". `silencedBy` on the alert stayed
+empty.
+**Cause**: `buildAckSilenceBody` built matchers from *all* of `alert.labels`,
+including the synthetic pseudo-labels Jarvis adds for display/filtering
+(`@receiver`, and `@cluster` via `getEffectiveAlertState`). Those keys do not
+exist on the real Alertmanager alert, so AM matched nothing (0 affected, no
+suppression). The client-side "affected" count in the silence *detail* uses the
+enriched labels, so it matched 1 — hence the contradiction between list and
+detail.
+**Rule**: When deriving silence matchers from an alert, skip pseudo-labels —
+any key starting with `@` plus `receiver`. This mirrors `SilenceForm`'s
+`buildPrefillMatchers` SKIP set (`receiver`, `@receiver`, `@cluster`). Regression
+guard: `e2e/functional/none/alert-ack.spec.ts` asserts no matcher name starts
+with `@` or equals `receiver`.
+
 ## WS clients must be registered synchronously in ServeWS, not via the hub loop
 
 **Symptom**: J3 e2e tests (`claim_set` badge in open detail panel) flaky —

@@ -452,7 +452,9 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
 │   ├── useAlertComments.ts    → useAlertComments, useAddComment, useDeleteComment (all cluster-scoped)
 │   ├── useAlertClaim.ts       → useActiveClaim, useClaimHistory, useSetClaim, useReleaseClaim,
 │   │                            useUpdateClaimNote, useClaimController (all cluster-scoped); USERNAME_KEY
-│   ├── useSilences.ts         → useSilences, useSilenceEvents, useUpsertSilence, useDeleteSilence
+│   ├── useSilences.ts         → useSilences, useSilenceEvents, useUpsertSilence, useDeleteSilence,
+│   │                            useAckAlert (one-click Fast-Silence → short-lived exact-match silence),
+│   │                            resolveCreatorName
 │   ├── useSilenceTemplates.ts → list + create/update/delete template mutations
 │   ├── useWebSocket.ts        → WS connection + cache patching via handleEvent()
 │   ├── useProtectedAction.ts  → wraps write actions; opens LoginModal when auth required
@@ -463,8 +465,7 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
 │   ├── alertUtils.ts          → getFilterableLabels, matchesLabelMatchers, safeRegex,
 │   │                            getEffectiveAlertState, getSilenceState, silenceMatchesAlert,
 │   │                            getExpiredSilence, filterSilences, pickIdentifierLabel,
-│   │                            formatSilenceDuration, formatTime, severityOrder,
-│   │                            HIDDEN_LABEL_KEYS, labelColorStyle
+│   │                            formatSilenceDuration, formatTime, severityOrder,│   │                            formatAckDuration, buildAckSilenceBody, FAST_SILENCE_DURATIONS,│   │                            HIDDEN_LABEL_KEYS, labelColorStyle
 │   │                            ← single source, never duplicate in components
 │   ├── alertSelection.ts      → makeAlertSelectionKey / parseAlertSelectionKey — selection key
 │   │                            format `<cluster>::<fingerprint>` (URL `alert=` param, cluster-safe)
@@ -484,15 +485,19 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │   ├── AlertCardGrid.tsx  → grouped by settings `groupByLabel` (default severity), responsive
     │   │                        column binning, per-group pagination, drag-and-drop section
     │   │                        reordering (persisted: 'jarvis-card-section-order:<label>')
-    │   ├── AlertCard.tsx      → card + claim banner + count badge + silence/detail actions
+    │   ├── AlertCard.tsx      → card + claim banner + count badge + silence/detail actions + Fast-Silence (hover)
     │   ├── AlertListView.tsx  → sortable table (name/time), expandable groups, section
     │   │                        reordering (persisted: 'jarvis-list-section-order:<label>')
     │   ├── AlertListRow.tsx   → single/indented row
     │   ├── AlertDetailPanel.tsx → slide-over: labels/annotations + link buttons, stats & timeline,
-    │   │                          claim (useClaimController), comments, silence controls, AI-prompt section
+    │   │                          claim (useClaimController), comments, silence controls + Fast-Silence, AI-prompt section
     │   ├── AlertDetailSection.tsx → collapsible section wrapper used inside the detail panel
     │   ├── AlertDetailHistorySection.tsx → stats + merged event timeline section
     │   ├── AlertComments.tsx  → comment list + input (author-gated delete)
+    │   ├── AckButton.tsx      → one-click Fast-Silence (short-lived exact-match silence); active-only
+    │   │                        (getEffectiveAlertState), auth-gated (useProtectedAction); hover/focus
+    │   │                        popover menu (FAST_SILENCE_DURATIONS 30m/1h/4h/1d/1w) picks the duration;
+    │   │                        transient Silenced/Failed feedback; used by AlertCard + AlertDetailPanel
     │   ├── AlertBadge.tsx     → severity badge
     │   ├── AlertFilters.tsx   → label matcher chips + state dropdown
     │   ├── LabelChip.tsx      → label chip with hover operator dropdown

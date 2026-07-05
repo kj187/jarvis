@@ -1,6 +1,7 @@
 import { Bell, BellMinus, BellOff, RefreshCw, User, X } from 'lucide-react'
 import { useState, useRef, useEffect } from 'react'
 import { AlertBadge, StatusBadge } from './AlertBadge'
+import { AckButton } from './AckButton'
 import { LabelChip } from './LabelChip'
 import { HIDDEN_LABEL_KEYS } from '@/lib/alertUtils'
 import { useAlertStats } from '@/hooks/useAlerts'
@@ -195,6 +196,7 @@ export function AlertListRow({
       )}
       {showActionsColumn && <td className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center gap-1">
+          {silences && <AckButton alerts={[alert]} silences={silences} variant="card" />}
           {silenceType === 'active' && silence && (
             <button
               type="button"

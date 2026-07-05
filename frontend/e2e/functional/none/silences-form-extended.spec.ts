@@ -314,7 +314,7 @@ test('F17 silence from alert detail panel is pre-filled with alert labels', asyn
   await expect(panel).toBeVisible()
 
   // Click the Silence button in the panel
-  const silenceBtn = panel.getByRole('button', { name: 'Silence' })
+  const silenceBtn = panel.getByRole('button', { name: 'Silence', exact: true })
   await expect(silenceBtn).toBeVisible()
   await silenceBtn.click()
 
@@ -380,7 +380,7 @@ test('F6 overlap warning shows when an existing silence already covers the same 
   await expect(panel).toBeVisible({ timeout: 10_000 })
 
   // Click the Silence button to open the form pre-filled for this alert
-  const silenceBtn = panel.getByRole('button', { name: 'Silence' })
+  const silenceBtn = panel.getByRole('button', { name: 'Silence', exact: true })
   await expect(silenceBtn).toBeVisible()
   await silenceBtn.click()
 
