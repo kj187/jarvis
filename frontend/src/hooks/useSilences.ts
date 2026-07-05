@@ -65,26 +65,35 @@ export function useAckAlert() {
  * `alerts` (normally just one) using `buildGroupAckSilenceBody`'s
  * common-vs-varying label matchers — the same scope `SilenceForm`'s group
  * prefill would default to — instead of fanning out one exact-match silence
- * per alert. Thin wrapper over `useUpsertSilence` — reuses its cache
- * invalidation + poll trigger.
+ * per alert. Reuses `useUpsertSilence`'s per-write cache invalidation + poll
+ * trigger, but wraps the whole fan-out in its OWN mutation for `isPending`:
+ * calling `mutateAsync` more than once concurrently on a single `useMutation`
+ * (as the previous version did, once per cluster) makes that mutation's own
+ * `isPending` reflect whichever call most recently changed state rather than
+ * "is any of them still in flight" — harmless for a single-cluster group
+ * (the overwhelmingly common case) but incorrect for a multi-cluster one.
  */
 export function useGroupAckAlert() {
   const upsert = useUpsertSilence()
-  const ackGroup = (alerts: EnrichedAlert[], durationMinutes: number) => {
-    const byCluster = new Map<string, EnrichedAlert[]>()
-    for (const a of alerts) {
-      const list = byCluster.get(a.clusterName) ?? []
-      list.push(a)
-      byCluster.set(a.clusterName, list)
-    }
-    const createdBy = resolveCreatorName()
-    return Promise.all(
-      [...byCluster.values()].map((clusterAlerts) =>
-        upsert.mutateAsync(buildGroupAckSilenceBody(clusterAlerts, durationMinutes, createdBy)),
-      ),
-    )
-  }
-  return { ackGroup, isPending: upsert.isPending }
+  const fanOut = useMutation({
+    mutationFn: ({ alerts, durationMinutes }: { alerts: EnrichedAlert[]; durationMinutes: number }) => {
+      const byCluster = new Map<string, EnrichedAlert[]>()
+      for (const a of alerts) {
+        const list = byCluster.get(a.clusterName) ?? []
+        list.push(a)
+        byCluster.set(a.clusterName, list)
+      }
+      const createdBy = resolveCreatorName()
+      return Promise.all(
+        [...byCluster.values()].map((clusterAlerts) =>
+          upsert.mutateAsync(buildGroupAckSilenceBody(clusterAlerts, durationMinutes, createdBy)),
+        ),
+      )
+    },
+  })
+  const ackGroup = (alerts: EnrichedAlert[], durationMinutes: number) =>
+    fanOut.mutateAsync({ alerts, durationMinutes })
+  return { ackGroup, isPending: fanOut.isPending }
 }
 
 export function useDeleteSilence() {
