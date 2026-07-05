@@ -85,8 +85,8 @@ test-frontend: ## Frontend: functional E2E tests across all auth modes
 	$(E2E_RUN) test internal
 	$(E2E_RUN) test oidc
 
-test-frontend-unit: ## Frontend: Vitest unit tests (lib/alertUtils.ts matching/formatting logic only)
-	podman exec $(FRONTEND_CONTAINER) sh -c "cd /app && pnpm test:unit"
+test-frontend-unit: ## Frontend: Vitest unit tests + 100% coverage gate (lib/alertUtils.ts only)
+	podman exec $(FRONTEND_CONTAINER) sh -c "cd /app && pnpm test:unit:coverage"
 
 helm-lint: ## Helm: lint chart
 	helm lint charts/jarvis/
