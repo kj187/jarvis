@@ -27,7 +27,7 @@ import { Input } from '@/components/ui/input'
 import { makeAlertSelectionKeyForAlert } from '@/lib/alertSelection'
 import type { EnrichedAlert, LabelMatcher, Silence, SilenceMatcher } from '@/types'
 import { renderTextWithLinks, extractLinkButtons } from '@/lib/linkUtils'
-import { pickIdentifierLabel, tzAbbr } from '@/lib/alertUtils'
+import { pickIdentifierLabel, tzAbbr, silenceMatchesAlert } from '@/lib/alertUtils'
 
 const ALERT_EVENT_LABEL: Record<string, string> = {
   firing: 'Alert fired',
@@ -101,22 +101,6 @@ function formatDuration(ms: number): string {
   }
   if (minutes >= 1) return `${minutes}m`
   return 'a few seconds'
-}
-
-function silenceMatchesAlert(silence: Silence, alert: EnrichedAlert): boolean {
-  const labels: Record<string, string> = { ...alert.labels, '@cluster': alert.clusterName }
-  return silence.matchers.every((m) => {
-    const value = labels[m.name] ?? ''
-    if (m.isRegex) {
-      try {
-        const re = new RegExp(m.value)
-        return m.isEqual ? re.test(value) : !re.test(value)
-      } catch {
-        return false
-      }
-    }
-    return m.isEqual ? value === m.value : value !== m.value
-  })
 }
 
 function MatcherChip({ matcher }: { matcher: SilenceMatcher }) {

@@ -462,10 +462,17 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
 │   ├── useFormatTime.ts       → relative/absolute timestamp formatter (from settings)
 │   └── useVersion.ts          → app version (staleTime Infinity)
 ├── lib/
-│   ├── alertUtils.ts          → getFilterableLabels, matchesLabelMatchers, safeRegex,
-│   │                            getEffectiveAlertState, getSilenceState, silenceMatchesAlert,
-│   │                            getExpiredSilence, filterSilences, pickIdentifierLabel,
-│   │                            formatSilenceDuration, formatTime, severityOrder,│   │                            formatAckDuration, buildAckSilenceBody, FAST_SILENCE_DURATIONS,│   │                            HIDDEN_LABEL_KEYS, labelColorStyle
+│   ├── alertUtils.ts          → getFilterableLabels, matchesLabelMatchers (filter-bar only,
+│   │                            substring regex + pseudo-labels — never for silence matching),
+│   │                            safeRegex, anchoredRegex, silenceWouldMatchAlert (Alertmanager-exact:
+│   │                            anchored regex, real labels only — SilenceForm preview/overlap),
+│   │                            hasUnevaluableRegexMatcher, silenceMatchesAlert,
+│   │                            getEffectiveAlertState, getSilenceState (both consider ALL active
+│   │                            silences in silencedBy, not just the first), getExpiredSilence,
+│   │                            filterSilences, pickIdentifierLabel, formatSilenceDuration,
+│   │                            formatTime, severityOrder, formatAckDuration, buildAckSilenceBody,
+│   │                            computeGroupLabelValues, buildGroupAckSilenceBody, escapeRegexValue,
+│   │                            FAST_SILENCE_DURATIONS, HIDDEN_LABEL_KEYS, labelColorStyle
 │   │                            ← single source, never duplicate in components
 │   ├── alertSelection.ts      → makeAlertSelectionKey / parseAlertSelectionKey — selection key
 │   │                            format `<cluster>::<fingerprint>` (URL `alert=` param, cluster-safe)
