@@ -610,7 +610,7 @@ export function AlertDetailPanel({
                   : (theme === 'light' ? 'bg-muted' : 'bg-slate-900'),
               )}
             >
-              <div className="mb-3 flex items-center justify-between gap-2">
+              <div className="mb-3 flex items-center justify-between gap-2 pr-8">
                 <div className={cn(
                   'flex items-center gap-1.5 text-xs font-semibold',
                   isPending
@@ -622,7 +622,7 @@ export function AlertDetailPanel({
                   <BellOff className="h-3 w-3 shrink-0" />
                   {isPending ? 'Silence pending' : 'Silence active'}
                 </div>
-                <div className="flex shrink-0 items-center gap-1">
+                <div className="flex shrink-0 items-center gap-2">
                   {isExpiring && (
                     <>
                       {([
@@ -737,12 +737,12 @@ export function AlertDetailPanel({
         {/* Expired silence banners */}
         {expiredSilences.map((s) => (
           <div key={s.id} className={cn('border-b border-border px-5 py-4', theme === 'light' ? 'bg-muted' : 'bg-slate-950')}>
-            <div className="mb-3 flex items-center justify-between gap-2">
+            <div className="mb-3 flex items-center justify-between gap-2 pr-8">
               <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
                 <BellOff className="h-3 w-3 shrink-0" />
                 Silence expired
               </div>
-              <div className="flex shrink-0 items-center gap-1">
+              <div className="flex shrink-0 items-center gap-2">
                 <button
                   className="flex items-center gap-1 rounded border border-border px-2 py-0.5 text-xs text-muted-foreground hover:text-foreground hover:bg-accent cursor-pointer"
                   onClick={() => setSilenceFormTarget(s)}
