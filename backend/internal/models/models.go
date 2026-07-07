@@ -180,10 +180,11 @@ type WSEvent struct {
 }
 
 const (
-	WSTypeAlertsUpdate  = "alerts_update"  // payload: { alerts: EnrichedAlert[] }
-	WSTypeClaimSet      = "claim_set"      // payload: { fingerprint, clusterName, claim }
-	WSTypeClaimReleased = "claim_released" // payload: { fingerprint, clusterName, releasedBy }
-	WSTypeCommentAdded  = "comment_added"  // payload: { fingerprint, comment }
+	WSTypeAlertsUpdate   = "alerts_update"   // payload: { alerts: EnrichedAlert[] }
+	WSTypeClaimSet       = "claim_set"       // payload: { fingerprint, clusterName, claim }
+	WSTypeClaimReleased  = "claim_released"  // payload: { fingerprint, clusterName, releasedBy }
+	WSTypeCommentAdded   = "comment_added"   // payload: { fingerprint, comment }
+	WSTypeSilencesUpdate = "silences_update" // payload: {} — pure invalidation signal, clients refetch /api/v1/silences
 )
 
 // ── Cluster ──────────────────────────────────────────────────────────────────

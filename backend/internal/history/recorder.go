@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"hash/fnv"
 	"log/slog"
+	"maps"
 	"strings"
 	"sync"
 	"time"
@@ -286,6 +287,10 @@ func (r *Recorder) applyPollResults(
 	// Detect new external silences (first seen in curr, not in prev).
 	newSilenceEntries := r.collectNewExternalSilences(currSilenceInfo, currAlertSilences)
 
+	// The silence snapshot changed when any silence appeared, disappeared, or
+	// changed state — clients then refetch /api/v1/silences (cheap, in-memory).
+	silencesChanged := !maps.Equal(r.prevSilenceInfo, currSilenceInfo)
+
 	r.prevSnapshot = curr
 	r.prevSilenceInfo = currSilenceInfo
 	r.prevAlertSilences = currAlertSilences
@@ -416,6 +421,10 @@ func (r *Recorder) applyPollResults(
 
 	// Broadcast via WebSocket — use Get() to include resolved buffer.
 	r.broadcastAlertsIfChanged()
+
+	if silencesChanged {
+		r.hub.BroadcastJSON(models.WSTypeSilencesUpdate, struct{}{})
+	}
 }
 
 // broadcastAlertsIfChanged pushes the current alert snapshot to all WebSocket

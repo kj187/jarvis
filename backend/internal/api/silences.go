@@ -36,9 +36,10 @@ func (s *Server) getSilences(c echo.Context) error {
 }
 
 // applySilenceWriteThrough bridges a successful silence mutation into the
-// snapshot store so the frontend's immediate refetch sees the change, then
-// requests a poll so the authoritative Alertmanager state reconciles the
-// bridge entry within one cycle.
+// snapshot store so the frontend's immediate refetch sees the change,
+// notifies all WS clients (other users' tabs refetch), then requests a poll
+// so the authoritative Alertmanager state reconciles the bridge entry within
+// one cycle.
 func (s *Server) applySilenceWriteThrough(cluster string, upsert *amclient.GettableSilence, expireID string) {
 	if upsert != nil {
 		s.silenceStore.Upsert(cluster, *upsert)
@@ -46,6 +47,7 @@ func (s *Server) applySilenceWriteThrough(cluster string, upsert *amclient.Getta
 	if expireID != "" {
 		s.silenceStore.MarkExpired(cluster, expireID)
 	}
+	s.hub.BroadcastJSON(models.WSTypeSilencesUpdate, struct{}{})
 	if s.pollTrigger != nil {
 		s.pollTrigger.Trigger()
 	}

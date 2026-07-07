@@ -91,7 +91,7 @@ make fixtures-unsilence            # expire test silences
 | `internal/history` | `alert_store_test.go` | `Set`/`Get`/`MarkResolved`/`RemoveByFingerprint` (thread safety via goroutines) |
 | `internal/history` | `silence_store_test.go` | `SilenceStore`: Set/Get copy semantics, Upsert, MarkExpired, Reset, concurrent access |
 | `internal/history` | `lifecycle_test.go` | Integration: FiringToResolved, SuppressedExpired, GracePeriod, ReoccurrenceAfterResolution, FullCycle |
-| `internal/history` | `recorder_test.go` | Diff logic: firing/resolved/suppressed/expired transitions; poll fills `SilenceStore` per cluster, failed silence fetch keeps previous snapshot |
+| `internal/history` | `recorder_test.go` | Diff logic: firing/resolved/suppressed/expired transitions; poll fills `SilenceStore` per cluster, failed silence fetch keeps previous snapshot; `silences_update` broadcast only when the silence snapshot changed |
 | `internal/history` | `claim_cluster_test.go` | Cluster-scoped claim isolation (same fingerprint in multiple clusters) |
 | `internal/history` | `enrich_test.go` | Alert enrichment (active claim attachment) |
 | `internal/history` | `optimization_test.go` | Query/indexing optimizations |

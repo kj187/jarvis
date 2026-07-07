@@ -94,6 +94,13 @@ export function useWebSocket() {
           break
         }
 
+        case 'silences_update': {
+          // Pure invalidation signal (empty payload) — the silence snapshot
+          // changed on the backend (poll diff or another user's mutation).
+          qc.invalidateQueries({ queryKey: ['silences'] })
+          break
+        }
+
         case 'comment_added': {
           const payload = event.payload as CommentAddedPayload
           const clusterName = payload.comment?.clusterName

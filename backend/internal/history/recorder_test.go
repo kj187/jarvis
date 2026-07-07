@@ -663,3 +663,59 @@ func TestPoll_FailedSilenceFetchKeepsPreviousSnapshot(t *testing.T) {
 		t.Errorf("cluster b snapshot len = %d, want 2 (must update while a fails)", len(got))
 	}
 }
+
+func countEvents(hub *mockHub, eventType string) int {
+	n := 0
+	for _, e := range hub.events {
+		if e.eventType == eventType {
+			n++
+		}
+	}
+	return n
+}
+
+func TestApplyPollResults_SilenceChangeBroadcastsSilencesUpdate(t *testing.T) {
+	rec, hub := newTestRecorder(t)
+	ctx := context.Background()
+
+	// First poll: a silence appears → broadcast.
+	rec.applyPollResults(ctx, nil, map[string]silenceInfoEntry{
+		"homelab\x1fsil-1": {state: "active", clusterName: "homelab"},
+	})
+	if got := countEvents(hub, models.WSTypeSilencesUpdate); got != 1 {
+		t.Fatalf("silences_update broadcasts after new silence = %d, want 1", got)
+	}
+
+	// Unchanged snapshot → no additional broadcast.
+	rec.applyPollResults(ctx, nil, map[string]silenceInfoEntry{
+		"homelab\x1fsil-1": {state: "active", clusterName: "homelab"},
+	})
+	if got := countEvents(hub, models.WSTypeSilencesUpdate); got != 1 {
+		t.Fatalf("silences_update broadcasts after unchanged poll = %d, want still 1", got)
+	}
+
+	// State change (active → expired) → broadcast.
+	rec.applyPollResults(ctx, nil, map[string]silenceInfoEntry{
+		"homelab\x1fsil-1": {state: "expired", clusterName: "homelab"},
+	})
+	if got := countEvents(hub, models.WSTypeSilencesUpdate); got != 2 {
+		t.Fatalf("silences_update broadcasts after state change = %d, want 2", got)
+	}
+
+	// Silence disappears → broadcast.
+	rec.applyPollResults(ctx, nil, nil)
+	if got := countEvents(hub, models.WSTypeSilencesUpdate); got != 3 {
+		t.Fatalf("silences_update broadcasts after removal = %d, want 3", got)
+	}
+}
+
+func TestApplyPollResults_NoSilences_NoSilencesUpdateBroadcast(t *testing.T) {
+	rec, hub := newTestRecorder(t)
+
+	rec.applyPollResults(context.Background(), nil, nil)
+	rec.applyPollResults(context.Background(), nil, nil)
+
+	if got := countEvents(hub, models.WSTypeSilencesUpdate); got != 0 {
+		t.Errorf("silences_update broadcasts with empty snapshots = %d, want 0", got)
+	}
+}
