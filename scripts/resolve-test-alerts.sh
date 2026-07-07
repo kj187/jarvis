@@ -26,7 +26,7 @@ echo "==> Resolving Kubernetes test alerts (test_suite=jarvis) via ${AM}"
 echo "    endsAt: ${ENDS_AT}"
 echo ""
 
-printf "  [1/10] KubePodCrashLooping..."
+printf "  [1/23] KubePodCrashLooping..."
 resolve '[{
   "labels": {
     "alertname": "KubePodCrashLooping",
@@ -43,7 +43,41 @@ resolve '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=kube_pod_container_status_restarts_total"
 }]'
 
-printf "  [2/10] KubeNodeNotReady..."
+printf "  [2/23] KubePodCrashLooping (2nd pod)..."
+resolve '[{
+  "labels": {
+    "alertname": "KubePodCrashLooping",
+    "severity": "critical",
+    "namespace": "prod",
+    "pod": "payment-api-7d9f6b8c4-9m3qz",
+    "container": "payment-api",
+    "cluster": "eu-west-1-prod",
+    "team": "platform",
+    "runbook": "'"${RUNBOOKS}"'/KubePodCrashLooping",
+    "test_suite": "jarvis"
+  },
+  "annotations": {"summary": "Pod payment-api-7d9f6b8c4-9m3qz is crash looping"},
+  "generatorURL": "'"${PROM}"'/graph?g0.expr=kube_pod_container_status_restarts_total"
+}]'
+
+printf "  [3/23] KubePodCrashLooping (3rd pod)..."
+resolve '[{
+  "labels": {
+    "alertname": "KubePodCrashLooping",
+    "severity": "critical",
+    "namespace": "prod",
+    "pod": "payment-api-7d9f6b8c4-p7wln",
+    "container": "payment-api",
+    "cluster": "eu-west-1-prod",
+    "team": "platform",
+    "runbook": "'"${RUNBOOKS}"'/KubePodCrashLooping",
+    "test_suite": "jarvis"
+  },
+  "annotations": {"summary": "Pod payment-api-7d9f6b8c4-p7wln is crash looping"},
+  "generatorURL": "'"${PROM}"'/graph?g0.expr=kube_pod_container_status_restarts_total"
+}]'
+
+printf "  [4/23] KubeNodeNotReady..."
 resolve '[{
   "labels": {
     "alertname": "KubeNodeNotReady",
@@ -61,7 +95,7 @@ resolve '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=kube_node_status_condition"
 }]'
 
-printf "  [3/10] KubeAPIServerErrorsHigh..."
+printf "  [5/23] KubeAPIServerErrorsHigh..."
 resolve '[{
   "labels": {
     "alertname": "KubeAPIServerErrorsHigh",
@@ -79,7 +113,7 @@ resolve '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=rate(apiserver_request_total%7Bcode%3D~%225..%22%7D%5B5m%5D)"
 }]'
 
-printf "  [4/10] KubeJobFailed..."
+printf "  [6/23] KubeJobFailed..."
 resolve '[{
   "labels": {
     "alertname": "KubeJobFailed",
@@ -95,7 +129,7 @@ resolve '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=kube_job_status_failed"
 }]'
 
-printf "  [5/10] KubeDeploymentReplicasMismatch..."
+printf "  [7/23] KubeDeploymentReplicasMismatch..."
 resolve '[{
   "labels": {
     "alertname": "KubeDeploymentReplicasMismatch",
@@ -114,7 +148,7 @@ resolve '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=kube_deployment_status_replicas_available"
 }]'
 
-printf "  [6/10] KubePersistentVolumeFillingUp..."
+printf "  [8/23] KubePersistentVolumeFillingUp..."
 resolve '[{
   "labels": {
     "alertname": "KubePersistentVolumeFillingUp",
@@ -133,7 +167,7 @@ resolve '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=kubelet_volume_stats_used_bytes"
 }]'
 
-printf "  [7/10] KubeHpaMaxedOut..."
+printf "  [9/23] KubeHpaMaxedOut..."
 resolve '[{
   "labels": {
     "alertname": "KubeHpaMaxedOut",
@@ -151,7 +185,7 @@ resolve '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=kube_horizontalpodautoscaler_status_current_replicas"
 }]'
 
-printf "  [8/10] KubePodOOMKilled..."
+printf " [10/23] KubePodOOMKilled..."
 resolve '[{
   "labels": {
     "alertname": "KubePodOOMKilled",
@@ -168,7 +202,41 @@ resolve '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=kube_pod_container_status_last_terminated_reason"
 }]'
 
-printf "  [9/10] KubeContainerWaiting..."
+printf " [11/23] KubePodOOMKilled (2nd pod)..."
+resolve '[{
+  "labels": {
+    "alertname": "KubePodOOMKilled",
+    "severity": "warning",
+    "namespace": "prod",
+    "pod": "ml-inference-6c8d9f7b5-h4dtx",
+    "container": "inference-server",
+    "cluster": "eu-west-1-prod",
+    "team": "ml",
+    "runbook": "'"${RUNBOOKS}"'/KubePodOOMKilled",
+    "test_suite": "jarvis"
+  },
+  "annotations": {"summary": "Container inference-server OOMKilled 2 times in 1h"},
+  "generatorURL": "'"${PROM}"'/graph?g0.expr=kube_pod_container_status_last_terminated_reason"
+}]'
+
+printf " [12/23] KubePodOOMKilled (3rd pod)..."
+resolve '[{
+  "labels": {
+    "alertname": "KubePodOOMKilled",
+    "severity": "warning",
+    "namespace": "prod",
+    "pod": "ml-inference-6c8d9f7b5-vw8kc",
+    "container": "inference-server",
+    "cluster": "eu-west-1-prod",
+    "team": "ml",
+    "runbook": "'"${RUNBOOKS}"'/KubePodOOMKilled",
+    "test_suite": "jarvis"
+  },
+  "annotations": {"summary": "Container inference-server OOMKilled 5 times in 1h"},
+  "generatorURL": "'"${PROM}"'/graph?g0.expr=kube_pod_container_status_last_terminated_reason"
+}]'
+
+printf " [13/23] KubeContainerWaiting..."
 resolve '[{
   "labels": {
     "alertname": "KubeContainerWaiting",
@@ -185,7 +253,41 @@ resolve '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=kube_pod_container_status_waiting_reason"
 }]'
 
-printf " [10/10] KubeStatefulSetReplicasMismatch..."
+printf " [14/23] KubeContainerWaiting (2nd pod)..."
+resolve '[{
+  "labels": {
+    "alertname": "KubeContainerWaiting",
+    "severity": "info",
+    "namespace": "prod",
+    "pod": "batch-worker-5f7b9c2d8-x9zzt",
+    "container": "batch-worker",
+    "reason": "ImagePullBackOff",
+    "cluster": "eu-west-1-prod",
+    "team": "platform",
+    "test_suite": "jarvis"
+  },
+  "annotations": {"summary": "Container batch-worker stuck in ImagePullBackOff"},
+  "generatorURL": "'"${PROM}"'/graph?g0.expr=kube_pod_container_status_waiting_reason"
+}]'
+
+printf " [15/23] KubeContainerWaiting (3rd pod)..."
+resolve '[{
+  "labels": {
+    "alertname": "KubeContainerWaiting",
+    "severity": "info",
+    "namespace": "prod",
+    "pod": "batch-worker-5f7b9c2d8-p3kjm",
+    "container": "batch-worker",
+    "reason": "ImagePullBackOff",
+    "cluster": "eu-west-1-prod",
+    "team": "platform",
+    "test_suite": "jarvis"
+  },
+  "annotations": {"summary": "Container batch-worker stuck in ImagePullBackOff"},
+  "generatorURL": "'"${PROM}"'/graph?g0.expr=kube_pod_container_status_waiting_reason"
+}]'
+
+printf " [16/23] KubeStatefulSetReplicasMismatch..."
 resolve '[{
   "labels": {
     "alertname": "KubeStatefulSetReplicasMismatch",
@@ -204,7 +306,7 @@ resolve '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=kube_statefulset_status_replicas_ready"
 }]'
 
-printf " [11/12] KubeServiceEndpointError..."
+printf " [17/23] KubeServiceEndpointError..."
 resolve '[{
   "labels": {
     "alertname": "KubeServiceEndpointError",
@@ -220,7 +322,7 @@ resolve '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=kube_endpoint_address_available"
 }]'
 
-printf " [12/12] KubeDNSErrors..."
+printf " [18/23] KubeDNSErrors..."
 resolve '[{
   "labels": {
     "alertname": "KubeDNSErrors",
@@ -236,7 +338,7 @@ resolve '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=rate(coredns_dns_responses_total%7Brcode%3D%22SERVFAIL%22%7D%5B5m%5D)"
 }]'
 
-printf " [13/17] LinkRichAlert..."
+printf " [19/23] LinkRichAlert..."
 resolve '[{
   "labels": {
     "alertname": "LinkRichAlert",
@@ -255,7 +357,7 @@ resolve '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=up%7Bjob%3D%22platform%22%7D"
 }]'
 
-printf " [14/17] InlineUrlsAlert..."
+printf " [20/23] InlineUrlsAlert..."
 resolve '[{
   "labels": {
     "alertname": "InlineUrlsAlert",
@@ -269,7 +371,7 @@ resolve '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=up%7Bjob%3D%22prometheus%22%7D"
 }]'
 
-printf " [15/17] LabelOnlyLinksAlert..."
+printf " [21/23] LabelOnlyLinksAlert..."
 resolve '[{
   "labels": {
     "alertname": "LabelOnlyLinksAlert",
@@ -287,7 +389,7 @@ resolve '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=http_requests_total%7Benv%3D%22staging%22%7D"
 }]'
 
-printf " [16/17] AnnotationOnlyLinksAlert..."
+printf " [22/23] AnnotationOnlyLinksAlert..."
 resolve '[{
   "labels": {
     "alertname": "AnnotationOnlyLinksAlert",
@@ -301,7 +403,7 @@ resolve '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=job_duration_seconds%7Bjob%3D%22s3-export%22%7D"
 }]'
 
-printf " [17/17] SpecialCharLabelAlert..."
+printf " [23/23] SpecialCharLabelAlert..."
 resolve '[{
   "labels": {
     "alertname": "SpecialCharLabelAlert",
@@ -320,4 +422,4 @@ resolve '[{
 }]'
 
 echo ""
-echo "==> All 17 Kubernetes test alerts resolved."
+echo "==> All 23 Kubernetes test alerts resolved."
