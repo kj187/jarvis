@@ -21,6 +21,7 @@ type pollTriggerer interface {
 // Server holds shared dependencies for all API handlers.
 type Server struct {
 	alertStore   *history.AlertStore
+	silenceStore *history.SilenceStore
 	store        *history.Store
 	hub          *ws.Hub
 	registry     *cluster.Registry
@@ -33,6 +34,7 @@ type Server struct {
 // NewServer creates a new Server with the given dependencies.
 func NewServer(
 	alertStore *history.AlertStore,
+	silenceStore *history.SilenceStore,
 	store *history.Store,
 	hub *ws.Hub,
 	registry *cluster.Registry,
@@ -43,6 +45,7 @@ func NewServer(
 ) *Server {
 	return &Server{
 		alertStore:   alertStore,
+		silenceStore: silenceStore,
 		store:        store,
 		hub:          hub,
 		registry:     registry,

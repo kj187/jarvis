@@ -89,8 +89,9 @@ make fixtures-unsilence            # expire test silences
 | `internal/history` | `store_test.go` | `UpsertFingerprint`, `GetOrCreateActiveEvent`, grace period (60s), `occurrence_count` logic |
 | `internal/history` | `store_extra_test.go` | `GetClaimHistory`, `RecordSilenceEvent`, `GetSilenceEvents`, `GetRecentResolved`, `SeedResolved`, silence templates |
 | `internal/history` | `alert_store_test.go` | `Set`/`Get`/`MarkResolved`/`RemoveByFingerprint` (thread safety via goroutines) |
+| `internal/history` | `silence_store_test.go` | `SilenceStore`: Set/Get copy semantics, Upsert, MarkExpired, Reset, concurrent access |
 | `internal/history` | `lifecycle_test.go` | Integration: FiringToResolved, SuppressedExpired, GracePeriod, ReoccurrenceAfterResolution, FullCycle |
-| `internal/history` | `recorder_test.go` | Diff logic: firing/resolved/suppressed/expired transitions |
+| `internal/history` | `recorder_test.go` | Diff logic: firing/resolved/suppressed/expired transitions; poll fills `SilenceStore` per cluster, failed silence fetch keeps previous snapshot |
 | `internal/history` | `claim_cluster_test.go` | Cluster-scoped claim isolation (same fingerprint in multiple clusters) |
 | `internal/history` | `enrich_test.go` | Alert enrichment (active claim attachment) |
 | `internal/history` | `optimization_test.go` | Query/indexing optimizations |
@@ -100,7 +101,7 @@ make fixtures-unsilence            # expire test silences
 | `internal/api` | `alerts_test.go` | Alert list/detail handler |
 | `internal/api` | `claims_test.go` | Claim set/release handler |
 | `internal/api` | `comments_test.go` | Comment create/delete handler (author-gated) |
-| `internal/api` | `silences_test.go` | Silence list/create/delete handler + silence templates CRUD + backend validation (empty/invalid matchers, endsAt checks) + AM 4xx passthrough |
+| `internal/api` | `silences_test.go` | Silence list (snapshot-only, zero AM calls, `?cluster=` filter) + create/delete handler incl. `SilenceStore` write-through + poll trigger + silence templates CRUD + backend validation (empty/invalid matchers, endsAt checks) + AM 4xx passthrough |
 | `internal/api` | `silence_validation_test.go` | `validateSilenceMatchers` (empty-string-match rule, RE2 compile), `sanitizeAMMessage`, `isUniqueViolation` |
 | `internal/api` | `silence_validation_fuzz_test.go` | Fuzz: `validateSilenceMatchers` accept/reject is consistent with its own regex compilation; `sanitizeAMMessage` never panics, always bounded and newline-free |
 | `internal/api` | `auth_handler_test.go` | login/logout/me/info, OIDC handlers |

@@ -37,7 +37,7 @@ func newTestServerWithRegistry(t *testing.T, registry *cluster.Registry) *Server
 	hub := ws.NewHub(nil, nil, metrics.New("test"))
 	go hub.Run()
 
-	return NewServer(alertStore, store, hub, registry, &config.Config{}, nil, auth.NoneProvider{}, userStore)
+	return NewServer(alertStore, history.NewSilenceStore(), store, hub, registry, &config.Config{}, nil, auth.NoneProvider{}, userStore)
 }
 
 func TestGetClusters_SingleMember_MembersFieldOmitted(t *testing.T) {

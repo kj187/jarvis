@@ -354,10 +354,11 @@ PATCH  /api/v1/alerts/:fingerprint/claim/note    Auth  (write)  Body: { note }  
 DELETE /api/v1/alerts/:fingerprint/claim         Auth  (write)  ?by=username
 GET    /api/v1/alerts/:fingerprint/claims/history full_protect? → []Claim  ?cluster=
 
-# ── Silences (proxy → Alertmanager) ──────────────────────────────────────────
+# ── Silences (reads from in-memory SilenceStore; writes → Alertmanager) ──────
 GET    /api/v1/silences                          full_protect?  → []Silence  ?cluster=
-#        a cluster whose silence fetch fails is skipped (best-effort, logged via slog.Warn)
-#        rather than failing the whole request — its silences are simply absent from the response
+#        served entirely from history.SilenceStore (filled by the recorder poll) — NEVER calls
+#        Alertmanager. A cluster whose poll-time silence fetch fails keeps its previous snapshot.
+#        Silences created/expired directly in AM appear within one JARVIS_POLL_INTERVAL.
 POST   /api/v1/silences                          Auth  (write)  → { id }
 #        validated server-side before the AM call (silence_validation.go validateSilenceMatchers):
 #        ≥1 matcher, no empty matcher names, every regex must compile (Go regexp = RE2, same
@@ -368,8 +369,11 @@ POST   /api/v1/silences                          Auth  (write)  → { id }
 #        id set → update (AM may return a NEW id; the old silence is then expired to avoid duplicates)
 #        fingerprint set → SilenceEvent recorded (action: created | updated | pending when startsAt is in the future)
 #        when auth mode ≠ none: createdBy/performedBy forced to the session username
+#        on success: write-through into SilenceStore (Upsert new + MarkExpired old id on id change)
+#        + poll trigger, so the frontend's immediate refetch sees the change (applySilenceWriteThrough)
 DELETE /api/v1/silences/:id                      Auth  (write)  ?cluster= (required) &fingerprint= &by=  → records "deleted" event
 #        AM 4xx response → relayed as 400 (sanitized); AM 5xx/transport failure → generic 502
+#        on success: SilenceStore.MarkExpired + poll trigger (same write-through pattern)
 
 # ── Silence Templates (DB, shared) ───────────────────────────────────────────
 GET    /api/v1/silence-templates                 full_protect?  → []SilenceTemplate
@@ -388,10 +392,12 @@ PATCH  /api/v1/admin/users/:id                   Admin        Body: { role }  (c
 DELETE /api/v1/admin/users/:id                   Admin        (cannot delete self)
 
 # ── E2E test routes (only with -tags e2e; no-op in production builds) ────────
-POST   /api/v1/test/reset                        (e2e only)  truncate history tables + clear in-memory store
+POST   /api/v1/test/reset                        (e2e only)  truncate history tables + clear in-memory stores (alerts + silences)
 POST   /api/v1/test/seed                         (e2e only)  insert resolved-alert lifecycles
 POST   /api/v1/test/claim                        (e2e only)  set claim, bypasses auth
 POST   /api/v1/test/comment                      (e2e only)  add comment, bypasses auth (no WS broadcast)
+POST   /api/v1/test/silence                      (e2e only)  create silence in AM, bypasses auth (same SilenceStore write-through as production)
+POST   /api/v1/test/template                     (e2e only)  create silence template, bypasses auth
 
 # ── Static (production build tag only) ───────────────────────────────────────
 GET    /*                                         None        → embed.FS (Vite build); SPA fallback to index.html
@@ -696,7 +702,11 @@ with its own `*alertmanager.Client`); `Cluster.AlertmanagerURL` /
   single-member JSON payloads stay byte-identical.
 - `Cluster.FetchSilences(ctx, onDuration)` mirrors this for silences, merging
   by ID via `mergeSilences` (freshest `UpdatedAt` wins); no `SeenOn` tracking
-  for silences.
+  for silences. Called only from the recorder poll, which stores the result
+  in `history.SilenceStore` (in-memory snapshot per cluster, AlertStore
+  pattern) — `GET /api/v1/silences` reads that snapshot and performs no
+  upstream call. A failed silence fetch keeps the cluster's previous
+  snapshot (never blanks the silences page on a transient error).
 - `Cluster.PingAll(ctx)` live-pings every member in parallel (used by
   `GET /api/v1/clusters`); cluster `Healthy` = any member healthy (UI shows
   e.g. "2/2 members up", amber when degraded).

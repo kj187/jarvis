@@ -60,6 +60,7 @@ func main() {
 
 	// ── Stores ────────────────────────────────────────────────────────────────
 	alertStore := &history.AlertStore{}
+	silenceStore := history.NewSilenceStore()
 	store := history.NewStore(database, dialect)
 	userStore := users.NewStore(database, dialect)
 
@@ -94,11 +95,11 @@ func main() {
 	go hub.Run()
 
 	// ── Recorder ──────────────────────────────────────────────────────────────
-	recorder := history.NewRecorder(registry, alertStore, store, hub, cfg.PollInterval, logger, m)
+	recorder := history.NewRecorder(registry, alertStore, silenceStore, store, hub, cfg.PollInterval, logger, m)
 	m.MustRegister(metrics.NewCollector(alertStore, hub, recorder.ClusterUpStates, len(registry.All())))
 
 	// ── HTTP Router ───────────────────────────────────────────────────────────
-	router := api.NewRouter(alertStore, store, hub, registry, cfg, static.StaticFiles, recorder, authProvider, userStore, m)
+	router := api.NewRouter(alertStore, silenceStore, store, hub, registry, cfg, static.StaticFiles, recorder, authProvider, userStore, m)
 
 	server := &http.Server{
 		Addr:         ":" + cfg.Port,

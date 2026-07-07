@@ -22,14 +22,15 @@ type broadcaster interface {
 
 // Recorder polls all Alertmanager clusters and persists alert lifecycle events.
 type Recorder struct {
-	registry   *cluster.Registry
-	alertStore *AlertStore
-	store      *Store
-	hub        broadcaster
-	interval   time.Duration
-	logger     *slog.Logger
-	triggerCh  chan struct{}
-	metrics    *metrics.Metrics
+	registry     *cluster.Registry
+	alertStore   *AlertStore
+	silenceStore *SilenceStore
+	store        *Store
+	hub          broadcaster
+	interval     time.Duration
+	logger       *slog.Logger
+	triggerCh    chan struct{}
+	metrics      *metrics.Metrics
 
 	// prevSnapshot holds the alert instance (fingerprint+cluster) from the last poll for diff computation.
 	prevMu            sync.Mutex
@@ -88,6 +89,7 @@ func splitRecorderSilenceKey(key string) (clusterName, silenceID string) {
 func NewRecorder(
 	registry *cluster.Registry,
 	alertStore *AlertStore,
+	silenceStore *SilenceStore,
 	store *Store,
 	hub broadcaster,
 	interval time.Duration,
@@ -97,6 +99,7 @@ func NewRecorder(
 	return &Recorder{
 		registry:          registry,
 		alertStore:        alertStore,
+		silenceStore:      silenceStore,
 		store:             store,
 		hub:               hub,
 		interval:          interval,
@@ -213,6 +216,11 @@ func (r *Recorder) poll(ctx context.Context) {
 		}
 		if res.silencesErr != nil && r.metrics != nil {
 			r.metrics.PollErrorsTotal.WithLabelValues(res.name, "silences").Inc()
+		}
+		// Snapshot only on a successful fetch — a transient failure must not
+		// blank the cluster's silences; the previous snapshot stays live.
+		if res.silencesErr == nil && r.silenceStore != nil {
+			r.silenceStore.Set(res.name, res.silences)
 		}
 		allAlerts = append(allAlerts, res.alerts...)
 		for _, s := range res.silences {

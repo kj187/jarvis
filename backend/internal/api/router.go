@@ -45,6 +45,7 @@ func rateLimiter(r rate.Limit, burst int) echo.MiddlewareFunc {
 // staticFiles is the embedded FS (empty in dev mode, populated in prod).
 func NewRouter(
 	alertStore *history.AlertStore,
+	silenceStore *history.SilenceStore,
 	store *history.Store,
 	hub *ws.Hub,
 	registry *cluster.Registry,
@@ -117,7 +118,7 @@ func NewRouter(
 		}))
 	}
 
-	srv := NewServer(alertStore, store, hub, registry, cfg, recorder, authProvider, userStore)
+	srv := NewServer(alertStore, silenceStore, store, hub, registry, cfg, recorder, authProvider, userStore)
 
 	// Wire JWT secret key into auth middleware.
 	if len(cfg.SecretKey) > 0 {
