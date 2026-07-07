@@ -16,7 +16,8 @@ FRONTEND_CONTAINER = jarvis_frontend_1
         scan scan-history scan-staged scan-all \
         build \
         e2e-build e2e-down e2e e2e-mode e2e-screenshots e2e-screenshot \
-        fixtures-create fixtures-remove fixtures-silence fixtures-unsilence
+        fixtures-create fixtures-remove fixtures-silence fixtures-unsilence \
+        diagrams
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -127,6 +128,18 @@ scan-all: scan scan-history scan-staged ## gitleaks: run all three scans (files 
 
 build: ## Build production container image locally
 	podman build -f Containerfile -t jarvis:local .
+
+# ── Diagrams (Mermaid sources in docs/diagrams/, rendered to docs/assets/) ─────
+# --user 0: rootless podman maps container root to the host user, so the
+# rendered files land with the correct ownership (the image's default node
+# user cannot write into the mounted repo).
+MERMAID = podman run --rm --user 0 -v "$(CURDIR):/data:z" docker.io/minlag/mermaid-cli:latest
+
+diagrams: ## Render all Mermaid sources (docs/diagrams/*.mmd) to docs/assets/*.svg
+	@for f in docs/diagrams/*.mmd; do \
+		out="docs/assets/$$(basename $$f .mmd).svg"; \
+		$(MERMAID) -i "/data/$$f" -o "/data/$$out" -b white && echo "rendered $$out"; \
+	done
 
 # ── E2E + Screenshots (isolated Playwright stack: compose.e2e.yml) ───────────────
 # All targets bring the stack up fresh, run, then tear it down. The auth mode

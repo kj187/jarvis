@@ -150,6 +150,7 @@ Tool-specific entry points map to the same files (no duplicated content):
    | Project description, invariants, workflow rules, commit format, repo layout | `AGENTS.md` itself |
    | E2E stack, specs, fixtures, auth modes | `docs/testing-e2e.md` |
    | Hard-won debugging insight or non-obvious gotcha | `.agents/lessons.md` |
+   | Who-talks-to-whom topology: upstream calls, stores, WS events, poll flow | `docs/diagrams/*.mmd` + re-render via `make diagrams` |
 
    A new **critical invariant** discovered during work goes into
    `AGENTS.md → Critical Invariants`. Before finishing any task, ask yourself:
@@ -212,6 +213,16 @@ Tool-specific entry points map to the same files (no duplicated content):
     any code** — the user decides whether to proceed anyway. Never silently
     build an out-of-scope feature. Bug fixes, refactorings, and docs need no
     scope check.
+12. **Diagrams — Mermaid, containerized, source + render committed together.**
+    Where a picture genuinely clarifies (data flow, who-talks-to-whom,
+    lifecycles — not trivial structures), add a Mermaid source under
+    `docs/diagrams/<name>.mmd` and render it with `make diagrams` (runs
+    mermaid-cli in a container, no local tooling) to
+    `docs/assets/<name>.svg`. Embed the SVG in the docs. The `.mmd` source
+    and the rendered SVG belong in the **same commit** — and when a change
+    alters what an existing diagram shows (new upstream call, new store, new
+    WS event), update and re-render it in that same commit, like every other
+    doc-sync duty in rule 6.
 
 ## Commit Format — Conventional Commits
 

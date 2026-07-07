@@ -4,6 +4,11 @@ Load this file for deep feature work, refactoring, new API endpoints, and any
 task that requires full context about the data model, API, stores, or state
 transitions. Base rules and critical invariants live in the root `AGENTS.md`.
 
+The rendered who-talks-to-whom data-flow diagram lives in
+`docs/architecture.md` (source: `docs/diagrams/architecture-data-flow.mmd`,
+re-render via `make diagrams`) — keep it in sync when the topology changes
+(AGENTS.md workflow rule 12).
+
 ---
 
 ## Technology Decisions
