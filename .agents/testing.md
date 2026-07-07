@@ -107,6 +107,7 @@ make fixtures-unsilence            # expire test silences
 | `internal/api` | `auth_handler_test.go` | login/logout/me/info, OIDC handlers |
 | `internal/api` | `setup_test.go` | first-run `/setup` handler (internal mode, 403 when users exist) |
 | `internal/api` | `admin_handler_test.go` | admin user CRUD + role/self guards |
+| `internal/api` | `clusters_test.go` | Cluster health from cached poll up-state (up/degraded/all-down/no-poll-yet), zero live `/api/v2/status` calls, single-member `members` omission |
 | `internal/api` | `router_test.go` | Route registration, `/groups` before `/:fingerprint/*`, protection modes |
 | `internal/auth` | `jwt_test.go` `internal_provider_test.go` `middleware_test.go` | JWT sign/verify, RequireAuth/RequireAdmin |
 | `internal/users` | `store_test.go` | User CRUD, OIDC upsert, bcrypt |

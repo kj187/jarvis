@@ -384,6 +384,8 @@ DELETE /api/v1/silence-templates/:id             Auth  (write)
 # ── Poll / Clusters ──────────────────────────────────────────────────────────
 POST   /api/v1/poll                              None  (RL)   → triggers an immediate Alertmanager poll
 GET    /api/v1/clusters                          full_protect?  → []ClusterInfo
+#        health from the cached per-member up-state of the last poll (Cluster.MemberUpStates) —
+#        never live-pings AM; members without poll state yet count as healthy (writeOrder optimism)
 
 # ── Admin (auth + role=admin) ────────────────────────────────────────────────
 GET    /api/v1/admin/users                       Admin        → []User
@@ -707,9 +709,14 @@ with its own `*alertmanager.Client`); `Cluster.AlertmanagerURL` /
   pattern) — `GET /api/v1/silences` reads that snapshot and performs no
   upstream call. A failed silence fetch keeps the cluster's previous
   snapshot (never blanks the silences page on a transient error).
-- `Cluster.PingAll(ctx)` live-pings every member in parallel (used by
-  `GET /api/v1/clusters`); cluster `Healthy` = any member healthy (UI shows
-  e.g. "2/2 members up", amber when degraded).
+- `GET /api/v1/clusters` derives member health from `Cluster.MemberUpStates()`
+  — the cached up-state written by every `FetchAlerts` (≤ one poll interval
+  old), never a live ping. Members without poll state yet (first interval
+  after startup) count as healthy, same optimism as `writeOrder`. Cluster
+  `Healthy` = any member healthy (UI shows e.g. "2/2 members up", amber when
+  degraded). The former `Cluster.PingAll` live-ping helper was removed with
+  this change; `alertmanager.Client.Ping` still exists but has no production
+  call site.
 - `Cluster.CreateSilence` / `DeleteSilence` send to the first healthy member
   (config order, from the cached up-state set by the last `FetchAlerts`),
   retrying once against the next member on transport failure or a 5xx

@@ -170,27 +170,6 @@ func TestFetchSilences_AllMembersDown_ReturnsError(t *testing.T) {
 	}
 }
 
-func TestPingAll_ReportsPerMemberHealth(t *testing.T) {
-	up := alertsServer(t, nil)
-	down := downServer(t)
-	cl := twoMemberCluster("prod", up.URL, down.URL)
-
-	statuses := cl.PingAll(context.Background())
-	if len(statuses) != 2 {
-		t.Fatalf("len(statuses) = %d, want 2", len(statuses))
-	}
-	byName := map[string]bool{}
-	for _, s := range statuses {
-		byName[s.Name] = s.Healthy
-	}
-	if !byName[config.DeriveMemberName(up.URL)] {
-		t.Error("up member must be healthy")
-	}
-	if byName[config.DeriveMemberName(down.URL)] {
-		t.Error("down member must be unhealthy")
-	}
-}
-
 func TestCreateSilence_FirstMemberSucceeds(t *testing.T) {
 	var hit string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

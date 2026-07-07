@@ -105,6 +105,13 @@ Tool-specific entry points map to the same files (no duplicated content):
     the two was the root cause of a preview showing "0 affected alerts" while
     Alertmanager silenced alerts anyway (unanchored `!~` substring match
     disagreeing with AM's anchored one).
+13. **Client-facing read endpoints never call Alertmanager synchronously.**
+    Reads are served from poll snapshots (`AlertStore`, `SilenceStore`,
+    cached member up-state) — only the recorder poll and explicit user
+    mutations (silence create/delete) go upstream, so AM load never scales
+    with the number of open browser tabs. Breaking this silently (live
+    proxying in `getSilences`/`getClusters`) roughly doubled AM CPU in a
+    real deployment.
 
 ## Workflow Rules — always follow
 

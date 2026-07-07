@@ -15,13 +15,6 @@ import (
 // used by the caller to record a per-member fetch-duration metric. May be nil.
 type FetchDurationFunc func(member string, seconds float64)
 
-// MemberStatus is the live ping result for one member.
-type MemberStatus struct {
-	Name    string
-	URL     string
-	Healthy bool
-}
-
 // FetchAlerts polls all members in parallel and returns the deduplicated,
 // enriched alert set for this cluster (see mergeAlerts). Returns an error
 // only when ALL members failed — a single member's failure does not fail the
@@ -129,21 +122,6 @@ func (c *Cluster) FetchSilences(ctx context.Context, onDuration FetchDurationFun
 		return nil, lastErr
 	}
 	return mergeSilences(byMember, order), nil
-}
-
-// PingAll pings every member in parallel and returns its live health.
-func (c *Cluster) PingAll(ctx context.Context) []MemberStatus {
-	statuses := make([]MemberStatus, len(c.Members))
-	var wg sync.WaitGroup
-	for i, m := range c.Members {
-		wg.Add(1)
-		go func(idx int, m *Member) {
-			defer wg.Done()
-			statuses[idx] = MemberStatus{Name: m.Name, URL: m.LinkURL, Healthy: m.Client.Ping(ctx) == nil}
-		}(i, m)
-	}
-	wg.Wait()
-	return statuses
 }
 
 // CreateSilence sends the silence to the first healthy member (config
