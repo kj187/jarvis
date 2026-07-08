@@ -81,7 +81,7 @@ func (s *Server) testReset(c echo.Context) error {
 	if err := s.store.ResetForTesting(); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
-	s.alertStore.Set(nil)
+	s.alertStore.Reset()
 	s.silenceStore.Reset()
 	return c.NoContent(http.StatusNoContent)
 }

@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
 import { createPortal } from 'react-dom'
-import { Bell, BellOff, Check, ChevronDown, ChevronUp, Loader2, TriangleAlert } from 'lucide-react'
+import { Bell, BellOff, Check, ChevronDown, ChevronRight, ChevronUp, Loader2, TriangleAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { LoginModal } from '@/components/auth/LoginModal'
 import { useAckAlert, useGroupAckAlert } from '@/hooks/useSilences'
@@ -69,8 +69,10 @@ const FEEDBACK_MS = 2500
 const MENU_CLOSE_MS = 140
 /** Vertical gap between the trigger and the menu. */
 const GAP = 6
-/** Conservative menu width used to decide whether it still fits right-aligned to the trigger's left edge. */
-const MENU_WIDTH_ESTIMATE = 220
+/** Fixed menu width (`w-60` below) — also used to decide whether it still fits right-aligned to the trigger's left edge. */
+const MENU_WIDTH_ESTIMATE = 240
+/** Placeholder coords for the aligned-menu first paint — off-screen so nothing flashes before `alignMenuToTrigger` (in a `useLayoutEffect`, so before the browser paints) moves it over the real trigger icon. */
+const OFFSCREEN = -9999
 
 /**
  * One-click Fast-Silence button with a duration menu. Hovering (or clicking /
@@ -106,6 +108,9 @@ export function AckButton({
   const feedbackTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const closeTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const triggerRef = useRef<HTMLDivElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+  const menuIconRef = useRef<SVGSVGElement>(null)
+  const alignedRef = useRef(false)
   const durationRef = useRef<number>(FAST_SILENCE_DURATIONS[0].minutes)
   const activeAlerts = alerts.filter((a) => getEffectiveAlertState(a, silences) === 'active')
 
@@ -146,13 +151,28 @@ export function AckButton({
     const el = triggerRef.current
     if (!el) return
     const r = el.getBoundingClientRect()
+
+    if (onCreateSilence) {
+      // Real position depends on the menu's rendered width (its first button
+      // centers its content), which isn't known until it's in the DOM — park
+      // it off-screen and let the layout effect below move it over the
+      // trigger icon before paint. Always mirror the "Silence…" button's icon
+      // to the right of its label so the menu opens leftward from the
+      // trigger — there's always room in that direction (it opens inside the
+      // alert card/row itself), unlike rightward where a right-column trigger
+      // can run out of viewport.
+      alignedRef.current = false
+      setCoords({ top: OFFSCREEN, left: OFFSCREEN })
+      return
+    }
+
     const overflowsRight = r.left + MENU_WIDTH_ESTIMATE > window.innerWidth
     setCoords(
       overflowsRight
         ? { top: r.bottom + GAP, right: window.innerWidth - r.right }
         : { top: r.bottom + GAP, left: r.left },
     )
-  }, [])
+  }, [onCreateSilence])
 
   const openMenu = useCallback(() => {
     clearTimeout(closeTimer.current)
@@ -175,6 +195,31 @@ export function AckButton({
       window.removeEventListener('resize', close)
     }
   }, [menuOpen])
+
+  // Runs before paint once the (off-screen) menu is in the DOM: measures
+  // where its own Bell icon actually landed and shifts the whole menu so that
+  // icon lands exactly on top of the trigger's Bell icon.
+  useLayoutEffect(() => {
+    if (!menuOpen || !onCreateSilence || alignedRef.current) return
+    const trigger = triggerRef.current
+    const icon = menuIconRef.current
+    if (!trigger || !icon) return
+
+    const tr = trigger.getBoundingClientRect()
+    const ir = icon.getBoundingClientRect()
+    // Actual rendered width, not the static MENU_WIDTH_ESTIMATE guess used by
+    // the non-aligned path below (that one clamps before the menu exists at
+    // all) — clamping against an overestimate here would needlessly push a
+    // narrower menu further left/right than the icon alignment calls for.
+    const menuWidth = menuRef.current?.getBoundingClientRect().width ?? MENU_WIDTH_ESTIMATE
+    const dx = (tr.left + tr.width / 2) - (ir.left + ir.width / 2)
+    const dy = (tr.top + tr.height / 2) - (ir.top + ir.height / 2)
+    alignedRef.current = true
+    setCoords((c) => ({
+      top: Math.max(8, c.top + dy),
+      left: Math.max(8, Math.min((c.left ?? 0) + dx, window.innerWidth - menuWidth - 8)),
+    }))
+  }, [menuOpen, onCreateSilence])
 
   if (requireActive && activeAlerts.length === 0) return null
 
@@ -297,56 +342,57 @@ export function AckButton({
       {menuOpen &&
         createPortal(
           <div
+            ref={menuRef}
             role="menu"
             data-testid="alert-ack-menu"
             onMouseEnter={() => clearTimeout(closeTimer.current)}
             onMouseLeave={scheduleClose}
-            className="fixed z-[100] min-w-[8rem] rounded-md border border-border bg-popover p-1 shadow-lg"
+            className="fixed z-[100] w-60 rounded-xl border border-border bg-popover p-2 shadow-xl"
             style={{ top: coords.top, left: coords.left, right: coords.right }}
           >
             {onCreateSilence && (
-              <>
-                <button
-                  type="button"
-                  role="menuitem"
-                  data-testid="alert-ack-open-form"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    clearTimeout(closeTimer.current)
-                    setMenuOpen(false)
-                    onCreateSilence(alerts)
-                  }}
-                  className="flex w-full items-center justify-center gap-1.5 rounded border border-border bg-accent/40 px-2 py-1.5 text-center text-xs font-semibold text-popover-foreground hover:bg-accent hover:text-foreground cursor-pointer"
-                >
-                  <Bell className="h-3 w-3" />
+              <button
+                type="button"
+                role="menuitem"
+                data-testid="alert-ack-open-form"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  clearTimeout(closeTimer.current)
+                  setMenuOpen(false)
+                  onCreateSilence(alerts)
+                }}
+                className="flex w-full flex-row-reverse items-center gap-2 rounded-lg bg-link/10 px-2.5 py-2 text-left text-[13px] font-semibold text-link transition-colors hover:bg-link/15 cursor-pointer"
+              >
+                <Bell ref={menuIconRef} className="h-4 w-4 shrink-0" />
+                <ChevronRight className="h-3.5 w-3.5 shrink-0 opacity-60" />
+                <span className="min-w-0 flex-1">
                   Silence…
-                </button>
-                {activeAlerts.length > 0 && (
-                  <div className="my-1.5 flex items-center gap-2">
-                    <div className="h-px flex-1 bg-border" />
-                    <span className="text-[9px] font-medium uppercase tracking-wide text-muted-foreground">or</span>
-                    <div className="h-px flex-1 bg-border" />
-                  </div>
-                )}
-              </>
+                  <span className="block text-[11px] font-medium opacity-70">Open full form</span>
+                </span>
+              </button>
             )}
             {activeAlerts.length > 0 && (
               <>
-                <p className="px-2 py-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                  {alerts.length > 1 ? `Fast-Silence ${activeAlerts.length} alerts for…` : 'Fast-Silence for…'}
-                </p>
-                {FAST_SILENCE_DURATIONS.map((d) => (
-                  <button
-                    key={d.minutes}
-                    type="button"
-                    role="menuitem"
-                    data-testid="alert-ack-option"
-                    onClick={pick(d.minutes)}
-                    className="flex w-full items-center rounded px-2 py-1 text-left text-xs text-popover-foreground hover:bg-accent hover:text-foreground cursor-pointer"
-                  >
-                    {d.label}
-                  </button>
-                ))}
+                <div className={cn('flex items-center gap-2 px-0.5', onCreateSilence && 'mb-1.5 mt-2')}>
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    {alerts.length > 1 ? `Fast-Silence ${activeAlerts.length} alerts` : 'Fast-Silence'}
+                  </span>
+                  <div className="h-px flex-1 bg-border" />
+                </div>
+                <div className="grid grid-cols-4 gap-1">
+                  {FAST_SILENCE_DURATIONS.map((d) => (
+                    <button
+                      key={d.minutes}
+                      type="button"
+                      role="menuitem"
+                      data-testid="alert-ack-option"
+                      onClick={pick(d.minutes)}
+                      className="flex items-center justify-center rounded-lg border border-border bg-card px-1 py-1.5 text-xs font-semibold tabular-nums text-foreground transition-colors hover:border-link/40 hover:bg-link/10 hover:text-link cursor-pointer"
+                    >
+                      {d.label}
+                    </button>
+                  ))}
+                </div>
               </>
             )}
           </div>,

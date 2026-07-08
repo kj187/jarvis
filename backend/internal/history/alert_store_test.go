@@ -25,6 +25,22 @@ func TestAlertStore_SetGet(t *testing.T) {
 	}
 }
 
+func TestAlertStore_Reset(t *testing.T) {
+	s := &AlertStore{}
+	s.Set([]models.EnrichedAlert{makeAlert("fp1", "active")})
+	s.MarkResolvedForCluster("fp1", "")
+
+	if len(s.Get()) != 1 {
+		t.Fatalf("precondition: expected 1 alert in resolved buffer before Reset")
+	}
+
+	s.Reset()
+
+	if got := s.Get(); len(got) != 0 {
+		t.Errorf("Get() after Reset = %d alerts, want 0 (resolved buffer must be cleared too)", len(got))
+	}
+}
+
 func TestAlertStore_GetReturnsCopy(t *testing.T) {
 	s := &AlertStore{}
 	s.Set([]models.EnrichedAlert{makeAlert("fp1", "active")})

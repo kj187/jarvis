@@ -33,7 +33,7 @@ pause() {
 
 echo "==> Firing Kubernetes test alerts to ${AM} (randomized, ~2 min)"
 
-printf "  [1/10] KubePodCrashLooping (critical, payment-api, prod)..."
+printf "  [1/23] KubePodCrashLooping (critical, payment-api, prod)..."
 post '[{
   "labels": {
     "alertname": "KubePodCrashLooping",
@@ -56,7 +56,51 @@ post '[{
 }]'
 
 pause
-printf "  [2/10] KubeNodeNotReady (critical, worker-node-3, prod)..."
+printf "  [2/23] KubePodCrashLooping (critical, payment-api, prod) — 2nd pod (groups with #1)..."
+post '[{
+  "labels": {
+    "alertname": "KubePodCrashLooping",
+    "severity": "critical",
+    "namespace": "prod",
+    "pod": "payment-api-7d9f6b8c4-9m3qz",
+    "container": "payment-api",
+    "cluster": "eu-west-1-prod",
+    "team": "platform",
+    "runbook": "'"${RUNBOOKS}"'/KubePodCrashLooping",
+    "test_suite": "jarvis"
+  },
+  "annotations": {
+    "summary": "Pod payment-api-7d9f6b8c4-9m3qz is crash looping",
+    "description": "Pod has restarted 9 times in the last 15 minutes. Exit code: 137 (OOMKilled).",
+    "dashboard": "'"${GRAFANA}"'/d/k8s-pods?var-namespace=prod&var-pod=payment-api-7d9f6b8c4-9m3qz&orgId=1"
+  },
+  "generatorURL": "'"${PROM}"'/graph?g0.expr=kube_pod_container_status_restarts_total%7Bnamespace%3D%22prod%22%7D"
+}]'
+
+pause
+printf "  [3/23] KubePodCrashLooping (critical, payment-api, prod) — 3rd pod (groups with #1)..."
+post '[{
+  "labels": {
+    "alertname": "KubePodCrashLooping",
+    "severity": "critical",
+    "namespace": "prod",
+    "pod": "payment-api-7d9f6b8c4-p7wln",
+    "container": "payment-api",
+    "cluster": "eu-west-1-prod",
+    "team": "platform",
+    "runbook": "'"${RUNBOOKS}"'/KubePodCrashLooping",
+    "test_suite": "jarvis"
+  },
+  "annotations": {
+    "summary": "Pod payment-api-7d9f6b8c4-p7wln is crash looping",
+    "description": "Pod has restarted 22 times in the last 15 minutes. Exit code: 137 (OOMKilled).",
+    "dashboard": "'"${GRAFANA}"'/d/k8s-pods?var-namespace=prod&var-pod=payment-api-7d9f6b8c4-p7wln&orgId=1"
+  },
+  "generatorURL": "'"${PROM}"'/graph?g0.expr=kube_pod_container_status_restarts_total%7Bnamespace%3D%22prod%22%7D"
+}]'
+
+pause
+printf "  [4/23] KubeNodeNotReady (critical, worker-node-3, prod)..."
 post '[{
   "labels": {
     "alertname": "KubeNodeNotReady",
@@ -76,7 +120,7 @@ post '[{
 }]'
 
 pause
-printf "  [3/10] KubeAPIServerErrorsHigh (critical, kube-system, prod)..."
+printf "  [5/23] KubeAPIServerErrorsHigh (critical, kube-system, prod)..."
 post '[{
   "labels": {
     "alertname": "KubeAPIServerErrorsHigh",
@@ -96,7 +140,7 @@ post '[{
 }]'
 
 pause
-printf "  [4/10] KubeJobFailed (critical, data-pipeline, prod)..."
+printf "  [6/23] KubeJobFailed (critical, data-pipeline, prod)..."
 post '[{
   "labels": {
     "alertname": "KubeJobFailed",
@@ -118,7 +162,7 @@ post '[{
 }]'
 
 pause
-printf "  [5/10] KubeDeploymentReplicasMismatch (warning, frontend, staging)..."
+printf "  [7/23] KubeDeploymentReplicasMismatch (warning, frontend, staging)..."
 post '[{
   "labels": {
     "alertname": "KubeDeploymentReplicasMismatch",
@@ -139,7 +183,7 @@ post '[{
 }]'
 
 pause
-printf "  [6/10] KubePersistentVolumeFillingUp (warning, prometheus, prod)..."
+printf "  [8/23] KubePersistentVolumeFillingUp (warning, prometheus, prod)..."
 post '[{
   "labels": {
     "alertname": "KubePersistentVolumeFillingUp",
@@ -160,7 +204,7 @@ post '[{
 }]'
 
 pause
-printf "  [7/10] KubeHpaMaxedOut (warning, auth-service, prod)..."
+printf "  [9/23] KubeHpaMaxedOut (warning, auth-service, prod)..."
 post '[{
   "labels": {
     "alertname": "KubeHpaMaxedOut",
@@ -180,7 +224,7 @@ post '[{
 }]'
 
 pause
-printf "  [8/10] KubePodOOMKilled (warning, ml-inference, prod)..."
+printf " [10/23] KubePodOOMKilled (warning, ml-inference, prod)..."
 post '[{
   "labels": {
     "alertname": "KubePodOOMKilled",
@@ -203,7 +247,49 @@ post '[{
 }]'
 
 pause
-printf "  [9/10] KubeContainerWaiting (info, batch-worker, prod)..."
+printf " [11/23] KubePodOOMKilled (warning, ml-inference, prod) — 2nd pod (groups with #10)..."
+post '[{
+  "labels": {
+    "alertname": "KubePodOOMKilled",
+    "severity": "warning",
+    "namespace": "prod",
+    "pod": "ml-inference-6c8d9f7b5-h4dtx",
+    "container": "inference-server",
+    "cluster": "eu-west-1-prod",
+    "team": "ml",
+    "runbook": "'"${RUNBOOKS}"'/KubePodOOMKilled",
+    "test_suite": "jarvis"
+  },
+  "annotations": {
+    "summary": "Container inference-server OOMKilled 2 times in 1h",
+    "description": "Memory limit: 4Gi, actual peak RSS: 4.6Gi. Increase memory limit or reduce batch size."
+  },
+  "generatorURL": "'"${PROM}"'/graph?g0.expr=kube_pod_container_status_last_terminated_reason%7Breason%3D%22OOMKilled%22%7D"
+}]'
+
+pause
+printf " [12/23] KubePodOOMKilled (warning, ml-inference, prod) — 3rd pod (groups with #10)..."
+post '[{
+  "labels": {
+    "alertname": "KubePodOOMKilled",
+    "severity": "warning",
+    "namespace": "prod",
+    "pod": "ml-inference-6c8d9f7b5-vw8kc",
+    "container": "inference-server",
+    "cluster": "eu-west-1-prod",
+    "team": "ml",
+    "runbook": "'"${RUNBOOKS}"'/KubePodOOMKilled",
+    "test_suite": "jarvis"
+  },
+  "annotations": {
+    "summary": "Container inference-server OOMKilled 5 times in 1h",
+    "description": "Memory limit: 4Gi, actual peak RSS: 5.1Gi. Increase memory limit or reduce batch size."
+  },
+  "generatorURL": "'"${PROM}"'/graph?g0.expr=kube_pod_container_status_last_terminated_reason%7Breason%3D%22OOMKilled%22%7D"
+}]'
+
+pause
+printf " [13/23] KubeContainerWaiting (info, batch-worker, prod)..."
 post '[{
   "labels": {
     "alertname": "KubeContainerWaiting",
@@ -224,7 +310,49 @@ post '[{
 }]'
 
 pause
-printf " [10/10] KubeStatefulSetReplicasMismatch (info, kafka, prod)..."
+printf " [14/23] KubeContainerWaiting (info, batch-worker, prod) — 2nd pod (groups with #13)..."
+post '[{
+  "labels": {
+    "alertname": "KubeContainerWaiting",
+    "severity": "info",
+    "namespace": "prod",
+    "pod": "batch-worker-5f7b9c2d8-x9zzt",
+    "container": "batch-worker",
+    "reason": "ImagePullBackOff",
+    "cluster": "eu-west-1-prod",
+    "team": "platform",
+    "test_suite": "jarvis"
+  },
+  "annotations": {
+    "summary": "Container batch-worker stuck in ImagePullBackOff",
+    "description": "Image ghcr.io/acme/batch-worker:v2.4.1 cannot be pulled. Registry credentials may have expired or image tag does not exist."
+  },
+  "generatorURL": "'"${PROM}"'/graph?g0.expr=kube_pod_container_status_waiting_reason%7Breason%3D%22ImagePullBackOff%22%7D"
+}]'
+
+pause
+printf " [15/23] KubeContainerWaiting (info, batch-worker, prod) — 3rd pod (groups with #13)..."
+post '[{
+  "labels": {
+    "alertname": "KubeContainerWaiting",
+    "severity": "info",
+    "namespace": "prod",
+    "pod": "batch-worker-5f7b9c2d8-p3kjm",
+    "container": "batch-worker",
+    "reason": "ImagePullBackOff",
+    "cluster": "eu-west-1-prod",
+    "team": "platform",
+    "test_suite": "jarvis"
+  },
+  "annotations": {
+    "summary": "Container batch-worker stuck in ImagePullBackOff",
+    "description": "Image ghcr.io/acme/batch-worker:v2.4.1 cannot be pulled. Registry credentials may have expired or image tag does not exist."
+  },
+  "generatorURL": "'"${PROM}"'/graph?g0.expr=kube_pod_container_status_waiting_reason%7Breason%3D%22ImagePullBackOff%22%7D"
+}]'
+
+pause
+printf " [16/23] KubeStatefulSetReplicasMismatch (info, kafka, prod)..."
 post '[{
   "labels": {
     "alertname": "KubeStatefulSetReplicasMismatch",
@@ -245,7 +373,7 @@ post '[{
 }]'
 
 pause
-printf " [11/12] KubeServiceEndpointError (error, checkout-api, prod)..."
+printf " [17/23] KubeServiceEndpointError (error, checkout-api, prod)..."
 post '[{
   "labels": {
     "alertname": "KubeServiceEndpointError",
@@ -266,7 +394,7 @@ post '[{
 }]'
 
 pause
-printf " [12/12] KubeDNSErrors (error, kube-dns, prod)..."
+printf " [18/23] KubeDNSErrors (error, kube-dns, prod)..."
 post '[{
   "labels": {
     "alertname": "KubeDNSErrors",
@@ -288,7 +416,7 @@ post '[{
 }]'
 
 pause
-printf " [13/16] LinkRichAlert — many link labels + annotations..."
+printf " [19/23] LinkRichAlert — many link labels + annotations..."
 post '[{
   "labels": {
     "alertname": "LinkRichAlert",
@@ -315,7 +443,7 @@ post '[{
 }]'
 
 pause
-printf " [14/16] InlineUrlsAlert — multiple URLs embedded in description prose..."
+printf " [20/23] InlineUrlsAlert — multiple URLs embedded in description prose..."
 post '[{
   "labels": {
     "alertname": "InlineUrlsAlert",
@@ -334,7 +462,7 @@ post '[{
 }]'
 
 pause
-printf " [15/16] LabelOnlyLinksAlert — all links in labels, no annotation links..."
+printf " [21/23] LabelOnlyLinksAlert — all links in labels, no annotation links..."
 post '[{
   "labels": {
     "alertname": "LabelOnlyLinksAlert",
@@ -356,7 +484,7 @@ post '[{
 }]'
 
 pause
-printf " [16/16] AnnotationOnlyLinksAlert — all links in annotations, no label links..."
+printf " [22/23] AnnotationOnlyLinksAlert — all links in annotations, no label links..."
 post '[{
   "labels": {
     "alertname": "AnnotationOnlyLinksAlert",
@@ -378,7 +506,7 @@ post '[{
 }]'
 
 pause
-printf " [17/17] SpecialCharLabelAlert — label value with dots + label value with hyphens..."
+printf " [23/23] SpecialCharLabelAlert — label value with dots + label value with hyphens..."
 post '[{
   "labels": {
     "alertname": "SpecialCharLabelAlert",
@@ -401,5 +529,8 @@ post '[{
 }]'
 
 echo ""
-echo "==> Done. 17 Kubernetes test alerts active (test_suite=jarvis)."
+echo "==> Done. 23 Kubernetes test alerts active (test_suite=jarvis)."
+echo "    KubePodCrashLooping, KubePodOOMKilled and KubeContainerWaiting each fired as"
+echo "    3 alerts (same alertname/cluster/namespace, different pod) — Alertmanager"
+echo "    groups them (group_by: alertname, cluster, namespace) into 3-alert groups."
 echo "    Alerts persist until you run 'make alerts-resolve' (endsAt: ${ENDS_AT})."

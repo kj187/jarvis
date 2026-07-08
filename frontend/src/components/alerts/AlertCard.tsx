@@ -267,7 +267,7 @@ export function AlertCard({
         title="Double-click to collapse"
       >
         <span className="break-all font-semibold leading-tight text-foreground">{alertname}</span>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2" title="">
           {showSeverityBadge && severityRaw && <AlertBadge severity={severity} />}
           {count > 1 && (
             <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-accent px-1.5 text-xs font-bold">

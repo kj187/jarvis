@@ -168,3 +168,22 @@ snapshots (`AlertStore` / `SilenceStore` / `MemberUpStates`), never from a
 synchronous AM call. Mutations write through to the snapshot + trigger a
 poll so the UI stays instant. When adding a read endpoint, ask: "does its
 cost scale with the number of open tabs?" — if yes, snapshot it.
+
+## e2e `/test/reset` didn't clear the 20-minute resolved-alert buffer
+
+**Symptom**: `silence-matching-semantics.spec.ts` flaked in CI with a wrong
+affected-alerts count (`silence-matching-semantics.spec.ts:135`), unrelated
+to the diff under test — pointed at cross-test state leakage.
+**Cause**: `POST /api/v1/test/reset` called `alertStore.Set(nil)` to clear
+alerts between tests. `Set` intentionally preserves `AlertStore`'s resolved
+buffer (alerts stay visible 20 minutes after resolving) — by design, `Set`
+only prunes buffer entries that reappear in the new active list, so `Set(nil)`
+touches the buffer not at all. A previous test's alert, resolved via
+`am.clearAll()` in the next test's fixture and picked up by the recorder's
+poll, landed in the buffer and leaked into `GET /api/v1/alerts` — which
+`SilenceForm`'s live affected-alerts preview reads unfiltered by state.
+**Rule**: `AlertStore.Reset()` (`internal/history/alert_store.go`) clears
+both the active list and the resolved buffer; `testReset` uses it instead of
+`Set(nil)`. `Set(nil)` keeps its production semantics for the real poll loop.
+Any store with a deliberately-persisted buffer/cache needs an explicit
+test-only full-wipe method — `Set(nil)`-shaped "clear" calls are not it.

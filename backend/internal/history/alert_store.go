@@ -30,6 +30,18 @@ func (s *AlertStore) Set(alerts []models.EnrichedAlert) {
 	}
 }
 
+// Reset clears both the active list and the resolved buffer. Unlike Set(nil),
+// which intentionally preserves the resolved buffer for its 20-minute
+// visibility window, Reset wipes the store entirely — used only by the e2e
+// test-reset route so a resolved alert from one test can't leak into the
+// next test's alert list for up to 20 minutes.
+func (s *AlertStore) Reset() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.alerts = nil
+	s.resolvedBuffer = nil
+}
+
 // Get returns a copy of all alerts: currently active + resolved buffer.
 func (s *AlertStore) Get() []models.EnrichedAlert {
 	s.mu.RLock()
