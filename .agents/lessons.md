@@ -9,6 +9,29 @@ instead of duplicating.
 
 ---
 
+## A resolve+refire faster than JARVIS_POLL_INTERVAL is invisible to the recorder
+
+**Symptom**: Manually testing occurrence tracking / the firing-pattern
+heatmap by running `make fixtures-remove` then `make fixtures-create` back
+to back — `occurrenceCount`, `lastFiredAt`, and the heatmap all stayed
+completely unchanged, as if nothing happened, even though Alertmanager's
+`GET /api/v2/alerts` showed a fresh `startsAt`.
+**Cause**: The recorder is snapshot-diffing (compares this poll's alert list
+against the previous poll's), not event-log based. `resolve-test-alerts.sh`
+resolves all 23 alerts in well under a second; if `fixtures-create` re-fires
+them before the next `JARVIS_POLL_INTERVAL` tick (15s in dev), no poll ever
+observes the alert as *absent* — from the recorder's point of view it was
+"firing" in every single snapshot, so `RecordStatusChange`'s idempotency
+check (same status → no-op) never fires a new event. AM's own `startsAt`
+changing underneath is irrelevant; only a state the recorder actually polls
+counts.
+**Rule**: To manually force a genuine new firing episode, resolve, then
+force an immediate poll (`POST /api/v1/poll`) and give it a couple seconds
+to land, *then* re-fire — `make fixtures-refire`
+(`scripts/refire-test-alerts.sh`) does exactly this. Bare
+`fixtures-remove` + `fixtures-create` in quick succession will not register
+as a new occurrence.
+
 ## A plausible-sounding Alertmanager validation rule can still be wrong — verify against a real instance
 
 **Symptom**: A new backend check (`validateSilenceMatchers`, added to reject
