@@ -1,5 +1,6 @@
-import { test, expect, waitForActiveAlerts, JARVIS_BASE_URL } from '../../support/fixtures'
+import { test, expect, JARVIS_BASE_URL } from '../../support/fixtures'
 import { dismissNoAuthNotice } from '../../support/auth'
+import { fireWithHeatmapHistory } from '../../support/heatmapHistory'
 import { kubernetesAlerts } from '../../fixtures/alerts'
 
 const DIR = process.env.SCREENSHOTS_DIR ?? '../docs/assets'
@@ -26,8 +27,7 @@ async function waitForSuppressedAlerts(baseURL: string, timeoutMs = 10_000): Pro
  */
 test('feature-alert-expiring-silence', async ({ page, am, jarvis }) => {
   await dismissNoAuthNotice(page)
-  await am.fire(kubernetesAlerts)
-  await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, kubernetesAlerts.length)
+  await fireWithHeatmapHistory(page, am, jarvis, JARVIS_BASE_URL, kubernetesAlerts)
 
   // Silence expires 20 minutes from real now — AM accepts future timestamps.
   const silenceEndsAt = new Date(Date.now() + 20 * 60 * 1000)

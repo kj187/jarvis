@@ -1,5 +1,6 @@
 import { test, expect, JARVIS_BASE_URL } from '../../support/fixtures'
 import { loginOIDC } from '../../support/auth'
+import { fireWithHeatmapHistory } from '../../support/heatmapHistory'
 import { manyAlerts } from '../../fixtures/alerts'
 
 const DIR = process.env.SCREENSHOTS_DIR ?? '../docs/assets'
@@ -20,26 +21,13 @@ test('screenshot', async ({ page, am, jarvis }) => {
   // Login first — session cookie must be in place before any page navigation.
   await loginOIDC(page)
 
-  await am.fire(manyAlerts)
-  await jarvis.poll()
+  // fireWithHeatmapHistory freezes the clock to real "now" and backfills a
+  // multi-week firing history per alert — must run before the claims/silences
+  // below, since it does an internal DB reset (see that helper's docstring).
+  await fireWithHeatmapHistory(page, am, jarvis, JARVIS_BASE_URL, manyAlerts)
 
-  // Wait for all alerts to land in Jarvis, then grab fingerprints.
-  const deadline = Date.now() + 15_000
-  let alerts: Array<{ fingerprint: string; labels: Record<string, string> }> = []
-  while (Date.now() < deadline) {
-    const res = await fetch(`${JARVIS_BASE_URL}/api/v1/alerts`)
-    if (res.ok) {
-      const data: typeof alerts = await res.json()
-      if (data.length >= manyAlerts.length) {
-        alerts = data
-        break
-      }
-    }
-    await new Promise((r) => setTimeout(r, 500))
-  }
-  if (alerts.length < manyAlerts.length) {
-    throw new Error(`timed out waiting for ${manyAlerts.length} alerts, got ${alerts.length}`)
-  }
+  const res = await fetch(`${JARVIS_BASE_URL}/api/v1/alerts`)
+  const alerts: Array<{ fingerprint: string; labels: Record<string, string> }> = await res.json()
 
   // Claim 3 alerts so the claim badges are visible on cards.
   const byName = (name: string) => alerts.find((a) => a.labels['alertname'] === name)

@@ -477,8 +477,9 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
 │                        HeatmapRange, AlertHeatmapResponse, ...
 ├── hooks/
 │   ├── useAlerts.ts           → useAlerts, useAlertGroups, useAlertHistory, useAlertTimeline,
-│   │                            useAlertStats, useAlertHeatmap (enabled only while detail panel
-│   │                            open, staleTime 60s), useRefreshAlerts
+│   │                            useAlertStats, useAlertHeatmap (staleTime 60s; enabled unconditionally
+│   │                            — both AlertDetailPanel and every AlertCard entry query it),
+│   │                            useRefreshAlerts
 │   ├── useAlertCounts.ts      → per-state alert counts for nav badges
 │   ├── useAlertComments.ts    → useAlertComments, useAddComment, useDeleteComment (all cluster-scoped)
 │   ├── useAlertClaim.ts       → useActiveClaim, useClaimHistory, useSetClaim, useReleaseClaim,
@@ -544,16 +545,27 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │   ├── AlertCard.tsx      → card + claim banner + count badge + silence/detail actions + Fast-Silence (hover);
     │   │                        FiringSparkline: dezent HeatmapCellsRow under the timestamp row —
     │   │                        fetches 30d, keeps only the most recent 14 buckets (fewer/bigger
-    │   │                        cells read better at card width), only fetched/rendered for alerts
-    │   │                        with occurrenceCount > 1 (no tooltips — would fight the card's own
-    │   │                        click target)
+    │   │                        cells read better at card width); always rendered, even with zero
+    │   │                        fires in the window (a missing sparkline reads as a rendering bug,
+    │   │                        not "no data") — no tooltips (would fight the card's own click target)
     │   ├── AlertListView.tsx  → sortable table (name/time), expandable groups, section
     │   │                        reordering (persisted: 'jarvis-list-section-order:<label>')
     │   ├── AlertListRow.tsx   → single/indented row
     │   ├── AlertDetailPanel.tsx → slide-over: labels/annotations + link buttons, stats & timeline,
     │   │                          claim (useClaimController), comments, silence controls + Fast-Silence, AI-prompt section;
     │   │                          header (below the stats line, above the action buttons) embeds
-    │   │                          AlertHeatmap directly — not a collapsible section, always visible
+    │   │                          AlertHeatmap directly — not a collapsible section, always visible;
+    │   │                          close (X) is rendered inline in the header row next to the status
+    │   │                          badges as a bordered button (Sheet's own absolute-positioned close
+    │   │                          is suppressed via `hideCloseButton`) — was previously floating
+    │   │                          top-right, forcing `pr-8` padding on every header row; sheet width
+    │   │                          is 10% narrower than Sheet's default (`sm:max-w-[37.8rem]
+    │   │                          lg:max-w-[50.4rem]` override, this panel only); the expired-silence
+    │   │                          banner is collapsible (default collapsed, ChevronDown/Up toggle),
+    │   │                          state persisted per-alert in localStorage
+    │   │                          (`jarvis:collapsed:expired-silence:<fingerprint>:<cluster>`) — the
+    │   │                          active-silence banner stays always expanded (actionable: extend
+    │   │                          buttons, expiry warning)
     │   ├── AlertDetailSection.tsx → collapsible section wrapper used inside the detail panel
     │   ├── AlertDetailHistorySection.tsx → stats + merged event timeline section (heatmap lives in
     │   │                        AlertDetailPanel's header, not here — see above)
@@ -562,7 +574,11 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │   │                        useAlertHeatmap query + range state); 7d renders as 7 day-rows of
     │   │                        24 hourly cells (with day labels), 24h/30d as one row; same
     │   │                        HeatmapCellsRow as the card, so card + detail share one visual
-    │   │                        language now (box grid, soft muted-fill empty cells)
+    │   │                        language now (box grid, soft muted-fill empty cells); Info icon next
+    │   │                        to the label opens a hover tooltip explaining cell shading + what
+    │   │                        each range shows (anchored `right-0` — the range-toggle buttons sit
+    │   │                        to the icon's right, unlike the Links-section Info icon which anchors
+    │   │                        `left-0`)
     │   ├── HeatmapCells.tsx   → HeatmapCellsRow (no chart lib; renders HEATMAP_INTENSITY_CLASSES
     │   │                        cells via heatmapIntensityLevel/heatmapCellTooltip, all three in
     │   │                        lib/heatmapUtils.ts — plain exports, not this .tsx file, so
@@ -655,7 +671,10 @@ interface UserSettings {
 `jarvis-user-settings` · `jarvis-username` (manual author in mode "none") ·
 `jarvis_noauth_notice_dismissed` ·
 `jarvis-card-section-order:<label>` · `jarvis-list-section-order:<label>`
-(drag-and-drop section order per grouping label)
+(drag-and-drop section order per grouping label) ·
+`jarvis:collapsed:<alertname>:<cluster>` (AlertCard collapse state) ·
+`jarvis:collapsed:expired-silence:<fingerprint>:<cluster>` (expired-silence
+banner collapse state in AlertDetailPanel, default collapsed)
 
 ## URL State Params
 
