@@ -2,7 +2,7 @@ module github.com/kj187/jarvis/backend
 
 go 1.25.0
 
-toolchain go1.25.11
+toolchain go1.25.12
 
 require (
 	github.com/coreos/go-oidc/v3 v3.19.0
