@@ -1,5 +1,6 @@
-import { test, expect, freezeClock, waitForActiveAlerts, JARVIS_BASE_URL } from '../../support/fixtures'
+import { test, expect, JARVIS_BASE_URL } from '../../support/fixtures'
 import { dismissNoAuthNotice } from '../../support/auth'
+import { fireWithHeatmapHistory } from '../../support/heatmapHistory'
 import { kubernetesAlerts } from '../../fixtures/alerts'
 
 const DIR = process.env.SCREENSHOTS_DIR ?? '../docs/assets'
@@ -9,10 +10,8 @@ const DIR = process.env.SCREENSHOTS_DIR ?? '../docs/assets'
  * Regenerate: make e2e-screenshot NAME=feature-fast-silence
  */
 test('feature-fast-silence', async ({ page, am, jarvis }) => {
-  await freezeClock(page)
   await dismissNoAuthNotice(page)
-  await am.fire(kubernetesAlerts)
-  await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, kubernetesAlerts.length)
+  await fireWithHeatmapHistory(page, am, jarvis, JARVIS_BASE_URL, kubernetesAlerts)
 
   await page.goto('/?state=active')
   const card = page.getByTestId('alert-card').first()

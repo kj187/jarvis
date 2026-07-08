@@ -17,6 +17,25 @@ export interface SeedResolvedAlert {
   resolvedAt?: string
 }
 
+export interface FiringCycle {
+  /** ISO timestamp. */
+  startsAt: string
+  /** ISO timestamp. */
+  resolvedAt: string
+}
+
+export interface SeedHeatmapHistoryAlert {
+  fingerprint: string
+  alertname: string
+  cluster: string
+  alertmanagerUrl?: string
+  labels?: Record<string, string>
+  annotations?: Record<string, string>
+  /** Historical firing→resolved windows, inserted directly with recorded_at
+   *  set to each cycle's own timestamp — see SeedFiringHistoryForTesting. */
+  cycles: FiringCycle[]
+}
+
 export interface AMSilenceMatcher {
   name: string
   value: string
@@ -59,6 +78,23 @@ export class JarvisClient {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ resolved }),
+    })
+    if (!res.ok) throw new Error(`seed failed: ${res.status} ${await res.text()}`)
+  }
+
+  /**
+   * Backfills historical firing→resolved cycles directly into the DB
+   * (e2e only) — use this instead of repeated `seedResolved` calls for
+   * multiple cycles on the SAME fingerprint. `seedResolved` reuses the
+   * production RecordStatusChange/RecordResolvedForCluster idempotency +
+   * 60s-grace-period logic, which silently collapses rapid same-fingerprint
+   * historical backfills onto a single surviving row (see .agents/lessons.md).
+   */
+  async seedHeatmapHistory(heatmapHistory: SeedHeatmapHistoryAlert[]): Promise<void> {
+    const res = await fetch(`${this.baseURL}/api/v1/test/seed`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ heatmapHistory }),
     })
     if (!res.ok) throw new Error(`seed failed: ${res.status} ${await res.text()}`)
   }

@@ -1,5 +1,6 @@
-import { test, expect, waitForActiveAlerts, JARVIS_BASE_URL } from '../../support/fixtures'
+import { test, expect, JARVIS_BASE_URL } from '../../support/fixtures'
 import { ensureInternalAdmin, loginInternal } from '../../support/auth'
+import { fireWithHeatmapHistory } from '../../support/heatmapHistory'
 import { manyAlerts } from '../../fixtures/alerts'
 
 const DIR = process.env.SCREENSHOTS_DIR ?? '../docs/assets'
@@ -11,8 +12,7 @@ const DIR = process.env.SCREENSHOTS_DIR ?? '../docs/assets'
 test('auth-user-menu', async ({ page, am, jarvis }) => {
   await ensureInternalAdmin(page)
   await loginInternal(page)
-  await am.fire(manyAlerts)
-  await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, manyAlerts.length)
+  await fireWithHeatmapHistory(page, am, jarvis, JARVIS_BASE_URL, manyAlerts)
 
   await page.goto('/?state=active')
   await expect(page.getByTestId('user-menu')).toBeVisible()

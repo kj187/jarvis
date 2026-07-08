@@ -13,6 +13,8 @@ interface SheetProps {
   ariaLabel?: string
   /** id of a visible element (e.g. the heading) that labels the dialog. Takes precedence over ariaLabel. */
   ariaLabelledby?: string
+  /** Suppress the default top-right close button when the consumer renders its own. */
+  hideCloseButton?: boolean
 }
 
 const FOCUSABLE_SELECTOR = [
@@ -39,6 +41,7 @@ export function Sheet({
   closeTestId,
   ariaLabel,
   ariaLabelledby,
+  hideCloseButton,
 }: SheetProps) {
   const panelRef = React.useRef<HTMLDivElement>(null)
   const idRef = React.useRef(0)
@@ -145,14 +148,16 @@ export function Sheet({
           className,
         )}
       >
-        <button
-          data-testid={closeTestId}
-          onClick={onClose}
-          className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring cursor-pointer"
-          aria-label="Close"
-        >
-          <X className="h-4 w-4" />
-        </button>
+        {!hideCloseButton && (
+          <button
+            data-testid={closeTestId}
+            onClick={onClose}
+            className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring cursor-pointer"
+            aria-label="Close"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
         <div className="sheet-scroll flex-1 overflow-y-auto">{children}</div>
       </div>
     </>

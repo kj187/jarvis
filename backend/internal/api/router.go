@@ -169,6 +169,7 @@ func NewRouter(
 	apiV1.GET("/alerts/:fingerprint/history", srv.getAlertHistory)
 	apiV1.GET("/alerts/:fingerprint/timeline", srv.getAlertTimeline)
 	apiV1.GET("/alerts/:fingerprint/stats", srv.getAlertStats)
+	apiV1.GET("/alerts/:fingerprint/heatmap", srv.getAlertHeatmap)
 	apiV1.GET("/alerts/:fingerprint/silence-events", srv.getSilenceEvents)
 
 	// Rate limiters:

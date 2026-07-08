@@ -1,5 +1,6 @@
-import { test, expect, freezeClock, waitForActiveAlerts, JARVIS_BASE_URL } from '../../support/fixtures'
+import { test, expect, JARVIS_BASE_URL } from '../../support/fixtures'
 import { dismissNoAuthNotice } from '../../support/auth'
+import { fireWithHeatmapHistory } from '../../support/heatmapHistory'
 import { manyAlerts } from '../../fixtures/alerts'
 
 const DIR = process.env.SCREENSHOTS_DIR ?? '../docs/assets'
@@ -10,10 +11,8 @@ const DIR = process.env.SCREENSHOTS_DIR ?? '../docs/assets'
  *             make e2e-screenshot NAME=feature-theme-light
  */
 test('feature-theme-dark', async ({ page, am, jarvis }) => {
-  await freezeClock(page)
   await dismissNoAuthNotice(page)
-  await am.fire(manyAlerts)
-  await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, manyAlerts.length)
+  await fireWithHeatmapHistory(page, am, jarvis, JARVIS_BASE_URL, manyAlerts)
   await page.goto('/?state=active')
   await expect(page.getByTestId('alert-card').first()).toBeVisible()
   await page.waitForTimeout(300)
@@ -21,10 +20,8 @@ test('feature-theme-dark', async ({ page, am, jarvis }) => {
 })
 
 test('feature-theme-light', async ({ page, am, jarvis }) => {
-  await freezeClock(page)
   await dismissNoAuthNotice(page)
-  await am.fire(manyAlerts)
-  await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, manyAlerts.length)
+  await fireWithHeatmapHistory(page, am, jarvis, JARVIS_BASE_URL, manyAlerts)
   await page.goto('/?state=active')
   await expect(page.getByTestId('alert-card').first()).toBeVisible()
   await page.getByLabel('Switch to light mode').click()

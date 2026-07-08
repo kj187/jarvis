@@ -50,7 +50,7 @@ alerts — so functional tests and screenshots exercise the actual system.
 | Endpoint | Effect |
 |---|---|
 | `POST /api/v1/test/reset` | Truncate all history tables + clear in-memory store. |
-| `POST /api/v1/test/seed`  | Insert resolved-alert lifecycles directly into the DB. |
+| `POST /api/v1/test/seed`  | Insert resolved-alert lifecycles directly into the DB (`resolved` body key), or backfill multi-cycle firing history for the heatmap (`heatmapHistory` body key — see `jarvis.seedHeatmapHistory()`). |
 | `POST /api/v1/test/claim` | Set a claim on an alert (bypasses auth). Used by `jarvis.setClaim()`. |
 | `POST /api/v1/test/comment` | Add a comment to an alert (bypasses auth). Note: does **not** broadcast a WS event — use the production endpoint `/api/v1/alerts/:fingerprint/comments` when testing WebSocket behaviour. |
 
@@ -98,9 +98,10 @@ frontend/
   e2e/
     support/
       alertmanager.ts   # AM API v2 client: fire() / clearAll()
-      jarvis.ts         # Jarvis client: poll() / reset() / seedResolved()
+      jarvis.ts         # Jarvis client: poll() / reset() / seedResolved() / seedHeatmapHistory()
       auth.ts           # dismissNoAuthNotice, ensureInternalAdmin, loginInternal, loginOIDC
       fixtures.ts       # test.extend (auto reset+clear per test), freezeClock, waitForActiveAlerts
+      heatmapHistory.ts # fireWithHeatmapHistory() — screenshot-only, see below
     fixtures/
       alerts.ts         # kubernetesAlerts (4), manyAlerts (~14, for populated screenshots)
     functional/
@@ -127,6 +128,37 @@ frontend/
   `login-button`, `user-menu`). Add new ones as needed rather than relying on
   text/CSS.
 - Populate screenshots with `manyAlerts` so they don't look empty.
+- **Element screenshots for a single UI area, not the whole page**: when a doc
+  image only needs to show one component (e.g. the heatmap), locate it via
+  `data-testid` and call `locator.screenshot(...)` instead of
+  `page.screenshot({ fullPage: true })`. See `feature-heatmap-detail` /
+  `feature-heatmap-card` for the pattern.
+- **Heatmap/sparkline data needs backfilled history, not just a live fire.**
+  Freshly fired alerts have no past `firing` events, so **every** screenshot
+  showing alert cards or the detail panel (essentially anything that fires
+  `manyAlerts`/`kubernetesAlerts` and doesn't immediately switch to List View)
+  uses `fireWithHeatmapHistory()` (`support/heatmapHistory.ts`) instead of
+  `am.fire()` + `waitForActiveAlerts()` — an empty sparkline row reads as a
+  rendering bug, not "no data" (the sparkline is always rendered, see
+  `AlertCard.tsx`). It fires normally through the real poll path, then
+  backfills a firing→resolved history per alert spread over the last ~29 days
+  (so 24h/7d/30d ranges all show something) directly via
+  `jarvis.seedHeatmapHistory()` — no DB reset in between, since the direct
+  insert path doesn't need a clean fingerprint row and a reset would wipe
+  `users`, breaking specs that log in first. History is deterministically
+  varied per alert (seeded by fingerprint, see the file's PRNG comment) so
+  cards don't all render an identical pattern, and some cells land multiple
+  hits for varying intensity — same alert reproduces the same pattern on every
+  regeneration. Only ~55% of alerts get a history at all
+  (`HISTORY_PROBABILITY`) — a real fleet is a mix of chronic recurring alerts
+  and ones firing for the first time, so giving every alert a rich history
+  reads as fake. Because of that mix, a screenshot meant to **demo** the
+  heatmap specifically (not just look populated) can't blindly grab
+  `alerts[0]` — it might land on a "no history" alert. Use
+  `pickAlertWithHistory()` (same file) to pick one that actually got backfilled;
+  see `feature-heatmap-detail` / `feature-heatmap-card` for the pattern. Do
+  call any claim/comment/silence setup for that alert *after*
+  `fireWithHeatmapHistory`, not before.
 
 ## When to run what
 

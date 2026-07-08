@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import { enUS } from 'date-fns/locale'
-import { ExternalLink, BookOpen, ChevronDown, ChevronUp, BellOff, Pencil, Trash2, User, Info, Server } from 'lucide-react'
+import { ExternalLink, BookOpen, ChevronDown, ChevronUp, BellOff, Pencil, Trash2, User, Info, Server, X } from 'lucide-react'
 import { TruncatableChip } from '@/components/ui/truncatable-chip'
 import { cn } from '@/lib/utils'
 import { Sheet } from '@/components/ui/sheet'
@@ -11,6 +11,7 @@ import { labelColorStyle } from '@/lib/alertUtils'
 import { AlertComments } from './AlertComments'
 import { AlertDetailHistorySection } from './AlertDetailHistorySection'
 import { AlertDetailSection } from './AlertDetailSection'
+import { AlertHeatmap } from './AlertHeatmap'
 import { SilenceForm } from '@/components/silences/SilenceForm'
 import { AckButton } from './AckButton'
 import { useAlerts, useAlertTimeline, useAlertStats } from '@/hooks/useAlerts'
@@ -48,6 +49,9 @@ function toHistoryAction(source: 'alert' | 'claim' | 'silence', action: string):
   if (source === 'silence') return SILENCE_ACTION_LABEL[action] ?? `Silence ${action}`
   return action
 }
+
+const expiredSilenceStorageKey = (fingerprint: string, cluster: string) =>
+  `jarvis:collapsed:expired-silence:${fingerprint}:${cluster}`
 
 const promptCache = new Map<string, string>()
 
@@ -226,6 +230,7 @@ export function AlertDetailPanel({
   const authMode = providerInfo?.mode ?? 'none'
   const claimName = user?.username ?? manualClaimName
   const [promptCopied, setPromptCopied] = useState(false)
+  const [expiredSilenceCollapsed, setExpiredSilenceCollapsed] = useState(true)
   const fmtTime = useFormatTime()
 
   const historyOffset = (historyPage - 1) * historyPageSize
@@ -258,6 +263,16 @@ export function AlertDetailPanel({
 
   useEffect(() => {
     setHistoryPage(1)
+  }, [alert?.fingerprint, alert?.clusterName])
+
+  useEffect(() => {
+    if (!alert) return
+    try {
+      const stored = localStorage.getItem(expiredSilenceStorageKey(alert.fingerprint, alert.clusterName))
+      setExpiredSilenceCollapsed(stored !== 'false')
+    } catch {
+      setExpiredSilenceCollapsed(true)
+    }
   }, [alert?.fingerprint, alert?.clusterName])
 
   useEffect(() => {
@@ -314,6 +329,14 @@ export function AlertDetailPanel({
         onSettled: () => setDeletingId(null),
       },
     )
+  }
+
+  const toggleExpiredSilenceCollapsed = () => {
+    setExpiredSilenceCollapsed((c) => {
+      const next = !c
+      try { localStorage.setItem(expiredSilenceStorageKey(alert.fingerprint, alert.clusterName), String(next)) } catch {}
+      return next
+    })
   }
 
   const labelEntries = Object.entries(alert.labels)
@@ -405,13 +428,20 @@ export function AlertDetailPanel({
 
   return (
     <>
-      <Sheet open={!!alert} onClose={onClose} testId="detail-panel" closeTestId="detail-panel-close" ariaLabelledby="detail-panel-title">
+      <Sheet
+        open={!!alert}
+        onClose={onClose}
+        testId="detail-panel"
+        hideCloseButton
+        ariaLabelledby="detail-panel-title"
+        className="sm:max-w-[37.8rem] lg:max-w-[50.4rem]"
+      >
         {(silenceFormTarget || showNewSilenceForm) && (
           <div className="absolute inset-0 z-10 bg-black/40 pointer-events-none" aria-hidden="true" />
         )}
         {/* Header */}
-        <div className="border-b border-border bg-card px-5 py-4 pt-8">
-          <div className="flex items-start justify-between gap-3 pr-8">
+        <div className="border-b border-border bg-card px-5 py-4">
+          <div className="flex items-start justify-between gap-3">
             <h2 id="detail-panel-title" className="text-lg font-bold break-all">{alertname}</h2>
             <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
               <span className="inline-flex items-center gap-1 rounded border border-border bg-muted px-2 py-0.5 text-xs font-medium">
@@ -420,6 +450,14 @@ export function AlertDetailPanel({
               </span>
               <AlertBadge severity={severity} />
               <StatusBadge state={alert.status.state} />
+              <button
+                data-testid="detail-panel-close"
+                onClick={onClose}
+                aria-label="Close"
+                className="ml-1 flex items-center justify-center rounded border border-border p-1 text-muted-foreground hover:bg-accent hover:text-foreground cursor-pointer"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
             </div>
           </div>
           <div data-testid="detail-stats-section" className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground">
@@ -436,8 +474,12 @@ export function AlertDetailPanel({
             )}
           </div>
 
+          <div className="mt-2.5" data-testid="detail-heatmap-section">
+            <AlertHeatmap fingerprint={alert.fingerprint} cluster={alert.clusterName} enabled={Boolean(alert.fingerprint)} />
+          </div>
+
           {/* Action buttons */}
-          <div className="mt-3 flex items-center justify-between gap-2 pr-8">
+          <div className="mt-3 flex items-center justify-between gap-2">
             {alert.alertmanagerUrl && (
               <a
                 href={(() => {
@@ -610,7 +652,7 @@ export function AlertDetailPanel({
                   : (theme === 'light' ? 'bg-muted' : 'bg-slate-900'),
               )}
             >
-              <div className="mb-3 flex items-center justify-between gap-2 pr-8">
+              <div className="mb-3 flex items-center justify-between gap-2">
                 <div className={cn(
                   'flex items-center gap-1.5 text-xs font-semibold',
                   isPending
@@ -736,12 +778,17 @@ export function AlertDetailPanel({
 
         {/* Expired silence banners */}
         {expiredSilences.map((s) => (
-          <div key={s.id} className={cn('border-b border-border px-5 py-4', theme === 'light' ? 'bg-muted' : 'bg-slate-950')}>
-            <div className="mb-3 flex items-center justify-between gap-2 pr-8">
-              <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+          <div key={s.id} className={cn('border-b border-border px-5 py-3', theme === 'light' ? 'bg-muted' : 'bg-slate-950')}>
+            <div className={cn('flex items-center justify-between gap-2', !expiredSilenceCollapsed && 'mb-3')}>
+              <button
+                className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground cursor-pointer"
+                onClick={toggleExpiredSilenceCollapsed}
+                aria-expanded={!expiredSilenceCollapsed}
+              >
+                {expiredSilenceCollapsed ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />}
                 <BellOff className="h-3 w-3 shrink-0" />
                 Silence expired
-              </div>
+              </button>
               <div className="flex shrink-0 items-center gap-2">
                 <button
                   className="flex items-center gap-1 rounded border border-border px-2 py-0.5 text-xs text-muted-foreground hover:text-foreground hover:bg-accent cursor-pointer"
@@ -752,38 +799,39 @@ export function AlertDetailPanel({
               </div>
             </div>
 
-            <div className="grid grid-cols-[120px_1fr] gap-x-3 gap-y-1.5 text-xs">
-              <span className="text-muted-foreground">Silence ID</span>
-              <a
-                href={`${s.alertmanagerUrl}/#/silences/${s.id}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="font-mono text-muted-foreground truncate hover:text-foreground underline decoration-dotted"
-              >
-                {s.id}
-              </a>
+            {!expiredSilenceCollapsed && (
+              <div className="grid grid-cols-[120px_1fr] gap-x-3 gap-y-1.5 text-xs">
+                <span className="text-muted-foreground">Silence ID</span>
+                <a
+                  href={`${s.alertmanagerUrl}/#/silences/${s.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-mono text-muted-foreground truncate hover:text-foreground underline decoration-dotted"
+                >
+                  {s.id}
+                </a>
 
-              <span className="text-muted-foreground">Created by</span>
-              <span className="text-muted-foreground">{s.createdBy}</span>
+                <span className="text-muted-foreground">Created by</span>
+                <span className="text-muted-foreground">{s.createdBy}</span>
 
-              <span className="text-muted-foreground">Created at</span>
-              <span className="text-muted-foreground">
-                {format(new Date(s.updatedAt), 'yyyy-MM-dd HH:mm', { locale: enUS })} {tzAbbr}
-              </span>
+                <span className="text-muted-foreground">Created at</span>
+                <span className="text-muted-foreground">
+                  {format(new Date(s.updatedAt), 'yyyy-MM-dd HH:mm', { locale: enUS })} {tzAbbr}
+                </span>
 
-              <span className="text-muted-foreground">Expired at</span>
-              <span className="text-muted-foreground">
-                {format(new Date(s.endsAt), 'yyyy-MM-dd HH:mm', { locale: enUS })} {tzAbbr}
-              </span>
+                <span className="text-muted-foreground">Expired at</span>
+                <span className="text-muted-foreground">
+                  {format(new Date(s.endsAt), 'yyyy-MM-dd HH:mm', { locale: enUS })} {tzAbbr}
+                </span>
 
-              {s.comment && (
-                <>
-                  <span className="text-muted-foreground">Reason</span>
-                  <span className="text-muted-foreground">{s.comment}</span>
-                </>
-              )}
-            </div>
-
+                {s.comment && (
+                  <>
+                    <span className="text-muted-foreground">Reason</span>
+                    <span className="text-muted-foreground">{s.comment}</span>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         ))}
 

@@ -5,10 +5,18 @@ import (
 	"regexp"
 	"sort"
 	"strconv"
+	"time"
 
 	"github.com/kj187/jarvis/backend/internal/models"
 	"github.com/labstack/echo/v4"
 )
+
+// heatmapRanges maps the accepted ?range= values to their lookback window.
+var heatmapRanges = map[string]time.Duration{
+	"24h": 24 * time.Hour,
+	"7d":  7 * 24 * time.Hour,
+	"30d": 30 * 24 * time.Hour,
+}
 
 // Alertmanager generates 16-character lowercase hex fingerprints (FNV-1a hash).
 var fingerprintRegex = regexp.MustCompile(`^[a-f0-9]{16}$`)
@@ -196,4 +204,34 @@ func (s *Server) getAlertStats(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusNotFound, "fingerprint not found")
 	}
 	return c.JSON(http.StatusOK, stats)
+}
+
+// GET /api/v1/alerts/:fingerprint/heatmap
+func (s *Server) getAlertHeatmap(c echo.Context) error {
+	fp := c.Param("fingerprint")
+	if !validateFingerprint(fp) {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid fingerprint")
+	}
+	cluster := c.QueryParam("cluster")
+
+	rangeParam := c.QueryParam("range")
+	window, ok := heatmapRanges[rangeParam]
+	if !ok {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid range: must be 24h, 7d, or 30d")
+	}
+
+	starts, err := s.store.GetFiringStarts(fp, cluster, time.Now().Add(-window), 10000)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get heatmap data").SetInternal(err)
+	}
+
+	firingStarts := make([]string, len(starts))
+	for i, t := range starts {
+		firingStarts[i] = t.UTC().Format(time.RFC3339)
+	}
+
+	return c.JSON(http.StatusOK, models.AlertHeatmapResponse{
+		Range:        rangeParam,
+		FiringStarts: firingStarts,
+	})
 }

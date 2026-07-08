@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/kj187/jarvis/backend/internal/alertmanager"
+	"github.com/kj187/jarvis/backend/internal/history"
 	"github.com/kj187/jarvis/backend/internal/models"
 	"github.com/labstack/echo/v4"
 	"golang.org/x/time/rate"
@@ -43,8 +44,24 @@ type seedAlert struct {
 	ResolvedAt  *time.Time        `json:"resolvedAt"`
 }
 
+type seedFiringCycle struct {
+	StartsAt   time.Time `json:"startsAt"`
+	ResolvedAt time.Time `json:"resolvedAt"`
+}
+
+type seedHeatmapHistoryAlert struct {
+	Fingerprint string            `json:"fingerprint"`
+	Alertname   string            `json:"alertname"`
+	Cluster     string            `json:"cluster"`
+	AlertmanURL string            `json:"alertmanagerUrl"`
+	Labels      map[string]string `json:"labels"`
+	Annotations map[string]string `json:"annotations"`
+	Cycles      []seedFiringCycle `json:"cycles"`
+}
+
 type seedRequest struct {
-	Resolved []seedAlert `json:"resolved"`
+	Resolved       []seedAlert               `json:"resolved"`
+	HeatmapHistory []seedHeatmapHistoryAlert `json:"heatmapHistory"`
 }
 
 type testSilenceRequest struct {
@@ -111,7 +128,20 @@ func (s *Server) testSeed(c echo.Context) error {
 		}
 	}
 
-	return c.JSON(http.StatusOK, map[string]int{"resolved": len(req.Resolved)})
+	for _, a := range req.HeatmapHistory {
+		cycles := make([]history.FiringCycle, len(a.Cycles))
+		for i, c := range a.Cycles {
+			cycles[i] = history.FiringCycle{StartsAt: c.StartsAt, ResolvedAt: c.ResolvedAt}
+		}
+		if err := s.store.SeedFiringHistoryForTesting(
+			a.Fingerprint, a.Alertname, a.Cluster, a.AlertmanURL,
+			a.Labels, a.Annotations, cycles,
+		); err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		}
+	}
+
+	return c.JSON(http.StatusOK, map[string]int{"resolved": len(req.Resolved), "heatmapHistory": len(req.HeatmapHistory)})
 }
 
 // POST /api/v1/test/silence — creates a silence in a specific cluster for testing.

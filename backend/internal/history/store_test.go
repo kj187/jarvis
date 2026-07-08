@@ -688,3 +688,99 @@ func TestUpdateSilenceTemplate(t *testing.T) {
 		t.Errorf("expected NewValue, got %s", updated.Matchers[0].Value)
 	}
 }
+
+func insertAlertEvent(t *testing.T, s *Store, fingerprint, cluster, status string, startsAt time.Time) {
+	t.Helper()
+	if err := s.UpsertFingerprint(fingerprint, "TestAlert", cluster, nil); err != nil {
+		t.Fatalf("upsert fingerprint: %v", err)
+	}
+	if _, err := s.exec(context.Background(),
+		`INSERT INTO alert_events (fingerprint, cluster_name, alertmanager_url, status, starts_at, recorded_at) VALUES (?, ?, ?, ?, ?, ?)`,
+		fingerprint, cluster, "http://am:9093", status, startsAt, startsAt,
+	); err != nil {
+		t.Fatalf("insert alert event: %v", err)
+	}
+}
+
+func TestGetFiringStarts_FiltersStatusClusterAndSince(t *testing.T) {
+	s := newTestStore(t)
+	fingerprint := "aabbccddeeff0011"
+	now := time.Now().UTC()
+
+	insertAlertEvent(t, s, fingerprint, "homelab", models.EventStatusFiring, now.Add(-3*time.Hour))
+	insertAlertEvent(t, s, fingerprint, "homelab", models.EventStatusResolved, now.Add(-2*time.Hour))
+	insertAlertEvent(t, s, fingerprint, "homelab", models.EventStatusFiring, now.Add(-1*time.Hour))
+	insertAlertEvent(t, s, fingerprint, "homelab", models.EventStatusFiring, now.Add(-30*time.Minute))
+	// Different cluster, same fingerprint — must not leak in when cluster-scoped.
+	insertAlertEvent(t, s, fingerprint, "other-cluster", models.EventStatusFiring, now.Add(-20*time.Minute))
+	// Too old — outside the "since" window.
+	insertAlertEvent(t, s, fingerprint, "homelab", models.EventStatusFiring, now.Add(-48*time.Hour))
+
+	starts, err := s.GetFiringStarts(fingerprint, "homelab", now.Add(-24*time.Hour), 100)
+	if err != nil {
+		t.Fatalf("GetFiringStarts: %v", err)
+	}
+	if len(starts) != 3 {
+		t.Fatalf("len(starts) = %d, want 3 (resolved/other-cluster/too-old excluded): %v", len(starts), starts)
+	}
+	// Newest first.
+	if !starts[0].After(starts[1]) || !starts[1].After(starts[2]) {
+		t.Errorf("expected newest-first order, got %v", starts)
+	}
+}
+
+func TestGetFiringStarts_EmptyClusterMatchesAll(t *testing.T) {
+	s := newTestStore(t)
+	fingerprint := "aabbccddeeff0022"
+	now := time.Now().UTC()
+
+	insertAlertEvent(t, s, fingerprint, "homelab", models.EventStatusFiring, now.Add(-1*time.Hour))
+	insertAlertEvent(t, s, fingerprint, "other-cluster", models.EventStatusFiring, now.Add(-2*time.Hour))
+
+	starts, err := s.GetFiringStarts(fingerprint, "", now.Add(-24*time.Hour), 100)
+	if err != nil {
+		t.Fatalf("GetFiringStarts: %v", err)
+	}
+	if len(starts) != 2 {
+		t.Errorf("len(starts) = %d, want 2 (empty cluster = no filter)", len(starts))
+	}
+}
+
+func TestGetFiringStarts_LimitCapped(t *testing.T) {
+	s := newTestStore(t)
+	fingerprint := "aabbccddeeff0033"
+	now := time.Now().UTC()
+
+	for i := 0; i < 5; i++ {
+		insertAlertEvent(t, s, fingerprint, "homelab", models.EventStatusFiring, now.Add(-time.Duration(i)*time.Minute))
+	}
+
+	starts, err := s.GetFiringStarts(fingerprint, "homelab", now.Add(-24*time.Hour), 3)
+	if err != nil {
+		t.Fatalf("GetFiringStarts: %v", err)
+	}
+	if len(starts) != 3 {
+		t.Errorf("len(starts) = %d, want 3 (limit)", len(starts))
+	}
+
+	// Zero/negative/over-cap limit falls back to the 10000 default cap, not an error.
+	starts, err = s.GetFiringStarts(fingerprint, "homelab", now.Add(-24*time.Hour), 0)
+	if err != nil {
+		t.Fatalf("GetFiringStarts with limit=0: %v", err)
+	}
+	if len(starts) != 5 {
+		t.Errorf("len(starts) with limit=0 = %d, want 5", len(starts))
+	}
+}
+
+func TestGetFiringStarts_NoEvents(t *testing.T) {
+	s := newTestStore(t)
+
+	starts, err := s.GetFiringStarts("nonexistent0000", "homelab", time.Now().Add(-24*time.Hour), 100)
+	if err != nil {
+		t.Fatalf("GetFiringStarts: %v", err)
+	}
+	if len(starts) != 0 {
+		t.Errorf("len(starts) = %d, want 0", len(starts))
+	}
+}

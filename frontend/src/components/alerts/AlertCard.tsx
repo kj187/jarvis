@@ -3,11 +3,13 @@ import { ArrowUpRight, BellOff, User } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getFilterableLabels, getSilenceState, getExpiredSilence, formatSilenceDuration, tzAbbr } from '@/lib/alertUtils'
 import { renderTextWithLinks } from '@/lib/linkUtils'
+import { bucketFiringStarts } from '@/lib/heatmapUtils'
 import { AlertBadge } from './AlertBadge'
 import { LabelChip } from './LabelChip'
 import { AckButton } from './AckButton'
+import { HeatmapCellsRow } from './HeatmapCells'
 import { HIDDEN_LABEL_KEYS } from '@/lib/alertUtils'
-import { useAlertStats } from '@/hooks/useAlerts'
+import { useAlertStats, useAlertHeatmap } from '@/hooks/useAlerts'
 import { useFormatTime } from '@/hooks/useFormatTime'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { makeAlertSelectionKeyForAlert, matchesAlertSelectionKey } from '@/lib/alertSelection'
@@ -25,6 +27,29 @@ interface AlertCardProps {
   showSeverityBadge?: boolean
 }
 
+
+// Dezent 14-day firing-pattern sparkline, Karma-style — glance-info only, no
+// tooltips (would fight the card's own click target). Fetches the 30d range
+// (not 24h) so alerts that recur every few days still show a pattern, then
+// keeps only the most recent 14 buckets — fewer, bigger cells read better at
+// card width than the full 30. Always rendered, even with zero fires in the
+// window — an absent sparkline reads as a rendering bug, not "no data".
+function FiringSparkline({
+  fingerprint,
+  cluster,
+}: {
+  fingerprint: string
+  cluster?: string
+}) {
+  const { data } = useAlertHeatmap(fingerprint, cluster, '30d', true)
+  if (!data) return null
+  const cells = bucketFiringStarts(data.firingStarts, '30d').slice(-14)
+  return (
+    <div className="mb-1.5">
+      <HeatmapCellsRow cells={cells} range="30d" cellClassName="h-2 w-full rounded-sm" gapClassName="gap-0.5" />
+    </div>
+  )
+}
 
 function getCommonLabels(alerts: EnrichedAlert[]): Record<string, string> {
   if (alerts.length === 0) return {}
@@ -133,6 +158,12 @@ function AlertEntry({
             </span>
           )}
         </div>
+
+        {/* Firing pattern sparkline */}
+        <FiringSparkline
+          fingerprint={alert.fingerprint}
+          cluster={alert.clusterName}
+        />
 
         {/* Silence banner */}
         {silenceType === 'active' && silence && remaining !== undefined && (
