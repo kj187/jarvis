@@ -1,18 +1,19 @@
-import { test, expect, freezeClock, waitForActiveAlerts, JARVIS_BASE_URL } from '../../support/fixtures'
+import { test, expect, JARVIS_BASE_URL } from '../../support/fixtures'
 import { dismissNoAuthNotice } from '../../support/auth'
+import { fireWithHeatmapHistory } from '../../support/heatmapHistory'
 import { kubernetesAlerts } from '../../fixtures/alerts'
 
 const DIR = process.env.SCREENSHOTS_DIR ?? '../docs/assets'
 
 /**
  * Screenshot: detail panel for a claimed alert showing claim badge and note.
+ * Uses fireWithHeatmapHistory so the heatmap isn't a suspiciously empty grid
+ * (it freezes the clock itself — see that helper's docstring).
  * Regenerate individually: make e2e-screenshot NAME=detail-claimed
  */
 test('detail-claimed', async ({ page, am, jarvis }) => {
-  await freezeClock(page)
   await dismissNoAuthNotice(page)
-  await am.fire(kubernetesAlerts)
-  await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, kubernetesAlerts.length)
+  await fireWithHeatmapHistory(page, am, jarvis, JARVIS_BASE_URL, kubernetesAlerts)
 
   // Get first alert's fingerprint
   const res = await page.request.get(`${JARVIS_BASE_URL}/api/v1/alerts`)

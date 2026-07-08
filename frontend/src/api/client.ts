@@ -4,6 +4,8 @@ import type {
   AlertEvent,
   AlertTimelineEntry,
   AlertStats,
+  AlertHeatmapResponse,
+  HeatmapRange,
   Comment,
   Claim,
   Silence,
@@ -82,6 +84,16 @@ export function fetchAlertStats(fingerprint: string, cluster?: string): Promise<
   if (cluster) q.set('cluster', cluster)
   const qs = q.toString()
   return request<AlertStats>(`/alerts/${fingerprint}/stats${qs ? `?${qs}` : ''}`)
+}
+
+export function fetchAlertHeatmap(
+  fingerprint: string,
+  range: HeatmapRange,
+  cluster?: string,
+): Promise<AlertHeatmapResponse> {
+  const q = new URLSearchParams({ range })
+  if (cluster) q.set('cluster', cluster)
+  return request<AlertHeatmapResponse>(`/alerts/${fingerprint}/heatmap?${q.toString()}`)
 }
 
 // ── Comments ─────────────────────────────────────────────────────────────────

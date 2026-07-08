@@ -9,6 +9,124 @@ instead of duplicating.
 
 ---
 
+## `jarvis.reset()` truncates `users` too — fatal for a helper called after login in a screenshot spec
+
+**Symptom**: `fireWithHeatmapHistory()` (see below) worked fine in `none`-mode
+screenshots, but every `internal`-mode spec that logged in first
+(`ensureInternalAdmin` + `loginInternal`) started timing out waiting for
+`login-button`/`user-menu` — the app silently redirected to a different auth
+state instead.
+**Cause**: `ResetForTesting` (`backend/internal/history/testing_e2e.go`)
+truncates `users` along with the alert-history tables — correct for the
+per-test auto-reset in `support/fixtures.ts` (full isolation between tests),
+but `fireWithHeatmapHistory` was *also* calling `jarvis.reset()` mid-flow
+(to start historical seeding from a clean fingerprint row). Any spec that
+creates its admin user (`ensureInternalAdmin`) *before* calling the helper
+had that user silently deleted by the helper's own reset, before the login
+step or subsequent navigation.
+**Rule**: Don't reset the DB inside a helper meant to run after other setup
+(auth, claims, etc.) unless you truncate only the tables you actually need
+clean — `alert_events`/`alert_fingerprints`, not `users`/`alert_claims`. In
+this case the real fix was realizing the reset wasn't needed at all: once
+history seeding moved to direct inserts (`SeedFiringHistoryForTesting`,
+next entry), there's no idempotency state left to collide with, so
+`fireWithHeatmapHistory` now seeds on top of the already-live fingerprint
+with no reset step.
+
+---
+
+## Chaining multiple historical firing cycles onto one fingerprint via the production record path silently collapses them into one row
+
+**Symptom**: Backfilling a 14-cycle firing→resolved history onto a single
+fingerprint via 14 sequential `SeedResolvedForTesting` calls (looping the
+existing e2e `/test/seed` endpoint) — regardless of whether the cycles were
+submitted oldest-first or newest-first — only ever left **one** surviving
+`firing` row in the DB: always whichever cycle was submitted **first**. Every
+other cycle vanished without error.
+**Cause**: `SeedResolvedForTesting` reuses the production
+`RecordStatusChange` + `RecordResolvedForCluster` path. `RecordStatusChange`
+always stamps `recorded_at` with **real** `time.Now()` regardless of the
+historical `startsAt` argument, while `RecordResolvedForCluster` stamps
+`recorded_at` with the **historical** `resolvedAt` argument passed in. So
+cycle 1's firing row gets `recorded_at = real_now`, but cycle 1's resolved row
+gets `recorded_at = <historical resolvedAt>` — always earlier than real_now.
+`getLastEventForCluster` picks the row with `MAX(recorded_at)`, which is
+therefore **permanently** cycle 1's firing row — no later historical resolved
+row can ever out-date real `time.Now()`. Every subsequent cycle's firing call
+sees `last.Status == "firing"` and hits the idempotency short-circuit
+(`RecordStatusChange`'s very first check) or the 60s grace period, either way
+inserting nothing new; its resolved call still inserts a row, but inherits
+`starts_at` from cycle 1's original firing row, corrupting it.
+**Rule**: Never chain more than one historical cycle onto the same
+fingerprint through `RecordStatusChange`/`RecordResolvedForCluster` (or
+`SeedResolvedForTesting`, which wraps them) — that path assumes `recorded_at`
+tracks real time, true for live poll ingestion but not for backfilling
+history. Use `SeedFiringHistoryForTesting`
+(`backend/internal/history/testing_e2e.go`) / `jarvis.seedHeatmapHistory()`
+(`e2e/support/jarvis.ts`) instead — it inserts each cycle's firing/resolved
+row directly with `recorded_at` set to that cycle's own timestamp, bypassing
+the idempotency/grace-period logic entirely (correct for controlled,
+already-ordered synthetic history — that logic exists to protect real-time
+flapping, which doesn't apply here).
+
+---
+
+## A frozen screenshot clock silently empties the heatmap even with real seeded data
+
+**Symptom**: Seeded a realistic firing history via `POST /api/v1/test/seed`
+(`support/heatmapHistory.ts`, `fireWithHeatmapHistory`) for a Playwright
+screenshot, confirmed via the API that `GET /alerts/:fp/heatmap` returned a
+non-empty `firingStarts` array — yet the rendered heatmap grid and card
+sparkline were 100% empty cells in the screenshot.
+**Cause**: `bucketFiringStarts` (`lib/heatmapUtils.ts`) buckets timestamps
+relative to `now = new Date()` read from the **frontend/browser** clock.
+Screenshot specs call `freezeClock(page)`, which pins that browser clock to
+the shared fixed epoch `FIXED_NOW` (`2025-01-15T12:00:00Z`, `support/
+fixtures.ts`) for deterministic relative-time text elsewhere. But the
+backend's heatmap window filter (`GetFiringStarts`,
+`backend/internal/history/store.go`) always uses real Go server time
+(`time.Now()`), and seeded history is naturally timestamped near real
+wall-clock time too. Once the real date drifts far enough from the fixed
+2025 epoch, every returned `firingStarts` timestamp lands far outside the
+window the frozen frontend clock computes buckets for → nothing matches →
+all-empty grid, despite correct, non-empty backend data.
+**Rule**: Any screenshot that needs a non-empty heatmap/sparkline must not
+freeze the browser clock to the shared fixed epoch. `fireWithHeatmapHistory`
+freezes it to `new Date()` (real time) internally instead — do not also call
+`freezeClock(page)` in a spec that uses it.
+
+---
+
+## A resolve+refire inside the 60s grace period is silently absorbed, not recorded
+
+**Symptom**: Manually testing occurrence tracking / the firing-pattern
+heatmap by running `make fixtures-remove` then `make fixtures-create` —
+even with an explicit `POST /api/v1/poll` forced in between and a few
+seconds' wait — `occurrenceCount` and the heatmap stayed completely
+unchanged, with zero trace of a resolved event ever appearing in
+`GET /alerts/:fp/history`, even though Alertmanager's own `GET /api/v2/alerts`
+confirmed the alert genuinely disappeared and came back with a fresh
+`startsAt`. (First suspected: poll-interval racing, or Alertmanager gossip
+lag between the dev HA pair's two members — both ruled out by direct testing:
+the resolve is immediate at the Alertmanager API level, and AM does not
+gossip raw alert data between mesh members at all, only silences/nflog, so
+member-lag was never the mechanism.)
+**Cause**: This is Critical Invariant #1 (`AGENTS.md`) doing exactly what
+it's designed to do. `RecordStatusChange` (`backend/internal/history/store.go`):
+a firing status arriving within 60s of the last recorded *resolved* row
+**deletes that resolved row** and returns the prior (still-firing) row
+unchanged — `created=false`, no new event, `occurrence_count` untouched.
+This exists to stop a transient poll miss from creating ghost-resolve
+entries. `resolve-test-alerts.sh` resolves in well under a second; unless
+something deliberately holds the alert resolved for >60s before re-firing,
+any test re-fire lands inside the grace window and is invisibly discarded —
+regardless of `JARVIS_POLL_INTERVAL`, and regardless of whether a poll was
+forced in between.
+**Rule**: To manually force a genuine new firing episode, resolve, then
+wait **more than 60 seconds** before re-firing — `make fixtures-refire`
+(`scripts/refire-test-alerts.sh`, `GRACE_WAIT_SECONDS=70`) does this. There
+is no way to shortcut this with faster polling; the wait is the fix.
+
 ## A plausible-sounding Alertmanager validation rule can still be wrong — verify against a real instance
 
 **Symptom**: A new backend check (`validateSilenceMatchers`, added to reject

@@ -69,8 +69,11 @@ make up-postgres                   # test PostgreSQL on 5432 (jarvis/jarvis/jarv
 make down-postgres
 
 # ── Manual test fixtures against the dev stack ───────────────
-make fixtures-create               # fire 10 Kubernetes-themed test alerts (label test_suite=jarvis)
+make fixtures-create               # fire 23 Kubernetes-themed test alerts (label test_suite=jarvis)
 make fixtures-remove               # resolve those alerts
+make fixtures-refire               # resolve + wait 70s (must clear the 60s grace period,
+                                    # Critical Invariant #1) + re-fire — guarantees a new
+                                    # occurrence. Takes ~3-4 minutes. See .agents/lessons.md
 make fixtures-silence              # create escaped-regex silence (recreate-bug repro)
 make fixtures-unsilence            # expire test silences
 ```

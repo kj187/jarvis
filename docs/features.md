@@ -13,6 +13,7 @@ The card view is the default landing page and the primary interface for active a
 - Alert name and the cluster it originates from
 - All active labels as chips — clickable to instantly add a label filter
 - How long the alert has been firing (e.g. "firing for 2h 14m")
+- A 14-day firing sparkline under the timestamp — see [Firing Heatmap](#firing-heatmap)
 - Claim banner — shows who has claimed the alert and since when, if anyone has
 
 **Actions available directly on the card:**
@@ -177,6 +178,7 @@ The detail panel is the central hub for working with a single alert. It slides i
 - Total occurrence count
 - Duration of the current firing period
 - Full event timeline: every state transition (`firing`, `suppressed`, `resolved`) with exact timestamps
+- Firing heatmap header (24h / 7d / 30d range toggle) — see [Firing Heatmap](#firing-heatmap)
 
 **Claim ownership**
 - Claim the alert to signal to your team that you are actively handling it
@@ -196,6 +198,27 @@ When an alert is claimed, the owner's name appears as a chip in the detail panel
 - Write freeform notes bound to the alert's fingerprint
 - Comments persist across re-fires: if the alert resolves and fires again later, the comment history is still there
 - Useful for documenting investigation steps, linking to tickets, or leaving context for the next person on-call
+
+---
+
+## Firing Heatmap
+
+At-a-glance history of how often an alert has fired recently — a compact grid, not a full event log.
+
+![Detail panel heatmap](assets/feature-heatmap-detail.png)
+
+Every alert's stats line in the detail panel carries a box-grid heatmap: each cell is one time bucket, and darker/filled cells mean the alert fired more often in that bucket — an empty cell means it didn't fire. A **24h / 7d / 30d** range toggle switches the bucketing:
+- **24h** — one row of hourly buckets
+- **7d** — one row per day, each with 24 hourly buckets (with day labels)
+- **30d** — one row of daily buckets
+
+Hover the info icon next to the heatmap label for the same explanation inline. Hovering an individual cell shows an exact count and time range tooltip.
+
+The same box-grid rendering (`HeatmapCellsRow`) also drives a smaller, decorative **firing sparkline** on each alert card — the most recent 14 daily buckets under the timestamp row, with no tooltips (so it doesn't fight the card's own click target):
+
+![Card firing sparkline](assets/feature-heatmap-card.png)
+
+Both are read-only glance information — there's nothing to click or configure. Data comes from Jarvis's own persisted event history (`GET /api/v1/alerts/:fingerprint/heatmap`), so it reflects the full recorded lifecycle of the alert, not just what happened since Jarvis last restarted.
 
 ---
 

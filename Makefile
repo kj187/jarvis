@@ -16,7 +16,7 @@ FRONTEND_CONTAINER = jarvis_frontend_1
         scan scan-history scan-staged scan-all \
         build \
         e2e-build e2e-down e2e e2e-mode e2e-screenshots e2e-screenshot \
-        fixtures-create fixtures-remove fixtures-silence fixtures-unsilence \
+        fixtures-create fixtures-remove fixtures-refire fixtures-silence fixtures-unsilence \
         diagrams
 
 help: ## Show available targets
@@ -181,6 +181,9 @@ fixtures-create: ## Fire 10 Kubernetes-themed test alerts (test_suite=jarvis) to
 
 fixtures-remove: ## Resolve all test alerts fired by fixtures-create
 	@bash scripts/resolve-test-alerts.sh
+
+fixtures-refire: ## Resolve, wait out the 60s grace period, re-fire — guarantees a new occurrence (~3-4 min)
+	@bash scripts/refire-test-alerts.sh
 
 fixtures-silence: ## Create an escaped regex silence in Alertmanager (recreate-bug repro)
 	@bash scripts/create-test-silence.sh

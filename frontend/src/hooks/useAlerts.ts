@@ -5,8 +5,10 @@ import {
   fetchAlertHistory,
   fetchAlertTimeline,
   fetchAlertStats,
+  fetchAlertHeatmap,
 } from '@/api/client'
 import { FALLBACK_REFETCH_INTERVAL_MS } from '@/lib/refetch'
+import type { HeatmapRange } from '@/types'
 
 export function useAlerts(params?: { cluster?: string; severity?: string; state?: string }) {
   return useQuery({
@@ -50,6 +52,20 @@ export function useAlertStats(fingerprint: string, cluster?: string) {
     queryKey: ['alert-stats', fingerprint, cluster],
     queryFn: () => fetchAlertStats(fingerprint, cluster),
     enabled: Boolean(fingerprint),
+  })
+}
+
+export function useAlertHeatmap(
+  fingerprint: string,
+  cluster: string | undefined,
+  range: HeatmapRange,
+  enabled: boolean,
+) {
+  return useQuery({
+    queryKey: ['alert-heatmap', fingerprint, cluster, range],
+    queryFn: () => fetchAlertHeatmap(fingerprint, range, cluster),
+    enabled: Boolean(fingerprint) && enabled,
+    staleTime: 60_000,
   })
 }
 

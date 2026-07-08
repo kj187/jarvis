@@ -1,4 +1,5 @@
-import { test, expect, freezeClock, waitForActiveAlerts, JARVIS_BASE_URL } from '../../support/fixtures'
+import { test, expect, JARVIS_BASE_URL } from '../../support/fixtures'
+import { fireWithHeatmapHistory } from '../../support/heatmapHistory'
 import { manyAlerts } from '../../fixtures/alerts'
 
 const DIR = process.env.SCREENSHOTS_DIR ?? '../docs/assets'
@@ -9,9 +10,7 @@ const DIR = process.env.SCREENSHOTS_DIR ?? '../docs/assets'
  *   make e2e-screenshot NAME=no-auth-notice
  */
 test('no-auth-notice', async ({ page, am, jarvis }) => {
-  await freezeClock(page)
-  await am.fire(manyAlerts)
-  await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, manyAlerts.length)
+  await fireWithHeatmapHistory(page, am, jarvis, JARVIS_BASE_URL, manyAlerts)
 
   await page.goto('/?state=active')
   await expect(page.getByRole('dialog', { name: 'Authentication notice' })).toBeVisible()
