@@ -19,7 +19,11 @@ jobs:
       attestations: write # required for build provenance and SBOM attestations
 
     steps:
+      # fetch-depth: 0 (full history + tags) so the pre-release notes step
+      # below can diff against the last stable tag.
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # ratchet:actions/checkout@v7.0.0
+        with:
+          fetch-depth: 0
 
       - name: Docker metadata
         id: meta
@@ -99,14 +103,31 @@ jobs:
           DIGEST="${{ steps.build.outputs.digest }}"
           CHART_VERSION=$(awk '/^version:/{print $2}' charts/jarvis/Chart.yaml)
 
-          # Prefer curated release notes committed by the release process;
-          # fall back to extracting this version's CHANGELOG section.
-          NOTES_FILE=".github/release-notes/${GITHUB_REF_NAME}.md"
-          if [ -f "${NOTES_FILE}" ]; then
-            cp "${NOTES_FILE}" release-body.md
+          # Pre-releases (tag contains a hyphen, e.g. v1.7.0-rc.1) never get
+          # curated notes or a CHANGELOG section — those are only generated
+          # for real releases, so an RC leaves no trace in either once the
+          # real release follows. Summarize commits since the last stable
+          # tag instead.
+          if [[ "${GITHUB_REF_NAME}" == *-* ]]; then
+            PREV_STABLE=$(git tag --list 'v*' | grep -Ev -- '-' | sort -V | tail -1)
+            {
+              printf '## Pre-release build\n\n'
+              printf 'Release candidate for the upcoming stable release. Not published as `latest`.\n\n'
+              if [ -n "${PREV_STABLE}" ]; then
+                printf '**Commits since %s:**\n\n' "${PREV_STABLE}"
+                git log "${PREV_STABLE}..${GITHUB_REF_NAME}" --pretty='- %s (%h)'
+              fi
+            } > release-body.md
           else
-            printf '## Changelog\n\n' > release-body.md
-            awk "/^## \[${GITHUB_REF_NAME}\]/{found=1; next} found && /^## \[/{exit} found{print}" CHANGELOG.md >> release-body.md
+            # Prefer curated release notes committed by the release process;
+            # fall back to extracting this version's CHANGELOG section.
+            NOTES_FILE=".github/release-notes/${GITHUB_REF_NAME}.md"
+            if [ -f "${NOTES_FILE}" ]; then
+              cp "${NOTES_FILE}" release-body.md
+            else
+              printf '## Changelog\n\n' > release-body.md
+              awk "/^## \[${GITHUB_REF_NAME}\]/{found=1; next} found && /^## \[/{exit} found{print}" CHANGELOG.md >> release-body.md
+            fi
           fi
 
           cat >> release-body.md <<'EOF'
@@ -164,9 +185,17 @@ jobs:
         run: |
           # Releases are immutable: if one already exists for this tag, fail
           # instead of silently overwriting it (delete manually if intended).
+          # Pre-release tags (contain a hyphen, e.g. v1.7.0-rc.1) are marked
+          # --prerelease instead of --latest, so they never override the
+          # "latest" pointer for the real release that follows.
+          if [[ "${GITHUB_REF_NAME}" == *-* ]]; then
+            STABILITY_FLAG="--prerelease"
+          else
+            STABILITY_FLAG="--latest"
+          fi
           gh release create "${{ github.ref_name }}" \
             --title "${{ github.ref_name }}" \
             --notes-file release-body.md \
             --verify-tag \
-            --latest \
+            "${STABILITY_FLAG}" \
             sbom.spdx.json

@@ -211,6 +211,45 @@ release history consistent.
 
 ---
 
+## Release Candidates (Pre-releases)
+
+For validating a batch of changes (e.g. dependency bumps, a CI fix) before
+committing to a real release. Tag format: `vX.Y.Z-rc.N` (semver pre-release
+identifier — the hyphen is what `release.yml` uses to detect a pre-release).
+
+Unlike a real release, an RC needs **no release branch and no repo changes**
+— no CHANGELOG, no README version bump, no chart bump. It's just a tag on
+the current `main` HEAD, so it can be pushed directly (tags aren't covered
+by the `protect-main` branch ruleset):
+
+```bash
+git fetch origin && git status -sb   # must not be ahead/behind, same as Phase 1
+git tag -a v1.7.0-rc.1 -m "Release candidate v1.7.0-rc.1"
+git push origin v1.7.0-rc.1
+```
+
+`release.yml` triggers on any `v*.*.*` tag (the glob matches pre-release
+suffixes too) and detects the hyphen to branch its behavior:
+
+- **Image tags**: `docker/metadata-action`'s `latest=auto` default already
+  excludes semver pre-releases from the `latest` tag — no workflow change
+  needed there. The RC image is pushed as `ghcr.io/kj187/jarvis:1.7.0-rc.1`
+  only.
+- **Release notes**: no curated notes file, no CHANGELOG section exists for
+  an RC tag (those are only generated in Phase 2 of a real release) — the
+  body is auto-generated instead: a short blurb + `git log` of commits since
+  the last **stable** tag (pre-release tags excluded from that lookup).
+- **GitHub Release**: created with `--prerelease` instead of `--latest`, so
+  it never overrides the "latest" pointer for the real release that follows.
+
+Cutting further RCs (`-rc.2`, …) or the real release afterwards needs no
+cleanup — the RC tag/release are independent of the real `vX.Y.Z` tag and
+leave no trace in its CHANGELOG or release notes. The RC's GitHub Release
+entry stays visible in the release list (marked "Pre-release") unless
+deleted manually — `gh release delete v1.7.0-rc.1 --cleanup-tag`.
+
+---
+
 ## What GitHub Actions does automatically (after tag push)
 
 From `.github/workflows/release.yml`:
@@ -231,12 +270,15 @@ From `.github/workflows/release.yml`:
 6. Build the release body: uses `.github/release-notes/vX.Y.Z.md` if present
    (fallback: awk-extract this version's CHANGELOG section), then appends
    image pull + digest, cosign verify, `gh attestation verify`, Helm install
-   + chart cosign verify, and SBOM pointers.
+   + chart cosign verify, and SBOM pointers. Pre-release tags (hyphen in the
+   tag name) skip both and get an auto-generated commit-log body instead —
+   see [Release Candidates](#release-candidates-pre-releases) above.
 7. Create the GitHub Release via `gh release create --notes-file
-   release-body.md --verify-tag --latest` with the SBOM as asset. Releases
-   are immutable: if a release for the tag already exists, the job fails —
-   never overwrite a published release; delete it manually first if a
-   re-release is really intended.
+   release-body.md --verify-tag` with the SBOM as asset — `--latest` for a
+   real release, `--prerelease` for a pre-release tag. Releases are
+   immutable: if a release for the tag already exists, the job fails — never
+   overwrite a published release; delete it manually first if a re-release
+   is really intended.
 
 **Helm chart** (separate workflow `.github/workflows/chart-release.yml`, *not*
 part of `release.yml`):
