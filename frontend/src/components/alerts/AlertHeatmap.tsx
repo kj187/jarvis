@@ -51,8 +51,8 @@ export function AlertHeatmap({ fingerprint, cluster, enabled }: AlertHeatmapProp
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <p className="text-xs text-muted-foreground">When and how often this alert fired</p>
+      <div className="flex items-center justify-end gap-2">
+        <p className="text-[10px] text-muted-foreground">When and how often this alert fired</p>
         <div className="flex items-center gap-1 rounded border border-border p-0.5">
           {RANGES.map((r) => (
             <button

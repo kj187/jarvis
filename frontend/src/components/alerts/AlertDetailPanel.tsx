@@ -437,7 +437,7 @@ export function AlertDetailPanel({
             )}
           </div>
 
-          <div className="mt-2.5" data-testid="detail-heatmap-section">
+          <div className="mt-2.5 pr-8" data-testid="detail-heatmap-section">
             <AlertHeatmap fingerprint={alert.fingerprint} cluster={alert.clusterName} enabled={Boolean(alert.fingerprint)} />
           </div>
 
