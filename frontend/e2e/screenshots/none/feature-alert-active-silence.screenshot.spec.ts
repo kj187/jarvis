@@ -37,6 +37,9 @@ test('feature-alert-active-silence', async ({ page, am, jarvis }) => {
   await waitForSuppressedAlerts(JARVIS_BASE_URL)
 
   await page.goto('/?state=suppressed')
+  // The covering-silence context is shown in list view; the toggle is not
+  // URL-addressable, so switch explicitly.
+  await page.getByTitle('List View').click()
   await expect(page.getByTestId('alert-group-row').first()).toBeVisible()
   await page.getByTestId('alert-group-row').first().click()
   await expect(page.getByTestId('alert-list-row').first()).toBeVisible()

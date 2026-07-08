@@ -31,7 +31,10 @@ test('feature-silence-from-alert', async ({ page, am, jarvis }) => {
   await page.goto('/?state=active')
   await expect(page.getByTestId('alert-card').first()).toBeVisible()
 
-  await page.getByTitle('Create silence').first().click()
+  // Since the bell action rail (PR #61) the full form opens via the bell
+  // menu's "Silence…" entry, not a direct per-card button.
+  await page.getByLabel('Silence options for this alert').first().click()
+  await page.getByText('Silence…').first().click()
 
   await expect(page.getByRole('heading', { name: 'Create silence' })).toBeVisible()
   await page.waitForTimeout(300)

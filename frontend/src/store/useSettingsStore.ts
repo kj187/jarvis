@@ -25,15 +25,9 @@ export interface UserSettings {
   defaultSilenceDurationMinutes: number
   defaultCreatorName: string
 
-  // Polling
-  pollIntervalSeconds: number
-
   // Animations
   claimAnimationEnabled: boolean
 }
-
-export const POLL_OPTIONS = [5, 10, 15, 20, 25, 30, 60] as const
-export type PollOption = (typeof POLL_OPTIONS)[number]
 
 export const RESOLVED_PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const
 export type ResolvedPageSizeOption = (typeof RESOLVED_PAGE_SIZE_OPTIONS)[number]
@@ -49,7 +43,6 @@ export const DEFAULT_SETTINGS: UserSettings = {
   resolvedPageSize: 25,
   defaultSilenceDurationMinutes: 60,
   defaultCreatorName: '',
-  pollIntervalSeconds: 15,
   claimAnimationEnabled: true,
 }
 
@@ -71,9 +64,3 @@ export const useSettingsStore = create<SettingsStore>()(
     },
   ),
 )
-
-export function nearestPollOption(v: number): PollOption {
-  return POLL_OPTIONS.reduce((best, opt) =>
-    Math.abs(opt - v) < Math.abs(best - v) ? opt : best,
-  )
-}

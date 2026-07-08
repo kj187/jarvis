@@ -29,7 +29,13 @@ export function useWebSocket() {
       wsRef.current = ws
 
       ws.onopen = () => {
-        if (mountedRef.current) setWsConnected(true)
+        if (!mountedRef.current) return
+        setWsConnected(true)
+        // WS delivers no replay: events broadcast while disconnected are
+        // gone. Refetch everything on every (re)connect so the UI recovers
+        // immediately — all list reads hit in-memory snapshots, so this is
+        // cheap and never touches Alertmanager.
+        qc.invalidateQueries()
       }
 
       ws.onclose = () => {

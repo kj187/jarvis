@@ -22,10 +22,16 @@ member in parallel, merges HA members (union by fingerprint/ID), and then:
 This is the **only** recurring Alertmanager traffic: `(alerts + silences)`
 per member per poll interval, flat regardless of how many tabs are open.
 
-**2. Client reads (page load + refetch)**
+**2. Client reads (page load + WS fallback)**
 `GET /api/v1/alerts`, `/silences`, and `/clusters` are served entirely from
 the in-memory snapshots and the cached up-state — zero Alertmanager calls
 per request. History, claims, and comments come from the database.
+
+WebSocket push is the primary update channel. Because WS has no replay,
+the frontend refetches everything on every (re)connect, plus a slow
+60-second safety-net refetch in case a broadcast is lost on a live
+connection. There is no user-facing poll setting — the only real poll knob
+is the admin's `JARVIS_POLL_INTERVAL`.
 
 **3. Client writes (user actions)**
 Silence create/delete is the only user action that reaches Alertmanager

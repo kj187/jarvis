@@ -19,7 +19,6 @@ async function resetPersistedUIState(page: Page) {
         resolvedPageSize: 25,
         defaultSilenceDurationMinutes: 60,
         defaultCreatorName: '',
-        pollIntervalSeconds: 15,
         claimAnimationEnabled: true,
       },
       version: 0,

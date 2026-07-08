@@ -26,7 +26,6 @@ interface UIStore {
   selectedFingerprint: string | null
   filters: Filters
   wsConnected: boolean
-  pollingPaused: boolean
   alertCounts: AlertCounts
 
   silencesViewMode: ViewMode
@@ -48,7 +47,6 @@ interface UIStore {
   /** Replaces all locked matchers with the given defaults. Non-locked matchers are preserved. */
   syncLockedMatchers: (defaults: Omit<LabelMatcher, 'id' | 'locked'>[]) => void
   setWsConnected: (connected: boolean) => void
-  setPollingPaused: (paused: boolean) => void
   setAlertCounts: (counts: AlertCounts) => void
 }
 
@@ -102,7 +100,6 @@ export const useUIStore = create<UIStore>()(
       selectedFingerprint: null,
       filters: defaultFilters,
       wsConnected: false,
-      pollingPaused: false,
       alertCounts: { filtered: 0, total: 0, byState: { active: 0, suppressed: 0, resolved: 0 }, silenceCount: 0 },
 
       setViewMode: (mode) => {
@@ -197,7 +194,6 @@ export const useUIStore = create<UIStore>()(
         }),
 
       setWsConnected: (connected) => set({ wsConnected: connected }),
-      setPollingPaused: (paused) => set({ pollingPaused: paused }),
       setAlertCounts: (counts) => set({ alertCounts: counts }),
     }),
     {

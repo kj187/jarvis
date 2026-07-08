@@ -4,6 +4,7 @@ import { buildAckSilenceBody, buildGroupAckSilenceBody } from '@/lib/alertUtils'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { useAuthStore } from '@/store/authStore'
 import type { EnrichedAlert } from '@/types'
+import { FALLBACK_REFETCH_INTERVAL_MS } from '@/lib/refetch'
 
 const USERNAME_KEY = 'jarvis-username'
 
@@ -32,7 +33,7 @@ export function useSilences(cluster?: string) {
   return useQuery({
     queryKey: ['silences', cluster],
     queryFn: () => fetchSilences(cluster),
-    refetchInterval: 30_000,
+    refetchInterval: FALLBACK_REFETCH_INTERVAL_MS,
   })
 }
 

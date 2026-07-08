@@ -6,27 +6,21 @@ import {
   fetchAlertTimeline,
   fetchAlertStats,
 } from '@/api/client'
-import { useUIStore } from '@/store/uiStore'
-import { useSettingsStore } from '@/store/useSettingsStore'
+import { FALLBACK_REFETCH_INTERVAL_MS } from '@/lib/refetch'
 
 export function useAlerts(params?: { cluster?: string; severity?: string; state?: string }) {
-  const pollingPaused = useUIStore((s) => s.pollingPaused)
-  const pollIntervalSeconds = useSettingsStore((s) => s.pollIntervalSeconds)
-
   return useQuery({
     queryKey: ['alerts', params],
     queryFn: () => fetchAlerts(params),
-    refetchInterval: pollingPaused ? false : pollIntervalSeconds * 1000,
+    refetchInterval: FALLBACK_REFETCH_INTERVAL_MS,
   })
 }
 
 export function useAlertGroups() {
-  const pollingPaused = useUIStore((s) => s.pollingPaused)
-  const pollIntervalSeconds = useSettingsStore((s) => s.pollIntervalSeconds)
   return useQuery({
     queryKey: ['alerts-groups'],
     queryFn: fetchAlertGroups,
-    refetchInterval: pollingPaused ? false : pollIntervalSeconds * 1000,
+    refetchInterval: FALLBACK_REFETCH_INTERVAL_MS,
   })
 }
 

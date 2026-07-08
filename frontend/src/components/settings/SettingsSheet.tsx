@@ -10,7 +10,6 @@ import { formatTime } from '@/lib/alertUtils'
 import {
   useSettingsStore,
   ALLOWED_SILENCE_DURATIONS,
-  POLL_OPTIONS,
 } from '@/store/useSettingsStore'
 import type { DefaultFilter } from '@/store/useSettingsStore'
 import type { LabelMatcherOperator } from '@/types'
@@ -51,50 +50,6 @@ function SegmentedControl<T extends string>({
           {opt.label}
         </button>
       ))}
-    </div>
-  )
-}
-
-// ── Poll interval slider ───────────────────────────────────────────────────────
-
-function PollSlider({
-  value,
-  onChange,
-}: {
-  value: number
-  onChange: (v: number) => void
-}) {
-  const idx = POLL_OPTIONS.indexOf(value as (typeof POLL_OPTIONS)[number])
-  const safeIdx = idx === -1 ? POLL_OPTIONS.indexOf(15) : idx
-
-  return (
-    <div className="space-y-2">
-      <input
-        type="range"
-        min={0}
-        max={POLL_OPTIONS.length - 1}
-        step={1}
-        value={safeIdx}
-        onChange={(e) => onChange(POLL_OPTIONS[parseInt(e.target.value, 10)])}
-        className="w-full cursor-pointer accent-primary"
-        aria-label="Poll interval"
-      />
-      <div className="flex justify-between">
-        {POLL_OPTIONS.map((opt, i) => (
-          <span
-            key={opt}
-            onClick={() => onChange(opt)}
-            className={cn(
-              'cursor-pointer text-[10px] transition-colors',
-              i === safeIdx
-                ? 'text-foreground font-semibold'
-                : 'text-muted-foreground hover:text-foreground',
-            )}
-          >
-            {opt}s
-          </span>
-        ))}
-      </div>
     </div>
   )
 }
@@ -502,24 +457,6 @@ export function SettingsSheet({ open, onClose }: SettingsSheetProps) {
 
         <div className="h-px bg-border" />
 
-        {/* ── Polling ── */}
-        <Section title="Polling">
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <span className="flex items-center gap-1.5 text-sm">
-                Poll interval
-                <InfoTooltip text="How often Jarvis fetches fresh data from Alertmanager (WebSocket delivers real-time updates between polls)" />
-              </span>
-              <span className="text-sm font-medium tabular-nums">{settings.pollIntervalSeconds}s</span>
-            </div>
-            <PollSlider
-              value={settings.pollIntervalSeconds}
-              onChange={(v) => update({ pollIntervalSeconds: v })}
-            />
-          </div>
-        </Section>
-
-        <div className="h-px bg-border" />
 
         {/* ── Footer ── */}
           <Button

@@ -143,6 +143,7 @@ const (
     WSTypeClaimSet      = "claim_set"        // payload: { fingerprint, clusterName, claim }
     WSTypeClaimReleased = "claim_released"   // payload: { fingerprint, clusterName, releasedBy }
     WSTypeCommentAdded  = "comment_added"    // payload: { fingerprint, comment }
+    WSTypeSilencesUpdate = "silences_update" // payload: {} — pure invalidation signal
 )
 
 // ── SilenceEvent (history of silence actions per alert) ───────────────────────
@@ -478,12 +479,15 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
 │   │                            useAckAlert (one-click Fast-Silence → short-lived exact-match silence),
 │   │                            resolveCreatorName
 │   ├── useSilenceTemplates.ts → list + create/update/delete template mutations
-│   ├── useWebSocket.ts        → WS connection + cache patching via handleEvent()
+│   ├── useWebSocket.ts        → WS connection + cache patching via handleEvent();
+│   │                            invalidates ALL queries on every (re)connect (WS has no replay)
 │   ├── useProtectedAction.ts  → wraps write actions; opens LoginModal when auth required
 │   ├── useLoginGuard.ts       → login-required state for guarded UI elements
 │   ├── useFormatTime.ts       → relative/absolute timestamp formatter (from settings)
 │   └── useVersion.ts          → app version (staleTime Infinity)
 ├── lib/
+│   ├── refetch.ts             → FALLBACK_REFETCH_INTERVAL_MS (60s) — safety-net refetch cadence;
+│   │                            WS push is the primary channel, reads hit in-memory snapshots only
 │   ├── alertUtils.ts          → getFilterableLabels, matchesLabelMatchers (filter-bar only,
 │   │                            substring regex + pseudo-labels — never for silence matching),
 │   │                            safeRegex, anchoredRegex, silenceWouldMatchAlert (Alertmanager-exact:
@@ -558,7 +562,7 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │   └── SilenceTemplateTab.tsx → template CRUD + apply-to-form
     ├── settings/
     │   └── SettingsSheet.tsx  → time format, default view, resolved page size, default filters,
-    │                            default silence duration, creator name, poll interval, claim animation, theme
+    │                            default silence duration, creator name, claim animation, theme
     ├── auth/
     │   ├── LoginModal.tsx     → on-demand login (write_protect)
     │   ├── LoginPage.tsx      → full-page login (full_protect)
@@ -589,7 +593,6 @@ interface UIStore {
     labelMatchers: LabelMatcher[]              // includes locked default-filter chips
   }
   wsConnected: boolean                         // NOT persisted
-  pollingPaused: boolean                       // NOT persisted (resets to false)
   alertCounts: AlertCounts                      // { filtered, total, byState: { active, suppressed, resolved }, silenceCount }
 }
 // syncLockedMatchers(defaults) replaces locked matchers from Settings, preserves user-added ones.
@@ -608,7 +611,6 @@ interface UserSettings {
   resolvedPageSize: 10 | 25 | 50 | 100          // default 25
   defaultSilenceDurationMinutes: number         // default 60; ALLOWED_SILENCE_DURATIONS = [15,30,60,240,480,1440,4320]
   defaultCreatorName: string                    // default ''
-  pollIntervalSeconds: number                   // default 15; POLL_OPTIONS = [5,10,15,20,25,30,60]
   claimAnimationEnabled: boolean                // default true
 }
 ```
