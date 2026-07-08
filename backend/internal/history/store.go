@@ -314,6 +314,50 @@ func (s *Store) GetHistoryForCluster(fingerprint, clusterName string, limit, off
 	return events, total, nil
 }
 
+// GetFiringStarts returns the start times of firing events for a fingerprint
+// (optionally cluster-scoped) since the given time, newest first, capped at
+// limit. One firing event = one event row with status "firing" — the grace
+// period (invariant #1: a resolve+refire within 60s reopens the existing
+// event) already prevents double-counting at write time, so no extra
+// dedup is needed here.
+func (s *Store) GetFiringStarts(fingerprint, clusterName string, since time.Time, limit int) ([]time.Time, error) {
+	if limit <= 0 || limit > 10000 {
+		limit = 10000
+	}
+
+	clusterFilter := ""
+	args := []interface{}{fingerprint, models.EventStatusFiring, since.UTC()}
+	if clusterName != "" {
+		clusterFilter = " AND cluster_name = ?"
+		args = append(args, clusterName)
+	}
+	args = append(args, limit)
+
+	rows, err := s.query(context.Background(), `
+		SELECT starts_at FROM alert_events
+		WHERE fingerprint = ? AND status = ? AND starts_at >= ?`+clusterFilter+`
+		ORDER BY starts_at DESC
+		LIMIT ?
+	`, args...)
+	if err != nil {
+		return nil, fmt.Errorf("query firing starts: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	starts := make([]time.Time, 0)
+	for rows.Next() {
+		var t time.Time
+		if err := rows.Scan(&t); err != nil {
+			return nil, fmt.Errorf("scan firing start: %w", err)
+		}
+		starts = append(starts, t.UTC())
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return starts, nil
+}
+
 // GetTimeline returns a merged, paginated timeline for a fingerprint.
 // Rows are ordered by recorded timestamp (newest first).
 func (s *Store) GetTimeline(fingerprint, clusterName string, limit, offset int) ([]models.AlertTimelineEntry, int, error) {

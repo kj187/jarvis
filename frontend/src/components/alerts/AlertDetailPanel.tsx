@@ -874,6 +874,8 @@ export function AlertDetailPanel({
 
         {/* History */}
         <AlertDetailHistorySection
+          fingerprint={alert.fingerprint}
+          clusterName={alert.clusterName}
           timelineData={timelineData}
           historyPage={historyPage}
           historyPageSize={historyPageSize}

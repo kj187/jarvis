@@ -98,6 +98,13 @@ export interface AlertStats {
   occurrenceCount: number
 }
 
+export type HeatmapRange = '24h' | '7d' | '30d'
+
+export interface AlertHeatmapResponse {
+  range: HeatmapRange
+  firingStarts: string[]
+}
+
 // ── Comment ──────────────────────────────────────────────────────────────────
 
 export interface Comment {

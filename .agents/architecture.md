@@ -346,6 +346,12 @@ GET    /api/v1/alerts                            full_protect?  → []EnrichedAl
 GET    /api/v1/alerts/:fingerprint/history       full_protect?  → { events: AlertEvent[], total }  ?limit= ?offset= ?cluster=
 GET    /api/v1/alerts/:fingerprint/timeline      full_protect?  → []AlertTimelineEntry  (merged alert+claim+silence history)
 GET    /api/v1/alerts/:fingerprint/stats         full_protect?  → AlertStats  ?cluster=
+GET    /api/v1/alerts/:fingerprint/heatmap       full_protect?  → AlertHeatmapResponse  ?cluster= &range=24h|7d|30d (required)
+#        raw firing-start timestamps (status='firing' alert_events rows, one per firing —
+#        the 60s grace period already prevents double-counting), capped at 10000, newest first
+#        internally; range maps to a lookback window (24h/7d/30d). Bucketing into hourly/daily
+#        cells happens entirely in the frontend (lib/heatmapUtils.ts bucketFiringStarts) so
+#        day/hour boundaries use the browser's local timezone, not the server's.
 GET    /api/v1/alerts/:fingerprint/silence-events full_protect? → []SilenceEvent   (silence action timeline)
 
 # ── Comments ─────────────────────────────────────────────────────────────────
@@ -467,10 +473,12 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
 │   ├── authStore.ts          → user, providerInfo, hydrate() (retries on slow backend), login/logout
 │   └── useSettingsStore.ts   → Zustand+persist('jarvis-user-settings'): all user preferences
 ├── types/index.ts    → Alert, Silence, Claim, Comment, AlertEvent, AlertStats, SilenceEvent,
-│                        SilenceTemplate, LabelMatcher, AuthUser, ProviderInfo, AdminUser, ...
+│                        SilenceTemplate, LabelMatcher, AuthUser, ProviderInfo, AdminUser,
+│                        HeatmapRange, AlertHeatmapResponse, ...
 ├── hooks/
 │   ├── useAlerts.ts           → useAlerts, useAlertGroups, useAlertHistory, useAlertTimeline,
-│   │                            useAlertStats, useRefreshAlerts
+│   │                            useAlertStats, useAlertHeatmap (enabled only while detail panel
+│   │                            open, staleTime 60s), useRefreshAlerts
 │   ├── useAlertCounts.ts      → per-state alert counts for nav badges
 │   ├── useAlertComments.ts    → useAlertComments, useAddComment, useDeleteComment (all cluster-scoped)
 │   ├── useAlertClaim.ts       → useActiveClaim, useClaimHistory, useSetClaim, useReleaseClaim,
@@ -512,6 +520,10 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
 │   │                            format `<cluster>::<fingerprint>` (URL `alert=` param, cluster-safe)
 │   ├── linkUtils.tsx          → isUrl, extractLinkButtons (URL-valued labels/annotations + runbook
 │   │                            logic), renderTextWithLinks
+│   ├── heatmapUtils.ts        → bucketFiringStarts(startsIso, range, now?) — pure hourly/daily
+│   │                            bucketing of raw firing timestamps into HeatmapCell[]
+│   │                            (browser-local day/hour boundaries; 24h/7d hourly cells via ms
+│   │                            arithmetic, 30d daily cells via calendar setDate for DST safety)
 │   └── utils.ts               → cn(), formatDuration() + misc helpers
 └── components/
     ├── ui/                    → shadcn/ui: button, card, badge, dialog, sheet, select, input,
@@ -533,7 +545,12 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │   ├── AlertDetailPanel.tsx → slide-over: labels/annotations + link buttons, stats & timeline,
     │   │                          claim (useClaimController), comments, silence controls + Fast-Silence, AI-prompt section
     │   ├── AlertDetailSection.tsx → collapsible section wrapper used inside the detail panel
-    │   ├── AlertDetailHistorySection.tsx → stats + merged event timeline section
+    │   ├── AlertDetailHistorySection.tsx → firing-pattern heatmap (AlertHeatmap) + stats + merged event timeline section
+    │   ├── AlertHeatmap.tsx    → 24h/7d/30d range toggle + CSS-grid firing-pattern heatmap
+    │   │                        (no chart lib; bucketFiringStarts + one accent hue, 5 opacity
+    │   │                        steps by quartile of max count in view); used by
+    │   │                        AlertDetailHistorySection, self-contained (owns its own
+    │   │                        useAlertHeatmap query + range state)
     │   ├── AlertComments.tsx  → comment list + input (author-gated delete)
     │   ├── AckButton.tsx      → one-click Fast-Silence (short-lived exact-match silence); active-only
     │   │                        (getEffectiveAlertState), auth-gated (useProtectedAction); hover/focus

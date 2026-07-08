@@ -216,3 +216,13 @@ type AlertGroup struct {
 	Alerts    []EnrichedAlert `json:"alerts"`
 	Count     int             `json:"count"`
 }
+
+// ── AlertHeatmap ─────────────────────────────────────────────────────────────
+
+// AlertHeatmapResponse carries raw firing-start timestamps for
+// /alerts/:fingerprint/heatmap; the frontend buckets them into cells so
+// day/hour boundaries are computed in the browser's local timezone.
+type AlertHeatmapResponse struct {
+	Range        string   `json:"range"`
+	FiringStarts []string `json:"firingStarts"`
+}

@@ -198,6 +198,123 @@ func TestGetAlertTimeline_InvalidFingerprint(t *testing.T) {
 	}
 }
 
+func TestGetAlertHeatmap_InvalidFingerprint(t *testing.T) {
+	srv, _ := newTestServer(t)
+	e := echo.New()
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/alerts/INVALID!/heatmap?range=24h", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("fingerprint")
+	c.SetParamValues("INVALID!")
+	c.QueryParams().Set("range", "24h")
+
+	err := srv.getAlertHeatmap(c)
+	if err == nil {
+		t.Error("expected error for invalid fingerprint, got nil")
+	}
+}
+
+func TestGetAlertHeatmap_InvalidRange(t *testing.T) {
+	srv, _ := newTestServer(t)
+	e := echo.New()
+	fp := "aabbccddeeff0044"
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/alerts/"+fp+"/heatmap?range=1y", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("fingerprint")
+	c.SetParamValues(fp)
+	c.QueryParams().Set("range", "1y")
+
+	err := srv.getAlertHeatmap(c)
+	if err == nil {
+		t.Fatal("expected error for invalid range, got nil")
+	}
+	httpErr, ok := err.(*echo.HTTPError)
+	if !ok || httpErr.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 HTTPError, got %v", err)
+	}
+}
+
+func TestGetAlertHeatmap_MissingRange(t *testing.T) {
+	srv, _ := newTestServer(t)
+	e := echo.New()
+	fp := "aabbccddeeff0055"
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/alerts/"+fp+"/heatmap", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("fingerprint")
+	c.SetParamValues(fp)
+
+	if err := srv.getAlertHeatmap(c); err == nil {
+		t.Error("expected error for missing range, got nil")
+	}
+}
+
+func TestGetAlertHeatmap_HappyPath(t *testing.T) {
+	srv, _ := newTestServer(t)
+	fp := "aabbccddeeff0066"
+	cluster := "homelab"
+	now := time.Now().UTC()
+
+	if err := srv.store.UpsertFingerprint(fp, "TestAlert", cluster, nil); err != nil {
+		t.Fatalf("UpsertFingerprint: %v", err)
+	}
+	if _, _, err := srv.store.RecordStatusChange(fp, cluster, "http://am:9093", "firing", now.Add(-1*time.Hour), nil); err != nil {
+		t.Fatalf("RecordStatusChange: %v", err)
+	}
+
+	e := echo.New()
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/alerts/"+fp+"/heatmap?range=24h&cluster="+cluster, nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("fingerprint")
+	c.SetParamValues(fp)
+	c.QueryParams().Set("range", "24h")
+	c.QueryParams().Set("cluster", cluster)
+
+	if err := srv.getAlertHeatmap(c); err != nil {
+		t.Fatalf("getAlertHeatmap: %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Errorf("status = %d, want 200", rec.Code)
+	}
+	if !contains(rec.Body.String(), `"range":"24h"`) {
+		t.Errorf("expected range in response: %s", rec.Body.String())
+	}
+	if !contains(rec.Body.String(), "firingStarts") {
+		t.Errorf("expected firingStarts in response: %s", rec.Body.String())
+	}
+}
+
+func TestGetAlertHeatmap_ClusterScoped(t *testing.T) {
+	srv, _ := newTestServer(t)
+	fp := "aabbccddeeff0077"
+	now := time.Now().UTC()
+
+	if err := srv.store.UpsertFingerprint(fp, "TestAlert", "cluster-a", nil); err != nil {
+		t.Fatalf("UpsertFingerprint: %v", err)
+	}
+	if _, _, err := srv.store.RecordStatusChange(fp, "cluster-a", "http://am:9093", "firing", now.Add(-1*time.Hour), nil); err != nil {
+		t.Fatalf("RecordStatusChange: %v", err)
+	}
+
+	e := echo.New()
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/alerts/"+fp+"/heatmap?range=24h&cluster=cluster-b", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("fingerprint")
+	c.SetParamValues(fp)
+	c.QueryParams().Set("range", "24h")
+	c.QueryParams().Set("cluster", "cluster-b")
+
+	if err := srv.getAlertHeatmap(c); err != nil {
+		t.Fatalf("getAlertHeatmap: %v", err)
+	}
+	if contains(rec.Body.String(), now.Add(-1*time.Hour).Format("2006-01-02T15:04")) {
+		t.Errorf("expected no data for wrong cluster, got: %s", rec.Body.String())
+	}
+}
+
 func TestGetHealth(t *testing.T) {
 	srv, _ := newTestServer(t)
 	e := echo.New()
