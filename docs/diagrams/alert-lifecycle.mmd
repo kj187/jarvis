@@ -1,0 +1,27 @@
+---
+title: Jarvis — alert lifecycle state machine
+config:
+  theme: neutral
+---
+stateDiagram-v2
+    [*] --> firing: alert first seen in Alertmanager
+
+    firing --> suppressed: silence activated
+    firing --> resolved: alert gone from AM API
+
+    suppressed --> firing: silence expired/deleted\n(expired event + new firing event)
+    suppressed --> resolved: problem fixed while silence active\n(no expired event)
+
+    resolved --> firing: alert reappears\n(grace period 60s: reopen if within window,\notherwise new event)
+
+    note right of suppressed
+        occurrence_count increments only
+        on the SECOND firing, never the first
+        (Critical Invariant #2)
+    end note
+
+    note right of resolved
+        Reopened within 60s of resolving →
+        reuse the old event, no new one
+        (Critical Invariant #1, grace period)
+    end note

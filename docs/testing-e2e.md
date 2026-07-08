@@ -31,17 +31,9 @@ alerts — so functional tests and screenshots exercise the actual system.
 
 ## Architecture
 
-```
-                 ┌──────────────────────── network: jarvis_e2e ────────────────────────┐
-                 │                                                                       │
-  host :8085 ───▶│  e2e-jarvis (Containerfile.e2e, -tags "prod e2e")                     │
-  host :8086 ───▶│      │  JARVIS_POLL_INTERVAL=1s, SQLite on tmpfs                       │
-                 │      ├─▶ e2e-alertmanager  (real Alertmanager, tmpfs)                  │
-                 │      └─▶ e2e-mock-oidc      (mock OIDC server, only MODE=oidc)         │
-                 │                                                                       │
-                 │  e2e-playwright (mcr.microsoft.com/playwright) ── runs the specs ──────│
-                 └───────────────────────────────────────────────────────────────────────┘
-```
+![E2E stack topology](assets/e2e-stack.svg)
+
+(source: [`docs/diagrams/e2e-stack.mmd`](diagrams/e2e-stack.mmd), re-render via `make diagrams`)
 
 | Service | Image | Purpose |
 |---|---|---|

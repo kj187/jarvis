@@ -1,0 +1,21 @@
+---
+title: Jarvis — OIDC login flow (Authorization Code + PKCE)
+config:
+  theme: neutral
+---
+sequenceDiagram
+    actor U as Browser
+    participant J as Jarvis backend
+    participant O as OIDC provider
+
+    U->>J: GET /auth/oidc/start
+    J->>J: generate code_verifier + code_challenge,<br/>set state cookie
+    J-->>U: 302 redirect to issuer<br/>(with code_challenge)
+    U->>O: authenticate (login form / SSO session)
+    O-->>U: 302 redirect to<br/>/auth/oidc/callback?code=...&state=...
+    U->>J: GET /auth/oidc/callback?code=...&state=...
+    J->>J: verify state (CSRF check)
+    J->>O: exchange code for tokens<br/>(sends code_verifier)
+    O-->>J: ID token + access token
+    J->>J: verify ID token,<br/>UpsertOIDCUser by sub,<br/>map admin role from configured claim
+    J-->>U: Set-Cookie: jarvis_session (HttpOnly, SameSite=Lax)<br/>302 redirect to /
