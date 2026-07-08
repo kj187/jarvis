@@ -83,7 +83,7 @@ jobs:
       # a workspace file (output-file/upload-* inputs were removed).
       - name: Install syft
         id: syft
-        uses: anchore/sbom-action/download-syft@f6c3d0fe42c3cf876e3462574e4c9416b5e0f07a # ratchet:anchore/sbom-action/download-syft@v0.9.0
+        uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610 # ratchet:anchore/sbom-action/download-syft@v0.24.0
 
       - name: Generate SBOM (SPDX)
         run: |
