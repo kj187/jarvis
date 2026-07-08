@@ -33,6 +33,7 @@ func TestNewRegistry_SingleCluster(t *testing.T) {
 	cl := r.Get("homelab")
 	if cl == nil {
 		t.Fatal("expected cluster homelab, got nil")
+		return
 	}
 	if cl.Name != "homelab" {
 		t.Errorf("Name = %q, want homelab", cl.Name)
