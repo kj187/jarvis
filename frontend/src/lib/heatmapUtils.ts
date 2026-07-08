@@ -3,10 +3,44 @@
 // getAlertHeatmap); bucketing happens here so day/hour boundaries are
 // computed in the browser's local timezone, not the server's.
 
+import { format } from 'date-fns'
+import { enUS } from 'date-fns/locale'
+import { tzAbbr } from './alertUtils'
+import type { HeatmapRange } from '@/types'
+
 export interface HeatmapCell {
   start: Date
   end: Date
   count: number
+}
+
+// One accent hue, opacity steps chosen to stay legible on both the light and
+// dark backgrounds this renders on (detail-panel section, card tile). Kept
+// as plain exports (not in a .tsx component file) so react-refresh doesn't
+// flag mixing components and constants in one module.
+export const HEATMAP_INTENSITY_CLASSES = [
+  'bg-transparent border border-border',
+  'bg-blue-500/20 dark:bg-blue-400/20',
+  'bg-blue-500/40 dark:bg-blue-400/35',
+  'bg-blue-500/65 dark:bg-blue-400/55',
+  'bg-blue-500/90 dark:bg-blue-400/80',
+]
+
+export function heatmapIntensityLevel(count: number, maxCount: number): number {
+  if (count === 0 || maxCount === 0) return 0
+  const ratio = count / maxCount
+  if (ratio <= 0.25) return 1
+  if (ratio <= 0.5) return 2
+  if (ratio <= 0.75) return 3
+  return 4
+}
+
+export function heatmapCellTooltip(cell: HeatmapCell, range: HeatmapRange): string {
+  const plural = cell.count === 1 ? 'firing' : 'firings'
+  if (range === '30d') {
+    return `${format(cell.start, 'MMM d, yyyy', { locale: enUS })} — ${cell.count} ${plural}`
+  }
+  return `${format(cell.start, 'MMM d, HH:mm', { locale: enUS })}–${format(cell.end, 'HH:mm', { locale: enUS })} ${tzAbbr} — ${cell.count} ${plural}`
 }
 
 const HOUR_MS = 3_600_000
@@ -64,7 +98,7 @@ function bucketDaily(starts: Date[], now: Date, count: number): HeatmapCell[] {
 
 export function bucketFiringStarts(
   startsIso: string[],
-  range: '24h' | '7d' | '30d',
+  range: HeatmapRange,
   now: Date = new Date(),
 ): HeatmapCell[] {
   const starts = startsIso.map((iso) => new Date(iso))

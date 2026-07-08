@@ -523,7 +523,10 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
 │   ├── heatmapUtils.ts        → bucketFiringStarts(startsIso, range, now?) — pure hourly/daily
 │   │                            bucketing of raw firing timestamps into HeatmapCell[]
 │   │                            (browser-local day/hour boundaries; 24h/7d hourly cells via ms
-│   │                            arithmetic, 30d daily cells via calendar setDate for DST safety)
+│   │                            arithmetic, 30d daily cells via calendar setDate for DST safety);
+│   │                            also HEATMAP_INTENSITY_CLASSES/heatmapIntensityLevel/
+│   │                            heatmapCellTooltip (plain exports, not the .tsx renderer, so
+│   │                            react-refresh/only-export-components stays clean)
 │   └── utils.ts               → cn(), formatDuration() + misc helpers
 └── components/
     ├── ui/                    → shadcn/ui: button, card, badge, dialog, sheet, select, input,
@@ -538,7 +541,10 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │   ├── AlertCardGrid.tsx  → grouped by settings `groupByLabel` (default severity), responsive
     │   │                        column binning, per-group pagination, drag-and-drop section
     │   │                        reordering (persisted: 'jarvis-card-section-order:<label>')
-    │   ├── AlertCard.tsx      → card + claim banner + count badge + silence/detail actions + Fast-Silence (hover)
+    │   ├── AlertCard.tsx      → card + claim banner + count badge + silence/detail actions + Fast-Silence (hover);
+    │   │                        FiringSparkline: dezent 30d HeatmapCellsRow under the timestamp row,
+    │   │                        only fetched/rendered for alerts with occurrenceCount > 1 (no tooltips —
+    │   │                        would fight the card's own click target)
     │   ├── AlertListView.tsx  → sortable table (name/time), expandable groups, section
     │   │                        reordering (persisted: 'jarvis-list-section-order:<label>')
     │   ├── AlertListRow.tsx   → single/indented row
@@ -546,11 +552,15 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │   │                          claim (useClaimController), comments, silence controls + Fast-Silence, AI-prompt section
     │   ├── AlertDetailSection.tsx → collapsible section wrapper used inside the detail panel
     │   ├── AlertDetailHistorySection.tsx → firing-pattern heatmap (AlertHeatmap) + stats + merged event timeline section
-    │   ├── AlertHeatmap.tsx    → 24h/7d/30d range toggle + CSS-grid firing-pattern heatmap
-    │   │                        (no chart lib; bucketFiringStarts + one accent hue, 5 opacity
-    │   │                        steps by quartile of max count in view); used by
+    │   ├── AlertHeatmap.tsx    → 24h/7d/30d range toggle + CSS-grid firing-pattern heatmap; used by
     │   │                        AlertDetailHistorySection, self-contained (owns its own
-    │   │                        useAlertHeatmap query + range state)
+    │   │                        useAlertHeatmap query + range state); cell rendering delegates to
+    │   │                        HeatmapCells.tsx (shared with AlertCard's FiringSparkline)
+    │   ├── HeatmapCells.tsx   → HeatmapCellsRow (no chart lib; renders HEATMAP_INTENSITY_CLASSES
+    │   │                        cells via heatmapIntensityLevel/heatmapCellTooltip, all three in
+    │   │                        lib/heatmapUtils.ts — plain exports, not this .tsx file, so
+    │   │                        react-refresh/only-export-components stays clean) — single source
+    │   │                        for both the full detail-panel heatmap and the card sparkline
     │   ├── AlertComments.tsx  → comment list + input (author-gated delete)
     │   ├── AckButton.tsx      → one-click Fast-Silence (short-lived exact-match silence); active-only
     │   │                        (getEffectiveAlertState), auth-gated (useProtectedAction); hover/focus

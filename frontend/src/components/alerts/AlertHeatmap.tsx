@@ -2,10 +2,9 @@ import { useState } from 'react'
 import { format } from 'date-fns'
 import { enUS } from 'date-fns/locale'
 import { cn } from '@/lib/utils'
-import { tzAbbr } from '@/lib/alertUtils'
 import { bucketFiringStarts, type HeatmapCell } from '@/lib/heatmapUtils'
 import { useAlertHeatmap } from '@/hooks/useAlerts'
-import { Tooltip } from '@/components/ui/tooltip'
+import { HeatmapCellsRow } from './HeatmapCells'
 import type { HeatmapRange } from '@/types'
 
 interface AlertHeatmapProps {
@@ -20,43 +19,8 @@ const RANGES: { value: HeatmapRange; label: string }[] = [
   { value: '30d', label: '30d' },
 ]
 
-// One accent hue, opacity steps chosen to stay legible on both the light and
-// dark card background (`AlertDetailSection`'s surrounding surface).
-const INTENSITY_CLASSES = [
-  'bg-transparent border border-border',
-  'bg-blue-500/20 dark:bg-blue-400/20',
-  'bg-blue-500/40 dark:bg-blue-400/35',
-  'bg-blue-500/65 dark:bg-blue-400/55',
-  'bg-blue-500/90 dark:bg-blue-400/80',
-]
-
-function intensityLevel(count: number, maxCount: number): number {
-  if (count === 0 || maxCount === 0) return 0
-  const ratio = count / maxCount
-  if (ratio <= 0.25) return 1
-  if (ratio <= 0.5) return 2
-  if (ratio <= 0.75) return 3
-  return 4
-}
-
-function cellTooltip(cell: HeatmapCell, range: HeatmapRange): string {
-  const plural = cell.count === 1 ? 'firing' : 'firings'
-  if (range === '30d') {
-    return `${format(cell.start, 'MMM d, yyyy', { locale: enUS })} — ${cell.count} ${plural}`
-  }
-  return `${format(cell.start, 'MMM d, HH:mm', { locale: enUS })}–${format(cell.end, 'HH:mm', { locale: enUS })} ${tzAbbr} — ${cell.count} ${plural}`
-}
-
 function HeatmapGrid({ cells, range }: { cells: HeatmapCell[]; range: HeatmapRange }) {
   const maxCount = Math.max(0, ...cells.map((c) => c.count))
-
-  const renderCell = (cell: HeatmapCell, key: string) => (
-    <Tooltip key={key} content={cellTooltip(cell, range)} wrapperClassName="flex-1">
-      <div
-        className={cn('h-4 w-full rounded-sm', INTENSITY_CLASSES[intensityLevel(cell.count, maxCount)])}
-      />
-    </Tooltip>
-  )
 
   if (range === '7d') {
     const days = Array.from({ length: 7 }, (_, i) => cells.slice(i * 24, i * 24 + 24))
@@ -67,8 +31,8 @@ function HeatmapGrid({ cells, range }: { cells: HeatmapCell[]; range: HeatmapRan
             <span className="w-8 shrink-0 text-[10px] text-muted-foreground">
               {dayCells[0] ? format(dayCells[0].start, 'EEE', { locale: enUS }) : ''}
             </span>
-            <div className="flex flex-1 gap-px">
-              {dayCells.map((cell, j) => renderCell(cell, `${i}-${j}`))}
+            <div className="flex-1">
+              <HeatmapCellsRow cells={dayCells} range={range} maxCount={maxCount} tooltips />
             </div>
           </div>
         ))}
@@ -76,7 +40,7 @@ function HeatmapGrid({ cells, range }: { cells: HeatmapCell[]; range: HeatmapRan
     )
   }
 
-  return <div className="flex gap-px">{cells.map((cell, i) => renderCell(cell, String(i)))}</div>
+  return <HeatmapCellsRow cells={cells} range={range} maxCount={maxCount} tooltips />
 }
 
 export function AlertHeatmap({ fingerprint, cluster, enabled }: AlertHeatmapProps) {
