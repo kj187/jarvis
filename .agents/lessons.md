@@ -9,28 +9,35 @@ instead of duplicating.
 
 ---
 
-## A resolve+refire faster than JARVIS_POLL_INTERVAL is invisible to the recorder
+## A resolve+refire inside the 60s grace period is silently absorbed, not recorded
 
 **Symptom**: Manually testing occurrence tracking / the firing-pattern
-heatmap by running `make fixtures-remove` then `make fixtures-create` back
-to back — `occurrenceCount`, `lastFiredAt`, and the heatmap all stayed
-completely unchanged, as if nothing happened, even though Alertmanager's
-`GET /api/v2/alerts` showed a fresh `startsAt`.
-**Cause**: The recorder is snapshot-diffing (compares this poll's alert list
-against the previous poll's), not event-log based. `resolve-test-alerts.sh`
-resolves all 23 alerts in well under a second; if `fixtures-create` re-fires
-them before the next `JARVIS_POLL_INTERVAL` tick (15s in dev), no poll ever
-observes the alert as *absent* — from the recorder's point of view it was
-"firing" in every single snapshot, so `RecordStatusChange`'s idempotency
-check (same status → no-op) never fires a new event. AM's own `startsAt`
-changing underneath is irrelevant; only a state the recorder actually polls
-counts.
+heatmap by running `make fixtures-remove` then `make fixtures-create` —
+even with an explicit `POST /api/v1/poll` forced in between and a few
+seconds' wait — `occurrenceCount` and the heatmap stayed completely
+unchanged, with zero trace of a resolved event ever appearing in
+`GET /alerts/:fp/history`, even though Alertmanager's own `GET /api/v2/alerts`
+confirmed the alert genuinely disappeared and came back with a fresh
+`startsAt`. (First suspected: poll-interval racing, or Alertmanager gossip
+lag between the dev HA pair's two members — both ruled out by direct testing:
+the resolve is immediate at the Alertmanager API level, and AM does not
+gossip raw alert data between mesh members at all, only silences/nflog, so
+member-lag was never the mechanism.)
+**Cause**: This is Critical Invariant #1 (`AGENTS.md`) doing exactly what
+it's designed to do. `RecordStatusChange` (`backend/internal/history/store.go`):
+a firing status arriving within 60s of the last recorded *resolved* row
+**deletes that resolved row** and returns the prior (still-firing) row
+unchanged — `created=false`, no new event, `occurrence_count` untouched.
+This exists to stop a transient poll miss from creating ghost-resolve
+entries. `resolve-test-alerts.sh` resolves in well under a second; unless
+something deliberately holds the alert resolved for >60s before re-firing,
+any test re-fire lands inside the grace window and is invisibly discarded —
+regardless of `JARVIS_POLL_INTERVAL`, and regardless of whether a poll was
+forced in between.
 **Rule**: To manually force a genuine new firing episode, resolve, then
-force an immediate poll (`POST /api/v1/poll`) and give it a couple seconds
-to land, *then* re-fire — `make fixtures-refire`
-(`scripts/refire-test-alerts.sh`) does exactly this. Bare
-`fixtures-remove` + `fixtures-create` in quick succession will not register
-as a new occurrence.
+wait **more than 60 seconds** before re-firing — `make fixtures-refire`
+(`scripts/refire-test-alerts.sh`, `GRACE_WAIT_SECONDS=70`) does this. There
+is no way to shortcut this with faster polling; the wait is the fix.
 
 ## A plausible-sounding Alertmanager validation rule can still be wrong — verify against a real instance
 

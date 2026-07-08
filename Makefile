@@ -182,7 +182,7 @@ fixtures-create: ## Fire 10 Kubernetes-themed test alerts (test_suite=jarvis) to
 fixtures-remove: ## Resolve all test alerts fired by fixtures-create
 	@bash scripts/resolve-test-alerts.sh
 
-fixtures-refire: ## Resolve + force-poll + re-fire — guarantees a new occurrence (occurrenceCount, heatmap)
+fixtures-refire: ## Resolve, wait out the 60s grace period, re-fire — guarantees a new occurrence (~3-4 min)
 	@bash scripts/refire-test-alerts.sh
 
 fixtures-silence: ## Create an escaped regex silence in Alertmanager (recreate-bug repro)
