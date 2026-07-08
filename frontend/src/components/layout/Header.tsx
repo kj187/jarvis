@@ -13,6 +13,7 @@ import { useAuthStore } from '@/store/authStore'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { useQuery } from '@tanstack/react-query'
 import { fetchClusters } from '@/api/client'
+import { FALLBACK_REFETCH_INTERVAL_MS } from '@/lib/refetch'
 
 // ── Header ────────────────────────────────────────────────────────────────────
 
@@ -60,7 +61,7 @@ export function Header() {
   const { data: clusters = [] } = useQuery({
     queryKey: ['clusters'],
     queryFn: fetchClusters,
-    refetchInterval: 30_000,
+    refetchInterval: FALLBACK_REFETCH_INTERVAL_MS,
   })
 
   const [silenceFormOpen, setSilenceFormOpen] = useState(false)
