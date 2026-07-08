@@ -542,10 +542,11 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │   │                        column binning, per-group pagination, drag-and-drop section
     │   │                        reordering (persisted: 'jarvis-card-section-order:<label>')
     │   ├── AlertCard.tsx      → card + claim banner + count badge + silence/detail actions + Fast-Silence (hover);
-    │   │                        FiringSparkline: dezent 30d HeatmapCellsRow under the timestamp row,
-    │   │                        only fetched/rendered for alerts with occurrenceCount > 1 (no tooltips —
-    │   │                        would fight the card's own click target; empty cells use a faint
-    │   │                        `emptyClassName` border so an all-empty row stays unobtrusive)
+    │   │                        FiringSparkline: dezent HeatmapCellsRow under the timestamp row —
+    │   │                        fetches 30d, keeps only the most recent 14 buckets (fewer/bigger
+    │   │                        cells read better at card width), only fetched/rendered for alerts
+    │   │                        with occurrenceCount > 1 (no tooltips — would fight the card's own
+    │   │                        click target)
     │   ├── AlertListView.tsx  → sortable table (name/time), expandable groups, section
     │   │                        reordering (persisted: 'jarvis-list-section-order:<label>')
     │   ├── AlertListRow.tsx   → single/indented row
@@ -556,22 +557,17 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │   ├── AlertDetailSection.tsx → collapsible section wrapper used inside the detail panel
     │   ├── AlertDetailHistorySection.tsx → stats + merged event timeline section (heatmap lives in
     │   │                        AlertDetailPanel's header, not here — see above)
-    │   ├── AlertHeatmap.tsx    → 24h/7d/30d range toggle + firing-pattern bar histogram; used by
+    │   ├── AlertHeatmap.tsx    → 24h/7d/30d range toggle + box-grid firing-pattern heatmap; used by
     │   │                        AlertDetailPanel's header, self-contained (owns its own
-    │   │                        useAlertHeatmap query + range state); rendering delegates to
-    │   │                        HeatmapBars.tsx (detail view) — NOT HeatmapCellsRow/box-grid,
-    │   │                        that style is card-only (AlertCard's FiringSparkline)
-    │   ├── HeatmapBars.tsx    → bar histogram (no chart lib) for the detail-panel header: bar
-    │   │                        height is the count relative to THIS window's own max (fixed
-    │   │                        container height, e.g. h-9 — a busy bucket never grows the
-    │   │                        container, only its own bar height, capped at 100%), most recent
-    │   │                        bucket gets a solid fill so "now" stays anchored; per-bucket
-    │   │                        Tooltip hover
+    │   │                        useAlertHeatmap query + range state); 7d renders as 7 day-rows of
+    │   │                        24 hourly cells (with day labels), 24h/30d as one row; same
+    │   │                        HeatmapCellsRow as the card, so card + detail share one visual
+    │   │                        language now (box grid, soft muted-fill empty cells)
     │   ├── HeatmapCells.tsx   → HeatmapCellsRow (no chart lib; renders HEATMAP_INTENSITY_CLASSES
     │   │                        cells via heatmapIntensityLevel/heatmapCellTooltip, all three in
     │   │                        lib/heatmapUtils.ts — plain exports, not this .tsx file, so
-    │   │                        react-refresh/only-export-components stays clean) — card-only now
-    │   │                        for both the full detail-panel heatmap and the card sparkline
+    │   │                        react-refresh/only-export-components stays clean) — single source
+    │   │                        for both the detail-panel heatmap and the card sparkline
     │   ├── AlertComments.tsx  → comment list + input (author-gated delete)
     │   ├── AckButton.tsx      → one-click Fast-Silence (short-lived exact-match silence); active-only
     │   │                        (getEffectiveAlertState), auth-gated (useProtectedAction); hover/focus

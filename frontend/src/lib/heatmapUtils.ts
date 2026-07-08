@@ -19,7 +19,7 @@ export interface HeatmapCell {
 // as plain exports (not in a .tsx component file) so react-refresh doesn't
 // flag mixing components and constants in one module.
 export const HEATMAP_INTENSITY_CLASSES = [
-  'bg-transparent border border-border',
+  'bg-muted-foreground/10',
   'bg-blue-500/20 dark:bg-blue-400/20',
   'bg-blue-500/40 dark:bg-blue-400/35',
   'bg-blue-500/65 dark:bg-blue-400/55',

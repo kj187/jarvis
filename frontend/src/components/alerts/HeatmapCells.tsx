@@ -17,10 +17,10 @@ interface HeatmapCellsRowProps {
   /** Intensity denominator. Defaults to this row's own max — pass the caller's
    *  cross-row max (e.g. the whole 7d grid) to keep scaling consistent across rows. */
   maxCount?: number
-  /** Class for empty (count=0) cells. Defaults to a visible border — pass a
-   *  faint one for decorative/compact uses (e.g. card sparklines) so an
-   *  all-empty row doesn't read as a grid of boxes. */
+  /** Class for empty (count=0) cells. Defaults to a soft muted fill. */
   emptyClassName?: string
+  /** Gap between cells. Defaults to a hairline (gap-px). */
+  gapClassName?: string
 }
 
 export function HeatmapCellsRow({
@@ -30,10 +30,11 @@ export function HeatmapCellsRow({
   tooltips = false,
   maxCount,
   emptyClassName,
+  gapClassName,
 }: HeatmapCellsRowProps) {
   const effectiveMax = maxCount ?? Math.max(0, ...cells.map((c) => c.count))
   return (
-    <div className="flex gap-px">
+    <div className={cn('flex', gapClassName ?? 'gap-px')}>
       {cells.map((cell, i) => {
         const level = heatmapIntensityLevel(cell.count, effectiveMax)
         const box = (

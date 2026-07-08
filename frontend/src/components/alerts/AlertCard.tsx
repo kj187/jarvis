@@ -28,11 +28,13 @@ interface AlertCardProps {
 }
 
 
-// Dezent 30d firing-pattern sparkline, Karma-style — glance-info only, no
-// tooltips (would fight the card's own click target). 30d (not 24h) so
-// alerts that recur every few days still show a pattern instead of an
-// empty bar. Only fetched/rendered for alerts that have actually recurred;
-// a single-fire alert's sparkline would be one empty row, zero information.
+// Dezent 14-day firing-pattern sparkline, Karma-style — glance-info only, no
+// tooltips (would fight the card's own click target). Fetches the 30d
+// range (not 24h) so alerts that recur every few days still show a pattern
+// instead of an empty bar, then keeps only the most recent 14 buckets —
+// fewer, bigger cells read better at card width than the full 30. Only
+// fetched/rendered for alerts that have actually recurred; a single-fire
+// alert's sparkline would be one empty row, zero information.
 function FiringSparkline({
   fingerprint,
   cluster,
@@ -44,16 +46,11 @@ function FiringSparkline({
 }) {
   const { data } = useAlertHeatmap(fingerprint, cluster, '30d', enabled)
   if (!data) return null
-  const cells = bucketFiringStarts(data.firingStarts, '30d')
+  const cells = bucketFiringStarts(data.firingStarts, '30d').slice(-14)
   if (!cells.some((c) => c.count > 0)) return null
   return (
     <div className="mb-1.5">
-      <HeatmapCellsRow
-        cells={cells}
-        range="30d"
-        cellClassName="h-1.5 w-full rounded-[1px]"
-        emptyClassName="bg-transparent border border-border/25"
-      />
+      <HeatmapCellsRow cells={cells} range="30d" cellClassName="h-2 w-full rounded-sm" gapClassName="gap-0.5" />
     </div>
   )
 }
