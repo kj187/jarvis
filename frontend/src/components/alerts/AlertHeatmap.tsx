@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils'
 import { tzAbbr } from '@/lib/alertUtils'
 import { bucketFiringStarts, type HeatmapCell } from '@/lib/heatmapUtils'
 import { useAlertHeatmap } from '@/hooks/useAlerts'
+import { Tooltip } from '@/components/ui/tooltip'
 import type { HeatmapRange } from '@/types'
 
 interface AlertHeatmapProps {
@@ -50,11 +51,11 @@ function HeatmapGrid({ cells, range }: { cells: HeatmapCell[]; range: HeatmapRan
   const maxCount = Math.max(0, ...cells.map((c) => c.count))
 
   const renderCell = (cell: HeatmapCell, key: string) => (
-    <div
-      key={key}
-      title={cellTooltip(cell, range)}
-      className={cn('h-4 flex-1 rounded-sm', INTENSITY_CLASSES[intensityLevel(cell.count, maxCount)])}
-    />
+    <Tooltip key={key} content={cellTooltip(cell, range)} wrapperClassName="flex-1">
+      <div
+        className={cn('h-4 w-full rounded-sm', INTENSITY_CLASSES[intensityLevel(cell.count, maxCount)])}
+      />
+    </Tooltip>
   )
 
   if (range === '7d') {
