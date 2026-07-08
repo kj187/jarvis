@@ -556,14 +556,19 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │   ├── AlertDetailSection.tsx → collapsible section wrapper used inside the detail panel
     │   ├── AlertDetailHistorySection.tsx → stats + merged event timeline section (heatmap lives in
     │   │                        AlertDetailPanel's header, not here — see above)
-    │   ├── AlertHeatmap.tsx    → 24h/7d/30d range toggle + CSS-grid firing-pattern heatmap; used by
+    │   ├── AlertHeatmap.tsx    → 24h/7d/30d range toggle + firing-pattern sparkline; used by
     │   │                        AlertDetailPanel's header, self-contained (owns its own
-    │   │                        useAlertHeatmap query + range state); cell rendering delegates to
-    │   │                        HeatmapCells.tsx (shared with AlertCard's FiringSparkline)
+    │   │                        useAlertHeatmap query + range state); rendering delegates to
+    │   │                        HeatmapSparkline.tsx (detail view) — NOT HeatmapCellsRow/box-grid,
+    │   │                        that style is card-only (AlertCard's FiringSparkline)
+    │   ├── HeatmapSparkline.tsx → smooth line/area SVG sparkline (no chart lib) for the detail-panel
+    │   │                        header: soft gradient fill, faint baseline, emphasized endpoint dot
+    │   │                        on the most recent bucket; invisible per-bucket Tooltip hit-areas
+    │   │                        overlaid on the SVG so hover still works despite the continuous line
     │   ├── HeatmapCells.tsx   → HeatmapCellsRow (no chart lib; renders HEATMAP_INTENSITY_CLASSES
     │   │                        cells via heatmapIntensityLevel/heatmapCellTooltip, all three in
     │   │                        lib/heatmapUtils.ts — plain exports, not this .tsx file, so
-    │   │                        react-refresh/only-export-components stays clean) — single source
+    │   │                        react-refresh/only-export-components stays clean) — card-only now
     │   │                        for both the full detail-panel heatmap and the card sparkline
     │   ├── AlertComments.tsx  → comment list + input (author-gated delete)
     │   ├── AckButton.tsx      → one-click Fast-Silence (short-lived exact-match silence); active-only
