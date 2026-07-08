@@ -11,6 +11,7 @@ import { labelColorStyle } from '@/lib/alertUtils'
 import { AlertComments } from './AlertComments'
 import { AlertDetailHistorySection } from './AlertDetailHistorySection'
 import { AlertDetailSection } from './AlertDetailSection'
+import { AlertHeatmap } from './AlertHeatmap'
 import { SilenceForm } from '@/components/silences/SilenceForm'
 import { AckButton } from './AckButton'
 import { useAlerts, useAlertTimeline, useAlertStats } from '@/hooks/useAlerts'
@@ -434,6 +435,10 @@ export function AlertDetailPanel({
             ) : (
               <span>Stats unavailable</span>
             )}
+          </div>
+
+          <div className="mt-2.5" data-testid="detail-heatmap-section">
+            <AlertHeatmap fingerprint={alert.fingerprint} cluster={alert.clusterName} enabled={Boolean(alert.fingerprint)} />
           </div>
 
           {/* Action buttons */}
@@ -874,8 +879,6 @@ export function AlertDetailPanel({
 
         {/* History */}
         <AlertDetailHistorySection
-          fingerprint={alert.fingerprint}
-          clusterName={alert.clusterName}
           timelineData={timelineData}
           historyPage={historyPage}
           historyPageSize={historyPageSize}

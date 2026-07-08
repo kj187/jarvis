@@ -544,16 +544,20 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │   ├── AlertCard.tsx      → card + claim banner + count badge + silence/detail actions + Fast-Silence (hover);
     │   │                        FiringSparkline: dezent 30d HeatmapCellsRow under the timestamp row,
     │   │                        only fetched/rendered for alerts with occurrenceCount > 1 (no tooltips —
-    │   │                        would fight the card's own click target)
+    │   │                        would fight the card's own click target; empty cells use a faint
+    │   │                        `emptyClassName` border so an all-empty row stays unobtrusive)
     │   ├── AlertListView.tsx  → sortable table (name/time), expandable groups, section
     │   │                        reordering (persisted: 'jarvis-list-section-order:<label>')
     │   ├── AlertListRow.tsx   → single/indented row
     │   ├── AlertDetailPanel.tsx → slide-over: labels/annotations + link buttons, stats & timeline,
-    │   │                          claim (useClaimController), comments, silence controls + Fast-Silence, AI-prompt section
+    │   │                          claim (useClaimController), comments, silence controls + Fast-Silence, AI-prompt section;
+    │   │                          header (below the stats line, above the action buttons) embeds
+    │   │                          AlertHeatmap directly — not a collapsible section, always visible
     │   ├── AlertDetailSection.tsx → collapsible section wrapper used inside the detail panel
-    │   ├── AlertDetailHistorySection.tsx → firing-pattern heatmap (AlertHeatmap) + stats + merged event timeline section
+    │   ├── AlertDetailHistorySection.tsx → stats + merged event timeline section (heatmap lives in
+    │   │                        AlertDetailPanel's header, not here — see above)
     │   ├── AlertHeatmap.tsx    → 24h/7d/30d range toggle + CSS-grid firing-pattern heatmap; used by
-    │   │                        AlertDetailHistorySection, self-contained (owns its own
+    │   │                        AlertDetailPanel's header, self-contained (owns its own
     │   │                        useAlertHeatmap query + range state); cell rendering delegates to
     │   │                        HeatmapCells.tsx (shared with AlertCard's FiringSparkline)
     │   ├── HeatmapCells.tsx   → HeatmapCellsRow (no chart lib; renders HEATMAP_INTENSITY_CLASSES

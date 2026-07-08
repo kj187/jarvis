@@ -6,11 +6,8 @@ import { cn } from '@/lib/utils'
 import { tzAbbr } from '@/lib/alertUtils'
 import type { AlertTimelineEntry } from '@/types'
 import { AlertDetailSection } from './AlertDetailSection'
-import { AlertHeatmap } from './AlertHeatmap'
 
 interface AlertDetailHistorySectionProps {
-  fingerprint: string
-  clusterName?: string
   timelineData: { entries: AlertTimelineEntry[]; total: number } | undefined
   historyPage: number
   historyPageSize: 10 | 50 | 100
@@ -52,8 +49,6 @@ function toHistoryAction(source: AlertTimelineEntry['source'], action: string): 
 }
 
 export function AlertDetailHistorySection({
-  fingerprint,
-  clusterName,
   timelineData,
   historyPage,
   historyPageSize,
@@ -123,10 +118,6 @@ export function AlertDetailHistorySection({
 
   return (
     <>
-      <AlertDetailSection title="Firing Pattern" defaultOpen={true} testId="detail-heatmap-section">
-        <AlertHeatmap fingerprint={fingerprint} cluster={clusterName} enabled={Boolean(fingerprint)} />
-      </AlertDetailSection>
-
       <AlertDetailSection title="History" defaultOpen={true} headerRight={pageSizeButtons}>
         {!timelineData ? (
           <p className="text-xs text-muted-foreground">Loading…</p>

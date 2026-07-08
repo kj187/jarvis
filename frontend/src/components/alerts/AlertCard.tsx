@@ -48,7 +48,12 @@ function FiringSparkline({
   if (!cells.some((c) => c.count > 0)) return null
   return (
     <div className="mb-1.5">
-      <HeatmapCellsRow cells={cells} range="30d" cellClassName="h-1.5 w-full rounded-[1px]" />
+      <HeatmapCellsRow
+        cells={cells}
+        range="30d"
+        cellClassName="h-1.5 w-full rounded-[1px]"
+        emptyClassName="bg-transparent border border-border/25"
+      />
     </div>
   )
 }
