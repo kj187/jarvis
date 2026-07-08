@@ -229,7 +229,10 @@ Quick reference: which spec file covers what. Use this to find the right place f
 
 Functional cases from the original test catalog that are **not** covered yet:
 
-- **E8** — Silences page auto-refresh (~30s interval).
+- **E8** — Silences page live update: `silences_update` WS push (not covered
+  by `websocket.spec.ts`, which only asserts `alerts_update` /
+  `claim_set`/`claim_released`/`comment_added`) and the 60s
+  `FALLBACK_REFETCH_INTERVAL_MS` safety-net poll.
 - **F18** — Precise/Broader/Pattern silence-matcher presets (remove label / `=` → `=~`).
 - **I5** — `full_protect` LoginPage gating the whole app (only a screenshot spec exists, no functional assertion).
 
