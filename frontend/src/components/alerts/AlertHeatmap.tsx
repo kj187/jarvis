@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { cn } from '@/lib/utils'
 import { bucketFiringStarts } from '@/lib/heatmapUtils'
 import { useAlertHeatmap } from '@/hooks/useAlerts'
-import { HeatmapSparkline } from './HeatmapSparkline'
+import { HeatmapBars } from './HeatmapBars'
 import type { HeatmapRange } from '@/types'
 
 interface AlertHeatmapProps {
@@ -47,7 +47,7 @@ export function AlertHeatmap({ fingerprint, cluster, enabled }: AlertHeatmapProp
 
       {isLoading && <p className="text-xs text-muted-foreground">Loading…</p>}
       {isError && <p className="text-xs text-destructive">Failed to load firing pattern.</p>}
-      {!isLoading && !isError && <HeatmapSparkline cells={cells} range={range} />}
+      {!isLoading && !isError && <HeatmapBars cells={cells} range={range} />}
     </div>
   )
 }

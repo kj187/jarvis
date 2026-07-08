@@ -556,15 +556,17 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │   ├── AlertDetailSection.tsx → collapsible section wrapper used inside the detail panel
     │   ├── AlertDetailHistorySection.tsx → stats + merged event timeline section (heatmap lives in
     │   │                        AlertDetailPanel's header, not here — see above)
-    │   ├── AlertHeatmap.tsx    → 24h/7d/30d range toggle + firing-pattern sparkline; used by
+    │   ├── AlertHeatmap.tsx    → 24h/7d/30d range toggle + firing-pattern bar histogram; used by
     │   │                        AlertDetailPanel's header, self-contained (owns its own
     │   │                        useAlertHeatmap query + range state); rendering delegates to
-    │   │                        HeatmapSparkline.tsx (detail view) — NOT HeatmapCellsRow/box-grid,
+    │   │                        HeatmapBars.tsx (detail view) — NOT HeatmapCellsRow/box-grid,
     │   │                        that style is card-only (AlertCard's FiringSparkline)
-    │   ├── HeatmapSparkline.tsx → smooth line/area SVG sparkline (no chart lib) for the detail-panel
-    │   │                        header: soft gradient fill, faint baseline, emphasized endpoint dot
-    │   │                        on the most recent bucket; invisible per-bucket Tooltip hit-areas
-    │   │                        overlaid on the SVG so hover still works despite the continuous line
+    │   ├── HeatmapBars.tsx    → bar histogram (no chart lib) for the detail-panel header: bar
+    │   │                        height is the count relative to THIS window's own max (fixed
+    │   │                        container height, e.g. h-9 — a busy bucket never grows the
+    │   │                        container, only its own bar height, capped at 100%), most recent
+    │   │                        bucket gets a solid fill so "now" stays anchored; per-bucket
+    │   │                        Tooltip hover
     │   ├── HeatmapCells.tsx   → HeatmapCellsRow (no chart lib; renders HEATMAP_INTENSITY_CLASSES
     │   │                        cells via heatmapIntensityLevel/heatmapCellTooltip, all three in
     │   │                        lib/heatmapUtils.ts — plain exports, not this .tsx file, so
