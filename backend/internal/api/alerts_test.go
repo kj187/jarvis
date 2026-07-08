@@ -39,7 +39,7 @@ func newTestServer(t *testing.T) (*Server, *history.AlertStore) {
 	registry := cluster.NewRegistry(nil)
 	cfg := &config.Config{}
 
-	return NewServer(alertStore, store, hub, registry, cfg, nil, auth.NoneProvider{}, userStore), alertStore
+	return NewServer(alertStore, history.NewSilenceStore(), store, hub, registry, cfg, nil, auth.NoneProvider{}, userStore), alertStore
 }
 
 func TestGetAlerts_Empty(t *testing.T) {

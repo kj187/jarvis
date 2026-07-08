@@ -4,6 +4,11 @@ Load this file for deep feature work, refactoring, new API endpoints, and any
 task that requires full context about the data model, API, stores, or state
 transitions. Base rules and critical invariants live in the root `AGENTS.md`.
 
+The rendered who-talks-to-whom data-flow diagram lives in
+`docs/architecture.md` (source: `docs/diagrams/architecture-data-flow.mmd`,
+re-render via `make diagrams`) — keep it in sync when the topology changes
+(AGENTS.md workflow rule 12).
+
 ---
 
 ## Technology Decisions
@@ -138,6 +143,7 @@ const (
     WSTypeClaimSet      = "claim_set"        // payload: { fingerprint, clusterName, claim }
     WSTypeClaimReleased = "claim_released"   // payload: { fingerprint, clusterName, releasedBy }
     WSTypeCommentAdded  = "comment_added"    // payload: { fingerprint, comment }
+    WSTypeSilencesUpdate = "silences_update" // payload: {} — pure invalidation signal
 )
 
 // ── SilenceEvent (history of silence actions per alert) ───────────────────────
@@ -354,10 +360,11 @@ PATCH  /api/v1/alerts/:fingerprint/claim/note    Auth  (write)  Body: { note }  
 DELETE /api/v1/alerts/:fingerprint/claim         Auth  (write)  ?by=username
 GET    /api/v1/alerts/:fingerprint/claims/history full_protect? → []Claim  ?cluster=
 
-# ── Silences (proxy → Alertmanager) ──────────────────────────────────────────
+# ── Silences (reads from in-memory SilenceStore; writes → Alertmanager) ──────
 GET    /api/v1/silences                          full_protect?  → []Silence  ?cluster=
-#        a cluster whose silence fetch fails is skipped (best-effort, logged via slog.Warn)
-#        rather than failing the whole request — its silences are simply absent from the response
+#        served entirely from history.SilenceStore (filled by the recorder poll) — NEVER calls
+#        Alertmanager. A cluster whose poll-time silence fetch fails keeps its previous snapshot.
+#        Silences created/expired directly in AM appear within one JARVIS_POLL_INTERVAL.
 POST   /api/v1/silences                          Auth  (write)  → { id }
 #        validated server-side before the AM call (silence_validation.go validateSilenceMatchers):
 #        ≥1 matcher, no empty matcher names, every regex must compile (Go regexp = RE2, same
@@ -368,8 +375,11 @@ POST   /api/v1/silences                          Auth  (write)  → { id }
 #        id set → update (AM may return a NEW id; the old silence is then expired to avoid duplicates)
 #        fingerprint set → SilenceEvent recorded (action: created | updated | pending when startsAt is in the future)
 #        when auth mode ≠ none: createdBy/performedBy forced to the session username
+#        on success: write-through into SilenceStore (Upsert new + MarkExpired old id on id change)
+#        + poll trigger, so the frontend's immediate refetch sees the change (applySilenceWriteThrough)
 DELETE /api/v1/silences/:id                      Auth  (write)  ?cluster= (required) &fingerprint= &by=  → records "deleted" event
 #        AM 4xx response → relayed as 400 (sanitized); AM 5xx/transport failure → generic 502
+#        on success: SilenceStore.MarkExpired + poll trigger (same write-through pattern)
 
 # ── Silence Templates (DB, shared) ───────────────────────────────────────────
 GET    /api/v1/silence-templates                 full_protect?  → []SilenceTemplate
@@ -380,6 +390,8 @@ DELETE /api/v1/silence-templates/:id             Auth  (write)
 # ── Poll / Clusters ──────────────────────────────────────────────────────────
 POST   /api/v1/poll                              None  (RL)   → triggers an immediate Alertmanager poll
 GET    /api/v1/clusters                          full_protect?  → []ClusterInfo
+#        health from the cached per-member up-state of the last poll (Cluster.MemberUpStates) —
+#        never live-pings AM; members without poll state yet count as healthy (writeOrder optimism)
 
 # ── Admin (auth + role=admin) ────────────────────────────────────────────────
 GET    /api/v1/admin/users                       Admin        → []User
@@ -388,10 +400,12 @@ PATCH  /api/v1/admin/users/:id                   Admin        Body: { role }  (c
 DELETE /api/v1/admin/users/:id                   Admin        (cannot delete self)
 
 # ── E2E test routes (only with -tags e2e; no-op in production builds) ────────
-POST   /api/v1/test/reset                        (e2e only)  truncate history tables + clear in-memory store
+POST   /api/v1/test/reset                        (e2e only)  truncate history tables + clear in-memory stores (alerts + silences)
 POST   /api/v1/test/seed                         (e2e only)  insert resolved-alert lifecycles
 POST   /api/v1/test/claim                        (e2e only)  set claim, bypasses auth
 POST   /api/v1/test/comment                      (e2e only)  add comment, bypasses auth (no WS broadcast)
+POST   /api/v1/test/silence                      (e2e only)  create silence in AM, bypasses auth (same SilenceStore write-through as production)
+POST   /api/v1/test/template                     (e2e only)  create silence template, bypasses auth
 
 # ── Static (production build tag only) ───────────────────────────────────────
 GET    /*                                         None        → embed.FS (Vite build); SPA fallback to index.html
@@ -465,12 +479,15 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
 │   │                            useAckAlert (one-click Fast-Silence → short-lived exact-match silence),
 │   │                            resolveCreatorName
 │   ├── useSilenceTemplates.ts → list + create/update/delete template mutations
-│   ├── useWebSocket.ts        → WS connection + cache patching via handleEvent()
+│   ├── useWebSocket.ts        → WS connection + cache patching via handleEvent();
+│   │                            invalidates ALL queries on every (re)connect (WS has no replay)
 │   ├── useProtectedAction.ts  → wraps write actions; opens LoginModal when auth required
 │   ├── useLoginGuard.ts       → login-required state for guarded UI elements
 │   ├── useFormatTime.ts       → relative/absolute timestamp formatter (from settings)
 │   └── useVersion.ts          → app version (staleTime Infinity)
 ├── lib/
+│   ├── refetch.ts             → FALLBACK_REFETCH_INTERVAL_MS (60s) — safety-net refetch cadence;
+│   │                            WS push is the primary channel, reads hit in-memory snapshots only
 │   ├── alertUtils.ts          → getFilterableLabels, matchesLabelMatchers (filter-bar only,
 │   │                            substring regex + pseudo-labels — never for silence matching),
 │   │                            safeRegex, anchoredRegex, silenceWouldMatchAlert (Alertmanager-exact:
@@ -545,7 +562,7 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │   └── SilenceTemplateTab.tsx → template CRUD + apply-to-form
     ├── settings/
     │   └── SettingsSheet.tsx  → time format, default view, resolved page size, default filters,
-    │                            default silence duration, creator name, poll interval, claim animation, theme
+    │                            default silence duration, creator name, claim animation, theme
     ├── auth/
     │   ├── LoginModal.tsx     → on-demand login (write_protect)
     │   ├── LoginPage.tsx      → full-page login (full_protect)
@@ -576,7 +593,6 @@ interface UIStore {
     labelMatchers: LabelMatcher[]              // includes locked default-filter chips
   }
   wsConnected: boolean                         // NOT persisted
-  pollingPaused: boolean                       // NOT persisted (resets to false)
   alertCounts: AlertCounts                      // { filtered, total, byState: { active, suppressed, resolved }, silenceCount }
 }
 // syncLockedMatchers(defaults) replaces locked matchers from Settings, preserves user-added ones.
@@ -595,7 +611,6 @@ interface UserSettings {
   resolvedPageSize: 10 | 25 | 50 | 100          // default 25
   defaultSilenceDurationMinutes: number         // default 60; ALLOWED_SILENCE_DURATIONS = [15,30,60,240,480,1440,4320]
   defaultCreatorName: string                    // default ''
-  pollIntervalSeconds: number                   // default 15; POLL_OPTIONS = [5,10,15,20,25,30,60]
   claimAnimationEnabled: boolean                // default true
 }
 ```
@@ -629,6 +644,7 @@ interface UserSettings {
 | `claim_set` | `{ fingerprint, clusterName, claim }` | patch alerts cache + invalidate claim queries (cluster-scoped keys) |
 | `claim_released` | `{ fingerprint, clusterName, releasedBy }` | set `activeClaim` to `undefined` + invalidate claim queries |
 | `comment_added` | `{ fingerprint, comment }` | invalidate comments query (cluster-scoped key) |
+| `silences_update` | `{}` (pure invalidation signal) | `invalidateQueries(['silences'])` → refetch from the in-memory snapshot. Broadcast by the recorder when the silence snapshot diff changed vs. the previous poll, and by every silence mutation write-through (`applySilenceWriteThrough`) |
 
 ---
 
@@ -696,10 +712,19 @@ with its own `*alertmanager.Client`); `Cluster.AlertmanagerURL` /
   single-member JSON payloads stay byte-identical.
 - `Cluster.FetchSilences(ctx, onDuration)` mirrors this for silences, merging
   by ID via `mergeSilences` (freshest `UpdatedAt` wins); no `SeenOn` tracking
-  for silences.
-- `Cluster.PingAll(ctx)` live-pings every member in parallel (used by
-  `GET /api/v1/clusters`); cluster `Healthy` = any member healthy (UI shows
-  e.g. "2/2 members up", amber when degraded).
+  for silences. Called only from the recorder poll, which stores the result
+  in `history.SilenceStore` (in-memory snapshot per cluster, AlertStore
+  pattern) — `GET /api/v1/silences` reads that snapshot and performs no
+  upstream call. A failed silence fetch keeps the cluster's previous
+  snapshot (never blanks the silences page on a transient error).
+- `GET /api/v1/clusters` derives member health from `Cluster.MemberUpStates()`
+  — the cached up-state written by every `FetchAlerts` (≤ one poll interval
+  old), never a live ping. Members without poll state yet (first interval
+  after startup) count as healthy, same optimism as `writeOrder`. Cluster
+  `Healthy` = any member healthy (UI shows e.g. "2/2 members up", amber when
+  degraded). The former `Cluster.PingAll` live-ping helper was removed with
+  this change; `alertmanager.Client.Ping` still exists but has no production
+  call site.
 - `Cluster.CreateSilence` / `DeleteSilence` send to the first healthy member
   (config order, from the cached up-state set by the last `FetchAlerts`),
   retrying once against the next member on transport failure or a 5xx

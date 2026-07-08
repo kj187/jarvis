@@ -44,17 +44,42 @@ func newTestServerWithAM(t *testing.T, amURL string) *Server {
 		{Name: "testcluster", AlertmanagerURL: amURL, AlertmanagerLinkURL: amURL},
 	})
 	cfg := &config.Config{}
-	return NewServer(alertStore, store, hub, registry, cfg, nil, auth.NoneProvider{}, userStore)
+	return NewServer(alertStore, history.NewSilenceStore(), store, hub, registry, cfg, nil, auth.NoneProvider{}, userStore)
 }
 
-func TestGetSilences_Empty(t *testing.T) {
-	am := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode([]amclient.GettableSilence{}) //nolint:errcheck
-	}))
-	defer am.Close()
+// fakeTriggerer records poll-trigger requests from mutation handlers.
+type fakeTriggerer struct{ calls int }
 
-	srv := newTestServerWithAM(t, am.URL)
+func (f *fakeTriggerer) Trigger() { f.calls++ }
+
+// guardAM builds an Alertmanager test server that fails the test on ANY
+// request — GET /api/v1/silences must be served purely from the snapshot.
+func guardAM(t *testing.T) *httptest.Server {
+	t.Helper()
+	am := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("alertmanager must not be called, got %s %s", r.Method, r.URL.Path)
+		http.Error(w, "unexpected call", http.StatusInternalServerError)
+	}))
+	t.Cleanup(am.Close)
+	return am
+}
+
+func testGettableSilence(id string) amclient.GettableSilence {
+	now := time.Now().UTC()
+	return amclient.GettableSilence{
+		ID:        id,
+		Matchers:  []amclient.AMSilenceMatcher{{Name: "alertname", Value: "Test", IsEqual: true}},
+		CreatedBy: "alice",
+		Comment:   "test silence",
+		StartsAt:  now,
+		EndsAt:    now.Add(time.Hour),
+		Status:    amclient.AMSilenceStatus{State: "active"},
+		UpdatedAt: now,
+	}
+}
+
+func TestGetSilences_EmptyStore_ReturnsEmptyArray(t *testing.T) {
+	srv := newTestServerWithAM(t, guardAM(t).URL)
 	e := echo.New()
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/silences", nil)
 	rec := httptest.NewRecorder()
@@ -71,25 +96,10 @@ func TestGetSilences_Empty(t *testing.T) {
 	}
 }
 
-func TestGetSilences_WithData(t *testing.T) {
-	now := time.Now().UTC()
-	silences := []amclient.GettableSilence{
-		{
-			ID:        "silence-1",
-			CreatedBy: "alice",
-			Comment:   "test silence",
-			StartsAt:  now,
-			EndsAt:    now.Add(time.Hour),
-			Status:    amclient.AMSilenceStatus{State: "active"},
-		},
-	}
-	am := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(silences) //nolint:errcheck
-	}))
-	defer am.Close()
+func TestGetSilences_ServedFromSnapshot_NoAMCall(t *testing.T) {
+	srv := newTestServerWithAM(t, guardAM(t).URL)
+	srv.silenceStore.Set("testcluster", []amclient.GettableSilence{testGettableSilence("silence-1")})
 
-	srv := newTestServerWithAM(t, am.URL)
 	e := echo.New()
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/silences", nil)
 	rec := httptest.NewRecorder()
@@ -101,49 +111,34 @@ func TestGetSilences_WithData(t *testing.T) {
 	if !contains(rec.Body.String(), "silence-1") {
 		t.Errorf("expected silence-1 in response: %s", rec.Body.String())
 	}
+	if !contains(rec.Body.String(), `"clusterName":"testcluster"`) {
+		t.Errorf("expected clusterName in response: %s", rec.Body.String())
+	}
 }
 
 func TestGetSilences_WithClusterFilter(t *testing.T) {
-	am := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode([]amclient.GettableSilence{}) //nolint:errcheck
-	}))
-	defer am.Close()
+	am := guardAM(t)
+	registry := cluster.NewRegistry([]config.ClusterConfig{
+		{Name: "alpha", AlertmanagerURL: am.URL, AlertmanagerLinkURL: am.URL},
+		{Name: "beta", AlertmanagerURL: am.URL, AlertmanagerLinkURL: am.URL},
+	})
+	srv := newTestServerWithRegistry(t, registry)
+	srv.silenceStore.Set("alpha", []amclient.GettableSilence{testGettableSilence("sil-alpha")})
+	srv.silenceStore.Set("beta", []amclient.GettableSilence{testGettableSilence("sil-beta")})
 
-	srv := newTestServerWithAM(t, am.URL)
 	e := echo.New()
-
-	// Filter by existing cluster
-	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/silences?cluster=testcluster", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/silences?cluster=beta", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 
 	if err := srv.getSilences(c); err != nil {
 		t.Fatalf("getSilences: %v", err)
 	}
-	if rec.Code != http.StatusOK {
-		t.Errorf("status = %d, want 200", rec.Code)
+	if contains(rec.Body.String(), "sil-alpha") {
+		t.Errorf("cluster filter leaked alpha silences: %s", rec.Body.String())
 	}
-}
-
-func TestGetSilences_AMError_BestEffort(t *testing.T) {
-	am := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.Error(w, "internal error", http.StatusInternalServerError)
-	}))
-	defer am.Close()
-
-	srv := newTestServerWithAM(t, am.URL)
-	e := echo.New()
-	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/silences", nil)
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
-
-	// AM error is best-effort — getSilences should not return error, just empty list
-	if err := srv.getSilences(c); err != nil {
-		t.Fatalf("getSilences: %v", err)
-	}
-	if rec.Code != http.StatusOK {
-		t.Errorf("status = %d, want 200", rec.Code)
+	if !contains(rec.Body.String(), "sil-beta") {
+		t.Errorf("expected sil-beta in response: %s", rec.Body.String())
 	}
 }
 
@@ -734,5 +729,145 @@ func TestDeleteSilence_AMValidationErrorPassthrough(t *testing.T) {
 	he, ok := err.(*echo.HTTPError)
 	if !ok || he.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 for AM 4xx passthrough, got %v", err)
+	}
+}
+
+func TestCreateSilence_WriteThroughToSnapshot(t *testing.T) {
+	tests := []struct {
+		name          string
+		startsAtDelta time.Duration
+		wantState     string
+	}{
+		{"immediate start is active", 0, "active"},
+		{"future start is pending", time.Hour, "pending"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			am := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusOK)
+				json.NewEncoder(w).Encode(amclient.PostSilenceResponse{SilenceID: "wt-1"}) //nolint:errcheck
+			}))
+			defer am.Close()
+
+			srv := newTestServerWithAM(t, am.URL)
+			ft := &fakeTriggerer{}
+			srv.pollTrigger = ft
+			e := echo.New()
+
+			now := time.Now().UTC()
+			body := map[string]interface{}{
+				"cluster":   "testcluster",
+				"matchers":  []interface{}{map[string]interface{}{"name": "alertname", "isEqual": true, "isRegex": false, "value": "Test"}},
+				"startsAt":  now.Add(tt.startsAtDelta).Format(time.RFC3339),
+				"endsAt":    now.Add(2 * time.Hour).Format(time.RFC3339),
+				"createdBy": "alice",
+				"comment":   "write-through",
+			}
+			b, _ := json.Marshal(body)
+			req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/silences", bytes.NewReader(b))
+			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+			rec := httptest.NewRecorder()
+			c := e.NewContext(req, rec)
+
+			if err := srv.createSilence(c); err != nil {
+				t.Fatalf("createSilence: %v", err)
+			}
+
+			snap := srv.silenceStore.GetCluster("testcluster")
+			if len(snap) != 1 || snap[0].ID != "wt-1" {
+				t.Fatalf("snapshot = %+v, want [wt-1]", snap)
+			}
+			if snap[0].Status.State != tt.wantState {
+				t.Errorf("state = %q, want %q", snap[0].Status.State, tt.wantState)
+			}
+			if snap[0].CreatedBy != "alice" || snap[0].Comment != "write-through" {
+				t.Errorf("snapshot entry incomplete: %+v", snap[0])
+			}
+			if ft.calls != 1 {
+				t.Errorf("poll trigger calls = %d, want 1", ft.calls)
+			}
+		})
+	}
+}
+
+func TestCreateSilence_UpdateIDChange_ExpiresOldInSnapshot(t *testing.T) {
+	am := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		if r.Method == http.MethodPost {
+			json.NewEncoder(w).Encode(amclient.PostSilenceResponse{SilenceID: "new-id"}) //nolint:errcheck
+		}
+	}))
+	defer am.Close()
+
+	srv := newTestServerWithAM(t, am.URL)
+	ft := &fakeTriggerer{}
+	srv.pollTrigger = ft
+	srv.silenceStore.Set("testcluster", []amclient.GettableSilence{testGettableSilence("old-id")})
+	e := echo.New()
+
+	now := time.Now().UTC()
+	body := map[string]interface{}{
+		"cluster":   "testcluster",
+		"id":        "old-id",
+		"matchers":  []interface{}{map[string]interface{}{"name": "alertname", "isEqual": true, "isRegex": false, "value": "Test"}},
+		"startsAt":  now.Format(time.RFC3339),
+		"endsAt":    now.Add(time.Hour).Format(time.RFC3339),
+		"createdBy": "alice",
+		"comment":   "edited",
+	}
+	b, _ := json.Marshal(body)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/silences", bytes.NewReader(b))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	if err := srv.createSilence(c); err != nil {
+		t.Fatalf("createSilence: %v", err)
+	}
+
+	snap := srv.silenceStore.GetCluster("testcluster")
+	states := map[string]string{}
+	for _, s := range snap {
+		states[s.ID] = s.Status.State
+	}
+	if states["old-id"] != "expired" {
+		t.Errorf("old-id state = %q, want expired (snapshot: %+v)", states["old-id"], snap)
+	}
+	if states["new-id"] != "active" {
+		t.Errorf("new-id state = %q, want active (snapshot: %+v)", states["new-id"], snap)
+	}
+	if ft.calls != 1 {
+		t.Errorf("poll trigger calls = %d, want 1", ft.calls)
+	}
+}
+
+func TestDeleteSilence_WriteThroughMarksExpired(t *testing.T) {
+	am := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer am.Close()
+
+	srv := newTestServerWithAM(t, am.URL)
+	ft := &fakeTriggerer{}
+	srv.pollTrigger = ft
+	srv.silenceStore.Set("testcluster", []amclient.GettableSilence{testGettableSilence("silence-1")})
+	e := echo.New()
+
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodDelete, "/?cluster=testcluster", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues("silence-1")
+
+	if err := srv.deleteSilence(c); err != nil {
+		t.Fatalf("deleteSilence: %v", err)
+	}
+
+	snap := srv.silenceStore.GetCluster("testcluster")
+	if len(snap) != 1 || snap[0].Status.State != "expired" {
+		t.Errorf("snapshot = %+v, want silence-1 expired", snap)
+	}
+	if ft.calls != 1 {
+		t.Errorf("poll trigger calls = %d, want 1", ft.calls)
 	}
 }

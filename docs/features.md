@@ -114,7 +114,6 @@ Open the Settings panel by clicking the **⚙ gear icon** in the top-right area 
 | **Default filter** | Label matchers that are always active — see below. |
 | **Default silence duration** | Pre-selected duration when the silence creation form opens (15 min to 3 days). |
 | **Creator name** | Pre-fills the "Created by" field in new silences. |
-| **Poll interval** | How often Jarvis polls Alertmanager — choose 5 / 10 / 15 / 20 / 25 / 30 / 60 seconds via a slider. |
 
 ### Default filters — permanent header chips
 

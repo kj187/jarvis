@@ -14,7 +14,6 @@ async function resetPersistedUIState(page: Page) {
         resolvedPageSize: 25,
         defaultSilenceDurationMinutes: 60,
         defaultCreatorName: '',
-        pollIntervalSeconds: 15,
         claimAnimationEnabled: true,
       },
       version: 0,
@@ -113,9 +112,8 @@ test('A3 mobile hamburger (<768px) reveals header controls', async ({ page }) =>
   await expect(hamburger).toHaveAttribute('aria-expanded', 'true')
 
   // Controls now visible after opening hamburger.
-  // DOM has two "Pause polling" buttons: desktop (CSS-hidden at <768px) + mobile panel.
+  // DOM has two "Refresh now" buttons: desktop (CSS-hidden at <768px) + mobile panel.
   // Use .last() to target the mobile panel button that's actually visible.
-  await expect(page.getByTitle('Pause polling').last()).toBeVisible()
   await expect(page.getByTitle('Refresh now').last()).toBeVisible()
 })
 
@@ -130,21 +128,11 @@ test('A4 WebSocket indicator is visible and green when connected', async ({ page
   await expect(connectedIndicator).toBeVisible({ timeout: 10_000 })
 })
 
-test('A5 polling pause/resume and manual refresh work', async ({ page, am, jarvis }) => {
+test('A5 manual refresh works', async ({ page, am, jarvis }) => {
   await dismissNoAuthNotice(page)
   await am.fire(kubernetesAlerts)
   await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, kubernetesAlerts.length)
   await page.goto('/?state=active')
-
-  const pauseBtn = page.getByTitle('Pause polling')
-  await expect(pauseBtn).toBeVisible()
-  await pauseBtn.click()
-
-  const resumeBtn = page.getByTitle('Resume polling')
-  await expect(resumeBtn).toBeVisible()
-
-  await resumeBtn.click()
-  await expect(page.getByTitle('Pause polling')).toBeVisible()
 
   const refreshBtn = page.getByTitle('Refresh now')
   await expect(refreshBtn).toBeVisible()

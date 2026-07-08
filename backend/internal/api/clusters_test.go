@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 
 	"github.com/labstack/echo/v4"
 
+	amclient "github.com/kj187/jarvis/backend/internal/alertmanager"
 	"github.com/kj187/jarvis/backend/internal/auth"
 	"github.com/kj187/jarvis/backend/internal/cluster"
 	"github.com/kj187/jarvis/backend/internal/config"
@@ -37,21 +39,35 @@ func newTestServerWithRegistry(t *testing.T, registry *cluster.Registry) *Server
 	hub := ws.NewHub(nil, nil, metrics.New("test"))
 	go hub.Run()
 
-	return NewServer(alertStore, store, hub, registry, &config.Config{}, nil, auth.NoneProvider{}, userStore)
+	return NewServer(alertStore, history.NewSilenceStore(), store, hub, registry, &config.Config{}, nil, auth.NoneProvider{}, userStore)
 }
 
-func TestGetClusters_SingleMember_MembersFieldOmitted(t *testing.T) {
+// healthMockAM serves an empty alert list (so FetchAlerts marks the member up)
+// and counts /api/v2/status hits — getClusters must never live-ping.
+func healthMockAM(t *testing.T, statusHits *atomic.Int64) *httptest.Server {
+	t.Helper()
 	am := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v2/status" {
+			statusHits.Add(1)
+		}
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]string{"status": "ready"})
+		_ = json.NewEncoder(w).Encode([]amclient.GettableAlert{})
 	}))
-	defer am.Close()
+	t.Cleanup(am.Close)
+	return am
+}
 
-	registry := cluster.NewRegistry([]config.ClusterConfig{
-		{Name: "homelab", AlertmanagerURL: am.URL, AlertmanagerLinkURL: am.URL},
-	})
-	srv := newTestServerWithRegistry(t, registry)
+func downMockAM(t *testing.T) *httptest.Server {
+	t.Helper()
+	am := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "boom", http.StatusInternalServerError)
+	}))
+	t.Cleanup(am.Close)
+	return am
+}
 
+func getClustersResponse(t *testing.T, srv *Server) []models.ClusterInfo {
+	t.Helper()
 	e := echo.New()
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/clusters", nil)
 	rec := httptest.NewRecorder()
@@ -67,6 +83,23 @@ func TestGetClusters_SingleMember_MembersFieldOmitted(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
+	return got
+}
+
+func TestGetClusters_SingleMember_MembersFieldOmitted(t *testing.T) {
+	var statusHits atomic.Int64
+	am := healthMockAM(t, &statusHits)
+
+	registry := cluster.NewRegistry([]config.ClusterConfig{
+		{Name: "homelab", AlertmanagerURL: am.URL, AlertmanagerLinkURL: am.URL},
+	})
+	// One poll cycle populates the cached member up-state.
+	if _, err := registry.Get("homelab").FetchAlerts(context.Background(), nil); err != nil {
+		t.Fatalf("FetchAlerts: %v", err)
+	}
+	srv := newTestServerWithRegistry(t, registry)
+
+	got := getClustersResponse(t, srv)
 	if len(got) != 1 {
 		t.Fatalf("len = %d, want 1", len(got))
 	}
@@ -76,18 +109,15 @@ func TestGetClusters_SingleMember_MembersFieldOmitted(t *testing.T) {
 	if !got[0].Healthy {
 		t.Error("Healthy = false, want true")
 	}
+	if statusHits.Load() != 0 {
+		t.Errorf("getClusters live-pinged AM %d times, want 0 (health comes from poll state)", statusHits.Load())
+	}
 }
 
 func TestGetClusters_MultiMember_DegradedButHealthy(t *testing.T) {
-	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]string{"status": "ready"})
-	}))
-	defer up.Close()
-	down := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.Error(w, "boom", http.StatusInternalServerError)
-	}))
-	defer down.Close()
+	var statusHits atomic.Int64
+	up := healthMockAM(t, &statusHits)
+	down := downMockAM(t)
 
 	registry := cluster.NewRegistry([]config.ClusterConfig{
 		{
@@ -98,20 +128,12 @@ func TestGetClusters_MultiMember_DegradedButHealthy(t *testing.T) {
 			},
 		},
 	})
+	if _, err := registry.Get("prod").FetchAlerts(context.Background(), nil); err != nil {
+		t.Fatalf("FetchAlerts: %v", err)
+	}
 	srv := newTestServerWithRegistry(t, registry)
 
-	e := echo.New()
-	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/clusters", nil)
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
-
-	if err := srv.getClusters(c); err != nil {
-		t.Fatalf("getClusters: %v", err)
-	}
-	var got []models.ClusterInfo
-	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
-		t.Fatalf("unmarshal: %v", err)
-	}
+	got := getClustersResponse(t, srv)
 	if len(got) != 1 {
 		t.Fatalf("len = %d, want 1", len(got))
 	}
@@ -130,17 +152,14 @@ func TestGetClusters_MultiMember_DegradedButHealthy(t *testing.T) {
 	if healthyCount != 1 {
 		t.Errorf("healthy members = %d, want 1 (degraded: 1/2 up)", healthyCount)
 	}
+	if statusHits.Load() != 0 {
+		t.Errorf("getClusters live-pinged AM %d times, want 0", statusHits.Load())
+	}
 }
 
 func TestGetClusters_AllMembersDown_Unhealthy(t *testing.T) {
-	down1 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.Error(w, "boom", http.StatusInternalServerError)
-	}))
-	defer down1.Close()
-	down2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.Error(w, "boom", http.StatusInternalServerError)
-	}))
-	defer down2.Close()
+	down1 := downMockAM(t)
+	down2 := downMockAM(t)
 
 	registry := cluster.NewRegistry([]config.ClusterConfig{
 		{
@@ -151,21 +170,28 @@ func TestGetClusters_AllMembersDown_Unhealthy(t *testing.T) {
 			},
 		},
 	})
+	// FetchAlerts fails (all members down) but still records the up-state.
+	if _, err := registry.Get("prod").FetchAlerts(context.Background(), nil); err == nil {
+		t.Fatal("FetchAlerts should fail when all members are down")
+	}
 	srv := newTestServerWithRegistry(t, registry)
 
-	e := echo.New()
-	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/clusters", nil)
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
-
-	if err := srv.getClusters(c); err != nil {
-		t.Fatalf("getClusters: %v", err)
-	}
-	var got []models.ClusterInfo
-	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
-		t.Fatalf("unmarshal: %v", err)
-	}
+	got := getClustersResponse(t, srv)
 	if got[0].Healthy {
 		t.Error("Healthy = true, want false (all members down)")
+	}
+}
+
+func TestGetClusters_NoPollYet_OptimisticallyHealthy(t *testing.T) {
+	// No FetchAlerts ran — member state unknown. Same optimism as
+	// cluster.writeOrder: report healthy until the first poll says otherwise.
+	registry := cluster.NewRegistry([]config.ClusterConfig{
+		{Name: "fresh", AlertmanagerURL: "http://127.0.0.1:0", AlertmanagerLinkURL: "http://127.0.0.1:0"},
+	})
+	srv := newTestServerWithRegistry(t, registry)
+
+	got := getClustersResponse(t, srv)
+	if len(got) != 1 || !got[0].Healthy {
+		t.Errorf("fresh cluster should be optimistically healthy, got %+v", got)
 	}
 }

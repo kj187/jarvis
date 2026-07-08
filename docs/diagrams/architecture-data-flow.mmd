@@ -1,0 +1,43 @@
+---
+title: Jarvis — who talks to whom, and when
+config:
+  theme: neutral
+  flowchart:
+    curve: basis
+---
+flowchart LR
+    subgraph clients["Browser — N open tabs"]
+        UI["React SPA<br/>(TanStack Query + Zustand)"]
+    end
+
+    subgraph jarvis["Jarvis backend — single container"]
+        API["Echo REST API"]
+        HUB["WS Hub"]
+        REC["Recorder<br/>poll loop, every JARVIS_POLL_INTERVAL (15s)"]
+        AS[("AlertStore<br/>in-memory snapshot")]
+        SS[("SilenceStore<br/>in-memory snapshot")]
+        UP[("Member up-state<br/>cache")]
+        DB[("SQLite / PostgreSQL<br/>history, claims, comments,<br/>templates, users")]
+    end
+
+    subgraph am["Alertmanager clusters (HA members)"]
+        AM["Cluster 1..N<br/>member 1..M"]
+    end
+
+    UI -- "reads (on load + refetch):<br/>alerts, silences, clusters, history" --> API
+    UI -- "writes (user action):<br/>silence create/delete, claim, comment" --> API
+    HUB -. "push on change:<br/>alerts_update, silences_update,<br/>claim_*, comment_added" .-> UI
+
+    API -- "read snapshot<br/>(zero AM calls)" --> AS
+    API -- "read snapshot<br/>(zero AM calls)" --> SS
+    API -- "health from last poll<br/>(zero AM calls)" --> UP
+    API -- "history / claims / comments" --> DB
+    API == "ONLY silence create/delete<br/>(user mutation)" ==> AM
+    API -- "write-through + poll trigger" --> SS
+
+    REC == "GET alerts + silences<br/>per member, every poll" ==> AM
+    REC -- "replace snapshots" --> AS
+    REC -- "replace snapshots" --> SS
+    REC -- "record up/down" --> UP
+    REC -- "lifecycle events" --> DB
+    REC -- "broadcast on diff" --> HUB

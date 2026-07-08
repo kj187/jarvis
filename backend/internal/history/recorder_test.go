@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -49,6 +50,7 @@ func newTestRecorder(t *testing.T) (*Recorder, *mockHub) {
 	alertStore := &AlertStore{}
 	rec := &Recorder{
 		alertStore:        alertStore,
+		silenceStore:      NewSilenceStore(),
 		store:             store,
 		hub:               hub,
 		interval:          time.Minute,
@@ -565,5 +567,155 @@ func TestRecorder_Metrics_NoCountOnRestartWithExistingEvents(t *testing.T) {
 
 	if got := testutil.ToFloat64(rec.metrics.AlertEventsTotal.WithLabelValues("homelab", models.EventStatusFiring)); got != 1 {
 		t.Errorf("AlertEventsTotal[homelab,firing] = %v, want 1 (restart must not re-count existing events)", got)
+	}
+}
+
+// fakeAM builds an httptest Alertmanager serving the given silences. The
+// failSilences flag can be flipped at runtime to simulate a transient
+// silences-fetch failure while alerts keep succeeding.
+type fakeAM struct {
+	srv          *httptest.Server
+	mu           sync.Mutex
+	silences     []alertmanager.GettableSilence
+	failSilences bool
+}
+
+func newFakeAM(t *testing.T, silences []alertmanager.GettableSilence) *fakeAM {
+	t.Helper()
+	f := &fakeAM{silences: silences}
+	f.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api/v2/alerts":
+			_ = json.NewEncoder(w).Encode([]alertmanager.GettableAlert{})
+		case "/api/v2/silences":
+			if f.failSilences {
+				http.Error(w, "boom", http.StatusInternalServerError)
+				return
+			}
+			_ = json.NewEncoder(w).Encode(f.silences)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(f.srv.Close)
+	return f
+}
+
+func (f *fakeAM) setFailSilences(fail bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.failSilences = fail
+}
+
+func (f *fakeAM) setSilences(silences []alertmanager.GettableSilence) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.silences = silences
+}
+
+func TestPoll_StoresSilencesPerCluster(t *testing.T) {
+	amA := newFakeAM(t, []alertmanager.GettableSilence{makeSilence("sil-a", "active")})
+	amB := newFakeAM(t, []alertmanager.GettableSilence{makeSilence("sil-b1", "active"), makeSilence("sil-b2", "pending")})
+
+	rec, _ := newTestRecorder(t)
+	rec.registry = cluster.NewRegistry([]config.ClusterConfig{
+		{Name: "a", AlertmanagerURL: amA.srv.URL, AlertmanagerLinkURL: amA.srv.URL},
+		{Name: "b", AlertmanagerURL: amB.srv.URL, AlertmanagerLinkURL: amB.srv.URL},
+	})
+
+	rec.poll(context.Background())
+
+	if got := rec.silenceStore.GetCluster("a"); len(got) != 1 || got[0].ID != "sil-a" {
+		t.Errorf("cluster a snapshot = %+v, want [sil-a]", got)
+	}
+	if got := rec.silenceStore.GetCluster("b"); len(got) != 2 {
+		t.Errorf("cluster b snapshot len = %d, want 2", len(got))
+	}
+}
+
+func TestPoll_FailedSilenceFetchKeepsPreviousSnapshot(t *testing.T) {
+	amA := newFakeAM(t, []alertmanager.GettableSilence{makeSilence("sil-a", "active")})
+	amB := newFakeAM(t, []alertmanager.GettableSilence{makeSilence("sil-b", "active")})
+
+	rec, _ := newTestRecorder(t)
+	rec.registry = cluster.NewRegistry([]config.ClusterConfig{
+		{Name: "a", AlertmanagerURL: amA.srv.URL, AlertmanagerLinkURL: amA.srv.URL},
+		{Name: "b", AlertmanagerURL: amB.srv.URL, AlertmanagerLinkURL: amB.srv.URL},
+	})
+
+	rec.poll(context.Background())
+	if got := rec.silenceStore.GetCluster("a"); len(got) != 1 {
+		t.Fatalf("cluster a snapshot len = %d, want 1", len(got))
+	}
+
+	// Cluster a's silences fetch now fails while b updates.
+	amA.setFailSilences(true)
+	amB.setSilences([]alertmanager.GettableSilence{makeSilence("sil-b", "active"), makeSilence("sil-b2", "active")})
+	rec.poll(context.Background())
+
+	if got := rec.silenceStore.GetCluster("a"); len(got) != 1 || got[0].ID != "sil-a" {
+		t.Errorf("cluster a snapshot after failed fetch = %+v, want previous [sil-a]", got)
+	}
+	if got := rec.silenceStore.GetCluster("b"); len(got) != 2 {
+		t.Errorf("cluster b snapshot len = %d, want 2 (must update while a fails)", len(got))
+	}
+}
+
+func countEvents(hub *mockHub, eventType string) int {
+	n := 0
+	for _, e := range hub.events {
+		if e.eventType == eventType {
+			n++
+		}
+	}
+	return n
+}
+
+func TestApplyPollResults_SilenceChangeBroadcastsSilencesUpdate(t *testing.T) {
+	rec, hub := newTestRecorder(t)
+	ctx := context.Background()
+
+	// First poll: a silence appears → broadcast.
+	rec.applyPollResults(ctx, nil, map[string]silenceInfoEntry{
+		"homelab\x1fsil-1": {state: "active", clusterName: "homelab"},
+	})
+	if got := countEvents(hub, models.WSTypeSilencesUpdate); got != 1 {
+		t.Fatalf("silences_update broadcasts after new silence = %d, want 1", got)
+	}
+
+	// Unchanged snapshot → no additional broadcast.
+	rec.applyPollResults(ctx, nil, map[string]silenceInfoEntry{
+		"homelab\x1fsil-1": {state: "active", clusterName: "homelab"},
+	})
+	if got := countEvents(hub, models.WSTypeSilencesUpdate); got != 1 {
+		t.Fatalf("silences_update broadcasts after unchanged poll = %d, want still 1", got)
+	}
+
+	// State change (active → expired) → broadcast.
+	rec.applyPollResults(ctx, nil, map[string]silenceInfoEntry{
+		"homelab\x1fsil-1": {state: "expired", clusterName: "homelab"},
+	})
+	if got := countEvents(hub, models.WSTypeSilencesUpdate); got != 2 {
+		t.Fatalf("silences_update broadcasts after state change = %d, want 2", got)
+	}
+
+	// Silence disappears → broadcast.
+	rec.applyPollResults(ctx, nil, nil)
+	if got := countEvents(hub, models.WSTypeSilencesUpdate); got != 3 {
+		t.Fatalf("silences_update broadcasts after removal = %d, want 3", got)
+	}
+}
+
+func TestApplyPollResults_NoSilences_NoSilencesUpdateBroadcast(t *testing.T) {
+	rec, hub := newTestRecorder(t)
+
+	rec.applyPollResults(context.Background(), nil, nil)
+	rec.applyPollResults(context.Background(), nil, nil)
+
+	if got := countEvents(hub, models.WSTypeSilencesUpdate); got != 0 {
+		t.Errorf("silences_update broadcasts with empty snapshots = %d, want 0", got)
 	}
 }

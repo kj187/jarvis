@@ -44,7 +44,7 @@ func newAuthServer(t *testing.T) (*Server, *users.Store) {
 	registry := cluster.NewRegistry(nil)
 	cfg := &config.Config{AuthProvider: "internal", SecretKey: testSecretKey}
 
-	return NewServer(alertStore, store, hub, registry, cfg, nil, provider, userStore), userStore
+	return NewServer(alertStore, history.NewSilenceStore(), store, hub, registry, cfg, nil, provider, userStore), userStore
 }
 
 func createTestUser(t *testing.T, store *users.Store, username, password, role string) *users.User {

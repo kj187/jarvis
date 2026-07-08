@@ -15,32 +15,42 @@ import (
 )
 
 // GET /api/v1/silences
+//
+// Served entirely from the in-memory poll snapshot — never calls Alertmanager.
+// The recorder poll fills the snapshot; mutations write through immediately.
+// Silences created/expired directly in Alertmanager (outside Jarvis) appear
+// with up to one poll interval of delay.
 func (s *Server) getSilences(c echo.Context) error {
 	clusterFilter := c.QueryParam("cluster")
-	ctx, cancel := context.WithTimeout(c.Request().Context(), 10*time.Second)
-	defer cancel()
 
-	var allSilences []models.Silence
+	allSilences := []models.Silence{}
 	for _, cl := range s.registry.All() {
 		if clusterFilter != "" && cl.Name != clusterFilter {
 			continue
 		}
-		raw, err := cl.FetchSilences(ctx, nil)
-		if err != nil {
-			// Best-effort: a cluster's silences are simply missing from the response rather
-			// than failing the whole request, but log it — otherwise this shows up to users
-			// only as an unexplained gap (e.g. a silence badge that should be there isn't).
-			slog.Warn("fetch silences failed", "cluster", cl.Name, "err", err)
-			continue
-		}
-		for _, rs := range raw {
+		for _, rs := range s.silenceStore.GetCluster(cl.Name) {
 			allSilences = append(allSilences, convertSilence(rs, cl.Name, cl.AlertmanagerLinkURL))
 		}
 	}
-	if allSilences == nil {
-		allSilences = []models.Silence{}
-	}
 	return c.JSON(http.StatusOK, allSilences)
+}
+
+// applySilenceWriteThrough bridges a successful silence mutation into the
+// snapshot store so the frontend's immediate refetch sees the change,
+// notifies all WS clients (other users' tabs refetch), then requests a poll
+// so the authoritative Alertmanager state reconciles the bridge entry within
+// one cycle.
+func (s *Server) applySilenceWriteThrough(cluster string, upsert *amclient.GettableSilence, expireID string) {
+	if upsert != nil {
+		s.silenceStore.Upsert(cluster, *upsert)
+	}
+	if expireID != "" {
+		s.silenceStore.MarkExpired(cluster, expireID)
+	}
+	s.hub.BroadcastJSON(models.WSTypeSilencesUpdate, struct{}{})
+	if s.pollTrigger != nil {
+		s.pollTrigger.Trigger()
+	}
 }
 
 // POST /api/v1/silences
@@ -131,11 +141,29 @@ func (s *Server) createSilence(c echo.Context) error {
 	// itself whenever matchers or startsAt change on an update — see PostableSilence
 	// handling in Alertmanager's silence.Set). Expire the old silence defensively to
 	// prevent duplicates in case Alertmanager didn't already do so.
+	expiredOldID := ""
 	if body.ID != "" && id != body.ID {
 		if err := cl.DeleteSilence(ctx, body.ID); err != nil {
 			slog.Warn("expire old silence after id change failed", "cluster", body.Cluster, "old_id", body.ID, "err", err)
 		}
+		expiredOldID = body.ID
 	}
+
+	now := time.Now().UTC()
+	state := "active"
+	if body.StartsAt.After(now) {
+		state = "pending"
+	}
+	s.applySilenceWriteThrough(body.Cluster, &amclient.GettableSilence{
+		ID:        id,
+		Matchers:  body.Matchers,
+		StartsAt:  body.StartsAt,
+		EndsAt:    body.EndsAt,
+		CreatedBy: createdBy,
+		Comment:   body.Comment,
+		Status:    amclient.AMSilenceStatus{State: state},
+		UpdatedAt: now,
+	}, expiredOldID)
 
 	if body.Fingerprint != "" {
 		action := "created"
@@ -182,6 +210,8 @@ func (s *Server) deleteSilence(c echo.Context) error {
 		slog.Error("delete silence failed", "cluster", clusterName, "id", silenceID, "err", err)
 		return echo.NewHTTPError(http.StatusBadGateway, "alertmanager request failed")
 	}
+
+	s.applySilenceWriteThrough(clusterName, nil, silenceID)
 
 	fingerprint := c.QueryParam("fingerprint")
 	by := c.QueryParam("by")

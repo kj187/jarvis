@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { Wifi, WifiOff, RefreshCw, Play, Pause, Plus, Settings, LogIn, LogOut, UserCheck, Shield, Sun, Moon, Menu, X } from 'lucide-react'
+import { Wifi, WifiOff, RefreshCw, Plus, Settings, LogIn, LogOut, UserCheck, Shield, Sun, Moon, Menu, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Sheet } from '@/components/ui/sheet'
 import { SilenceForm } from '@/components/silences/SilenceForm'
@@ -21,8 +21,6 @@ export function Header() {
     activePage,
     setActivePage,
     wsConnected,
-    pollingPaused,
-    setPollingPaused,
     filters,
     setFilter,
     addLabelMatcher,
@@ -46,11 +44,8 @@ export function Header() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [pollSpinning, setPollSpinning] = useState(false)
   const pollSpinTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const pollingPausedRef = useRef(pollingPaused)
-  useEffect(() => { pollingPausedRef.current = pollingPaused }, [pollingPaused])
   useEffect(() => {
     return qc.getQueryCache().subscribe((event) => {
-      if (pollingPausedRef.current) return
       const action = (event as { type: string; query: { queryKey: unknown[] }; action?: { type: string } }).action
       const key = event.query?.queryKey
       if (event.type !== 'updated') return
@@ -228,9 +223,6 @@ export function Header() {
             {wsConnected ? <Wifi className="h-4 w-4 text-green-500" /> : <WifiOff className="h-4 w-4 text-red-500" />}
           </div>
 
-          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => setPollingPaused(!pollingPaused)} title={pollingPaused ? 'Resume polling' : 'Pause polling'}>
-            {pollingPaused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
-          </Button>
           <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={handleRefresh} title="Refresh now" disabled={refreshing}>
             <RefreshCw className={`h-4 w-4 ${isSpinning ? 'animate-spin' : ''}`} />
           </Button>
@@ -300,9 +292,6 @@ export function Header() {
               <div className={`h-2 w-2 rounded-full ${healthyCount === clusters.length ? 'bg-green-500' : 'bg-red-500'}`} />
               <span className="text-muted-foreground tabular-nums">{healthyCount}/{clusters.length}</span>
             </div>
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setPollingPaused(!pollingPaused)} title={pollingPaused ? 'Resume polling' : 'Pause polling'}>
-              {pollingPaused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
-            </Button>
             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleRefresh} title="Refresh now" disabled={refreshing}>
               <RefreshCw className={`h-4 w-4 ${isSpinning ? 'animate-spin' : ''}`} />
             </Button>

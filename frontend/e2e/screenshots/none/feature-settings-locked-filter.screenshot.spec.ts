@@ -18,7 +18,6 @@ test('feature-settings-locked-filter', async ({ page, am, jarvis }) => {
       resolvedPageSize: 25,
       defaultSilenceDurationMinutes: 60,
       defaultCreatorName: '',
-      pollIntervalSeconds: 15,
       claimAnimationEnabled: true,
     }
     localStorage.setItem('jarvis-user-settings', JSON.stringify({ state: settings, version: 0 }))

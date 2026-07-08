@@ -41,7 +41,7 @@ func newTestServerFull(t *testing.T) (*Server, *history.AlertStore, *history.Sto
 	registry := cluster.NewRegistry(nil)
 	cfg := &config.Config{}
 
-	return NewServer(alertStore, store, hub, registry, cfg, nil, auth.NoneProvider{}, userStore), alertStore, store
+	return NewServer(alertStore, history.NewSilenceStore(), store, hub, registry, cfg, nil, auth.NoneProvider{}, userStore), alertStore, store
 }
 
 // seedFP inserts a fingerprint row so FK constraints in claims/comments pass.

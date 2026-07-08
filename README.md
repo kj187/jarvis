@@ -352,6 +352,7 @@ helm plugin install https://github.com/helm-unittest/helm-unittest --version v0.
 
 ## Documentation
 
+- [docs/architecture.md](docs/architecture.md) — data-flow overview: who talks to whom, and when (with diagram)
 - [docs/authentication-user.md](docs/authentication-user.md) — user login: providers (none / internal / OIDC), first-run wizard, roles, sessions, Helm
 - [docs/authentication-alertmanager.md](docs/authentication-alertmanager.md) — Alertmanager upstream auth: OAuth2 client credentials, bearer token, basic auth, custom headers
 - [docs/metrics.md](docs/metrics.md) — Prometheus `/metrics` endpoint: exported metrics, scrape config, ServiceMonitor

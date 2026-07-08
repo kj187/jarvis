@@ -1,9 +1,7 @@
 package api
 
 import (
-	"context"
 	"net/http"
-	"time"
 
 	"github.com/kj187/jarvis/backend/internal/models"
 	"github.com/kj187/jarvis/backend/internal/version"
@@ -21,10 +19,11 @@ func (s *Server) getInfo(c echo.Context) error {
 }
 
 // GET /api/v1/clusters
+//
+// Health is derived from the cached per-member up-state of the last recorder
+// poll (≤ one JARVIS_POLL_INTERVAL old) — never live-pings Alertmanager, so
+// client count does not influence AM load.
 func (s *Server) getClusters(c echo.Context) error {
-	ctx, cancel := context.WithTimeout(c.Request().Context(), 10*time.Second)
-	defer cancel()
-
 	allAlerts := s.alertStore.Get()
 	clusterAlertCount := make(map[string]int)
 	for _, a := range allAlerts {
@@ -34,14 +33,20 @@ func (s *Server) getClusters(c echo.Context) error {
 	clusters := s.registry.All()
 	result := make([]models.ClusterInfo, 0, len(clusters))
 	for _, cl := range clusters {
-		statuses := cl.PingAll(ctx)
+		upStates := cl.MemberUpStates()
 		healthy := false
-		members := make([]models.MemberInfo, 0, len(statuses))
-		for _, st := range statuses {
-			if st.Healthy {
+		members := make([]models.MemberInfo, 0, len(cl.Members))
+		for _, m := range cl.Members {
+			// A member without poll state yet (first ~one interval after
+			// startup) counts as healthy — same optimism as cluster.writeOrder.
+			up, known := upStates[m.Name]
+			if !known {
+				up = true
+			}
+			if up {
 				healthy = true
 			}
-			members = append(members, models.MemberInfo{Name: st.Name, URL: st.URL, Healthy: st.Healthy})
+			members = append(members, models.MemberInfo{Name: m.Name, URL: m.LinkURL, Healthy: up})
 		}
 		info := models.ClusterInfo{
 			Name:            cl.Name,

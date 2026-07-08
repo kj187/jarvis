@@ -151,3 +151,20 @@ tag** (`git tag -f`, force-push) — the workflow runs from the tag's commit,
 so re-pushing the old tag would rerun the broken workflow. Only safe while
 no GitHub Release was published (releases are immutable; images/charts are
 tag-overwritable).
+
+## Per-client live proxying to Alertmanager makes AM load scale with open tabs
+
+**Symptom**: Alertmanager CPU roughly doubled on one environment after
+deploying Jarvis — most visible on the instance with the largest
+alert/silence payload.
+**Cause**: `GET /api/v1/silences` (fetch from every cluster member) and
+`GET /api/v1/clusters` (live `/api/v2/status` ping per member) proxied to
+Alertmanager on **every client request**, and the frontend refetches both
+every 30s in every open tab. Each tab added ~4 AM requests/min per member on
+top of the recorder poll — the intended "only the backend polls, clients get
+snapshots/WS" architecture was silently broken for these two endpoints.
+**Rule**: Critical Invariant #13 — client-facing reads are served from poll
+snapshots (`AlertStore` / `SilenceStore` / `MemberUpStates`), never from a
+synchronous AM call. Mutations write through to the snapshot + trigger a
+poll so the UI stays instant. When adding a read endpoint, ask: "does its
+cost scale with the number of open tabs?" — if yes, snapshot it.

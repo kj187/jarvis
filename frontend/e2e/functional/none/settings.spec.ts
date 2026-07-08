@@ -18,7 +18,7 @@ test('H1 settings panel opens via gear icon and shows Settings heading', async (
 
   await expect(dialog.getByRole('heading', { name: 'Settings' })).toBeVisible()
   await expect(dialog.getByText('Display')).toBeVisible()
-  await expect(dialog.getByText('Polling')).toBeVisible()
+  await expect(dialog.getByText('Silences')).toBeVisible()
 })
 
 test('H2 timeFormat toggle switches between Relative and Absolute', async ({ page }) => {
@@ -28,7 +28,7 @@ test('H2 timeFormat toggle switches between Relative and Absolute', async ({ pag
       state: {
         theme: 'dark', timeFormat: 'relative', defaultViewMode: 'card',
         defaultFilters: [], resolvedPageSize: 25, defaultSilenceDurationMinutes: 60,
-        defaultCreatorName: '', pollIntervalSeconds: 15, claimAnimationEnabled: true,
+        defaultCreatorName: '', claimAnimationEnabled: true,
         groupByLabel: 'severity',
       },
       version: 0,
@@ -69,7 +69,7 @@ test('H3 defaultViewMode card/list setting persists', async ({ page, am, jarvis 
       state: {
         theme: 'dark', timeFormat: 'relative', defaultViewMode: 'card',
         defaultFilters: [], resolvedPageSize: 25, defaultSilenceDurationMinutes: 60,
-        defaultCreatorName: '', pollIntervalSeconds: 15, claimAnimationEnabled: true,
+        defaultCreatorName: '', claimAnimationEnabled: true,
         groupByLabel: 'severity',
       },
       version: 0,
@@ -102,7 +102,7 @@ test('H5 defaultFilters adds a locked chip to the matcher bar', async ({ page, a
       state: {
         theme: 'dark', timeFormat: 'relative', defaultViewMode: 'card',
         defaultFilters: [], resolvedPageSize: 25, defaultSilenceDurationMinutes: 60,
-        defaultCreatorName: '', pollIntervalSeconds: 15, claimAnimationEnabled: true,
+        defaultCreatorName: '', claimAnimationEnabled: true,
         groupByLabel: 'severity',
       },
       version: 0,
@@ -145,7 +145,7 @@ test('H6 defaultSilenceDurationMinutes select changes stored value', async ({ pa
       state: {
         theme: 'dark', timeFormat: 'relative', defaultViewMode: 'card',
         defaultFilters: [], resolvedPageSize: 25, defaultSilenceDurationMinutes: 60,
-        defaultCreatorName: '', pollIntervalSeconds: 15, claimAnimationEnabled: true,
+        defaultCreatorName: '', claimAnimationEnabled: true,
         groupByLabel: 'severity',
       },
       version: 0,
@@ -168,39 +168,6 @@ test('H6 defaultSilenceDurationMinutes select changes stored value', async ({ pa
   expect(stored).toBe(240)
 })
 
-test('H8 poll interval labels update the stored value', async ({ page }) => {
-  await dismissNoAuthNotice(page)
-  await page.addInitScript(() => {
-    localStorage.setItem('jarvis-user-settings', JSON.stringify({
-      state: {
-        theme: 'dark', timeFormat: 'relative', defaultViewMode: 'card',
-        defaultFilters: [], resolvedPageSize: 25, defaultSilenceDurationMinutes: 60,
-        defaultCreatorName: '', pollIntervalSeconds: 15, claimAnimationEnabled: true,
-        groupByLabel: 'severity',
-      },
-      version: 0,
-    }))
-  })
-  await page.goto('/')
-
-  const dialog = await openSettings(page)
-
-  // Find the poll interval range slider
-  const slider = dialog.locator('input[type="range"][aria-label="Poll interval"]')
-  await expect(slider).toBeVisible()
-
-  // Click the "5s" tick label to set poll interval to 5
-  const tickLabel = dialog.locator('span').filter({ hasText: /^5s$/ }).first()
-  await expect(tickLabel).toBeVisible()
-  await tickLabel.click()
-
-  const stored = await page.evaluate(() => {
-    const raw = localStorage.getItem('jarvis-user-settings')
-    return raw ? JSON.parse(raw).state.pollIntervalSeconds : null
-  })
-  expect(stored).toBe(5)
-})
-
 test('H9 claimAnimationEnabled toggle switches state', async ({ page }) => {
   await dismissNoAuthNotice(page)
   await page.addInitScript(() => {
@@ -208,7 +175,7 @@ test('H9 claimAnimationEnabled toggle switches state', async ({ page }) => {
       state: {
         theme: 'dark', timeFormat: 'relative', defaultViewMode: 'card',
         defaultFilters: [], resolvedPageSize: 25, defaultSilenceDurationMinutes: 60,
-        defaultCreatorName: '', pollIntervalSeconds: 15, claimAnimationEnabled: true,
+        defaultCreatorName: '', claimAnimationEnabled: true,
         groupByLabel: 'severity',
       },
       version: 0,
@@ -243,7 +210,7 @@ test('H10 reset to defaults shows confirm state then resets', async ({ page }) =
       state: {
         theme: 'dark', timeFormat: 'relative', defaultViewMode: 'card',
         defaultFilters: [], resolvedPageSize: 25, defaultSilenceDurationMinutes: 60,
-        defaultCreatorName: '', pollIntervalSeconds: 15, claimAnimationEnabled: true,
+        defaultCreatorName: '', claimAnimationEnabled: true,
         groupByLabel: 'severity',
       },
       version: 0,
@@ -331,7 +298,7 @@ test('H4 resolvedPageSize per-page buttons update localStorage', async ({ page, 
       state: {
         theme: 'dark', timeFormat: 'relative', defaultViewMode: 'list',
         defaultFilters: [], resolvedPageSize: 25, defaultSilenceDurationMinutes: 60,
-        defaultCreatorName: '', pollIntervalSeconds: 15, claimAnimationEnabled: true,
+        defaultCreatorName: '', claimAnimationEnabled: true,
         groupByLabel: 'severity',
       },
       version: 0,
@@ -368,7 +335,7 @@ test('H7 defaultCreatorName from settings pre-fills the author in the silence fo
       state: {
         theme: 'dark', timeFormat: 'relative', defaultViewMode: 'card',
         defaultFilters: [], resolvedPageSize: 25, defaultSilenceDurationMinutes: 60,
-        defaultCreatorName: 'h7-settings-user', pollIntervalSeconds: 15, claimAnimationEnabled: true,
+        defaultCreatorName: 'h7-settings-user', claimAnimationEnabled: true,
         groupByLabel: 'severity',
       },
       version: 0,

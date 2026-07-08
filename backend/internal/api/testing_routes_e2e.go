@@ -82,6 +82,7 @@ func (s *Server) testReset(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 	s.alertStore.Set(nil)
+	s.silenceStore.Reset()
 	return c.NoContent(http.StatusNoContent)
 }
 
@@ -147,6 +148,24 @@ func (s *Server) testCreateSilence(c echo.Context) error {
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
+
+	// Mirror the production createSilence write-through so the silence is
+	// visible in GET /api/v1/silences without waiting for the next poll.
+	now := time.Now().UTC()
+	state := "active"
+	if req.StartsAt.After(now) {
+		state = "pending"
+	}
+	s.applySilenceWriteThrough(req.Cluster, &alertmanager.GettableSilence{
+		ID:        silenceID,
+		Matchers:  req.Matchers,
+		StartsAt:  req.StartsAt,
+		EndsAt:    req.EndsAt,
+		CreatedBy: req.CreatedBy,
+		Comment:   req.Comment,
+		Status:    alertmanager.AMSilenceStatus{State: state},
+		UpdatedAt: now,
+	}, "")
 
 	return c.JSON(http.StatusOK, map[string]string{"silenceID": silenceID})
 }

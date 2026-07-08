@@ -29,7 +29,13 @@ export function useWebSocket() {
       wsRef.current = ws
 
       ws.onopen = () => {
-        if (mountedRef.current) setWsConnected(true)
+        if (!mountedRef.current) return
+        setWsConnected(true)
+        // WS delivers no replay: events broadcast while disconnected are
+        // gone. Refetch everything on every (re)connect so the UI recovers
+        // immediately — all list reads hit in-memory snapshots, so this is
+        // cheap and never touches Alertmanager.
+        qc.invalidateQueries()
       }
 
       ws.onclose = () => {
@@ -91,6 +97,13 @@ export function useWebSocket() {
           })
           qc.invalidateQueries({ queryKey: ['claim', payload.fingerprint, payload.clusterName] })
           qc.invalidateQueries({ queryKey: ['claim-history', payload.fingerprint, payload.clusterName] })
+          break
+        }
+
+        case 'silences_update': {
+          // Pure invalidation signal (empty payload) — the silence snapshot
+          // changed on the backend (poll diff or another user's mutation).
+          qc.invalidateQueries({ queryKey: ['silences'] })
           break
         }
 

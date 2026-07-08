@@ -39,7 +39,7 @@ func newSetupServer(t *testing.T) (*Server, *users.Store) {
 	registry := cluster.NewRegistry(nil)
 	cfg := &config.Config{AuthProvider: "internal"}
 
-	srv := NewServer(alertStore, store, hub, registry, cfg, nil, auth.NewInternalProvider(userStore), userStore)
+	srv := NewServer(alertStore, history.NewSilenceStore(), store, hub, registry, cfg, nil, auth.NewInternalProvider(userStore), userStore)
 	return srv, userStore
 }
 

@@ -235,3 +235,7 @@ export interface CommentAddedPayload {
   fingerprint: string
   comment: Comment
 }
+
+// `silences_update` carries an empty payload — a pure invalidation signal;
+// the frontend refetches /api/v1/silences (see useWebSocket).
+
