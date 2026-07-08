@@ -1,0 +1,22 @@
+---
+title: Jarvis — isolated E2E stack topology
+config:
+  theme: neutral
+  flowchart:
+    curve: basis
+---
+flowchart LR
+    HOST["Host machine"]
+
+    subgraph net["network: jarvis_e2e (isolated, ephemeral tmpfs)"]
+        J["e2e-jarvis<br/>Containerfile.e2e, -tags 'prod e2e'<br/>JARVIS_POLL_INTERVAL=1s, SQLite on tmpfs"]
+        AM["e2e-alertmanager<br/>real Alertmanager, tmpfs<br/>fixtures fired via API v2"]
+        OIDC["e2e-mock-oidc<br/>mock OIDC IdP<br/>only MODE=oidc"]
+        PW["e2e-playwright<br/>runs the specs"]
+    end
+
+    HOST -- ":8085" --> J
+    HOST -- ":8086" --> OIDC
+    J --> AM
+    J -.-> OIDC
+    PW -- "drives specs against" --> J

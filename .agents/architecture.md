@@ -748,6 +748,10 @@ with its own `*alertmanager.Client`); `Cluster.AlertmanagerURL` /
 
 ## Alert Lifecycle State Machine
 
+![Alert lifecycle state machine](../docs/assets/alert-lifecycle.svg)
+
+(source: `docs/diagrams/alert-lifecycle.mmd`, re-render via `make diagrams`)
+
 ```
 firing → suppressed   (silence activated)
        → resolved     (alert gone from AM API)

@@ -134,15 +134,9 @@ Users are redirected to the OIDC provider on login. The login modal shows a sing
 
 ### Flow
 
-```
-Browser → GET /auth/oidc/login
-        ← redirect to OIDC provider (with code_challenge)
-Browser → authenticate at provider
-        ← redirect to /auth/oidc/callback?code=...
-Backend → exchange code for tokens (verifies code_verifier)
-        ← Set-Cookie: jarvis_session (HttpOnly, SameSite=Lax)
-Browser → redirect to /
-```
+![OIDC login flow](assets/oidc-login-flow.svg)
+
+(source: [`docs/diagrams/oidc-login-flow.mmd`](diagrams/oidc-login-flow.mmd), re-render via `make diagrams`)
 
 ### Keycloak Setup
 
