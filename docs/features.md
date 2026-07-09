@@ -96,6 +96,20 @@ The complete filter state is encoded into the URL as query parameters. This mean
 
 ---
 
+## Alerts Overview
+
+A Karma-style breakdown of the current alert list by label value — the fastest way to answer *"where is the fire?"* when a wall of alerts appears.
+
+![Alerts Overview](assets/feature-alerts-overview.png)
+
+Click the **pie-chart icon** next to the card/list view toggle to open the overview. It aggregates all alerts in the current state tab (Active / Suppressed / Resolved) by label, independent of any label filters already applied — the point is discovering what to filter *by*, not summarizing what's already filtered down.
+
+Labels are ordered by usefulness: `alertname` and `severity` are always pinned to the top, followed by the remaining labels sorted by how many alerts carry them. Each label shows its top 8 values by count, with a "+N more" hint if there are more.
+
+**Click any value** to instantly apply it as a filter chip — the overview closes and the alert list narrows to that value. Clicking a value that's already filtered is a no-op (no duplicate chip).
+
+---
+
 ## User Settings
 
 Per-user preferences stored in the browser — no server config required.

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { Maximize2, Search, X } from 'lucide-react'
+import { ChartPie, Maximize2, Search, X } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { ViewToggle } from './ViewToggle'
+import { AlertsOverviewModal } from './AlertsOverviewModal'
 import { MatcherChipsBar } from '@/components/layout/MatcherChipsBar'
 import { useAlerts } from '@/hooks/useAlerts'
 import { useSilences } from '@/hooks/useSilences'
@@ -116,6 +117,7 @@ export function AlertsPage() {
   // Search panel — auto-open when URL contains a search param
   const [searchOpen, setSearchOpen] = useState(() => Boolean(filters.search))
   const [cardGroupingEnabled, setCardGroupingEnabled] = useState(loadCardGroupingEnabled)
+  const [overviewOpen, setOverviewOpen] = useState(false)
   const searchInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -202,6 +204,14 @@ export function AlertsPage() {
 
             {/* Right controls */}
             <div className="flex items-center gap-2 shrink-0 ml-auto">
+              <button
+                onClick={() => setOverviewOpen(true)}
+                className="cursor-pointer flex h-7 w-7 items-center justify-center rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-accent/40"
+                title="Alerts overview"
+                aria-label="Open alerts overview"
+              >
+                <ChartPie className="h-3.5 w-3.5" />
+              </button>
               {!isResolvedMode && (
                 <ViewToggle value={viewMode} onChange={(mode) => { setViewMode(mode); setActiveViewMode(mode) }} />
               )}
@@ -346,6 +356,8 @@ export function AlertsPage() {
         silences={silences}
         onSelectAlert={setSelectedFingerprint}
       />
+
+      <AlertsOverviewModal open={overviewOpen} onClose={() => setOverviewOpen(false)} />
     </div>
   )
 }

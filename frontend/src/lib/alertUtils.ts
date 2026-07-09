@@ -535,6 +535,69 @@ export function isRoundTrippableTagList(amValue: string): boolean {
   return roundTripped === amValue
 }
 
+// ── Label breakdown (alerts overview) ─────────────────────────────────────
+
+export interface LabelBreakdown {
+  name: string
+  /** Number of alerts carrying this label. */
+  total: number
+  /** Top values by count, descending. */
+  values: { value: string; count: number }[]
+  /** How many distinct values beyond `values` were cut off. */
+  truncated: number
+}
+
+/** Label names always shown first, in this order, regardless of coverage. */
+const PINNED_BREAKDOWN_LABELS = ['alertname', 'severity']
+
+/**
+ * Aggregates, per label name, how often each value occurs across `alerts` —
+ * the data source for the alerts-overview modal ("where is the fire?").
+ * Uses `getFilterableLabels()` (invariant #4) so `@cluster` is included, but
+ * drops `receiver` (the `@receiver` alias) and any other `HIDDEN_LABEL_KEYS`
+ * member except `alertname`/`severity` — those have dedicated UI elsewhere
+ * (`AlertCard`/`AlertListView`/`AlertListRow`), same reasoning as there,
+ * while `alertname`/`severity` stay in specifically to be pinned to the top.
+ */
+export function computeLabelBreakdown(
+  alerts: EnrichedAlert[],
+  opts?: { maxLabels?: number; maxValues?: number },
+): LabelBreakdown[] {
+  const maxLabels = opts?.maxLabels ?? 10
+  const maxValues = opts?.maxValues ?? 8
+
+  const counts = new Map<string, Map<string, number>>()
+  for (const alert of alerts) {
+    const labels = getFilterableLabels(alert)
+    for (const [key, value] of Object.entries(labels)) {
+      if (!value) continue
+      if (key === 'receiver') continue
+      if (HIDDEN_LABEL_KEYS.has(key) && !PINNED_BREAKDOWN_LABELS.includes(key)) continue
+      if (!counts.has(key)) counts.set(key, new Map())
+      const valueCounts = counts.get(key)!
+      valueCounts.set(value, (valueCounts.get(value) ?? 0) + 1)
+    }
+  }
+
+  const breakdowns: LabelBreakdown[] = [...counts.entries()].map(([name, valueCounts]) => {
+    const sorted = [...valueCounts.entries()].sort((a, b) => b[1] - a[1])
+    return {
+      name,
+      total: sorted.reduce((sum, [, count]) => sum + count, 0),
+      values: sorted.slice(0, maxValues).map(([value, count]) => ({ value, count })),
+      truncated: Math.max(0, sorted.length - maxValues),
+    }
+  })
+
+  const pinRank = (name: string) => {
+    const i = PINNED_BREAKDOWN_LABELS.indexOf(name)
+    return i === -1 ? Number.MAX_SAFE_INTEGER : i
+  }
+  breakdowns.sort((a, b) => pinRank(a.name) - pinRank(b.name) || b.total - a.total)
+
+  return breakdowns.slice(0, maxLabels)
+}
+
 const GROUP_MATCHER_SKIP = new Set(['receiver', '@receiver', '@cluster'])
 
 /**

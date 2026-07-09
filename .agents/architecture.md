@@ -513,7 +513,11 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
 │   │                            whether an AM regex matcher is a Jarvis-style escaped-literal-OR-list
 │   │                            SilenceForm can safely edit as tags, vs. a real regex needing raw-text
 │   │                            editing — see SilenceForm's `raw` matcher mode),
-│   │                            FAST_SILENCE_DURATIONS, HIDDEN_LABEL_KEYS, labelColorStyle
+│   │                            FAST_SILENCE_DURATIONS, HIDDEN_LABEL_KEYS, labelColorStyle,
+│   │                            computeLabelBreakdown (alerts-overview modal: per-label-name
+│   │                            value counts, alertname/severity pinned to the top regardless
+│   │                            of coverage, `receiver` alias + rest of HIDDEN_LABEL_KEYS
+│   │                            excluded from the generic loop — dedicated UI elsewhere)
 │   │                            ← single source, never duplicate in components
 │   │                            100% test coverage enforced (frontend/vitest.config.ts) — a narrow
 │   │                            exception to the functional-E2E-only strategy, see .agents/testing.md
@@ -591,6 +595,15 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │   │                        transient Silenced/Failed feedback; used by AlertCard + AlertDetailPanel
     │   ├── AlertBadge.tsx     → severity badge
     │   ├── AlertFilters.tsx   → label matcher chips + state dropdown
+    │   ├── AlertsOverviewModal.tsx → Karma-style "where is the fire?" overview, opened from a
+    │   │                        ChartPie icon button in AlertsPage's sub-header (next to
+    │   │                        ViewToggle — Alerts-specific, doesn't belong in the global Header
+    │   │                        chrome that's also visible on the Silences page);
+    │   │                        computeLabelBreakdown over the current state tab's alerts
+    │   │                        (ignores the label-matcher filter bar — the point is discovering
+    │   │                        what to filter *by*); clicking a value adds an unlocked `=`
+    │   │                        matcher via uiStore.addLabelMatcher (no-op if an identical one
+    │   │                        already exists) and closes the modal
     │   ├── LabelChip.tsx      → label chip with hover operator dropdown
     │   ├── ViewToggle.tsx     → ⊞ / ☰ toggle
     │   └── EmptyState.tsx     → large empty-state icon (no alerts)
