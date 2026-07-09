@@ -606,27 +606,43 @@ func (s *Store) GetStatsForCluster(fingerprint, clusterName string) (*models.Ale
 
 // ── Comments ──────────────────────────────────────────────────────────────────
 
-// GetComments returns all comments for a (fingerprint, cluster) pair (newest first).
-func (s *Store) GetComments(fingerprint, clusterName string) ([]models.Comment, error) {
+// GetComments returns paginated comments for a (fingerprint, cluster) pair
+// (newest first) plus the total count across all pages.
+func (s *Store) GetComments(fingerprint, clusterName string, limit, offset int) ([]models.Comment, int, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	var total int
+	if err := s.queryRow(context.Background(), `
+		SELECT COUNT(*) FROM alert_comments WHERE fingerprint = ? AND cluster_name = ?
+	`, fingerprint, clusterName).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("count comments: %w", err)
+	}
+
 	rows, err := s.query(context.Background(), `
 		SELECT id, fingerprint, cluster_name, event_id, user_id, author_name, body, created_at
 		FROM alert_comments
 		WHERE fingerprint = ? AND cluster_name = ?
-		ORDER BY created_at DESC
-	`, fingerprint, clusterName)
+		ORDER BY created_at DESC, id DESC
+		LIMIT ? OFFSET ?
+	`, fingerprint, clusterName, limit, offset)
 	if err != nil {
-		return nil, fmt.Errorf("query comments: %w", err)
+		return nil, 0, fmt.Errorf("query comments: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 
-	var comments []models.Comment
+	comments := make([]models.Comment, 0)
 	for rows.Next() {
 		var c models.Comment
 		var eventID sql.NullInt64
 		var userID sql.NullString
 		var createdAt time.Time
 		if err := rows.Scan(&c.ID, &c.Fingerprint, &c.ClusterName, &eventID, &userID, &c.AuthorName, &c.Body, &createdAt); err != nil {
-			return nil, fmt.Errorf("scan comment: %w", err)
+			return nil, 0, fmt.Errorf("scan comment: %w", err)
 		}
 		c.CreatedAt = createdAt.UTC()
 		if eventID.Valid {
@@ -637,7 +653,10 @@ func (s *Store) GetComments(fingerprint, clusterName string) ([]models.Comment, 
 		}
 		comments = append(comments, c)
 	}
-	return comments, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+	return comments, total, nil
 }
 
 // GetComment returns a comment by ID scoped to (fingerprint, cluster).

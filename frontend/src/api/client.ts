@@ -7,6 +7,7 @@ import type {
   AlertHeatmapResponse,
   HeatmapRange,
   Comment,
+  CommentsPage,
   Claim,
   Silence,
   SilenceTemplate,
@@ -98,11 +99,17 @@ export function fetchAlertHeatmap(
 
 // ── Comments ─────────────────────────────────────────────────────────────────
 
-export function fetchComments(fingerprint: string, clusterName: string): Promise<Comment[]> {
+export function fetchComments(
+  fingerprint: string,
+  clusterName: string,
+  params?: { limit?: number; offset?: number },
+): Promise<CommentsPage> {
   const q = new URLSearchParams()
   if (clusterName) q.set('cluster', clusterName)
+  if (params?.limit) q.set('limit', String(params.limit))
+  if (params?.offset) q.set('offset', String(params.offset))
   const qs = q.toString()
-  return request<Comment[]>(`/alerts/${fingerprint}/comments${qs ? `?${qs}` : ''}`)
+  return request<CommentsPage>(`/alerts/${fingerprint}/comments${qs ? `?${qs}` : ''}`)
 }
 
 export function addComment(

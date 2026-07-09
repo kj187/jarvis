@@ -355,8 +355,10 @@ GET    /api/v1/alerts/:fingerprint/heatmap       full_protect?  → AlertHeatmap
 GET    /api/v1/alerts/:fingerprint/silence-events full_protect? → []SilenceEvent   (silence action timeline)
 
 # ── Comments ─────────────────────────────────────────────────────────────────
-GET    /api/v1/alerts/:fingerprint/comments      full_protect?  → []Comment
-POST   /api/v1/alerts/:fingerprint/comments      Auth  (write)  Body: { authorName, body, eventId? }
+GET    /api/v1/alerts/:fingerprint/comments      full_protect?  → { comments: Comment[], total }  ?limit= ?offset= ?cluster= (required)
+#        mirrors the history/timeline pagination pattern: default limit 20, max 100, offset >= 0
+#        (parseFingerprintClusterPagination); ORDER BY created_at DESC, id DESC (newest first)
+POST   /api/v1/alerts/:fingerprint/comments      Auth  (write)  Body: { authorName, body, eventId? }  (body capped at 10000 chars → 400)
 DELETE /api/v1/alerts/:fingerprint/comments/:id  Auth  (write)  (author-gated: user_id, else author_name)
 
 # ── Claims ───────────────────────────────────────────────────────────────────
@@ -481,7 +483,9 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
 │   │                            — both AlertDetailPanel and every AlertCard entry query it),
 │   │                            useRefreshAlerts
 │   ├── useAlertCounts.ts      → per-state alert counts for nav badges
-│   ├── useAlertComments.ts    → useAlertComments, useAddComment, useDeleteComment (all cluster-scoped)
+│   ├── useAlertComments.ts    → useAlertComments(fingerprint, cluster, page), useAddComment,
+│   │                            useDeleteComment (all cluster-scoped); COMMENTS_PAGE_SIZE = 20;
+│   │                            query key `['comments', fingerprint, clusterName, page]`
 │   ├── useAlertClaim.ts       → useActiveClaim, useClaimHistory, useSetClaim, useReleaseClaim,
 │   │                            useUpdateClaimNote, useClaimController (all cluster-scoped); USERNAME_KEY
 │   ├── useSilences.ts         → useSilences, useSilenceEvents, useUpsertSilence, useDeleteSilence,
@@ -556,23 +560,61 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │   │                        reordering (persisted: 'jarvis-list-section-order:<label>')
     │   ├── AlertListRow.tsx   → single/indented row
     │   ├── AlertDetailPanel.tsx → slide-over: labels/annotations + link buttons, stats & timeline,
-    │   │                          claim (useClaimController), comments, silence controls + Fast-Silence, AI-prompt section;
+    │   │                          claim (useClaimController), comments (CommentsPanel), silence
+    │   │                          controls + Fast-Silence, AI-prompt section;
     │   │                          header (below the stats line, above the action buttons) embeds
     │   │                          AlertHeatmap directly — not a collapsible section, always visible;
     │   │                          close (X) is rendered inline in the header row next to the status
     │   │                          badges as a bordered button (Sheet's own absolute-positioned close
     │   │                          is suppressed via `hideCloseButton`) — was previously floating
     │   │                          top-right, forcing `pr-8` padding on every header row; sheet width
-    │   │                          is 10% narrower than Sheet's default (`sm:max-w-[37.8rem]
-    │   │                          lg:max-w-[50.4rem]` override, this panel only); the expired-silence
-    │   │                          banner is collapsible (default collapsed, ChevronDown/Up toggle),
-    │   │                          state persisted per-alert in localStorage
+    │   │                          is `sm:max-w-[37.8rem] lg:max-w-[50.4rem]` (10% narrower than
+    │   │                          Sheet's default, this panel only), fixed regardless of tab — the
+    │   │                          expired-silence banner is collapsible (default collapsed,
+    │   │                          ChevronDown/Up toggle), state persisted per-alert in localStorage
     │   │                          (`jarvis:collapsed:expired-silence:<fingerprint>:<cluster>`) — the
     │   │                          active-silence banner stays always expanded (actionable: extend
-    │   │                          buttons, expiry warning)
-    │   ├── AlertDetailSection.tsx → collapsible section wrapper used inside the detail panel
-    │   ├── AlertDetailHistorySection.tsx → stats + merged event timeline section (heatmap lives in
-    │   │                        AlertDetailPanel's header, not here — see above)
+    │   │                          buttons, expiry warning); below the silence banners (`mt-3` gap), a
+    │   │                          **"Details" / "History" / "AI Prompt" / "Comments" tab bar** splits
+    │   │                          the rest of the panel — `activeTab` state (`'details' | 'history' |
+    │   │                          'ai-prompt' | 'comments'`, resets to `'details'` on fingerprint/
+    │   │                          cluster change like `historyPage`). Tabs render "folder tab" style:
+    │   │                          the active tab sits flush on the content background with no bottom
+    │   │                          border (`-mb-px border-b-transparent bg-card`, visually merges into
+    │   │                          the content below it), inactive tabs sit on a muted strip
+    │   │                          (`bg-muted/30` row, `border-b border-border`) — chosen over a plain
+    │   │                          underline and over a segmented-pill control (both tried and rejected
+    │   │                          in review) because it reads unambiguously as navigation with hidden
+    │   │                          panels behind it. "Details" holds Annotations → Summary → Links →
+    │   │                          Labels (no divider under Summary/Links/Labels —
+    │   │                          `AlertDetailSection bordered={false}` — only Annotations keeps its
+    │   │                          divider, since the tab boundary already separates the group);
+    │   │                          "History" holds `AlertDetailHistorySection` (event timeline only —
+    │   │                          own tab now, no more collapsible sub-header inside it, the tab label
+    │   │                          itself is the heading); "AI Prompt" holds
+    │   │                          `AlertDetailAIPromptSection` (copy-to-clipboard prompt text, was
+    │   │                          previously a collapsed-by-default subsection at the bottom of
+    │   │                          History — split into its own tab since building an AI prompt is a
+    │   │                          different task than reading the event timeline); "Comments" holds
+    │   │                          `CommentsPanel` alone at full panel width. The Comments tab label
+    │   │                          always carries a count badge (shows `0`, not hidden at zero) fed by
+    │   │                          a `useAlertComments(fingerprint, cluster, 1)` call that shares its
+    │   │                          cache with `CommentsPanel`'s own page-1 query (same key, no extra
+    │   │                          network cost) — earlier revisions of this panel tried a side-by-side
+    │   │                          two-column layout (comments in their own sticky column, collapsible
+    │   │                          to a slim strip) but that was scrapped after user feedback in favor
+    │   │                          of tabs: one column, no responsive-breakpoint width math, comments
+    │   │                          get the full panel width when active
+    │   ├── AlertDetailSection.tsx → collapsible section wrapper used inside the detail panel;
+    │   │                        `bordered` prop (default `true`) toggles the bottom divider — `false`
+    │   │                        for sections meant to flow into the next one without a visual break
+    │   ├── AlertDetailHistorySection.tsx → merged event timeline table + pager (heatmap lives in
+    │   │                        AlertDetailPanel's header, not here — see above; AI-prompt is its own
+    │   │                        `AlertDetailAIPromptSection` component/tab, not part of this one)
+    │   ├── AlertDetailAIPromptSection.tsx → copy-to-clipboard AI-analysis prompt text (`promptText`
+    │   │                        built + cached in `AlertDetailPanel`'s `getCachedPrompt`); own tab,
+    │   │                        always expanded (no collapsible wrapper — the tab itself is the
+    │   │                        section boundary)
     │   ├── AlertHeatmap.tsx    → 24h/7d/30d range toggle + box-grid firing-pattern heatmap; used by
     │   │                        AlertDetailPanel's header, self-contained (owns its own
     │   │                        useAlertHeatmap query + range state); 7d renders as 7 day-rows of
@@ -588,7 +630,6 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │   │                        lib/heatmapUtils.ts — plain exports, not this .tsx file, so
     │   │                        react-refresh/only-export-components stays clean) — single source
     │   │                        for both the detail-panel heatmap and the card sparkline
-    │   ├── AlertComments.tsx  → comment list + input (author-gated delete)
     │   ├── AckButton.tsx      → one-click Fast-Silence (short-lived exact-match silence); active-only
     │   │                        (getEffectiveAlertState), auth-gated (useProtectedAction); hover/focus
     │   │                        popover menu (FAST_SILENCE_DURATIONS 30m/1h/4h/1d/1w) picks the duration;
@@ -607,6 +648,41 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │   ├── LabelChip.tsx      → label chip with hover operator dropdown
     │   ├── ViewToggle.tsx     → ⊞ / ☰ toggle
     │   └── EmptyState.tsx     → large empty-state icon (no alerts)
+    ├── comments/
+    │   ├── CommentsPanel.tsx  → list (paginated, newest first) + Write/Preview editor; the sole
+    │   │                        content of AlertDetailPanel's "Comments" tab (full panel width, no
+    │   │                        responsive width classes of its own — the panel's own outer scroll
+    │   │                        container handles scrolling); local `page` state resets to 1 on
+    │   │                        fingerprint/cluster change;
+    │   │                        keeps a second background query on page 1 (`useAlertComments(...,
+    │   │                        1)`, deduped by TanStack Query when already on page 1) purely as a
+    │   │                        "did a newer comment land" signal — if its `total` exceeds the
+    │   │                        currently-viewed page's `total` while `page > 1`, shows a "New
+    │   │                        comment — jump to latest" affordance instead of forcing the user
+    │   │                        back to page 1 (WS `comment_added` invalidation never touches local
+    │   │                        page state, only the query cache); editor is a plain `<textarea>`
+    │   │                        (no WYSIWYG) with a Write/Preview tab pair — Preview renders through
+    │   │                        the same lazy `CommentMarkdown`; `Ctrl/Cmd+Enter` submits; length
+    │   │                        counter appears once within 500 chars of the 10 000-char server cap
+    │   ├── CommentMarkdown.tsx → `react-markdown` + `remark-gfm`, `skipHtml` (no raw HTML, ever —
+    │   │                        this is why react-markdown was chosen over a `dangerouslySetInnerHTML`
+    │   │                        approach, invariant/workflow rule 4), `allowedElements` locked to
+    │   │                        `p, br, strong, em, del, code, pre, a, ul, ol, li, blockquote` (a
+    │   │                        comment is a note, not a document — no images/headings/tables);
+    │   │                        links get `target="_blank" rel="noopener noreferrer"`, URL
+    │   │                        sanitization is react-markdown's built-in default (`javascript:`
+    │   │                        etc. neutralized); code highlighting via `rehype-highlight` +
+    │   │                        `highlight.js/lib/core` with a small explicit language set (`bash,
+    │   │                        json, yaml, go, javascript, sql, ini`) instead of the ~190-language
+    │   │                        default bundle; theme is hand-written in `index.css` (`.hljs*`
+    │   │                        rules) against our own `--color-*` CSS variables, not an imported
+    │   │                        hljs theme, so it stays legible in dark AND light mode; this whole
+    │   │                        module is `React.lazy`-imported from `CommentsPanel` (not eagerly)
+    │   │                        so the main bundle doesn't grow for users who never open comments —
+    │   │                        it renders as its own chunk (~320 KB) in `pnpm build` output
+    │   └── (storage stays raw text in `alert_comments.body` — Markdown is a rendering-only
+    │       concern; old plain-text comments render unchanged, a stray `*`/`_` rendering as
+    │       emphasis in a legacy comment is accepted)
     ├── silences/
     │   ├── SilencesPage.tsx   → dedicated page: card|list, fullscreen, show/hide expired,
     │   │                        sort (expires/created), matcher-chip filter
@@ -709,7 +785,7 @@ banner collapse state in AlertDetailPanel, default collapsed)
 | `alerts_update` | `{ alerts: EnrichedAlert[] }` | `queryClient.setQueryData(['alerts'], alerts)` |
 | `claim_set` | `{ fingerprint, clusterName, claim }` | patch alerts cache + invalidate claim queries (cluster-scoped keys) |
 | `claim_released` | `{ fingerprint, clusterName, releasedBy }` | set `activeClaim` to `undefined` + invalidate claim queries |
-| `comment_added` | `{ fingerprint, comment }` | invalidate comments query (cluster-scoped key) |
+| `comment_added` | `{ fingerprint, comment }` | invalidate comments query by prefix key `['comments', fingerprint, clusterName]` — matches every paged query key (`..., page]`) for that alert, so whichever page is mounted refetches; local `page` state is untouched (see `CommentsPanel.tsx` above for the page>1 "jump to latest" affordance) |
 | `silences_update` | `{}` (pure invalidation signal) | `invalidateQueries(['silences'])` → refetch from the in-memory snapshot. Broadcast by the recorder when the silence snapshot diff changed vs. the previous poll, and by every silence mutation write-through (`applySilenceWriteThrough`) |
 
 ---

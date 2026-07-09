@@ -8,8 +8,10 @@ import { cn } from '@/lib/utils'
 import { Sheet } from '@/components/ui/sheet'
 import { AlertBadge, StatusBadge } from './AlertBadge'
 import { labelColorStyle } from '@/lib/alertUtils'
-import { AlertComments } from './AlertComments'
+import { CommentsPanel } from '@/components/comments/CommentsPanel'
+import { useAlertComments } from '@/hooks/useAlertComments'
 import { AlertDetailHistorySection } from './AlertDetailHistorySection'
+import { AlertDetailAIPromptSection } from './AlertDetailAIPromptSection'
 import { AlertDetailSection } from './AlertDetailSection'
 import { AlertHeatmap } from './AlertHeatmap'
 import { SilenceForm } from '@/components/silences/SilenceForm'
@@ -214,7 +216,7 @@ export function AlertDetailPanel({
   onSelectAlert,
 }: AlertDetailPanelProps) {
   const [now, setNow] = useState(Date.now())
-  const [historyPageSize, setHistoryPageSize] = useState<10 | 50 | 100>(10)
+  const [historyPageSize, setHistoryPageSize] = useState<10 | 50 | 100>(50)
   const [historyPage, setHistoryPage] = useState(1)
   const [silenceFormTarget, setSilenceFormTarget] = useState<Silence | null>(null)
   const [showNewSilenceForm, setShowNewSilenceForm] = useState(false)
@@ -231,6 +233,8 @@ export function AlertDetailPanel({
   const claimName = user?.username ?? manualClaimName
   const [promptCopied, setPromptCopied] = useState(false)
   const [expiredSilenceCollapsed, setExpiredSilenceCollapsed] = useState(true)
+  const [expandedSilenceIds, setExpandedSilenceIds] = useState<Set<string>>(new Set())
+  const [activeTab, setActiveTab] = useState<'details' | 'history' | 'ai-prompt' | 'comments'>('details')
   const fmtTime = useFormatTime()
 
   const historyOffset = (historyPage - 1) * historyPageSize
@@ -254,6 +258,9 @@ export function AlertDetailPanel({
   const { mutate: deleteSilence } = useDeleteSilence()
   const { mutate: upsertSilence, isPending: isExtending } = useUpsertSilence()
   const { data: allAlerts = [] } = useAlerts()
+  // Shares its cache/network with CommentsPanel's own page-1 query (same key) —
+  // only read here for the "Comments" tab count badge.
+  const { data: commentsPage1 } = useAlertComments(alert?.fingerprint ?? '', alert?.clusterName ?? '', 1)
   const qc = useQueryClient()
 
   useEffect(() => {
@@ -263,6 +270,7 @@ export function AlertDetailPanel({
 
   useEffect(() => {
     setHistoryPage(1)
+    setActiveTab('details')
   }, [alert?.fingerprint, alert?.clusterName])
 
   useEffect(() => {
@@ -440,7 +448,7 @@ export function AlertDetailPanel({
           <div className="absolute inset-0 z-10 bg-black/40 pointer-events-none" aria-hidden="true" />
         )}
         {/* Header */}
-        <div className="border-b border-border bg-card px-5 py-4">
+        <div className="bg-muted/30 px-5 py-4">
           <div className="flex items-start justify-between gap-3">
             <h2 id="detail-panel-title" className="text-lg font-bold break-all">{alertname}</h2>
             <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
@@ -641,29 +649,38 @@ export function AlertDetailPanel({
           const isExpiring = s.status.state === 'active' && remaining <= FIFTEEN_MIN
           const isDeleting = deletingId === s.id
           const isPending = s.status.state === 'pending'
+          const isExpanded = expandedSilenceIds.has(s.id)
+          const toggleExpanded = () => setExpandedSilenceIds((prev) => {
+            const next = new Set(prev)
+            if (next.has(s.id)) next.delete(s.id); else next.add(s.id)
+            return next
+          })
 
           return (
             <div
               key={s.id}
               className={cn(
-                'border-b border-border px-5 py-4',
-                isExpiring
-                  ? (theme === 'light' ? 'bg-yellow-50' : 'bg-yellow-900/30')
-                  : (theme === 'light' ? 'bg-muted' : 'bg-slate-900'),
+                'border-l-8 bg-muted/20 px-4 py-2.5',
+                isExpiring ? 'border-l-yellow-500' : 'border-l-blue-500/70',
               )}
             >
-              <div className="mb-3 flex items-center justify-between gap-2">
-                <div className={cn(
-                  'flex items-center gap-1.5 text-xs font-semibold',
-                  isPending
-                    ? 'text-muted-foreground'
-                    : isExpiring
-                      ? (theme === 'light' ? 'text-yellow-700' : 'text-yellow-300')
-                      : 'text-foreground',
-                )}>
-                  <BellOff className="h-3 w-3 shrink-0" />
-                  {isPending ? 'Silence pending' : 'Silence active'}
-                </div>
+              <div className="flex items-center justify-between gap-2">
+                <button
+                  onClick={toggleExpanded}
+                  className="flex min-w-0 cursor-pointer items-center gap-1.5 text-xs font-semibold"
+                  aria-expanded={isExpanded}
+                >
+                  {isExpanded ? <ChevronUp className="h-3 w-3 shrink-0 text-muted-foreground" /> : <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />}
+                  <BellOff className={cn('h-3 w-3 shrink-0', isExpiring ? (theme === 'light' ? 'text-yellow-700' : 'text-yellow-300') : 'text-foreground')} />
+                  <span className={isPending ? 'text-muted-foreground' : isExpiring ? (theme === 'light' ? 'text-yellow-700' : 'text-yellow-300') : 'text-foreground'}>
+                    {isPending ? 'Silence pending' : 'Silence active'}
+                  </span>
+                  <span className="truncate font-normal text-muted-foreground">
+                    · {isPending
+                      ? `starts ${format(new Date(s.startsAt), 'yyyy-MM-dd HH:mm', { locale: enUS })} ${tzAbbr}`
+                      : `${isExpiring ? 'expires' : 'ends'} in ${formatDuration(remaining)}`}
+                  </span>
+                </button>
                 <div className="flex shrink-0 items-center gap-2">
                   {isExpiring && (
                     <>
@@ -711,83 +728,90 @@ export function AlertDetailPanel({
                 </div>
               </div>
 
-              <div className="flex gap-5 overflow-hidden">
-                <div className="w-[55%] shrink-0 grid grid-cols-[120px_minmax(0,1fr)] gap-x-3 gap-y-0.5 text-xs self-start">
-                  <span className="text-muted-foreground">Silence ID</span>
-                  <a
-                    href={`${s.alertmanagerUrl}/#/silences/${s.id}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="font-mono text-muted-foreground truncate hover:text-foreground underline decoration-dotted"
-                  >
-                    {s.id}
-                  </a>
+              {isExpanded && (
+                <>
+                  <div className="mt-3 flex gap-5 overflow-hidden">
+                    <div className="w-[55%] shrink-0 grid grid-cols-[120px_minmax(0,1fr)] gap-x-3 gap-y-0.5 text-xs self-start">
+                      <span className="text-muted-foreground">Silence ID</span>
+                      <a
+                        href={`${s.alertmanagerUrl}/#/silences/${s.id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-mono text-muted-foreground truncate hover:text-foreground underline decoration-dotted"
+                      >
+                        {s.id}
+                      </a>
 
-                  <span className="text-muted-foreground">Created by</span>
-                  <span className={isExpiring ? (theme === 'light' ? 'text-yellow-800' : 'text-yellow-200') : 'text-foreground'}>{s.createdBy}</span>
+                      <span className="text-muted-foreground">Created by</span>
+                      <span className={isExpiring ? (theme === 'light' ? 'text-yellow-800' : 'text-yellow-200') : 'text-foreground'}>{s.createdBy}</span>
 
-                  <span className="text-muted-foreground">Created at</span>
-                  <span className={isExpiring ? (theme === 'light' ? 'text-yellow-700' : 'text-yellow-400') : 'text-muted-foreground'}>
-                    {format(new Date(s.updatedAt), 'yyyy-MM-dd HH:mm', { locale: enUS })} {tzAbbr}
-                  </span>
-
-                  {isPending ? (
-                    <>
-                      <span className="text-muted-foreground">Starts at</span>
-                      <span className="text-muted-foreground">
-                        {format(new Date(s.startsAt), 'yyyy-MM-dd HH:mm', { locale: enUS })} {tzAbbr}
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <span className="text-muted-foreground">{isExpiring ? 'Expires' : 'Ends'}</span>
+                      <span className="text-muted-foreground">Created at</span>
                       <span className={isExpiring ? (theme === 'light' ? 'text-yellow-700' : 'text-yellow-400') : 'text-muted-foreground'}>
-                        in {formatDuration(remaining)} ({format(new Date(s.endsAt), 'yyyy-MM-dd HH:mm', { locale: enUS })} {tzAbbr})
+                        {format(new Date(s.updatedAt), 'yyyy-MM-dd HH:mm', { locale: enUS })} {tzAbbr}
                       </span>
-                    </>
-                  )}
 
-                  {s.comment && (
-                    <>
-                      <span className="text-muted-foreground">Reason</span>
-                      <span className={isExpiring ? (theme === 'light' ? 'text-yellow-700' : 'text-yellow-400') : 'text-muted-foreground'}>{s.comment}</span>
-                    </>
-                  )}
-                </div>
+                      {isPending ? (
+                        <>
+                          <span className="text-muted-foreground">Starts at</span>
+                          <span className="text-muted-foreground">
+                            {format(new Date(s.startsAt), 'yyyy-MM-dd HH:mm', { locale: enUS })} {tzAbbr}
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="text-muted-foreground">{isExpiring ? 'Expires' : 'Ends'}</span>
+                          <span className={isExpiring ? (theme === 'light' ? 'text-yellow-700' : 'text-yellow-400') : 'text-muted-foreground'}>
+                            in {formatDuration(remaining)} ({format(new Date(s.endsAt), 'yyyy-MM-dd HH:mm', { locale: enUS })} {tzAbbr})
+                          </span>
+                        </>
+                      )}
 
-                <div className="flex flex-1 min-w-0 flex-wrap content-start gap-1">
-                  {s.matchers.map((m, i) => <MatcherChip key={i} matcher={m} />)}
-                </div>
-              </div>
+                      {s.comment && (
+                        <>
+                          <span className="text-muted-foreground">Reason</span>
+                          <span className={isExpiring ? (theme === 'light' ? 'text-yellow-700' : 'text-yellow-400') : 'text-muted-foreground'}>{s.comment}</span>
+                        </>
+                      )}
+                    </div>
 
-              {(() => {
-                const affected = allAlerts.filter((a) => a.status.silencedBy.includes(s.id))
-                if (affected.length === 0) return null
+                    <div className="flex flex-1 min-w-0 flex-wrap content-start gap-1">
+                      {s.matchers.map((m, i) => <MatcherChip key={i} matcher={m} />)}
+                    </div>
+                  </div>
 
-                return (
-                  <AffectedAlertsSection
-                    affected={affected}
-                    currentAlert={alert}
-                    onSelectAlert={onSelectAlert}
-                  />
-                )
-              })()}
+                  {(() => {
+                    const affected = allAlerts.filter((a) => a.status.silencedBy.includes(s.id))
+                    if (affected.length === 0) return null
+
+                    return (
+                      <AffectedAlertsSection
+                        affected={affected}
+                        currentAlert={alert}
+                        onSelectAlert={onSelectAlert}
+                      />
+                    )
+                  })()}
+                </>
+              )}
             </div>
           )
         })}
 
         {/* Expired silence banners */}
         {expiredSilences.map((s) => (
-          <div key={s.id} className={cn('border-b border-border px-5 py-3', theme === 'light' ? 'bg-muted' : 'bg-slate-950')}>
+          <div key={s.id} className="border-l-8 border-l-violet-500/70 bg-muted/20 px-4 py-2.5">
             <div className={cn('flex items-center justify-between gap-2', !expiredSilenceCollapsed && 'mb-3')}>
               <button
-                className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground cursor-pointer"
+                className="flex min-w-0 cursor-pointer items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground"
                 onClick={toggleExpiredSilenceCollapsed}
                 aria-expanded={!expiredSilenceCollapsed}
               >
-                {expiredSilenceCollapsed ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />}
+                {expiredSilenceCollapsed ? <ChevronDown className="h-3 w-3 shrink-0" /> : <ChevronUp className="h-3 w-3 shrink-0" />}
                 <BellOff className="h-3 w-3 shrink-0" />
                 Silence expired
+                <span className="truncate font-normal">
+                  · {formatDuration(now - new Date(s.endsAt).getTime())} ago
+                </span>
               </button>
               <div className="flex shrink-0 items-center gap-2">
                 <button
@@ -835,6 +859,50 @@ export function AlertDetailPanel({
           </div>
         ))}
 
+        {/* Tabs — Details / History / AI Prompt / Comments. "Folder tab" look:
+            active tab sits flush on the content background with no bottom
+            border (visually merges into what's below it), inactive tabs sit
+            on a muted strip — reads as a real nav with hidden panels behind
+            it, not decoration. */}
+        <div className="flex gap-1 border-b border-border bg-muted/30 px-5 pt-3">
+          {(
+            [
+              { key: 'details', label: 'Details' },
+              { key: 'history', label: 'History' },
+              { key: 'comments', label: 'Comments' },
+              { key: 'ai-prompt', label: 'AI Prompt' },
+            ] as const
+          ).map((tab) => (
+            <button
+              key={tab.key}
+              data-testid={`detail-tab-${tab.key}`}
+              onClick={() => setActiveTab(tab.key)}
+              className={cn(
+                'relative top-px flex cursor-pointer items-center gap-1.5 rounded-t-md border px-3 py-2 text-xs font-semibold',
+                activeTab === tab.key
+                  ? '-mb-px border-border border-b-transparent bg-card text-foreground'
+                  : 'border-transparent bg-transparent text-muted-foreground hover:text-foreground',
+              )}
+            >
+              {tab.label}
+              {tab.key === 'comments' && (
+                <span
+                  data-testid="detail-tab-comments-count"
+                  className={cn(
+                    'inline-flex h-[15px] min-w-[15px] items-center justify-center rounded-full px-1 text-[10px] font-bold',
+                    activeTab === 'comments' ? 'bg-link/20 text-link' : 'bg-accent text-muted-foreground',
+                  )}
+                >
+                  {commentsPage1?.total ?? 0}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+
+        {/* Details tab */}
+        {activeTab === 'details' && (
+        <>
         {/* Annotations */}
         {annotationEntries.length > 0 && (
           <AlertDetailSection title="Annotations" defaultOpen={true} testId="detail-annotations-section">
@@ -851,7 +919,7 @@ export function AlertDetailPanel({
 
         {/* Summary / Description */}
         {(summaryText || descriptionText) && (
-          <AlertDetailSection title="Summary" defaultOpen={true}>
+          <AlertDetailSection title="Summary" defaultOpen={true} bordered={false}>
             <div className="space-y-2">
               {summaryText && (
                 <p className="text-sm text-foreground">{renderTextWithLinks(summaryText)}</p>
@@ -884,6 +952,7 @@ export function AlertDetailPanel({
               </>
             }
             defaultOpen={true}
+            bordered={false}
           >
             <div className="flex flex-wrap items-center gap-2">
               {linkButtons.map((btn) => (
@@ -903,7 +972,7 @@ export function AlertDetailPanel({
         )}
 
         {/* Labels */}
-        <AlertDetailSection title="Labels" testId="detail-labels-section">
+        <AlertDetailSection title="Labels" testId="detail-labels-section" bordered={false}>
           <div className="grid grid-cols-2 gap-x-4 gap-y-2">
             <div className="space-y-2">{renderLabelColumn(leftLabels)}</div>
             <div className="space-y-2">{renderLabelColumn(rightLabels)}</div>
@@ -919,24 +988,36 @@ export function AlertDetailPanel({
             </div>
           )}
         </AlertDetailSection>
+        </>
+        )}
 
-        {/* History */}
-        <AlertDetailHistorySection
-          timelineData={timelineData}
-          historyPage={historyPage}
-          historyPageSize={historyPageSize}
-          setHistoryPage={setHistoryPage}
-          setHistoryPageSize={setHistoryPageSize}
-          alertmanagerUrl={alert.alertmanagerUrl}
-          promptText={promptText}
-          promptCopied={promptCopied}
-          setPromptCopied={setPromptCopied}
-        />
+        {/* History tab (event timeline) */}
+        {activeTab === 'history' && (
+          <AlertDetailHistorySection
+            timelineData={timelineData}
+            historyPage={historyPage}
+            historyPageSize={historyPageSize}
+            setHistoryPage={setHistoryPage}
+            setHistoryPageSize={setHistoryPageSize}
+            alertmanagerUrl={alert.alertmanagerUrl}
+          />
+        )}
 
-        {/* Comments */}
-        <AlertDetailSection title="Comments" testId="detail-comments-section">
-          <AlertComments fingerprint={alert.fingerprint} clusterName={alert.clusterName} />
-        </AlertDetailSection>
+        {/* AI Prompt tab */}
+        {activeTab === 'ai-prompt' && (
+          <AlertDetailAIPromptSection
+            promptText={promptText}
+            promptCopied={promptCopied}
+            setPromptCopied={setPromptCopied}
+          />
+        )}
+
+        {/* Comments tab */}
+        {activeTab === 'comments' && (
+          <div data-testid="detail-comments-section" className="px-5 py-4">
+            <CommentsPanel fingerprint={alert.fingerprint} clusterName={alert.clusterName} />
+          </div>
+        )}
 
       </Sheet>
 

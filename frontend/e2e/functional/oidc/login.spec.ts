@@ -1,4 +1,4 @@
-import { test, expect, waitForActiveAlerts, JARVIS_BASE_URL } from '../../support/fixtures'
+import { test, expect, waitForActiveAlerts, expandComments, JARVIS_BASE_URL } from '../../support/fixtures'
 import { loginOIDC } from '../../support/auth'
 
 /**
@@ -36,6 +36,7 @@ test('I3 write_protect oidc mode shows SSO login button on write attempt', async
 
   const panel = page.getByTestId('detail-panel')
   await expect(panel).toBeVisible()
+  await expandComments(panel)
 
   // Type a comment and submit — triggers LoginModal in write_protect oidc mode
   const commentInput = page.getByTestId('detail-comment-input')

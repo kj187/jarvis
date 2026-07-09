@@ -1,4 +1,6 @@
-import { test as base, expect, type Page } from '@playwright/test'
+import { test as base, expect, type Page, type Locator } from '@playwright/test'
+
+type Rootish = Page | Locator
 import { AlertmanagerClient } from './alertmanager'
 import { JarvisClient } from './jarvis'
 
@@ -59,3 +61,12 @@ export async function waitForActiveAlerts(
 }
 
 export const JARVIS_BASE_URL = JARVIS_URL
+
+/**
+ * Detail panel shows "Details" and "Comments" as tabs, "Details" active by
+ * default — switch to the Comments tab before interacting with comment
+ * testids.
+ */
+export async function expandComments(root: Rootish): Promise<void> {
+  await root.getByTestId('detail-tab-comments').click()
+}

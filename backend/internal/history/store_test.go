@@ -3,6 +3,7 @@ package history
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -381,12 +382,12 @@ func TestComments(t *testing.T) {
 		t.Error("expected non-zero comment ID")
 	}
 
-	comments, err := s.GetComments("fp1", "c")
+	comments, total, err := s.GetComments("fp1", "c", 20, 0)
 	if err != nil {
 		t.Fatalf("GetComments: %v", err)
 	}
-	if len(comments) != 1 || comments[0].Body != "hello" {
-		t.Errorf("unexpected comments: %+v", comments)
+	if total != 1 || len(comments) != 1 || comments[0].Body != "hello" {
+		t.Errorf("unexpected comments: total=%d comments=%+v", total, comments)
 	}
 
 	deleted, err := s.DeleteComment(c.ID, "fp1", "c")
@@ -394,9 +395,63 @@ func TestComments(t *testing.T) {
 		t.Fatalf("DeleteComment: deleted=%v err=%v", deleted, err)
 	}
 
-	comments2, _ := s.GetComments("fp1", "c")
-	if len(comments2) != 0 {
-		t.Errorf("expected 0 comments after delete, got %d", len(comments2))
+	comments2, total2, _ := s.GetComments("fp1", "c", 20, 0)
+	if len(comments2) != 0 || total2 != 0 {
+		t.Errorf("expected 0 comments after delete, got %d (total %d)", len(comments2), total2)
+	}
+}
+
+func TestGetComments_PaginatedAndOrdered(t *testing.T) {
+	s := newTestStore(t)
+	s.UpsertFingerprint("fp1", "A", "c", nil) //nolint:errcheck
+
+	for i := 0; i < 5; i++ {
+		if _, err := s.AddComment("fp1", "c", nil, nil, "alice", fmt.Sprintf("comment %d", i)); err != nil {
+			t.Fatalf("AddComment %d: %v", i, err)
+		}
+	}
+
+	page1, total, err := s.GetComments("fp1", "c", 2, 0)
+	if err != nil {
+		t.Fatalf("GetComments page 1: %v", err)
+	}
+	if total != 5 {
+		t.Fatalf("total = %d, want 5", total)
+	}
+	if len(page1) != 2 || page1[0].Body != "comment 4" || page1[1].Body != "comment 3" {
+		t.Fatalf("unexpected page 1: %+v", page1)
+	}
+
+	page2, _, err := s.GetComments("fp1", "c", 2, 2)
+	if err != nil {
+		t.Fatalf("GetComments page 2: %v", err)
+	}
+	if len(page2) != 2 || page2[0].Body != "comment 2" || page2[1].Body != "comment 1" {
+		t.Fatalf("unexpected page 2: %+v", page2)
+	}
+}
+
+func TestGetComments_LimitClamped(t *testing.T) {
+	s := newTestStore(t)
+	s.UpsertFingerprint("fp1", "A", "c", nil) //nolint:errcheck
+	if _, err := s.AddComment("fp1", "c", nil, nil, "alice", "hi"); err != nil {
+		t.Fatalf("AddComment: %v", err)
+	}
+
+	comments, total, err := s.GetComments("fp1", "c", 0, -5)
+	if err != nil {
+		t.Fatalf("GetComments: %v", err)
+	}
+	if total != 1 || len(comments) != 1 {
+		t.Errorf("expected default limit/offset clamp to still return the row, got total=%d len=%d", total, len(comments))
+	}
+
+	comments2, _, err := s.GetComments("fp1", "c", 1000, 0)
+	if err != nil {
+		t.Fatalf("GetComments over-limit: %v", err)
+	}
+	if len(comments2) != 1 {
+		t.Errorf("expected clamped limit to still return the one row, got %d", len(comments2))
 	}
 }
 
@@ -421,7 +476,7 @@ func TestDeleteComment_WrongFingerprint(t *testing.T) {
 	}
 
 	// Original comment must still exist.
-	comments, _ := s.GetComments("fp1", "c")
+	comments, _, _ := s.GetComments("fp1", "c", 20, 0)
 	if len(comments) != 1 {
 		t.Errorf("expected comment to survive wrong-fingerprint delete, got %d comments", len(comments))
 	}
