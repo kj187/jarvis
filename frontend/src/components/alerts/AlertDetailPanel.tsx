@@ -449,9 +449,9 @@ export function AlertDetailPanel({
         )}
         {/* Header */}
         <div className="bg-muted/30 px-5 py-4">
-          <div className="flex items-start justify-between gap-3">
-            <h2 id="detail-panel-title" className="text-lg font-bold break-all">{alertname}</h2>
-            <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+            <h2 id="detail-panel-title" className="min-w-0 text-lg font-bold break-words">{alertname}</h2>
+            <div className="flex flex-wrap items-center gap-1.5 sm:shrink-0 sm:justify-end">
               <span className="inline-flex items-center gap-1 rounded border border-border bg-muted px-2 py-0.5 text-xs font-medium">
                 <Server className="h-3 w-3 text-muted-foreground" />
                 {alert.clusterName}
@@ -487,7 +487,7 @@ export function AlertDetailPanel({
           </div>
 
           {/* Action buttons */}
-          <div className="mt-3 flex items-center justify-between gap-2">
+          <div className="mt-3 flex flex-wrap items-center gap-2">
             {alert.alertmanagerUrl && (
               <a
                 href={(() => {
@@ -509,7 +509,7 @@ export function AlertDetailPanel({
                 Go to Alertmanager
               </a>
             )}
-            <div className="flex shrink-0 items-center gap-2 ml-auto">
+            <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
               {activeClaim ? (
                 <div data-testid="detail-claim-badge" className={cn('flex h-8 min-w-0 max-w-[16rem] items-center gap-1.5 rounded-md border px-2', theme === 'light' ? 'border-blue-300 bg-blue-50' : 'border-blue-800 bg-blue-950/40')}>
                   <User className={cn('h-3 w-3 shrink-0', theme === 'light' ? 'text-blue-600' : 'text-blue-400')} />
@@ -864,7 +864,7 @@ export function AlertDetailPanel({
             border (visually merges into what's below it), inactive tabs sit
             on a muted strip — reads as a real nav with hidden panels behind
             it, not decoration. */}
-        <div className="flex gap-1 border-b border-border bg-muted/30 px-5 pt-3">
+        <div className="flex flex-wrap gap-1 border-b border-border bg-muted/30 px-5 pt-3">
           {(
             [
               { key: 'details', label: 'Details' },
@@ -878,7 +878,7 @@ export function AlertDetailPanel({
               data-testid={`detail-tab-${tab.key}`}
               onClick={() => setActiveTab(tab.key)}
               className={cn(
-                'relative top-px flex cursor-pointer items-center gap-1.5 rounded-t-md border px-3 py-2 text-xs font-semibold',
+                'relative top-px flex shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-t-md border px-3 py-2 text-xs font-semibold',
                 activeTab === tab.key
                   ? '-mb-px border-border border-b-transparent bg-card text-foreground'
                   : 'border-transparent bg-transparent text-muted-foreground hover:text-foreground',
