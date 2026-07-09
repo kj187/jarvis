@@ -5,6 +5,7 @@ import {
   formatAckDuration,
   formatSilenceDuration,
   formatTime,
+  computeLabelBreakdown,
   getFilterableLabels,
   pickIdentifierLabel,
   safeRegex,
@@ -924,5 +925,100 @@ describe('getExpiredSilence', () => {
     const newer = makeSilence({ id: 'new', status: { state: 'expired' }, clusterName: 'cluster-a', endsAt: '2026-02-01T00:00:00Z', matchers: [{ name: 'alertname', value: 'X', isEqual: true, isRegex: false }] })
     const alert = makeAlert({ clusterName: 'cluster-a', labels: { alertname: 'X' }, status: { inhibitedBy: [], silencedBy: [], state: 'active' } })
     expect(getExpiredSilence(alert, [older, newer])?.id).toBe('new')
+  })
+})
+
+describe('computeLabelBreakdown', () => {
+  it('returns [] for no alerts', () => {
+    expect(computeLabelBreakdown([])).toEqual([])
+  })
+
+  it('counts occurrences of each label value', () => {
+    const alerts = [
+      makeAlert({ labels: { alertname: 'X', severity: 'critical', cluster: 'prod' } }),
+      makeAlert({ labels: { alertname: 'X', severity: 'critical', cluster: 'prod' } }),
+      makeAlert({ labels: { alertname: 'X', severity: 'warning', cluster: 'staging' } }),
+    ]
+    const breakdown = computeLabelBreakdown(alerts)
+    const cluster = breakdown.find((b) => b.name === 'cluster')!
+    expect(cluster.total).toBe(3)
+    expect(cluster.values).toEqual([
+      { value: 'prod', count: 2 },
+      { value: 'staging', count: 1 },
+    ])
+  })
+
+  it('pins alertname and severity to the top regardless of coverage', () => {
+    const alerts = [
+      makeAlert({ labels: { alertname: 'X', severity: 'critical', instance: 'a', job: 'b', team: 'c' } }),
+      makeAlert({ labels: { alertname: 'X', severity: 'critical', instance: 'a', job: 'b', team: 'c' } }),
+    ]
+    const breakdown = computeLabelBreakdown(alerts)
+    expect(breakdown[0].name).toBe('alertname')
+    expect(breakdown[1].name).toBe('severity')
+  })
+
+  it('orders non-pinned labels by coverage (alerts carrying the label) descending', () => {
+    const alerts = [
+      makeAlert({ labels: { alertname: 'X', instance: 'a', pod: 'p1' } }),
+      makeAlert({ labels: { alertname: 'X', instance: 'b' } }),
+      makeAlert({ labels: { alertname: 'X', instance: 'c' } }),
+    ]
+    const breakdown = computeLabelBreakdown(alerts)
+    const names = breakdown.map((b) => b.name)
+    expect(names.indexOf('instance')).toBeLessThan(names.indexOf('pod'))
+  })
+
+  it('excludes the receiver alias and @receiver pseudo-label (dedicated UI elsewhere)', () => {
+    const alerts = [makeAlert({ receivers: [{ name: 'team-a' }] })]
+    const breakdown = computeLabelBreakdown(alerts)
+    expect(breakdown.find((b) => b.name === 'receiver')).toBeUndefined()
+    expect(breakdown.find((b) => b.name === '@receiver')).toBeUndefined()
+  })
+
+  it('includes the @cluster pseudo-label', () => {
+    const alerts = [makeAlert({ clusterName: 'cluster-a' })]
+    const breakdown = computeLabelBreakdown(alerts)
+    expect(breakdown.find((b) => b.name === '@cluster')?.values).toEqual([{ value: 'cluster-a', count: 1 }])
+  })
+
+  it('caps values per label to maxValues (default 8) and reports the truncated count', () => {
+    const alerts = Array.from({ length: 10 }, (_, i) =>
+      makeAlert({ labels: { alertname: 'X', instance: `web${i}` } }),
+    )
+    const breakdown = computeLabelBreakdown(alerts)
+    const instance = breakdown.find((b) => b.name === 'instance')!
+    expect(instance.values).toHaveLength(8)
+    expect(instance.truncated).toBe(2)
+  })
+
+  it('respects a custom maxValues option', () => {
+    const alerts = Array.from({ length: 5 }, (_, i) =>
+      makeAlert({ labels: { alertname: 'X', instance: `web${i}` } }),
+    )
+    const breakdown = computeLabelBreakdown(alerts, { maxValues: 2 })
+    const instance = breakdown.find((b) => b.name === 'instance')!
+    expect(instance.values).toHaveLength(2)
+    expect(instance.truncated).toBe(3)
+  })
+
+  it('caps the number of label names to maxLabels (default 10)', () => {
+    const labels: Record<string, string> = { alertname: 'X' }
+    for (let i = 0; i < 15; i++) labels[`label${i}`] = 'v'
+    const breakdown = computeLabelBreakdown([makeAlert({ labels })])
+    expect(breakdown).toHaveLength(10)
+  })
+
+  it('respects a custom maxLabels option', () => {
+    const labels: Record<string, string> = { alertname: 'X' }
+    for (let i = 0; i < 5; i++) labels[`label${i}`] = 'v'
+    const breakdown = computeLabelBreakdown([makeAlert({ labels })], { maxLabels: 3 })
+    expect(breakdown).toHaveLength(3)
+  })
+
+  it('skips empty label values', () => {
+    const alerts = [makeAlert({ labels: { alertname: 'X', empty: '' } })]
+    const breakdown = computeLabelBreakdown(alerts)
+    expect(breakdown.find((b) => b.name === 'empty')).toBeUndefined()
   })
 })
