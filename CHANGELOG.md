@@ -1,3 +1,50 @@
+<a name="v1.7.0"></a>
+## [v1.7.0](https://github.com/kj187/jarvis/compare/v1.7.0-rc.1...v1.7.0) (2026-07-09)
+
+### Features
+
+* **alerts:** add alerts overview modal with top-label breakdown ([#87](https://github.com/kj187/jarvis/issues/87))
+
+<a name="v1.7.0-rc.1"></a>
+## [v1.7.0-rc.1](https://github.com/kj187/jarvis/compare/v1.6.0...v1.7.0-rc.1) (2026-07-08)
+
+### Bug Fixes
+
+* **alerts:** redesign Fast-Silence menu, aligned submenu icon ([#79](https://github.com/kj187/jarvis/issues/79))
+* **backend:** silence staticcheck SA5011 false positive in registry_test ([#85](https://github.com/kj187/jarvis/issues/85))
+* **silences:** use shared fallback refetch interval for cluster health ([#82](https://github.com/kj187/jarvis/issues/82))
+* **silences:** eliminate per-client Alertmanager load ([#80](https://github.com/kj187/jarvis/issues/80))
+* **silences:** edit real regex matchers as raw text instead of corrupting them ([#70](https://github.com/kj187/jarvis/issues/70))
+* **silences:** fix group Fast-Silence scope and reach 100% coverage ([#69](https://github.com/kj187/jarvis/issues/69))
+* **silences:** validate matchers server-side and relay AM rejections ([#68](https://github.com/kj187/jarvis/issues/68))
+* **silences:** match Alertmanager's anchored-regex semantics exactly ([#67](https://github.com/kj187/jarvis/issues/67))
+* **ws:** register clients synchronously to stop losing events after connect
+
+### Chores
+
+* **deps:** bump docker/metadata-action from 6.1.0 to 6.2.0 ([#75](https://github.com/kj187/jarvis/issues/75))
+* **deps:** bump anchore/sbom-action/download-syft from 0.9.0 to 0.24.0 ([#76](https://github.com/kj187/jarvis/issues/76))
+* **deps:** bump docker/setup-buildx-action from 4.1.0 to 4.2.0 ([#74](https://github.com/kj187/jarvis/issues/74))
+* **deps:** bump docker/setup-qemu-action from 4.1.0 to 4.2.0 ([#73](https://github.com/kj187/jarvis/issues/73))
+* **deps:** bump docker/login-action from 4.2.0 to 4.4.0 ([#72](https://github.com/kj187/jarvis/issues/72))
+
+### Documentation
+
+* add Mermaid diagrams for lifecycle, OIDC login, and E2E stack ([#81](https://github.com/kj187/jarvis/issues/81))
+* make PR-only git workflow explicit with interactive gates for AI agents ([#60](https://github.com/kj187/jarvis/issues/60))
+* define project scope, add scope gate and issue-triage command ([#58](https://github.com/kj187/jarvis/issues/58))
+
+### Features
+
+* **alerts:** firing-pattern heatmap for card + detail view ([#84](https://github.com/kj187/jarvis/issues/84))
+* **alerts:** add group Fast-Silence and persistent bell action rail ([#61](https://github.com/kj187/jarvis/issues/61))
+* **alerts:** support Alertmanager HA gossip clusters with fingerprint dedup ([#59](https://github.com/kj187/jarvis/issues/59))
+* **release:** support pre-release (RC) tags in release workflow ([#86](https://github.com/kj187/jarvis/issues/86))
+
+### Tests
+
+* **silences:** add differential E2E specs against real Alertmanager ([#71](https://github.com/kj187/jarvis/issues/71))
+
 <a name="v1.6.0"></a>
 ## [v1.6.0](https://github.com/kj187/jarvis/compare/v1.5.3...v1.6.0) (2026-07-04)
 
@@ -5,26 +52,28 @@
 
 * **api:** add cluster label to alert events, add per-cluster fetch duration
 * **db:** report event creation from RecordStatusChange, fix event metric drift
+* **docker:** generate release SBOM via syft directly, sync release docs
 * **docker:** chart-release guard and cosign auth
 
 ### Chores
 
+* decouple Helm chart versioning, publish and sign via own workflow
 * enforce DCO sign-off on all commits via CI check
+* update maintainer in Chart.yaml
 * add OpenSSF Scorecard workflow
 * fail release job instead of overwriting existing release
 * harden workflows, move chart publishing out of release.yml
-* decouple Helm chart versioning, publish and sign via own workflow
-* update maintainer in Chart.yaml
 * **ci:** replace unpinned pnpm npm-install with SHA-pinned pnpm/action-setup
-* **deps:** bump actions/checkout from 6.0.3 to 7.0.0 ([#42](https://github.com/kj187/jarvis/issues/42))
+* **deps:** bump the minor-patch group across 1 directory with 9 updates ([#52](https://github.com/kj187/jarvis/issues/52))
 * **deps:** bump azure/setup-helm from 4.3.1 to 5.0.1 ([#45](https://github.com/kj187/jarvis/issues/45))
+* **deps:** bump actions/checkout from 6.0.3 to 7.0.0 ([#42](https://github.com/kj187/jarvis/issues/42))
 * **deps:** bump actions/setup-go from 6.4.0 to 6.5.0 ([#46](https://github.com/kj187/jarvis/issues/46))
 * **deps:** bump golangci/golangci-lint-action from 9.2.1 to 9.3.0 ([#47](https://github.com/kj187/jarvis/issues/47))
 * **deps:** bump gitleaks/gitleaks-action from 2.3.9 to 3.0.0 ([#43](https://github.com/kj187/jarvis/issues/43))
-* **deps:** bump the minor-patch group across 1 directory with 9 updates ([#52](https://github.com/kj187/jarvis/issues/52))
+* **deps-dev:** bump eslint from 9.39.4 to 10.6.0 in /frontend ([#50](https://github.com/kj187/jarvis/issues/50))
 * **deps-dev:** bump [@types](https://github.com/types)/node from 25.9.3 to 26.0.1 in /frontend ([#49](https://github.com/kj187/jarvis/issues/49))
 * **deps-dev:** bump jscpd from 4.2.5 to 5.0.11 in /frontend ([#51](https://github.com/kj187/jarvis/issues/51))
-* **deps-dev:** bump eslint from 9.39.4 to 10.6.0 in /frontend ([#50](https://github.com/kj187/jarvis/issues/50))
+* **release:** prepare v1.6.0
 * **security:** consolidate gosec into golangci-lint, move govulncheck to CI-only
 
 ### Documentation
