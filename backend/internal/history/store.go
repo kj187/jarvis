@@ -314,12 +314,17 @@ func (s *Store) GetHistoryForCluster(fingerprint, clusterName string, limit, off
 	return events, total, nil
 }
 
-// GetFiringStarts returns the start times of firing events for a fingerprint
-// (optionally cluster-scoped) since the given time, newest first, capped at
-// limit. One firing event = one event row with status "firing" — the grace
-// period (invariant #1: a resolve+refire within 60s reopens the existing
-// event) already prevents double-counting at write time, so no extra
-// dedup is needed here.
+// GetFiringStarts returns the recorded times of firing events for a
+// fingerprint (optionally cluster-scoped) since the given time, newest
+// first, capped at limit. Uses recorded_at (when Jarvis observed the
+// event), not starts_at (Alertmanager's upstream condition-start time), so
+// the heatmap bucketing agrees with "Last fired" and the history log —
+// otherwise a poll gap between AM's StartsAt and Jarvis first seeing it
+// makes the same single event appear at two different times in the UI. One
+// firing event = one event row with status "firing" — the grace period
+// (invariant #1: a resolve+refire within 60s reopens the existing event)
+// already prevents double-counting at write time, so no extra dedup is
+// needed here.
 func (s *Store) GetFiringStarts(fingerprint, clusterName string, since time.Time, limit int) ([]time.Time, error) {
 	if limit <= 0 || limit > 10000 {
 		limit = 10000
@@ -334,9 +339,9 @@ func (s *Store) GetFiringStarts(fingerprint, clusterName string, since time.Time
 	args = append(args, limit)
 
 	rows, err := s.query(context.Background(), `
-		SELECT starts_at FROM alert_events
-		WHERE fingerprint = ? AND status = ? AND starts_at >= ?`+clusterFilter+`
-		ORDER BY starts_at DESC
+		SELECT recorded_at FROM alert_events
+		WHERE fingerprint = ? AND status = ? AND recorded_at >= ?`+clusterFilter+`
+		ORDER BY recorded_at DESC
 		LIMIT ?
 	`, args...)
 	if err != nil {
