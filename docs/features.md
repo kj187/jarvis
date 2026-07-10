@@ -164,7 +164,7 @@ Alerts are displayed as a flat list sorted by resolution time (newest first). A 
 - **Post-incident review:** After an incident you can look up exactly when an alert first fired, how long it stayed active, and how many times it re-fired before resolution — without relying on Prometheus or Grafana.
 - **Noise analysis:** Recurring alerts with high occurrence counts are easy to identify and prioritize for permanent fixes.
 - **Restarts are safe:** The history is not lost when Jarvis restarts, when Alertmanager is down for maintenance, or when the container is updated.
-- **Grace period:** If an alert resolves and re-fires within 60 seconds (e.g. due to a missed poll), Jarvis reopens the existing event instead of creating a phantom new one — keeping the history clean.
+- **Grace period:** If an alert resolves and re-fires within `max(60s, 2 × JARVIS_POLL_INTERVAL)` (e.g. due to a missed poll), Jarvis reopens the existing event instead of creating a phantom new one — keeping the history clean. Full lifecycle semantics: [docs/alert-lifecycle.md](alert-lifecycle.md).
 
 ---
 

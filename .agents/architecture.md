@@ -924,6 +924,11 @@ with its own `*alertmanager.Client`); `Cluster.AlertmanagerURL` /
 
 (source: `docs/diagrams/alert-lifecycle.mmd`, re-render via `make diagrams`)
 
+Full user-facing lifecycle reference — episodes/`starts_at`, grace period,
+resolved buffer, claim auto-release, startup reconciliation, fetch-failure
+guarantees: `docs/alert-lifecycle.md` (keep it in sync with lifecycle
+changes like every other doc).
+
 ```
 firing → suppressed   (silence activated)
        → resolved     (alert gone from AM API)
