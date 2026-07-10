@@ -469,7 +469,7 @@ func (r *Recorder) applyPollResults(
 				select {
 				case <-ctx.Done():
 				case <-time.After(20 * time.Minute):
-					r.alertStore.RemoveByFingerprintForCluster(ra.fingerprint, ra.clusterName)
+					r.alertStore.RemoveResolvedForCluster(ra.fingerprint, ra.clusterName)
 				}
 			}(ra)
 		}

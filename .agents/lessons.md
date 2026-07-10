@@ -9,6 +9,30 @@ instead of duplicating.
 
 ---
 
+## The 20-minute resolved-alert removal timer could delete an alert that had already re-fired
+
+**Symptom**: An alert resolved, then re-fired within the 20-minute
+"greyed-out" visibility window (correctly moved back into `AlertStore`'s
+active list by `Set()`). Up to 20 minutes later it could vanish from
+`GET /api/v1/alerts` for up to one poll interval, with nothing in the logs
+to explain it.
+**Cause**: `Recorder`'s post-resolve goroutine (`recorder.go`) scheduled a
+20-minute timer that called `AlertStore.RemoveByFingerprintForCluster` —
+which deleted the fingerprint from *both* the resolved buffer *and* the
+active list. If the alert had re-fired in the meantime, that delete from
+the active list was wrong: the alert was live again, and the timer had no
+way to know that (it only remembers the fingerprint+cluster it was
+scheduled for, not whether the underlying alert since changed state).
+**Rule**: A cleanup timer scheduled at time T for state observed at T must
+only ever undo *that* state — never blanket-delete by key, since the key
+might refer to something entirely different by the time the timer fires.
+Fixed by splitting the delete surface: `AlertStore.RemoveResolvedForCluster`
+(new) touches only the resolved buffer; `RemoveByFingerprintForCluster` was
+deleted since it had no other caller once the recorder switched to the
+narrower method.
+
+---
+
 ## A Jarvis restart during an alert's downtime resolve permanently swallowed its next re-fire
 
 **Symptom**: An alert that fired, then genuinely resolved while Jarvis

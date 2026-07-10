@@ -174,6 +174,44 @@ func TestAlertStore_RemoveByFingerprint_FromBuffer(t *testing.T) {
 	}
 }
 
+// TestAlertStore_RemoveResolvedForCluster_ClearsBufferWhenNotRefired covers
+// the plain 20-minute-timer case: the alert stayed resolved the whole time,
+// so removing it from the resolved buffer makes it disappear from Get().
+func TestAlertStore_RemoveResolvedForCluster_ClearsBufferWhenNotRefired(t *testing.T) {
+	s := &AlertStore{}
+	s.Set([]models.EnrichedAlert{{Fingerprint: "fp1", ClusterName: "homelab", Status: models.AlertStatus{State: "active"}}})
+	s.MarkResolvedForCluster("fp1", "homelab")
+
+	s.RemoveResolvedForCluster("fp1", "homelab")
+
+	if got := s.Get(); len(got) != 0 {
+		t.Fatalf("Get() = %+v, want empty (resolved buffer entry removed, never re-fired)", got)
+	}
+}
+
+// TestAlertStore_RemoveResolvedForCluster_LeavesReFiredAlertActive is WP4's
+// regression case: if the alert re-fires before the 20-minute removal timer
+// fires, Set() already moved it back into the active list and cleared its
+// resolved-buffer entry. The timer firing afterward must not remove it from
+// the active list too — RemoveByFingerprintForCluster (removed) did exactly
+// that; RemoveResolvedForCluster only ever touches the resolved buffer.
+func TestAlertStore_RemoveResolvedForCluster_LeavesReFiredAlertActive(t *testing.T) {
+	s := &AlertStore{}
+	s.Set([]models.EnrichedAlert{{Fingerprint: "fp1", ClusterName: "homelab", Status: models.AlertStatus{State: "active"}}})
+	s.MarkResolvedForCluster("fp1", "homelab")
+
+	// Re-fires within the 20-minute window: back in the active list.
+	s.Set([]models.EnrichedAlert{{Fingerprint: "fp1", ClusterName: "homelab", Status: models.AlertStatus{State: "active"}}})
+
+	// The removal timer scheduled at resolve time fires late (after the re-fire).
+	s.RemoveResolvedForCluster("fp1", "homelab")
+
+	got := s.Get()
+	if len(got) != 1 || got[0].Fingerprint != "fp1" || got[0].Status.State != "active" {
+		t.Fatalf("Get() = %+v, want [fp1 active] (re-fired alert must survive the late removal timer)", got)
+	}
+}
+
 func TestAlertStore_ConcurrentAccess(t *testing.T) {
 	s := &AlertStore{}
 	s.Set([]models.EnrichedAlert{makeAlert("fp1", "active")})
