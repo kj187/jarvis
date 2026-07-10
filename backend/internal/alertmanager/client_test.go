@@ -48,6 +48,27 @@ func TestGetAlerts(t *testing.T) {
 	}
 }
 
+// TestNewClient_SetsJarvisUserAgent verifies that requests identify themselves
+// to Alertmanager as Jarvis instead of Go's default "Go-http-client/1.1", so
+// AM access logs show who is calling.
+func TestNewClient_SetsJarvisUserAgent(t *testing.T) {
+	var gotUA string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotUA = r.Header.Get("User-Agent")
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode([]GettableAlert{}) //nolint:errcheck
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL)
+	if _, err := client.GetAlerts(context.Background()); err != nil {
+		t.Fatalf("GetAlerts() error: %v", err)
+	}
+	if !strings.HasPrefix(gotUA, "Jarvis/") {
+		t.Errorf("User-Agent = %q, want prefix %q", gotUA, "Jarvis/")
+	}
+}
+
 // TestGetAlerts_ReusesConnection verifies that get() drains the response body so
 // the underlying TCP connection is kept alive and reused across polls. The handler
 // appends trailing whitespace after the JSON value: the JSON decoder stops at the
