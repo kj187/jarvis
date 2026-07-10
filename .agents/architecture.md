@@ -863,7 +863,14 @@ with its own `*alertmanager.Client`); `Cluster.AlertmanagerURL` /
   in `history.SilenceStore` (in-memory snapshot per cluster, AlertStore
   pattern) — `GET /api/v1/silences` reads that snapshot and performs no
   upstream call. A failed silence fetch keeps the cluster's previous
-  snapshot (never blanks the silences page on a transient error).
+  snapshot (never blanks the silences page on a transient error). A failed
+  *alert* fetch (`Recorder.poll`, `recorder.go`) mirrors this: the cluster's
+  last successfully fetched alert list (`Recorder.lastGoodAlerts`) is reused
+  instead of contributing zero alerts for that poll, so a transient AM
+  outage never makes `applyPollResults`'s prev/curr diff read every alert of
+  that cluster as resolved (phantom resolves — false `resolved` events,
+  wrong `occurrence_count` increments, and premature claim releases on the
+  next re-fire).
 - `GET /api/v1/clusters` derives member health from `Cluster.MemberUpStates()`
   — the cached up-state written by every `FetchAlerts` (≤ one poll interval
   old), never a live ping. Members without poll state yet (first interval

@@ -9,6 +9,33 @@ instead of duplicating.
 
 ---
 
+## A cluster's failed alert fetch was diffed as if every one of its alerts had resolved
+
+**Symptom**: The silence-fetch path already had a "snapshot only on a
+successful fetch" guard (`poll()` in `recorder.go`), but the equivalent
+alert-fetch path didn't. A cluster whose `FetchAlerts` fails (all HA members
+down, or the only member down for a single-member cluster) simply
+`continue`d past that cluster for the poll — its alerts were absent from
+`allAlerts` entirely.
+**Cause**: `applyPollResults`'s prev/curr diff treats "alert present in
+`prevSnapshot` but missing from the current poll" as resolved — the
+mechanism that correctly detects a real resolution can't distinguish "alert
+actually gone" from "we simply failed to ask this cluster this time". Below
+the 60s grace period a single missed poll self-heals (re-fire cancels the
+phantom resolve); at or above it, the DB gets permanent bogus
+resolved+firing pairs (`occurrence_count` increments, claim releases fire,
+and the alert visibly greys out in the UI for a poll cycle even in the
+sub-60s case).
+**Rule**: See Critical Invariant #14 in `AGENTS.md`. Fixed by
+`Recorder.lastGoodAlerts` (`recorder.go`) — a cluster's alerts from its last
+*successful* fetch are reused whenever the current fetch fails, so the diff,
+`AlertStore`, WS broadcast (hash unchanged → no broadcast), and claim logic
+all see a stable snapshot for a cluster that's merely unreachable, not
+resolved. Applies mainly to single-member clusters and genuine total
+outages, since `FetchAlerts` only errors when every HA member fails.
+
+---
+
 ## A silence expiring mid-episode replays as a "new" firing row with the same `starts_at` — double-counts the heatmap
 
 **Symptom**: `GetFiringStarts` (`backend/internal/history/store.go`) was

@@ -112,6 +112,14 @@ Tool-specific entry points map to the same files (no duplicated content):
     with the number of open browser tabs. Breaking this silently (live
     proxying in `getSilences`/`getClusters`) roughly doubled AM CPU in a
     real deployment.
+14. **A failed cluster fetch must never trigger resolves.** The last
+    successful snapshot of that cluster stays authoritative — for alerts
+    (`Recorder.lastGoodAlerts`, `recorder.go`) exactly as for silences
+    (`SilenceStore`, "snapshot only on a successful fetch" in `poll()`).
+    Letting `applyPollResults`'s prev/curr diff see zero alerts for a
+    transiently-failing cluster reads as every one of its alerts resolving:
+    phantom `resolved` events, wrong `occurrence_count` increments, and
+    premature claim releases on the next re-fire.
 
 ## Workflow Rules — always follow
 

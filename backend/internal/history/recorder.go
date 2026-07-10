@@ -39,6 +39,14 @@ type Recorder struct {
 	prevSilenceInfo   map[string]silenceInfoEntry // cluster+silenceID → {state, cluster, comment}
 	prevAlertSilences map[string][]string         // fingerprint+cluster → []cluster+silenceID
 
+	// lastGoodAlerts holds each cluster's most recently successfully fetched
+	// alert list. poll() reads only within its own single-threaded loop, so
+	// no separate mutex is needed. A cluster whose fetch fails reuses this
+	// snapshot instead of contributing zero alerts, so a transient AM outage
+	// never looks like every one of its alerts resolved (mirrors the
+	// silence-snapshot "only update on success" pattern above).
+	lastGoodAlerts map[string][]models.EnrichedAlert
+
 	// claimReleaseDelay is how long to wait after detecting a resolution before
 	// releasing claims. Must exceed the 60s grace period so grace-period re-fires
 	// can cancel the release before it runs.
@@ -110,6 +118,7 @@ func NewRecorder(
 		prevSnapshot:      make(map[string]string),
 		prevSilenceInfo:   make(map[string]silenceInfoEntry),
 		prevAlertSilences: make(map[string][]string),
+		lastGoodAlerts:    make(map[string][]models.EnrichedAlert),
 		claimReleaseDelay: 20 * time.Minute,
 	}
 }
@@ -213,6 +222,12 @@ func (r *Recorder) poll(ctx context.Context) {
 			if r.metrics != nil {
 				r.metrics.PollErrorsTotal.WithLabelValues(res.name, "alerts").Inc()
 			}
+			// Reuse the last known-good alert snapshot instead of contributing
+			// zero alerts — otherwise the diff below reads every alert of this
+			// cluster as resolved on a merely transient fetch failure.
+			if stale, ok := r.lastGoodAlerts[res.name]; ok {
+				allAlerts = append(allAlerts, stale...)
+			}
 			continue
 		}
 		if res.silencesErr != nil && r.metrics != nil {
@@ -223,6 +238,7 @@ func (r *Recorder) poll(ctx context.Context) {
 		if res.silencesErr == nil && r.silenceStore != nil {
 			r.silenceStore.Set(res.name, res.silences)
 		}
+		r.lastGoodAlerts[res.name] = res.alerts
 		allAlerts = append(allAlerts, res.alerts...)
 		for _, s := range res.silences {
 			currSilenceInfo[recorderSilenceKey(res.name, s.ID)] = silenceInfoEntry{

@@ -59,6 +59,7 @@ func newTestRecorder(t *testing.T) (*Recorder, *mockHub) {
 		prevSnapshot:      make(map[string]string),
 		prevSilenceInfo:   make(map[string]silenceInfoEntry),
 		prevAlertSilences: make(map[string][]string),
+		lastGoodAlerts:    make(map[string][]models.EnrichedAlert),
 		claimReleaseDelay: 10 * time.Millisecond,
 		registry:          cluster.NewRegistry(nil),
 	}
@@ -576,7 +577,9 @@ func TestRecorder_Metrics_NoCountOnRestartWithExistingEvents(t *testing.T) {
 type fakeAM struct {
 	srv          *httptest.Server
 	mu           sync.Mutex
+	alerts       []alertmanager.GettableAlert
 	silences     []alertmanager.GettableSilence
+	failAlerts   bool
 	failSilences bool
 }
 
@@ -589,7 +592,11 @@ func newFakeAM(t *testing.T, silences []alertmanager.GettableSilence) *fakeAM {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
 		case "/api/v2/alerts":
-			_ = json.NewEncoder(w).Encode([]alertmanager.GettableAlert{})
+			if f.failAlerts {
+				http.Error(w, "boom", http.StatusInternalServerError)
+				return
+			}
+			_ = json.NewEncoder(w).Encode(f.alerts)
 		case "/api/v2/silences":
 			if f.failSilences {
 				http.Error(w, "boom", http.StatusInternalServerError)
@@ -614,6 +621,18 @@ func (f *fakeAM) setSilences(silences []alertmanager.GettableSilence) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.silences = silences
+}
+
+func (f *fakeAM) setFailAlerts(fail bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.failAlerts = fail
+}
+
+func (f *fakeAM) setAlerts(alerts []alertmanager.GettableAlert) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.alerts = alerts
 }
 
 func TestPoll_StoresSilencesPerCluster(t *testing.T) {
@@ -661,6 +680,129 @@ func TestPoll_FailedSilenceFetchKeepsPreviousSnapshot(t *testing.T) {
 	}
 	if got := rec.silenceStore.GetCluster("b"); len(got) != 2 {
 		t.Errorf("cluster b snapshot len = %d, want 2 (must update while a fails)", len(got))
+	}
+}
+
+func alertEventStatuses(t *testing.T, rec *Recorder, fingerprint, clusterName string) []string {
+	t.Helper()
+	events, _, err := rec.store.GetHistoryForCluster(fingerprint, clusterName, 100, 0)
+	if err != nil {
+		t.Fatalf("GetHistoryForCluster: %v", err)
+	}
+	statuses := make([]string, len(events))
+	for i, e := range events {
+		statuses[i] = e.Status
+	}
+	return statuses
+}
+
+// TestRecorder_Poll_FailedClusterFetchKeepsPreviousAlertSnapshot verifies
+// WP1: a cluster whose alert fetch fails must not look like every one of its
+// alerts resolved. Mirrors TestPoll_FailedSilenceFetchKeepsPreviousSnapshot,
+// but for alerts (which additionally feed history events, occurrence counts,
+// and claim release — none of which may fire on a transient fetch failure).
+func TestRecorder_Poll_FailedClusterFetchKeepsPreviousAlertSnapshot(t *testing.T) {
+	amA := newFakeAM(t, nil)
+	amA.setAlerts([]alertmanager.GettableAlert{
+		{
+			Fingerprint: "fp1",
+			Status:      alertmanager.GettableAlertStatus{State: "active"},
+			Labels:      map[string]string{"alertname": "TestAlert"},
+			Annotations: map[string]string{},
+			StartsAt:    time.Now().UTC(),
+		},
+	})
+
+	rec, _ := newTestRecorder(t)
+	rec.registry = cluster.NewRegistry([]config.ClusterConfig{
+		{Name: "a", AlertmanagerURL: amA.srv.URL, AlertmanagerLinkURL: amA.srv.URL},
+	})
+
+	// Poll 1: successful fetch, alert A firing.
+	rec.poll(context.Background())
+	if got := alertEventStatuses(t, rec, "fp1", "a"); len(got) != 1 || got[0] != models.EventStatusFiring {
+		t.Fatalf("events after poll 1 = %v, want [firing]", got)
+	}
+	stats, err := rec.store.GetStatsForCluster("fp1", "a")
+	if err != nil {
+		t.Fatalf("GetStatsForCluster: %v", err)
+	}
+	if stats.OccurrenceCount != 1 {
+		t.Fatalf("OccurrenceCount after poll 1 = %d, want 1 (first occurrence, not incremented)", stats.OccurrenceCount)
+	}
+
+	// Poll 2: cluster fetch fails — must not resolve fp1.
+	amA.setFailAlerts(true)
+	rec.poll(context.Background())
+
+	if got := alertEventStatuses(t, rec, "fp1", "a"); len(got) != 1 || got[0] != models.EventStatusFiring {
+		t.Fatalf("events after failed poll = %v, want still [firing] (no phantom resolve)", got)
+	}
+	stats, err = rec.store.GetStatsForCluster("fp1", "a")
+	if err != nil {
+		t.Fatalf("GetStatsForCluster: %v", err)
+	}
+	if stats.OccurrenceCount != 1 {
+		t.Fatalf("OccurrenceCount after failed poll = %d, want 1 (unchanged)", stats.OccurrenceCount)
+	}
+	found := false
+	for _, a := range rec.alertStore.Get() {
+		if a.Fingerprint == "fp1" && a.ClusterName == "a" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("fp1 missing from AlertStore after failed poll, want it to remain visible")
+	}
+	if got := testutil.ToFloat64(rec.metrics.PollErrorsTotal.WithLabelValues("a", "alerts")); got != 1 {
+		t.Errorf("PollErrorsTotal[a,alerts] = %v, want 1", got)
+	}
+
+	// Poll 3: fetch recovers, alert A still firing — idempotent, no new row.
+	amA.setFailAlerts(false)
+	rec.poll(context.Background())
+	if got := alertEventStatuses(t, rec, "fp1", "a"); len(got) != 1 || got[0] != models.EventStatusFiring {
+		t.Fatalf("events after recovered poll (still firing) = %v, want still [firing]", got)
+	}
+
+	// Poll 4: alert A genuinely gone — only now does a resolved event appear.
+	amA.setAlerts(nil)
+	rec.poll(context.Background())
+	if got := alertEventStatuses(t, rec, "fp1", "a"); len(got) != 2 || got[0] != models.EventStatusResolved {
+		t.Fatalf("events after genuine resolve (newest first) = %v, want [resolved firing]", got)
+	}
+}
+
+// TestRecorder_Poll_FailedClusterOnlyFreezesThatCluster verifies that a
+// fetch failure on one cluster does not stop a healthy cluster's alerts from
+// being diffed normally in the same poll.
+func TestRecorder_Poll_FailedClusterOnlyFreezesThatCluster(t *testing.T) {
+	amA := newFakeAM(t, nil)
+	amA.setAlerts([]alertmanager.GettableAlert{
+		{Fingerprint: "fp-a", Status: alertmanager.GettableAlertStatus{State: "active"}, Labels: map[string]string{"alertname": "A"}, Annotations: map[string]string{}, StartsAt: time.Now().UTC()},
+	})
+	amB := newFakeAM(t, nil)
+	amB.setAlerts([]alertmanager.GettableAlert{
+		{Fingerprint: "fp-b", Status: alertmanager.GettableAlertStatus{State: "active"}, Labels: map[string]string{"alertname": "B"}, Annotations: map[string]string{}, StartsAt: time.Now().UTC()},
+	})
+
+	rec, _ := newTestRecorder(t)
+	rec.registry = cluster.NewRegistry([]config.ClusterConfig{
+		{Name: "a", AlertmanagerURL: amA.srv.URL, AlertmanagerLinkURL: amA.srv.URL},
+		{Name: "b", AlertmanagerURL: amB.srv.URL, AlertmanagerLinkURL: amB.srv.URL},
+	})
+	rec.poll(context.Background())
+
+	// Cluster a fails; cluster b's alert genuinely resolves in the same poll.
+	amA.setFailAlerts(true)
+	amB.setAlerts(nil)
+	rec.poll(context.Background())
+
+	if got := alertEventStatuses(t, rec, "fp-a", "a"); len(got) != 1 || got[0] != models.EventStatusFiring {
+		t.Errorf("events for frozen cluster a = %v, want still [firing] (no phantom resolve)", got)
+	}
+	if got := alertEventStatuses(t, rec, "fp-b", "b"); len(got) != 2 || got[0] != models.EventStatusResolved {
+		t.Errorf("events for healthy cluster b (newest first) = %v, want [resolved firing] (must still diff normally)", got)
 	}
 }
 
