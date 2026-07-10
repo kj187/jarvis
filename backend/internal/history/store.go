@@ -314,17 +314,20 @@ func (s *Store) GetHistoryForCluster(fingerprint, clusterName string, limit, off
 	return events, total, nil
 }
 
-// GetFiringStarts returns the recorded times of firing events for a
-// fingerprint (optionally cluster-scoped) since the given time, newest
+// GetFiringStarts returns one recorded time per distinct firing episode for
+// a fingerprint (optionally cluster-scoped) since the given time, newest
 // first, capped at limit. Uses recorded_at (when Jarvis observed the
 // event), not starts_at (Alertmanager's upstream condition-start time), so
 // the heatmap bucketing agrees with "Last fired" and the history log —
 // otherwise a poll gap between AM's StartsAt and Jarvis first seeing it
-// makes the same single event appear at two different times in the UI. One
-// firing event = one event row with status "firing" — the grace period
-// (invariant #1: a resolve+refire within 60s reopens the existing event)
-// already prevents double-counting at write time, so no extra dedup is
-// needed here.
+// makes the same single event appear at two different times in the UI.
+// Grouped by starts_at (Alertmanager's episode identity) so a silence
+// expiring mid-episode — which produces a fresh "firing" row (suppressed ->
+// expired -> firing, since the last event was "expired" not "firing") with
+// the *same* starts_at as the original episode — is counted once, not
+// twice. The grace period (invariant #1) only dedupes resolve+refire within
+// 60s; it does not cover this suppressed/expired/firing sequence, so the
+// dedup has to happen here.
 func (s *Store) GetFiringStarts(fingerprint, clusterName string, since time.Time, limit int) ([]time.Time, error) {
 	if limit <= 0 || limit > 10000 {
 		limit = 10000
@@ -339,8 +342,13 @@ func (s *Store) GetFiringStarts(fingerprint, clusterName string, since time.Time
 	args = append(args, limit)
 
 	rows, err := s.query(context.Background(), `
-		SELECT recorded_at FROM alert_events
-		WHERE fingerprint = ? AND status = ? AND recorded_at >= ?`+clusterFilter+`
+		SELECT recorded_at FROM (
+			SELECT recorded_at,
+			       ROW_NUMBER() OVER (PARTITION BY starts_at ORDER BY recorded_at ASC) AS rn
+			FROM alert_events
+			WHERE fingerprint = ? AND status = ? AND recorded_at >= ?`+clusterFilter+`
+		) episodes
+		WHERE rn = 1
 		ORDER BY recorded_at DESC
 		LIMIT ?
 	`, args...)

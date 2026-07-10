@@ -347,11 +347,13 @@ GET    /api/v1/alerts/:fingerprint/history       full_protect?  → { events: Al
 GET    /api/v1/alerts/:fingerprint/timeline      full_protect?  → []AlertTimelineEntry  (merged alert+claim+silence history)
 GET    /api/v1/alerts/:fingerprint/stats         full_protect?  → AlertStats  ?cluster=
 GET    /api/v1/alerts/:fingerprint/heatmap       full_protect?  → AlertHeatmapResponse  ?cluster= &range=24h|7d|30d (required)
-#        raw firing-event timestamps (recorded_at of status='firing' alert_events rows, one per
-#        firing — the 60s grace period already prevents double-counting), capped at 10000, newest
-#        first. Uses recorded_at (when Jarvis observed the event), not starts_at (AM's upstream
-#        condition-start time), so heatmap buckets agree with "Last fired" / history log for the
-#        same event
+#        firing-event timestamps (recorded_at of status='firing' alert_events rows, one per
+#        distinct starts_at episode — a silence expiring mid-episode replays as a fresh firing row
+#        with the *same* starts_at, so GetFiringStarts dedupes by starts_at; the 60s grace period
+#        only covers resolve+refire, not this suppressed/expired/firing sequence), capped at 10000,
+#        newest first. Uses recorded_at (when Jarvis observed the event), not starts_at (AM's
+#        upstream condition-start time), so heatmap buckets agree with "Last fired" / history log
+#        for the same event
 #        internally; range maps to a lookback window (24h/7d/30d). Bucketing into hourly/daily
 #        cells happens entirely in the frontend (lib/heatmapUtils.ts bucketFiringStarts) so
 #        day/hour boundaries use the browser's local timezone, not the server's.

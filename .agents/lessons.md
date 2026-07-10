@@ -9,6 +9,34 @@ instead of duplicating.
 
 ---
 
+## A silence expiring mid-episode replays as a "new" firing row with the same `starts_at` — double-counts the heatmap
+
+**Symptom**: `GetFiringStarts` (`backend/internal/history/store.go`) was
+believed safe from double-counting because "the 60s grace period already
+prevents it" (old code comment). That's only true for resolve+refire.
+**Cause**: When a silence expires (or is deleted) while the alert is still
+actually firing in Alertmanager, the poll sequence is `suppressed →
+expired (poll N) → firing (poll N+1)` — the new firing row is written
+because the *last* event was `expired`, not `firing` (idempotency only
+skips inserts when the immediately preceding status matches). That new row
+carries the *same* `starts_at` as the original episode (AM never actually
+stopped firing), so one real firing episode produced two rows with
+status `firing` — `GetFiringStarts` counted both, double-counting the
+episode in the heatmap. The same pattern hits the grace-period edge case
+too, when the row immediately before a `resolved` row was `suppressed`.
+**Rule**: Episode identity for firing-episode dedup is `starts_at`
+(Alertmanager's upstream condition-start time), not "one row per firing
+status change". `GetFiringStarts` now groups by `starts_at` (via a
+`ROW_NUMBER() OVER (PARTITION BY starts_at ...)` subquery — a plain
+`GROUP BY` + `MIN(recorded_at)` fails on SQLite because aggregate
+expressions lose the column's declared `DATETIME` type, so
+`modernc.org/sqlite` scans the result as a string instead of `time.Time`;
+selecting the raw `recorded_at` column through a window-function subquery
+preserves it). `occurrence_count` and `GetStatsForCluster`'s per-cluster LAG
+query are unaffected — they only count firing-after-resolved transitions.
+
+---
+
 ## `jarvis.reset()` truncates `users` too — fatal for a helper called after login in a screenshot spec
 
 **Symptom**: `fireWithHeatmapHistory()` (see below) worked fine in `none`-mode

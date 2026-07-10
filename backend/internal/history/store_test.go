@@ -746,12 +746,21 @@ func TestUpdateSilenceTemplate(t *testing.T) {
 
 func insertAlertEvent(t *testing.T, s *Store, fingerprint, cluster, status string, startsAt time.Time) {
 	t.Helper()
+	insertAlertEventFull(t, s, fingerprint, cluster, status, startsAt, startsAt)
+}
+
+// insertAlertEventFull lets tests set starts_at (Alertmanager's episode
+// identity) and recorded_at (when Jarvis observed the event) independently
+// — needed to reproduce a silence-expiry replay, where a new event row gets
+// a fresh recorded_at but keeps the original episode's starts_at.
+func insertAlertEventFull(t *testing.T, s *Store, fingerprint, cluster, status string, startsAt, recordedAt time.Time) {
+	t.Helper()
 	if err := s.UpsertFingerprint(fingerprint, "TestAlert", cluster, nil); err != nil {
 		t.Fatalf("upsert fingerprint: %v", err)
 	}
 	if _, err := s.exec(context.Background(),
 		`INSERT INTO alert_events (fingerprint, cluster_name, alertmanager_url, status, starts_at, recorded_at) VALUES (?, ?, ?, ?, ?, ?)`,
-		fingerprint, cluster, "http://am:9093", status, startsAt, startsAt,
+		fingerprint, cluster, "http://am:9093", status, startsAt, recordedAt,
 	); err != nil {
 		t.Fatalf("insert alert event: %v", err)
 	}
@@ -825,6 +834,47 @@ func TestGetFiringStarts_LimitCapped(t *testing.T) {
 	}
 	if len(starts) != 5 {
 		t.Errorf("len(starts) with limit=0 = %d, want 5", len(starts))
+	}
+}
+
+func TestGetFiringStarts_DedupesSuppressedExpiredReplay(t *testing.T) {
+	s := newTestStore(t)
+	fingerprint := "aabbccddeeff0044"
+	now := time.Now().UTC()
+	episodeStart := now.Add(-3 * time.Hour)
+
+	// Same Alertmanager episode (starts_at unchanged throughout): silence
+	// activates and expires mid-episode, producing a "new" firing row that
+	// is really a continuation, not a new episode.
+	insertAlertEventFull(t, s, fingerprint, "homelab", models.EventStatusFiring, episodeStart, now.Add(-3*time.Hour))
+	insertAlertEventFull(t, s, fingerprint, "homelab", models.EventStatusSuppressed, episodeStart, now.Add(-2*time.Hour))
+	insertAlertEventFull(t, s, fingerprint, "homelab", models.EventStatusExpired, episodeStart, now.Add(-90*time.Minute))
+	insertAlertEventFull(t, s, fingerprint, "homelab", models.EventStatusFiring, episodeStart, now.Add(-80*time.Minute))
+
+	starts, err := s.GetFiringStarts(fingerprint, "homelab", now.Add(-24*time.Hour), 100)
+	if err != nil {
+		t.Fatalf("GetFiringStarts: %v", err)
+	}
+	if len(starts) != 1 {
+		t.Fatalf("len(starts) = %d, want 1 (same episode counted once): %v", len(starts), starts)
+	}
+}
+
+func TestGetFiringStarts_TwoRealEpisodesBothCounted(t *testing.T) {
+	s := newTestStore(t)
+	fingerprint := "aabbccddeeff0055"
+	now := time.Now().UTC()
+
+	insertAlertEventFull(t, s, fingerprint, "homelab", models.EventStatusFiring, now.Add(-5*time.Hour), now.Add(-5*time.Hour))
+	insertAlertEventFull(t, s, fingerprint, "homelab", models.EventStatusResolved, now.Add(-5*time.Hour), now.Add(-4*time.Hour))
+	insertAlertEventFull(t, s, fingerprint, "homelab", models.EventStatusFiring, now.Add(-3*time.Hour), now.Add(-3*time.Hour))
+
+	starts, err := s.GetFiringStarts(fingerprint, "homelab", now.Add(-24*time.Hour), 100)
+	if err != nil {
+		t.Fatalf("GetFiringStarts: %v", err)
+	}
+	if len(starts) != 2 {
+		t.Fatalf("len(starts) = %d, want 2 (distinct starts_at = distinct episodes): %v", len(starts), starts)
 	}
 }
 
