@@ -9,6 +9,30 @@ instead of duplicating.
 
 ---
 
+## A fixed 60s grace period can't absorb a missed poll once the poll interval itself is ≥ 60s
+
+**Symptom**: Not yet observed in production — found by inspection while
+auditing the grace period (Critical Invariant #1). `RecordStatusChange`'s
+grace window was a hardcoded 60 seconds, but `JARVIS_POLL_INTERVAL` is a
+user-configurable duration with no upper bound enforced.
+**Cause**: The grace period exists specifically to absorb *one missed poll*
+between a genuine resolve and its immediate re-fire (so a single dropped
+poll cycle doesn't permanently split one episode into two). If the poll
+interval itself is configured at or above 60 seconds, a single missed poll
+can by definition never fit inside a fixed 60s window — the mechanism the
+invariant is supposed to provide stops working exactly when polls are
+sparse enough to need it most.
+**Rule**: The grace period must scale with the poll interval, not be a
+fixed constant. Fixed via `Store.SetGracePeriod` (`store.go`), set in
+`cmd/jarvis/main.go` to `max(60s, 2×JARVIS_POLL_INTERVAL)`.
+`Recorder.claimReleaseDelay` (now a `NewRecorder` parameter instead of a
+hardcoded 20 minutes) is derived alongside it to stay comfortably above the
+grace period — see Critical Invariant #1 in `AGENTS.md`. Any other
+hardcoded constant that exists to absorb "one poll cycle" of slack should
+be checked against the same scaling requirement.
+
+---
+
 ## The 20-minute resolved-alert removal timer could delete an alert that had already re-fired
 
 **Symptom**: An alert resolved, then re-fired within the 20-minute

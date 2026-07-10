@@ -810,7 +810,7 @@ banner collapse state in AlertDetailPanel, default collapsed)
 
 | Var | Notes |
 |---|---|
-| `JARVIS_PORT` `JARVIS_LOG_LEVEL` `JARVIS_LOG_REQUESTS` `JARVIS_POLL_INTERVAL` | server basics — defaults: `8080`, `info`, `false`, `15s` |
+| `JARVIS_PORT` `JARVIS_LOG_LEVEL` `JARVIS_LOG_REQUESTS` `JARVIS_POLL_INTERVAL` | server basics — defaults: `8080`, `info`, `false`, `15s`. `JARVIS_POLL_INTERVAL` also drives the grace period: `main.go` sets `Store`'s grace period to `max(60s, 2×JARVIS_POLL_INTERVAL)` and `Recorder.claimReleaseDelay` to stay comfortably above it (Critical Invariant #1, `AGENTS.md`) |
 | `JARVIS_DB_DSN` | `postgres://` or `postgresql://` → PostgreSQL, anything else → SQLite file path. Default `/data/jarvis.db`. Never logged raw (`db.RedactDSN()`) |
 | `JARVIS_RUNBOOK_BASE_URL` | prefix for non-URL `runbook` values |
 | `JARVIS_ALLOWED_ORIGINS` | CORS + WS origin allow-list (no `*`), comma-separated |

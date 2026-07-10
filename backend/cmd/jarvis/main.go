@@ -64,6 +64,25 @@ func main() {
 	store := history.NewStore(database, dialect)
 	userStore := users.NewStore(database, dialect)
 
+	// Grace Period (Critical Invariant #1) must absorb at least one missed
+	// poll: at 60s flat, a poll interval configured ≥ 60s could never let a
+	// single dropped poll fall inside the window, permanently splitting a
+	// resolve+refire pair into two episodes instead of reopening one event.
+	// claimReleaseDelay must in turn stay comfortably ahead of the grace
+	// period, or the delayed claim-release check could run before a
+	// grace-period-eligible re-fire has had a chance to reopen the event.
+	gracePeriod := 60 * time.Second
+	if twicePoll := 2 * cfg.PollInterval; twicePoll > gracePeriod {
+		gracePeriod = twicePoll
+	}
+	store.SetGracePeriod(gracePeriod)
+	logger.Info("grace period configured", "duration", gracePeriod, "poll_interval", cfg.PollInterval)
+
+	claimReleaseDelay := 20 * time.Minute
+	if min := gracePeriod * 2; min > claimReleaseDelay {
+		claimReleaseDelay = min
+	}
+
 	// ── Auth Provider ─────────────────────────────────────────────────────────
 	var authProvider auth.Provider
 	switch cfg.AuthProvider {
@@ -95,7 +114,7 @@ func main() {
 	go hub.Run()
 
 	// ── Recorder ──────────────────────────────────────────────────────────────
-	recorder := history.NewRecorder(registry, alertStore, silenceStore, store, hub, cfg.PollInterval, logger, m)
+	recorder := history.NewRecorder(registry, alertStore, silenceStore, store, hub, cfg.PollInterval, logger, m, claimReleaseDelay)
 	m.MustRegister(metrics.NewCollector(alertStore, hub, recorder.ClusterUpStates, len(registry.All())))
 
 	// ── HTTP Router ───────────────────────────────────────────────────────────

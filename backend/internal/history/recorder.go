@@ -57,8 +57,9 @@ type Recorder struct {
 	reconciledClusters map[string]bool
 
 	// claimReleaseDelay is how long to wait after detecting a resolution before
-	// releasing claims. Must exceed the 60s grace period so grace-period re-fires
-	// can cancel the release before it runs.
+	// releasing claims. Must exceed the store's grace period (Store.gracePeriod,
+	// set via SetGracePeriod) so grace-period re-fires can cancel the release
+	// before it runs — see NewRecorder's doc comment.
 	claimReleaseDelay time.Duration
 
 	// broadcastMu guards the dedup state for the alerts-update WebSocket broadcast.
@@ -103,7 +104,12 @@ func splitRecorderSilenceKey(key string) (clusterName, silenceID string) {
 	return "", key
 }
 
-// NewRecorder creates a new Recorder.
+// NewRecorder creates a new Recorder. claimReleaseDelay must exceed the
+// grace period configured on store (Store.SetGracePeriod) — otherwise the
+// delayed claim-release check could run before a grace-period-eligible
+// re-fire has had a chance to reopen the resolved event, releasing a claim
+// that should have stayed held. Callers derive it accordingly (see
+// cmd/jarvis/main.go).
 func NewRecorder(
 	registry *cluster.Registry,
 	alertStore *AlertStore,
@@ -113,6 +119,7 @@ func NewRecorder(
 	interval time.Duration,
 	logger *slog.Logger,
 	m *metrics.Metrics,
+	claimReleaseDelay time.Duration,
 ) *Recorder {
 	return &Recorder{
 		registry:           registry,
@@ -129,7 +136,7 @@ func NewRecorder(
 		prevAlertSilences:  make(map[string][]string),
 		lastGoodAlerts:     make(map[string][]models.EnrichedAlert),
 		reconciledClusters: make(map[string]bool),
-		claimReleaseDelay:  20 * time.Minute,
+		claimReleaseDelay:  claimReleaseDelay,
 	}
 }
 

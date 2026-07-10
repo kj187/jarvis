@@ -233,6 +233,51 @@ func TestRecordStatusChange_GracePeriodExpired(t *testing.T) {
 	}
 }
 
+// TestRecordStatusChange_SetGracePeriod_WidensWindow verifies WP5:
+// SetGracePeriod lets a deployment with a longer JARVIS_POLL_INTERVAL widen
+// the grace window past the 60s default, so a single missed poll at that
+// interval still falls inside it.
+func TestRecordStatusChange_SetGracePeriod_WidensWindow(t *testing.T) {
+	s := newTestStore(t)
+	s.SetGracePeriod(3 * time.Minute)
+
+	s.UpsertFingerprint("fp1", "TestAlert", "homelab", nil) //nolint:errcheck
+
+	// Firing, then resolved 90s ago — inside the default 60s grace period's
+	// "expired" territory, but inside a widened 3-minute window.
+	s.db.ExecContext(context.Background(), //nolint:errcheck
+		`INSERT INTO alert_events (fingerprint, cluster_name, alertmanager_url, status, starts_at, recorded_at) VALUES (?, ?, ?, ?, ?, ?)`,
+		"fp1", "homelab", "http://am:9093", "firing",
+		time.Now().Add(-5*time.Minute), time.Now().Add(-3*time.Minute),
+	)
+	s.db.ExecContext(context.Background(), //nolint:errcheck
+		`INSERT INTO alert_events (fingerprint, cluster_name, alertmanager_url, status, starts_at, recorded_at) VALUES (?, ?, ?, ?, ?, ?)`,
+		"fp1", "homelab", "http://am:9093", "resolved",
+		time.Now().Add(-5*time.Minute), time.Now().Add(-90*time.Second),
+	)
+
+	ev, created, err := s.RecordStatusChange("fp1", "homelab", "http://am:9093", models.EventStatusFiring, time.Now(), nil)
+	if err != nil {
+		t.Fatalf("refire: %v", err)
+	}
+	if created {
+		t.Error("expected no new row (widened grace period should reopen the original event)")
+	}
+	if ev.Status != models.EventStatusFiring {
+		t.Errorf("Status = %q, want firing", ev.Status)
+	}
+
+	_, total, _ := s.GetHistory("fp1", 10, 0)
+	if total != 1 {
+		t.Errorf("total = %d, want 1 (resolved row deleted, no new firing row)", total)
+	}
+
+	st, _ := s.GetStats("fp1")
+	if st == nil || st.OccurrenceCount != 1 {
+		t.Errorf("OccurrenceCount = %+v, want 1 (grace period, no increment)", st)
+	}
+}
+
 func TestRecordStatusChange_Transitions(t *testing.T) {
 	s := newTestStore(t)
 

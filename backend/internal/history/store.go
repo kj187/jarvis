@@ -22,15 +22,35 @@ var (
 	ErrNotClaimOwner = errors.New("not claim owner")
 )
 
+// defaultGracePeriod is the grace period used until SetGracePeriod overrides
+// it. 60s is the invariant's historical baseline value.
+const defaultGracePeriod = 60 * time.Second
+
 // Store handles all database persistence for alerts.
 type Store struct {
 	db      *sql.DB
 	dialect idb.Dialect
+
+	// gracePeriod is Critical Invariant #1's window (AGENTS.md): a re-fire
+	// within this long of a recorded resolve reopens the old event instead
+	// of creating a new one. Set once at startup via SetGracePeriod, before
+	// the recorder starts polling — RecordStatusChange only reads it
+	// afterward, so no lock is needed.
+	gracePeriod time.Duration
 }
 
 // NewStore creates a new Store with the given database connection and dialect.
 func NewStore(database *sql.DB, dialect idb.Dialect) *Store {
-	return &Store{db: database, dialect: dialect}
+	return &Store{db: database, dialect: dialect, gracePeriod: defaultGracePeriod}
+}
+
+// SetGracePeriod overrides the grace period (Critical Invariant #1) used by
+// RecordStatusChange. Must be called before the recorder starts polling —
+// see the field's own doc comment. Callers should keep this at least
+// 2×JARVIS_POLL_INTERVAL, so a single missed poll can never make a
+// resolve+refire pair permanently split into two episodes.
+func (s *Store) SetGracePeriod(d time.Duration) {
+	s.gracePeriod = d
 }
 
 // ── Query helpers ─────────────────────────────────────────────────────────────
@@ -144,8 +164,9 @@ func (s *Store) UpsertFingerprint(fingerprint, alertname, clusterName string, la
 
 // RecordStatusChange records a status transition as an immutable append-only row.
 // Idempotent: if the last recorded status equals the new status, no row is inserted.
-// Grace Period (60s): if the alert re-fires within 60 s of a resolved row, that
-// resolved row is deleted and the prior firing row is returned — no new insert.
+// Grace Period (s.gracePeriod, defaults to 60s): if the alert re-fires within
+// that window of a resolved row, that resolved row is deleted and the prior
+// firing row is returned — no new insert.
 // occurrence_count is incremented only when re-firing after a full resolution.
 // The bool return reports whether a new event row was actually inserted —
 // callers that count lifecycle events (metrics) must rely on it instead of
@@ -170,9 +191,9 @@ func (s *Store) RecordStatusChange(
 		lastStatus = last.Status
 	}
 
-	// Grace Period: alert re-fires within 60 s of resolved → discard resolved row.
+	// Grace Period: alert re-fires within the configured window of resolved → discard resolved row.
 	if status == models.EventStatusFiring && lastStatus == models.EventStatusResolved {
-		if time.Since(last.RecordedAt) < 60*time.Second {
+		if time.Since(last.RecordedAt) < s.gracePeriod {
 			if _, err := s.exec(context.Background(), `DELETE FROM alert_events WHERE id = ?`, last.ID); err != nil {
 				return nil, false, fmt.Errorf("grace period delete resolved: %w", err)
 			}
