@@ -9,6 +9,31 @@ instead of duplicating.
 
 ---
 
+## A Jarvis restart during an alert's downtime resolve permanently swallowed its next re-fire
+
+**Symptom**: An alert that fired, then genuinely resolved while Jarvis
+happened to be restarting, never got a `resolved` row in the DB. Its next
+real fire didn't create a new history/heatmap entry either — the alert just
+looked stuck in `firing` forever, quietly, until some unrelated later event
+touched it.
+**Cause**: The poll diff in `applyPollResults` only ever compares against
+`Recorder.prevSnapshot`, which is pure in-memory state. A fresh process
+starts with an empty `prevSnapshot`, so the first poll after a restart has
+nothing to diff against — an alert that vanished from Alertmanager during
+the downtime just silently stops appearing, with no "missing from curr"
+detection possible. The DB's last event for that `(fingerprint, cluster)`
+stays whatever it was before the restart (typically `firing`). When the
+alert fires again later, `RecordStatusChange`'s idempotency check
+(`last.Status == status` → no insert) treats it as an unchanged, still-open
+episode instead of a new one.
+**Rule**: See Critical Invariant #14's sibling fix in `AGENTS.md` /
+`reconcileStartupResolves` — DB state, not just in-memory `prevSnapshot`,
+has to be consulted once at startup. Any future "recorder decides lifecycle
+purely from `prevSnapshot`" logic needs the same startup bootstrap or it
+will repeat this gap after every restart, not just occasionally.
+
+---
+
 ## A cluster's failed alert fetch was diffed as if every one of its alerts had resolved
 
 **Symptom**: The silence-fetch path already had a "snapshot only on a

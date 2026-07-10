@@ -871,6 +871,24 @@ with its own `*alertmanager.Client`); `Cluster.AlertmanagerURL` /
   that cluster as resolved (phantom resolves — false `resolved` events,
   wrong `occurrence_count` increments, and premature claim releases on the
   next re-fire).
+- **Startup reconciliation** (`Recorder.reconcileStartupResolves`,
+  `recorder.go`): `prevSnapshot` lives only in memory, so after a Jarvis
+  restart it starts empty regardless of what actually happened in the DB
+  while it was down. Without this, an alert that resolved during the
+  downtime keeps a dangling non-`resolved` last event forever, and its next
+  re-fire is silently swallowed by `RecordStatusChange`'s idempotency
+  (`firing == firing`, no insert) — no heatmap entry, no
+  `occurrence_count` bump, until some *later* cycle happens to notice. Fix:
+  on each cluster's first successful fetch since the Recorder was created
+  (tracked in `Recorder.reconciledClusters`, so this runs at most once per
+  cluster per process lifetime), `Store.GetOpenFingerprintsForCluster`
+  finds fingerprints whose latest event (within a 7-day window) isn't
+  `resolved`; any not present in that first fetch's alerts get
+  `RecordResolvedForCluster`'d with the startup time. The resolved
+  timestamp is therefore startup time, not the real (unrecoverable) time it
+  resolved during the downtime — a deliberate, documented approximation.
+  The normal grace period and idempotency rules apply unchanged to whatever
+  happens afterward.
 - `GET /api/v1/clusters` derives member health from `Cluster.MemberUpStates()`
   — the cached up-state written by every `FetchAlerts` (≤ one poll interval
   old), never a live ping. Members without poll state yet (first interval

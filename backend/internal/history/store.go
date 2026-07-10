@@ -245,6 +245,43 @@ func (s *Store) RecordResolvedForCluster(fingerprint, clusterName string, resolv
 	return err
 }
 
+// GetOpenFingerprintsForCluster returns fingerprints in the given cluster
+// whose most recent alert_event (recorded within window) is not "resolved"
+// — i.e. alerts the DB still considers open. Used for startup
+// reconciliation: after a Jarvis restart, in-memory prevSnapshot is empty,
+// so the normal poll diff can't tell "resolved during downtime" apart from
+// "just started" — this query finds the candidates directly in the DB.
+// Scoped to window so old/stale fingerprints from long-abandoned alerts
+// aren't dragged into every startup's reconciliation pass.
+func (s *Store) GetOpenFingerprintsForCluster(clusterName string, window time.Duration) ([]string, error) {
+	since := time.Now().UTC().Add(-window)
+	rows, err := s.query(context.Background(), `
+		SELECT fingerprint FROM alert_events
+		WHERE cluster_name = ? AND status != ? AND id IN (
+			SELECT MAX(id) FROM alert_events
+			WHERE cluster_name = ? AND recorded_at >= ?
+			GROUP BY fingerprint
+		)
+	`, clusterName, models.EventStatusResolved, clusterName, since)
+	if err != nil {
+		return nil, fmt.Errorf("get open fingerprints for cluster: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	fingerprints := make([]string, 0)
+	for rows.Next() {
+		var fp string
+		if err := rows.Scan(&fp); err != nil {
+			return nil, fmt.Errorf("scan open fingerprint: %w", err)
+		}
+		fingerprints = append(fingerprints, fp)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return fingerprints, nil
+}
+
 // GetHistory returns paginated alert events for a fingerprint (newest first).
 func (s *Store) GetHistory(fingerprint string, limit, offset int) ([]models.AlertEvent, int, error) {
 	return s.GetHistoryForCluster(fingerprint, "", limit, offset)

@@ -889,3 +889,47 @@ func TestGetFiringStarts_NoEvents(t *testing.T) {
 		t.Errorf("len(starts) = %d, want 0", len(starts))
 	}
 }
+
+func TestGetOpenFingerprintsForCluster_ReturnsOnlyNonResolved(t *testing.T) {
+	s := newTestStore(t)
+	now := time.Now().UTC()
+
+	// fp-open: last event firing → open.
+	insertAlertEvent(t, s, "fp-open", "homelab", models.EventStatusFiring, now.Add(-1*time.Hour))
+	// fp-suppressed: last event suppressed → also open (not resolved).
+	insertAlertEvent(t, s, "fp-suppressed", "homelab", models.EventStatusFiring, now.Add(-2*time.Hour))
+	insertAlertEvent(t, s, "fp-suppressed", "homelab", models.EventStatusSuppressed, now.Add(-1*time.Hour))
+	// fp-resolved: last event resolved → excluded.
+	insertAlertEvent(t, s, "fp-resolved", "homelab", models.EventStatusFiring, now.Add(-2*time.Hour))
+	insertAlertEvent(t, s, "fp-resolved", "homelab", models.EventStatusResolved, now.Add(-1*time.Hour))
+	// Different cluster — must not leak in.
+	insertAlertEvent(t, s, "fp-other-cluster", "other", models.EventStatusFiring, now.Add(-1*time.Hour))
+
+	open, err := s.GetOpenFingerprintsForCluster("homelab", 24*time.Hour)
+	if err != nil {
+		t.Fatalf("GetOpenFingerprintsForCluster: %v", err)
+	}
+	got := map[string]bool{}
+	for _, fp := range open {
+		got[fp] = true
+	}
+	if len(got) != 2 || !got["fp-open"] || !got["fp-suppressed"] {
+		t.Errorf("open fingerprints = %v, want exactly [fp-open fp-suppressed]", open)
+	}
+}
+
+func TestGetOpenFingerprintsForCluster_WindowExcludesOldEvents(t *testing.T) {
+	s := newTestStore(t)
+	now := time.Now().UTC()
+
+	insertAlertEvent(t, s, "fp-old", "homelab", models.EventStatusFiring, now.Add(-30*24*time.Hour))
+	insertAlertEvent(t, s, "fp-recent", "homelab", models.EventStatusFiring, now.Add(-1*time.Hour))
+
+	open, err := s.GetOpenFingerprintsForCluster("homelab", 7*24*time.Hour)
+	if err != nil {
+		t.Fatalf("GetOpenFingerprintsForCluster: %v", err)
+	}
+	if len(open) != 1 || open[0] != "fp-recent" {
+		t.Errorf("open fingerprints = %v, want exactly [fp-recent] (old event outside window excluded)", open)
+	}
+}

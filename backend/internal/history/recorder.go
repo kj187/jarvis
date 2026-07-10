@@ -47,6 +47,15 @@ type Recorder struct {
 	// silence-snapshot "only update on success" pattern above).
 	lastGoodAlerts map[string][]models.EnrichedAlert
 
+	// reconciledClusters tracks which clusters have already run startup
+	// reconciliation (reconcileStartupResolves) since this Recorder was
+	// created — each cluster runs it exactly once, on its first successful
+	// fetch. prevSnapshot is only ever populated in-memory, so after a
+	// restart it starts empty regardless of what actually happened in the
+	// DB while Jarvis was down; this repairs that gap once at startup
+	// instead of relying on the (by-then-empty) poll diff.
+	reconciledClusters map[string]bool
+
 	// claimReleaseDelay is how long to wait after detecting a resolution before
 	// releasing claims. Must exceed the 60s grace period so grace-period re-fires
 	// can cancel the release before it runs.
@@ -106,20 +115,21 @@ func NewRecorder(
 	m *metrics.Metrics,
 ) *Recorder {
 	return &Recorder{
-		registry:          registry,
-		alertStore:        alertStore,
-		silenceStore:      silenceStore,
-		store:             store,
-		hub:               hub,
-		interval:          interval,
-		logger:            logger,
-		metrics:           m,
-		triggerCh:         make(chan struct{}, 1),
-		prevSnapshot:      make(map[string]string),
-		prevSilenceInfo:   make(map[string]silenceInfoEntry),
-		prevAlertSilences: make(map[string][]string),
-		lastGoodAlerts:    make(map[string][]models.EnrichedAlert),
-		claimReleaseDelay: 20 * time.Minute,
+		registry:           registry,
+		alertStore:         alertStore,
+		silenceStore:       silenceStore,
+		store:              store,
+		hub:                hub,
+		interval:           interval,
+		logger:             logger,
+		metrics:            m,
+		triggerCh:          make(chan struct{}, 1),
+		prevSnapshot:       make(map[string]string),
+		prevSilenceInfo:    make(map[string]silenceInfoEntry),
+		prevAlertSilences:  make(map[string][]string),
+		lastGoodAlerts:     make(map[string][]models.EnrichedAlert),
+		reconciledClusters: make(map[string]bool),
+		claimReleaseDelay:  20 * time.Minute,
 	}
 }
 
@@ -239,6 +249,10 @@ func (r *Recorder) poll(ctx context.Context) {
 			r.silenceStore.Set(res.name, res.silences)
 		}
 		r.lastGoodAlerts[res.name] = res.alerts
+		if !r.reconciledClusters[res.name] {
+			r.reconcileStartupResolves(res.name, res.alerts)
+			r.reconciledClusters[res.name] = true
+		}
 		allAlerts = append(allAlerts, res.alerts...)
 		for _, s := range res.silences {
 			currSilenceInfo[recorderSilenceKey(res.name, s.ID)] = silenceInfoEntry{
@@ -251,6 +265,48 @@ func (r *Recorder) poll(ctx context.Context) {
 	}
 
 	r.applyPollResults(ctx, allAlerts, currSilenceInfo)
+}
+
+// reconcileStartupResolves resolves alerts that actually went away while
+// Jarvis was down. It runs once per cluster, on that cluster's first
+// successful fetch since this Recorder was created: prevSnapshot lives only
+// in memory, so right after a restart it's empty and the normal poll diff
+// in applyPollResults has nothing to compare against — an alert that
+// resolved during the downtime keeps a dangling "firing" row forever
+// (idempotency then silently swallows its next re-fire, since firing ==
+// firing). currentAlerts is the cluster's freshly fetched snapshot.
+//
+// Known limitation (acceptable): the resolved timestamp recorded here is
+// startup time, not the real time the alert resolved during the downtime —
+// there is no way to recover that. An approximate resolve is still more
+// honest than a permanently stuck "firing" row.
+func (r *Recorder) reconcileStartupResolves(clusterName string, currentAlerts []models.EnrichedAlert) {
+	open, err := r.store.GetOpenFingerprintsForCluster(clusterName, 7*24*time.Hour)
+	if err != nil {
+		r.logger.Error("reconcile startup resolves: get open fingerprints", "cluster", clusterName, "err", err)
+		return
+	}
+	if len(open) == 0 {
+		return
+	}
+	current := make(map[string]struct{}, len(currentAlerts))
+	for _, a := range currentAlerts {
+		current[a.Fingerprint] = struct{}{}
+	}
+	now := time.Now().UTC()
+	for _, fp := range open {
+		if _, stillActive := current[fp]; stillActive {
+			continue
+		}
+		if err := r.store.RecordResolvedForCluster(fp, clusterName, now); err != nil {
+			r.logger.Error("reconcile startup resolves: record resolved", "fp", fp, "cluster", clusterName, "err", err)
+			continue
+		}
+		r.logger.Info("reconciled stale open alert as resolved on startup", "fp", fp, "cluster", clusterName)
+		if r.metrics != nil {
+			r.metrics.AlertEventsTotal.WithLabelValues(clusterName, models.EventStatusResolved).Inc()
+		}
+	}
 }
 
 // applyPollResults persists lifecycle events for the given alert snapshot,
