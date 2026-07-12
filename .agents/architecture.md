@@ -332,7 +332,9 @@ GET    /auth/oidc/callback                       None        → exchanges code,
 POST   /setup                                    None  (RL)  Body: { username, password } (internal mode only; 403 if users exist)
 
 # ── WebSocket ────────────────────────────────────────────────────────────────
-WS     /ws                                       None        (origin checked against JARVIS_ALLOWED_ORIGINS)
+WS     /ws                                       full_protect?  (origin checked against JARVIS_ALLOWED_ORIGINS;
+#        in full_protect mode the upgrade request additionally requires a valid
+#        session cookie via RequireAuth — /ws streams the full alert snapshot)
 
 # ── Status / Version ─────────────────────────────────────────────────────────
 GET    /api/v1/status                            full_protect?  → { status, clusters, alerts, ws_clients }
