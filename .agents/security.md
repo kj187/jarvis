@@ -122,6 +122,13 @@ The backend validates the `Origin` header for both HTTP CORS and the WebSocket
 upgrade against `cfg.AllowedOrigins` (Critical Invariant #11 in `AGENTS.md`).
 Never use an unconditional `return true` in `upgrader.CheckOrigin`.
 
+In `full_protect` mode the `/ws` route is additionally wrapped with
+`auth.RequireAuth` (`internal/api/router.go`): the origin check alone does not
+gate non-browser clients (no `Origin` header ⇒ allowed), and `/ws` streams the
+full alert snapshot plus claim/comment events — exactly the data
+`full_protect` protects. The JWT session cookie rides on the upgrade request,
+so no WS-specific auth plumbing exists.
+
 Actual behavior in `internal/ws/hub.go`:
 
 ```go
