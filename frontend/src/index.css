@@ -123,3 +123,64 @@ body {
   overflow-x: hidden;
 }
 
+/* Comment Markdown rendering (react-markdown + rehype-highlight, CommentMarkdown.tsx) —
+ * one theme driven by our own CSS variables instead of importing an hljs theme,
+ * so it stays legible in both dark and light mode. */
+.comment-markdown p { margin-bottom: 0.5rem; }
+.comment-markdown p:last-child { margin-bottom: 0; }
+.comment-markdown ul,
+.comment-markdown ol { margin: 0.25rem 0 0.5rem 1.25rem; }
+.comment-markdown ul { list-style: disc; }
+.comment-markdown ol { list-style: decimal; }
+.comment-markdown blockquote {
+  border-left: 2px solid var(--color-border);
+  padding-left: 0.75rem;
+  color: var(--color-muted-foreground);
+  margin: 0.5rem 0;
+}
+.comment-markdown code {
+  background: var(--color-muted);
+  border-radius: 0.25rem;
+  padding: 0.1rem 0.3rem;
+  font-size: 0.85em;
+  font-family: ui-monospace, monospace;
+}
+.comment-markdown pre {
+  background: var(--color-muted);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 0.6rem 0.75rem;
+  overflow-x: auto;
+  margin: 0.5rem 0;
+}
+.comment-markdown pre code {
+  background: transparent;
+  padding: 0;
+  font-size: 0.8rem;
+}
+.hljs { color: var(--color-foreground); }
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-section,
+.hljs-link { color: var(--color-severity-info); }
+.hljs-string,
+.hljs-title,
+.hljs-name,
+.hljs-type,
+.hljs-attribute,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-addition,
+.hljs-variable,
+.hljs-template-tag,
+.hljs-template-variable { color: var(--color-severity-warning); }
+.hljs-comment,
+.hljs-quote,
+.hljs-deletion,
+.hljs-meta { color: var(--color-muted-foreground); font-style: italic; }
+.hljs-number,
+.hljs-regexp { color: var(--color-severity-critical); }
+.hljs-emphasis { font-style: italic; }
+.hljs-strong { font-weight: 600; }
+

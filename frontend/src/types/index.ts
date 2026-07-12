@@ -118,6 +118,11 @@ export interface Comment {
   createdAt: string
 }
 
+export interface CommentsPage {
+  comments: Comment[]
+  total: number
+}
+
 // ── Claim ────────────────────────────────────────────────────────────────────
 
 export type ClaimReleaseReason = 'manual' | 'resolved' | 'reclaimed'
