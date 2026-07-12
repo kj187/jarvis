@@ -170,15 +170,21 @@ Alerts are displayed as a flat list sorted by resolution time (newest first). A 
 
 ## Alert Detail Panel
 
-Per-alert drawer with labels, annotations, firing history, occurrence stats, claim ownership, silence controls, and comments.
+Per-alert drawer with labels, annotations, firing history, occurrence stats, claim ownership, silence controls, comments, and an AI-analysis prompt — organized into tabs.
 
 ![Alert Detail Panel](assets/feature-detail-panel.png)
 
 The detail panel is the central hub for working with a single alert. It slides in from the right side of the screen without navigating away from the alert list, so you can open it, take action, close it, and move to the next alert without losing context.
 
-**Sections in the detail panel:**
+**Always visible (above the tabs):**
+- Alert name, cluster, severity, and claim chip in the header
+- First seen / last seen timestamps and total occurrence count
+- Firing heatmap (24h / 7d / 30d range toggle) — see [Firing Heatmap](#firing-heatmap)
+- Active/expired silence banners, if the alert is currently or was recently silenced
 
-**Labels & Annotations**
+**The panel is then split into four tabs:**
+
+**Details**
 - Complete label set, rendered as key-value pairs
 - All annotations, including `description` and `summary`
 - **Dynamic link buttons**: any label or annotation whose value is an absolute URL (`http://` or `https://`) automatically renders as a clickable button using the key name as the label — no configuration needed. Examples: `dashboard=https://grafana.example.com/d/abc`, `ticket=https://jira.example.com/ISSUE-1`
@@ -187,31 +193,34 @@ The detail panel is the central hub for working with a single alert. It slides i
   - If the value is a plain string and `JARVIS_RUNBOOK_BASE_URL` is configured → the final URL is `RUNBOOK_BASE_URL` + value (e.g. `https://wiki.example.com/runbooks/my-alert`)
   - If the value is a plain string and `JARVIS_RUNBOOK_BASE_URL` is not set → no button is shown
 
-**Stats & Timeline**
-- First seen / last seen timestamps
-- Total occurrence count
-- Duration of the current firing period
+**History**
 - Full event timeline: every state transition (`firing`, `suppressed`, `resolved`) with exact timestamps
-- Firing heatmap header (24h / 7d / 30d range toggle) — see [Firing Heatmap](#firing-heatmap)
+- Merged with claim and silence actions for the same alert, so the whole handling story reads in one place
+- Paginated for long-running, frequently-firing alerts
 
-**Claim ownership**
+**Comments**
+- Write freeform notes bound to the alert's fingerprint — supports Markdown (bold, links, lists, fenced code blocks with syntax highlighting for bash, JSON, YAML, Go, JavaScript, SQL, and INI)
+- Comments persist across re-fires: if the alert resolves and fires again later, the comment history is still there
+- The tab label carries a count badge, so you can see at a glance whether an alert already has notes without opening the tab
+- Useful for documenting investigation steps, linking to tickets, or leaving context for the next person on-call
+
+**AI Prompt**
+- Generates a ready-to-paste prompt for an LLM (alert name, cluster, severity, labels, annotations, and the recent history table), framed as an SRE root-cause-analysis request
+- One-click copy to clipboard — paste directly into Claude, ChatGPT, or any other AI assistant to get a head start on investigation
+
+**Claim ownership** (available regardless of tab)
 - Claim the alert to signal to your team that you are actively handling it
 - The claim is stored in Jarvis's database and survives page refreshes and restarts
 - Other team members can see who has claimed an alert on both the card and list view
 - Unclaim at any time
 
-When an alert is claimed, the owner's name appears as a chip in the detail panel header and as an "In progress" banner on the alert card. The claim history is recorded in the History table.
+When an alert is claimed, the owner's name appears as a chip in the detail panel header and as an "In progress" banner on the alert card. The claim history is recorded in the History tab.
 
 ![Alert Detail Panel — Claimed](assets/feature-detail-claimed.png)
 
 **Silence controls**
 - Create a new silence directly from the panel — the form opens pre-filled with the alert's labels
 - Extend or delete an existing silence if the alert is currently suppressed
-
-**Comments**
-- Write freeform notes bound to the alert's fingerprint
-- Comments persist across re-fires: if the alert resolves and fires again later, the comment history is still there
-- Useful for documenting investigation steps, linking to tickets, or leaving context for the next person on-call
 
 ---
 
