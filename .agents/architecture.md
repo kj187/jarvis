@@ -595,6 +595,12 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │   ├── AlertDetailPanel.tsx → slide-over: labels/annotations + link buttons, stats & timeline,
     │   │                          claim (useClaimController), comments (CommentsPanel), silence
     │   │                          controls + Fast-Silence, AI-prompt section;
+    │   │                          when the alert was opened from a multi-alert list/card group,
+    │   │                          `uiStore.selectedGroupKeys` holds the sibling selection keys and a
+    │   │                          fixed up/down chevron pair renders left of the sheet (position
+    │   │                          mirrors the sheet's own width breakpoints) to step through them —
+    │   │                          also bound to ArrowUp/ArrowDown globally while the panel is open
+    │   │                          (ignored while focus is in an input/textarea/contenteditable);
     │   │                          header (below the stats line, above the action buttons) embeds
     │   │                          AlertHeatmap directly — not a collapsible section, always visible;
     │   │                          close (X) is rendered inline in the header row next to the status
@@ -786,6 +792,11 @@ interface UIStore {
   silencesViewMode: ViewMode                    // silences view (key 'jarvis-silencesViewMode')
   isFullscreen: boolean                         // NOT persisted
   selectedFingerprint: string | null            // NOT persisted (detail panel target)
+  selectedGroupKeys: string[] | null             // NOT persisted; sibling selection keys of the alert-list
+                                                //   group (list/card grouped view) the current selection came
+                                                //   from — null outside a group context. Set via
+                                                //   setSelectedFingerprint(fp, groupKeys); drives the
+                                                //   up/down group-navigation arrows in AlertDetailPanel.
   detailTab: DetailTab                          // NOT persisted (detail-panel tab; synced to `tab` URL param;
                                                 //   setSelectedFingerprint/setActivePage reset it to 'details')
   filters: {

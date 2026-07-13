@@ -31,6 +31,13 @@ interface UIStore {
   activeViewMode: ViewMode
   activePage: ActivePage
   selectedFingerprint: string | null
+  /**
+   * Selection keys of the sibling alerts in the same alert-list group as
+   * `selectedFingerprint` (list/card grouped views only), in display order.
+   * Null when the current selection didn't come from a multi-alert group —
+   * drives the group-navigation arrows in AlertDetailPanel.
+   */
+  selectedGroupKeys: string[] | null
   /** Active tab of the alert detail panel — synced to the `tab` URL param so reload/share lands on it. */
   detailTab: DetailTab
   filters: Filters
@@ -46,7 +53,7 @@ interface UIStore {
   setActiveViewMode: (mode: ViewMode) => void
   setSilencesViewMode: (mode: ViewMode) => void
   setIsFullscreen: (v: boolean) => void
-  setSelectedFingerprint: (fp: string | null) => void
+  setSelectedFingerprint: (fp: string | null, groupKeys?: string[] | null) => void
   setDetailTab: (tab: DetailTab) => void
   setFilter: (key: keyof Omit<Filters, 'labelMatchers'>, value: string) => void
   addLabelMatcher: (matcher: Omit<LabelMatcher, 'id'>) => void
@@ -108,6 +115,7 @@ export const useUIStore = create<UIStore>()(
       isFullscreen: false,
       activePage: 'alerts',
       selectedFingerprint: null,
+      selectedGroupKeys: null,
       detailTab: 'details',
       filters: defaultFilters,
       wsConnected: false,
@@ -126,11 +134,13 @@ export const useUIStore = create<UIStore>()(
         set({ silencesViewMode: mode })
       },
       setIsFullscreen: (v) => set({ isFullscreen: v }),
-      setActivePage: (page) => set({ activePage: page, selectedFingerprint: null, detailTab: 'details' }),
+      setActivePage: (page) => set({ activePage: page, selectedFingerprint: null, selectedGroupKeys: null, detailTab: 'details' }),
       // Selecting a different alert (or closing the panel) resets the tab —
       // URL hydration relies on this order: setSelectedFingerprint first,
-      // setDetailTab afterwards.
-      setSelectedFingerprint: (fp) => set({ selectedFingerprint: fp, detailTab: 'details' }),
+      // setDetailTab afterwards. groupKeys defaults to null so selections
+      // outside a group context (card grid, related-tab jumps) drop any
+      // stale group-navigation state from a previous selection.
+      setSelectedFingerprint: (fp, groupKeys = null) => set({ selectedFingerprint: fp, selectedGroupKeys: groupKeys, detailTab: 'details' }),
       setDetailTab: (tab) => set({ detailTab: tab }),
       setFilter: (key, value) =>
         set((s) => ({ filters: { ...s.filters, [key]: value } })),

@@ -206,7 +206,7 @@ interface AlertDetailPanelProps {
   onAddLabelMatcher: (matcher: Omit<LabelMatcher, 'id'>) => void
   runbookBaseUrl?: string
   silences: Silence[]
-  onSelectAlert?: (selectionKey: string) => void
+  onSelectAlert?: (selectionKey: string, groupKeys?: string[] | null) => void
 }
 
 export function AlertDetailPanel({
@@ -241,7 +241,37 @@ export function AlertDetailPanel({
   // to 'details' inside setSelectedFingerprint.
   const activeTab = useUIStore((s) => s.detailTab)
   const setActiveTab = useUIStore((s) => s.setDetailTab)
+  const selectedGroupKeys = useUIStore((s) => s.selectedGroupKeys)
   const fmtTime = useFormatTime()
+
+  // Up/down arrow navigation between sibling alerts of the group (list/card
+  // grouped view) the current selection came from. `selectedGroupKeys` is
+  // null outside a group context, so the nav UI stays hidden there.
+  const groupNavIndex = alert && selectedGroupKeys
+    ? selectedGroupKeys.indexOf(makeAlertSelectionKeyForAlert(alert))
+    : -1
+  const groupNavEnabled = groupNavIndex !== -1 && (selectedGroupKeys?.length ?? 0) > 1
+
+  function navigateGroup(direction: 1 | -1) {
+    if (!onSelectAlert || !selectedGroupKeys || groupNavIndex === -1) return
+    const len = selectedGroupKeys.length
+    const nextIndex = (groupNavIndex + direction + len) % len
+    onSelectAlert(selectedGroupKeys[nextIndex], selectedGroupKeys)
+  }
+
+  useEffect(() => {
+    if (!groupNavEnabled) return
+    function onKeyDown(e: KeyboardEvent) {
+      const target = e.target as HTMLElement | null
+      if (target && ['INPUT', 'TEXTAREA'].includes(target.tagName)) return
+      if (target?.isContentEditable) return
+      if (e.key === 'ArrowUp') { e.preventDefault(); navigateGroup(-1) }
+      else if (e.key === 'ArrowDown') { e.preventDefault(); navigateGroup(1) }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groupNavEnabled, groupNavIndex, selectedGroupKeys])
 
   const historyOffset = (historyPage - 1) * historyPageSize
   const { data: timelineData } = useAlertTimeline(
@@ -1043,6 +1073,41 @@ export function AlertDetailPanel({
         )}
 
       </Sheet>
+
+      {/* Group navigation — rendered after the Sheet and overlapping its left
+          border by 1px so the box (same bg-card) reads as a seamless extension
+          of the panel with no divider line between them. */}
+      {groupNavEnabled && (
+        <div
+          className="fixed top-12 z-50 rounded-l-md border border-r-0 border-border bg-card right-0 sm:right-[calc(37.8rem-1px)] lg:right-[calc(50.4rem-1px)]"
+          data-testid="detail-panel-group-nav"
+        >
+          {/* Same two-layer background as the sheet header (bg-muted/30 over bg-card). */}
+          <div className="flex flex-col items-center rounded-l-md bg-muted/30">
+            <button
+              type="button"
+              onClick={() => navigateGroup(-1)}
+              title="Previous alert in group (↑)"
+              aria-label="Previous alert in group"
+              className="flex h-10 w-12 items-center justify-center rounded-tl-md text-muted-foreground hover:bg-accent hover:text-foreground cursor-pointer"
+            >
+              <ChevronUp className="h-5 w-5" />
+            </button>
+            <span className="w-full py-1 text-center text-[11px] font-semibold text-muted-foreground">
+              {groupNavIndex + 1}/{selectedGroupKeys?.length}
+            </span>
+            <button
+              type="button"
+              onClick={() => navigateGroup(1)}
+              title="Next alert in group (↓)"
+              aria-label="Next alert in group"
+              className="flex h-10 w-12 items-center justify-center rounded-bl-md text-muted-foreground hover:bg-accent hover:text-foreground cursor-pointer"
+            >
+              <ChevronDown className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Silence form sheet (new silence for this alert) */}
       {showNewSilenceForm && (
