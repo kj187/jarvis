@@ -118,6 +118,10 @@ frontend/
 
 - **One screenshot = one named test.** The test name is the PNG basename and the
   `-g` selector for single regeneration. Output goes to `docs/assets/<name>.png`.
+  Exception: a test may write a tightly-coupled *series* sharing one expensive
+  setup — `detail-tabs` writes all five `feature-detail-tab-<tab>.png` images
+  (one per detail-panel tab) from a single fire+seed; regenerating the series
+  is still one `-g` run (`make e2e-screenshot NAME=detail-tabs`).
 - Fixtures are created **per test** via real APIs (AM for active alerts, Jarvis
   test endpoints for resolved/history). The `page` fixture auto-runs
   `am.clearAll()` + `jarvis.reset()` before every test → clean slate.

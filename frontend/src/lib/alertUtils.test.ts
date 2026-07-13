@@ -26,6 +26,7 @@ import {
   labelColorStyle,
   unescapeRegex,
   isRoundTrippableTagList,
+  findRelatedAlerts,
 } from './alertUtils'
 import type { EnrichedAlert, LabelMatcher, Silence } from '@/types'
 
@@ -1020,5 +1021,171 @@ describe('computeLabelBreakdown', () => {
     const alerts = [makeAlert({ labels: { alertname: 'X', empty: '' } })]
     const breakdown = computeLabelBreakdown(alerts)
     expect(breakdown.find((b) => b.name === 'empty')).toBeUndefined()
+  })
+})
+
+describe('findRelatedAlerts', () => {
+  it('matches alerts sharing any real label with equal non-empty value', () => {
+    const target = makeAlert({ fingerprint: 'a', labels: { alertname: 'X', instance: 'web1' } })
+    const related = makeAlert({ fingerprint: 'b', labels: { alertname: 'Y', instance: 'web1' } })
+    const unrelated = makeAlert({ fingerprint: 'c', labels: { alertname: 'Z', instance: 'web2' } })
+    const result = findRelatedAlerts(target, [target, related, unrelated])
+    expect(result).toHaveLength(1)
+    expect(result[0].alert.fingerprint).toBe('b')
+    expect(result[0].sharedKeys).toEqual(['instance'])
+  })
+
+  it('matches on custom (non-identity) labels too — no hardcoded key list', () => {
+    const target = makeAlert({ fingerprint: 'a', labels: { alertname: 'X', entity: 'sensor.rack_temp' } })
+    const related = makeAlert({ fingerprint: 'b', labels: { alertname: 'Y', entity: 'sensor.rack_temp' } })
+    const result = findRelatedAlerts(target, [target, related])
+    expect(result).toHaveLength(1)
+    expect(result[0].sharedKeys).toEqual(['entity'])
+  })
+
+  it('does not match on alertname, severity, receiver, @-pseudo-labels, or empty values', () => {
+    const target = makeAlert({
+      fingerprint: 'a',
+      labels: { alertname: 'X', severity: 'critical', receiver: 'team-a', '@cluster': 'cluster-a', empty: '' },
+    })
+    const sameSkippedOnly = makeAlert({
+      fingerprint: 'b',
+      labels: { alertname: 'X', severity: 'critical', receiver: 'team-a', '@cluster': 'cluster-a', empty: '' },
+    })
+    expect(findRelatedAlerts(target, [target, sameSkippedOnly])).toHaveLength(0)
+  })
+
+  it('does not match on URL-valued labels (runbook/dashboard links are metadata, not identity)', () => {
+    const target = makeAlert({
+      fingerprint: 'a',
+      labels: { alertname: 'X', runbook: 'https://runbooks.example.com/X', dashboard: 'http://grafana.example.com/d/1' },
+    })
+    const sameUrlsOnly = makeAlert({
+      fingerprint: 'b',
+      labels: { alertname: 'Y', runbook: 'https://runbooks.example.com/X', dashboard: 'http://grafana.example.com/d/1' },
+    })
+    expect(findRelatedAlerts(target, [target, sameUrlsOnly])).toHaveLength(0)
+  })
+
+  it('excludes the target itself by fingerprint + cluster (selection key)', () => {
+    const target = makeAlert({ fingerprint: 'a', clusterName: 'cluster-a', labels: { alertname: 'X', instance: 'web1' } })
+    const result = findRelatedAlerts(target, [target])
+    expect(result).toHaveLength(0)
+  })
+
+  it('does not treat the same fingerprint in a different cluster as self', () => {
+    const target = makeAlert({ fingerprint: 'a', clusterName: 'cluster-a', labels: { alertname: 'X', instance: 'web1' } })
+    const twin = makeAlert({ fingerprint: 'a', clusterName: 'cluster-b', labels: { alertname: 'X', instance: 'web1' } })
+    const result = findRelatedAlerts(target, [target, twin])
+    expect(result).toHaveLength(1)
+    expect(result[0].alert.clusterName).toBe('cluster-b')
+  })
+
+  it('allows cross-cluster matches', () => {
+    const target = makeAlert({ fingerprint: 'a', clusterName: 'cluster-a', labels: { alertname: 'X', instance: 'web1' } })
+    const other = makeAlert({ fingerprint: 'd', clusterName: 'cluster-b', labels: { alertname: 'Y', instance: 'web1' } })
+    const result = findRelatedAlerts(target, [target, other])
+    expect(result).toHaveLength(1)
+    expect(result[0].alert.clusterName).toBe('cluster-b')
+  })
+
+  it('weights a rare shared label above a common one (IDF), regardless of shared-key count', () => {
+    const now = '2026-01-01T00:00:00Z'
+    // `namespace=prod` on every alert (common), `instance=web3` only on target + one candidate (rare).
+    const target = makeAlert({ fingerprint: 'a', labels: { alertname: 'X', namespace: 'prod', instance: 'web3' }, startsAt: now })
+    const rareMatch = makeAlert({ fingerprint: 'b', labels: { alertname: 'B', instance: 'web3' }, startsAt: now })
+    const commonMatch = makeAlert({ fingerprint: 'c', labels: { alertname: 'C', namespace: 'prod' }, startsAt: now })
+    const filler = Array.from({ length: 10 }, (_, i) =>
+      makeAlert({ fingerprint: `f${i}`, labels: { alertname: `F${i}`, namespace: 'prod' }, startsAt: now }),
+    )
+    const result = findRelatedAlerts(target, [target, rareMatch, commonMatch, ...filler])
+    expect(result[0].alert.fingerprint).toBe('b')
+  })
+
+  it('sorts sharedKeys most specific (rarest) first', () => {
+    const now = '2026-01-01T00:00:00Z'
+    const target = makeAlert({ fingerprint: 'a', labels: { alertname: 'X', namespace: 'prod', instance: 'web3' }, startsAt: now })
+    const both = makeAlert({ fingerprint: 'b', labels: { alertname: 'B', namespace: 'prod', instance: 'web3' }, startsAt: now })
+    const filler = Array.from({ length: 10 }, (_, i) =>
+      makeAlert({ fingerprint: `f${i}`, labels: { alertname: `F${i}`, namespace: 'prod' }, startsAt: now }),
+    )
+    // `namespace` listed first on the target, but `instance` is rarer → must come first.
+    const result = findRelatedAlerts(target, [target, both, ...filler])
+    expect(result[0].sharedKeys).toEqual(['instance', 'namespace'])
+  })
+
+  it('still relates alerts via a label every alert carries (smoothed IDF, weight > 0)', () => {
+    const target = makeAlert({ fingerprint: 'a', labels: { alertname: 'X', instance: 'node1' } })
+    const others = Array.from({ length: 4 }, (_, i) =>
+      makeAlert({ fingerprint: `b${i}`, labels: { alertname: `B${i}`, instance: 'node1' } }),
+    )
+    expect(findRelatedAlerts(target, [target, ...others])).toHaveLength(4)
+  })
+
+  it('boosts alerts that started close in time to the target', () => {
+    const target = makeAlert({ fingerprint: 'a', labels: { alertname: 'X', instance: 'web1' }, startsAt: '2026-01-01T12:00:00Z' })
+    const nearInTime = makeAlert({ fingerprint: 'b', labels: { alertname: 'B', instance: 'web1' }, startsAt: '2026-01-01T11:58:00Z' })
+    const farInTime = makeAlert({ fingerprint: 'c', labels: { alertname: 'C', instance: 'web1' }, startsAt: '2025-12-01T00:00:00Z' })
+    const result = findRelatedAlerts(target, [target, farInTime, nearInTime])
+    expect(result.map((r) => r.alert.fingerprint)).toEqual(['b', 'c'])
+  })
+
+  it('applies no time boost when a startsAt does not parse', () => {
+    const target = makeAlert({ fingerprint: 'a', labels: { alertname: 'X', instance: 'web1' }, startsAt: '2026-01-01T12:00:00Z' })
+    const invalidStart = makeAlert({ fingerprint: 'b', labels: { alertname: 'B', instance: 'web1' }, startsAt: 'not-a-date' })
+    const boosted = makeAlert({ fingerprint: 'c', labels: { alertname: 'C', instance: 'web1' }, startsAt: '2026-01-01T12:00:00Z' })
+    const result = findRelatedAlerts(target, [target, invalidStart, boosted])
+    expect(result.map((r) => r.alert.fingerprint)).toEqual(['c', 'b'])
+  })
+
+  it('works for a target absent from the snapshot (resolved alert viewed from history)', () => {
+    const target = makeAlert({ fingerprint: 'gone', labels: { alertname: 'X', instance: 'web1' } })
+    const current = makeAlert({ fingerprint: 'b', labels: { alertname: 'B', instance: 'web1' } })
+    const result = findRelatedAlerts(target, [current])
+    expect(result).toHaveLength(1)
+    expect(result[0].alert.fingerprint).toBe('b')
+  })
+
+  it('breaks score ties by severity, then startsAt descending', () => {
+    const target = makeAlert({ fingerprint: 'a', labels: { alertname: 'X', instance: 'web1', severity: 'critical' }, startsAt: '2026-01-01T12:00:00Z' })
+    // Equidistant from the target (±10min) → identical time boost and score.
+    const warningNear = makeAlert({
+      fingerprint: 'b',
+      labels: { alertname: 'B', instance: 'web1', severity: 'warning' },
+      startsAt: '2026-01-01T12:10:00Z',
+    })
+    const criticalNear = makeAlert({
+      fingerprint: 'c',
+      labels: { alertname: 'C', instance: 'web1', severity: 'critical' },
+      startsAt: '2026-01-01T11:50:00Z',
+    })
+    const noSeverityNewer = makeAlert({
+      fingerprint: 'd',
+      labels: { alertname: 'D', instance: 'web1' },
+      startsAt: '2026-01-01T12:10:00Z',
+    })
+    const noSeverityOlder = makeAlert({
+      fingerprint: 'e',
+      labels: { alertname: 'E', instance: 'web1' },
+      startsAt: '2026-01-01T11:50:00Z',
+    })
+    const result = findRelatedAlerts(target, [target, noSeverityOlder, warningNear, noSeverityNewer, criticalNear])
+    // critical beats warning beats missing severity; equal severity → newer startsAt first.
+    expect(result.map((r) => r.alert.fingerprint)).toEqual(['c', 'b', 'd', 'e'])
+  })
+
+  it('returns an empty result when no eligible labels match', () => {
+    const target = makeAlert({ fingerprint: 'a', labels: { alertname: 'X' } })
+    const other = makeAlert({ fingerprint: 'b', labels: { alertname: 'Y' } })
+    expect(findRelatedAlerts(target, [target, other])).toEqual([])
+  })
+
+  it('caps results when a max is given, ranked list stays uncapped by default', () => {
+    const target = makeAlert({ fingerprint: 'a', labels: { alertname: 'X', instance: 'web1' } })
+    const others = Array.from({ length: 15 }, (_, i) =>
+      makeAlert({ fingerprint: `b${i}`, labels: { alertname: `B${i}`, instance: 'web1' } }),
+    )
+    expect(findRelatedAlerts(target, [target, ...others])).toHaveLength(15)
+    expect(findRelatedAlerts(target, [target, ...others], 10)).toHaveLength(10)
   })
 })
