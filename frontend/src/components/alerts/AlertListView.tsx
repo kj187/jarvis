@@ -16,14 +16,14 @@ import { useSettingsStore, RESOLVED_PAGE_SIZE_OPTIONS } from '@/store/useSetting
 import { useUIStore } from '@/store/uiStore'
 import { useLoginGuard } from '@/hooks/useLoginGuard'
 import { LoginModal } from '@/components/auth/LoginModal'
-import { matchesAlertSelectionKey } from '@/lib/alertSelection'
+import { matchesAlertSelectionKey, makeAlertSelectionKeyForAlert } from '@/lib/alertSelection'
 import type { EnrichedAlert, Silence } from '@/types'
 import { cn } from '@/lib/utils'
 
 interface AlertListViewProps {
   alerts: EnrichedAlert[]
   silences: Silence[]
-  onSelectAlert: (selectionKey: string) => void
+  onSelectAlert: (selectionKey: string, groupKeys?: string[] | null) => void
   selectedFingerprint?: string | null
   stateFilter?: string
   resolvedMode?: boolean
@@ -891,7 +891,12 @@ export function AlertListView({
                           <AlertListRow
                             key={alertRowKey(alert)}
                             alert={alert}
-                            onClick={onSelectAlert}
+                            onClick={(key) =>
+                              onSelectAlert(
+                                key,
+                                group.alerts.length > 1 ? group.alerts.map(makeAlertSelectionKeyForAlert) : null,
+                              )
+                            }
                             selected={matchesAlertSelectionKey(alert, selectedFingerprint)}
                             indented
                             isLastInGroup={idx === group.alerts.length - 1}
