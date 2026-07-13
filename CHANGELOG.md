@@ -1,5 +1,48 @@
+<a name="v1.8.0"></a>
+## [v1.8.0](https://github.com/kj187/jarvis/compare/v1.7.0...v1.8.0) (2026-07-13)
+
+### Bug Fixes
+
+* **alerts:** bucket heatmap by recorded_at instead of starts_at
+* **alerts:** make alert detail panel responsive on narrow viewports
+* **api:** 20-min resolved-alert removal timer no longer deletes re-fired alerts
+* **config:** bump codeql-action init/autobuild/analyze together to v4.37.0 ([#105](https://github.com/kj187/jarvis/issues/105))
+* **db:** scale grace period with JARVIS_POLL_INTERVAL
+* **db:** reconcile alerts resolved during a Jarvis restart
+* **db:** keep last-known-good alert snapshot on cluster fetch failure
+* **db:** dedupe firing episodes in GetFiringStarts by starts_at
+
+### Chores
+
+* **deps:** bump github.com/coreos/go-oidc/v3 in /backend ([#90](https://github.com/kj187/jarvis/issues/90))
+* **deps:** bump docker/build-push-action from 7.2.0 to 7.3.0 ([#93](https://github.com/kj187/jarvis/issues/93))
+* **deps:** bump golang.org/x/crypto from 0.53.0 to 0.54.0 in /backend ([#92](https://github.com/kj187/jarvis/issues/92))
+* **deps:** bump github/codeql-action/upload-sarif ([#89](https://github.com/kj187/jarvis/issues/89))
+
+### Documentation
+
+* **alerts:** regenerate screenshots and rewrite detail-panel docs for tabbed layout ([#100](https://github.com/kj187/jarvis/issues/100))
+* **alerts:** add full alert-lifecycle reference, fix stale 60s grace-period mentions
+
+### Features
+
+* **alertmanager:** identify HTTP client as Jarvis via User-Agent
+* **alerts:** navigate between group siblings from the detail panel ([#103](https://github.com/kj187/jarvis/issues/103))
+* **alerts:** add [@age](https://github.com/age) and [@claimed](https://github.com/claimed)-by advanced filter expressions ([#102](https://github.com/kj187/jarvis/issues/102))
+* **alerts:** add Related tab to detail panel ([#101](https://github.com/kj187/jarvis/issues/101))
+* **alerts:** rework comments and alert detail panel layout
+* **db:** add optional data-retention sweeper ([#104](https://github.com/kj187/jarvis/issues/104))
+
+### Security
+
+* **api:** require auth on /ws websocket upgrade in full_protect mode ([#98](https://github.com/kj187/jarvis/issues/98))
+
 <a name="v1.7.0"></a>
 ## [v1.7.0](https://github.com/kj187/jarvis/compare/v1.7.0-rc.1...v1.7.0) (2026-07-09)
+
+### Chores
+
+* **release:** prepare v1.7.0
 
 ### Features
 

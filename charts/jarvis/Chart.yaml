@@ -4,10 +4,10 @@ description: Web frontend for Prometheus Alertmanager with persistent alert hist
 type: application
 # Chart version — decoupled from the app version. Bump it manually in the same
 # commit as any chart change; a push to main publishes it (chart-release.yml).
-version: 1.6.1
+version: 1.6.2
 # App version — the image tag deployed by default. Bumped as part of the app
 # release process (see .agents/release.md).
-appVersion: "1.7.0"
+appVersion: "1.8.0"
 keywords:
   - alertmanager
   - prometheus
