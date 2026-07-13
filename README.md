@@ -357,6 +357,7 @@ helm plugin install https://github.com/helm-unittest/helm-unittest --version v0.
 - [docs/authentication-user.md](docs/authentication-user.md) — user login: providers (none / internal / OIDC), first-run wizard, roles, sessions, Helm
 - [docs/authentication-alertmanager.md](docs/authentication-alertmanager.md) — Alertmanager upstream auth: OAuth2 client credentials, bearer token, basic auth, custom headers
 - [docs/metrics.md](docs/metrics.md) — Prometheus `/metrics` endpoint: exported metrics, scrape config, ServiceMonitor
+- [docs/retention.md](docs/retention.md) — optional data-retention sweep: what gets deleted, `JARVIS_RETENTION_*` config, sweep order
 - [AGENTS.md](AGENTS.md) — AI-agent entry point: conventions, critical invariants, task router
 - [.agents/testing.md](.agents/testing.md) — full test strategy, matrix, and CI pipeline
 - [docs/security.md](docs/security.md) — security measures
