@@ -182,9 +182,12 @@ The detail panel is the central hub for working with a single alert. It slides i
 - Firing heatmap (24h / 7d / 30d range toggle) — see [Firing Heatmap](#firing-heatmap)
 - Active/expired silence banners, if the alert is currently or was recently silenced
 
-**The panel is then split into four tabs:**
+**The panel is then split into five tabs:**
 
 **Details**
+
+![Detail Panel — Details tab](assets/feature-detail-tab-details.png)
+
 - Complete label set, rendered as key-value pairs
 - All annotations, including `description` and `summary`
 - **Dynamic link buttons**: any label or annotation whose value is an absolute URL (`http://` or `https://`) automatically renders as a clickable button using the key name as the label — no configuration needed. Examples: `dashboard=https://grafana.example.com/d/abc`, `ticket=https://jira.example.com/ISSUE-1`
@@ -194,17 +197,44 @@ The detail panel is the central hub for working with a single alert. It slides i
   - If the value is a plain string and `JARVIS_RUNBOOK_BASE_URL` is not set → no button is shown
 
 **History**
+
+![Detail Panel — History tab](assets/feature-detail-tab-history.png)
+
 - Full event timeline: every state transition (`firing`, `suppressed`, `resolved`) with exact timestamps
 - Merged with claim and silence actions for the same alert, so the whole handling story reads in one place
 - Paginated for long-running, frequently-firing alerts
 
 **Comments**
+
+![Detail Panel — Comments tab](assets/feature-detail-tab-comments.png)
+
 - Write freeform notes bound to the alert's fingerprint — supports Markdown (bold, links, lists, fenced code blocks with syntax highlighting for bash, JSON, YAML, Go, JavaScript, SQL, and INI)
 - Comments persist across re-fires: if the alert resolves and fires again later, the comment history is still there
 - The tab label carries a count badge, so you can see at a glance whether an alert already has notes without opening the tab
 - Useful for documenting investigation steps, linking to tickets, or leaving context for the next person on-call
 
+**Related**
+
+![Detail Panel — Related tab](assets/feature-detail-tab-related.png)
+
+- Answers *"is this alert part of a bigger problem?"* — lists other **currently firing or suppressed** alerts that share labels with the open alert, without leaving the panel
+- The tab label carries a count badge, so you can spot a correlated incident before even opening the tab
+- Each row shows the severity, alert name, the shared labels as chips (most specific first), the cluster name when the related alert lives in a different cluster, and when it started — click a row to jump to that alert's detail
+- Results are ranked, top 10 shown first with a **Show more** button for the rest
+
+*How relatedness is computed:*
+
+- Two alerts are related when they share at least one label with an identical value — any real label counts (`instance`, `namespace`, `pod`, `job`, custom labels like `entity` or `device`, …)
+- **Not** counted: `alertname` (fifty hosts firing the same rule is a grouping concern, not a shared blast radius), `severity`, `receiver`, and labels whose value is a URL (runbook/dashboard links are metadata, not identity)
+- **Rarity weighting**: a shared label value carried by only two alerts (`instance=web3`) weighs far more than one carried by half the snapshot (`namespace=prod`) — common labels devalue themselves automatically, so the top results are the alerts that share something genuinely specific with yours
+- **Time proximity**: alerts that started around the same time as the open alert get a score boost — started together usually means same incident
+- Cross-cluster matches are included on purpose: the same `instance` reported by two Alertmanager clusters is exactly the pattern worth surfacing
+- The comparison always runs against the *current* snapshot — even when you open a resolved alert from history, the tab answers "is this still hot elsewhere?"
+
 **AI Prompt**
+
+![Detail Panel — AI Prompt tab](assets/feature-detail-tab-ai-prompt.png)
+
 - Generates a ready-to-paste prompt for an LLM (alert name, cluster, severity, labels, annotations, and the recent history table), framed as an SRE root-cause-analysis request
 - One-click copy to clipboard — paste directly into Claude, ChatGPT, or any other AI assistant to get a head start on investigation
 

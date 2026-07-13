@@ -528,7 +528,19 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
 │   │                            computeLabelBreakdown (alerts-overview modal: per-label-name
 │   │                            value counts, alertname/severity pinned to the top regardless
 │   │                            of coverage, `receiver` alias + rest of HIDDEN_LABEL_KEYS
-│   │                            excluded from the generic loop — dedicated UI elsewhere)
+│   │                            excluded from the generic loop — dedicated UI elsewhere),
+│   │                            findRelatedAlerts (detail panel "Related" tab: alerts sharing ≥1
+│   │                            real label with equal non-empty value — no hardcoded key list;
+│   │                            skipped: alertname/severity/receiver/`@`-pseudo-labels/URL-valued
+│   │                            labels (runbook/dashboard links = alertname by another name);
+│   │                            self-excluded by fingerprint+cluster, not fingerprint alone — the
+│   │                            same fingerprint in another cluster IS related; scored by smoothed
+│   │                            IDF per shared pair, log((N+1)/df), so rare shared values outrank
+│   │                            snapshot-wide ones and universal labels still count slightly
+│   │                            instead of zeroing out, × time-proximity boost 1+exp(-|Δt|/30min)
+│   │                            on startsAt (unparseable date → no boost); ties: severityOrder →
+│   │                            startsAt desc; sharedKeys sorted rarest-first for chip display;
+│   │                            `max` param optional, uncapped by default)
 │   │                            ← single source, never duplicate in components
 │   │                            100% test coverage enforced (frontend/vitest.config.ts) — a narrow
 │   │                            exception to the functional-E2E-only strategy, see .agents/testing.md
@@ -582,10 +594,12 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │   │                          (`jarvis:collapsed:expired-silence:<fingerprint>:<cluster>`) — the
     │   │                          active-silence banner stays always expanded (actionable: extend
     │   │                          buttons, expiry warning); below the silence banners (`mt-3` gap), a
-    │   │                          **"Details" / "History" / "AI Prompt" / "Comments" tab bar** splits
-    │   │                          the rest of the panel — `activeTab` state (`'details' | 'history' |
-    │   │                          'ai-prompt' | 'comments'`, resets to `'details'` on fingerprint/
-    │   │                          cluster change like `historyPage`). Tabs render "folder tab" style:
+    │   │                          **"Details" / "History" / "Comments" / "Related" / "AI Prompt" tab
+    │   │                          bar** splits the rest of the panel — active tab = `uiStore.detailTab`
+    │   │                          (`DetailTab` union, synced to the `tab` URL param so reload/share
+    │   │                          lands on the same tab; reset to `'details'` inside
+    │   │                          `setSelectedFingerprint`, NOT in the panel). Tabs
+    │   │                          render "folder tab" style:
     │   │                          the active tab sits flush on the content background with no bottom
     │   │                          border (`-mb-px border-b-transparent bg-card`, visually merges into
     │   │                          the content below it), inactive tabs sit on a muted strip
@@ -598,7 +612,26 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │   │                          divider, since the tab boundary already separates the group);
     │   │                          "History" holds `AlertDetailHistorySection` (event timeline only —
     │   │                          own tab now, no more collapsible sub-header inside it, the tab label
-    │   │                          itself is the heading); "AI Prompt" holds
+    │   │                          itself is the heading); "Related" holds `AlertDetailRelatedSection`
+    │   │                          (other currently firing/suppressed alerts sharing real labels —
+    │   │                          `findRelatedAlerts` in `lib/alertUtils.ts`, smoothed-IDF specificity
+    │   │                          weighting × time-proximity boost, see the lib/ entry above for the
+    │   │                          scoring; deliberately NOT alertname/severity/URL-valued labels,
+    │   │                          cross-cluster matches allowed). Computed EAGERLY in the panel via
+    │   │                          `useMemo([alert, allAlerts])` — the tab label carries a live count
+    │   │                          badge like Comments, which requires the result before the tab opens
+    │   │                          (an earlier lazy+spinner variant was dropped for exactly that
+    │   │                          reason; the computation is O(alerts×labels) over in-memory data,
+    │   │                          microseconds); data comes from the already-loaded `['alerts']`
+    │   │                          cache via `useAlerts()` — no extra fetch. Rows render compact
+    │   │                          two-line (severity badge + alertname + cluster-if-different + start
+    │   │                          time / max 3 shared-label chips rarest-first + "+N" title-tooltip
+    │   │                          for the rest); top 10 shown, "Show 10 more (N remaining)" button
+    │   │                          appends chunks of 10 (`visibleCount` state, reset on alert switch
+    │   │                          via the panel's `<cluster>::<fingerprint>` key); row click swaps
+    │   │                          the panel to that alert via the same `onSelectAlert` jump used by
+    │   │                          `AffectedAlertRow` (which also resets the tab to Details);
+    │   │                          "AI Prompt" holds
     │   │                          `AlertDetailAIPromptSection` (copy-to-clipboard prompt text, was
     │   │                          previously a collapsed-by-default subsection at the bottom of
     │   │                          History — split into its own tab since building an AI prompt is a
@@ -618,6 +651,12 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │   ├── AlertDetailHistorySection.tsx → merged event timeline table + pager (heatmap lives in
     │   │                        AlertDetailPanel's header, not here — see above; AI-prompt is its own
     │   │                        `AlertDetailAIPromptSection` component/tab, not part of this one)
+    │   ├── AlertDetailRelatedSection.tsx → own "Related" tab; presentational — receives the
+    │   │                        pre-computed `related` list from AlertDetailPanel (eager useMemo
+    │   │                        there feeds the tab count badge too), compact two-line rows, chunked
+    │   │                        show-more, row click jumps via `onSelectAlert` +
+    │   │                        `makeAlertSelectionKeyForAlert` (see tab-bar note above for full
+    │   │                        rationale)
     │   ├── AlertDetailAIPromptSection.tsx → copy-to-clipboard AI-analysis prompt text (`promptText`
     │   │                        built + cached in `AlertDetailPanel`'s `getCachedPrompt`); own tab,
     │   │                        always expanded (no collapsible wrapper — the tab itself is the
@@ -733,6 +772,8 @@ interface UIStore {
   silencesViewMode: ViewMode                    // silences view (key 'jarvis-silencesViewMode')
   isFullscreen: boolean                         // NOT persisted
   selectedFingerprint: string | null            // NOT persisted (detail panel target)
+  detailTab: DetailTab                          // NOT persisted (detail-panel tab; synced to `tab` URL param;
+                                                //   setSelectedFingerprint/setActivePage reset it to 'details')
   filters: {
     state: string                              // default 'active'
     search: string
@@ -780,6 +821,7 @@ banner collapse state in AlertDetailPanel, default collapsed)
 | `q` | `node` | empty |
 | `matchers` | `[{"name":"env","operator":"=","value":"prod"}]` | empty — **only unlocked** matchers are serialized (locked ones come from Settings on mount) |
 | `alert` | `<cluster>::<fingerprint>` (URL-encoded selection key from `lib/alertSelection.ts`; legacy fingerprint-only still parsed) | empty |
+| `tab` | `related` (detail-panel tab, one of `DETAIL_TABS` in `uiStore.ts` — validated via `isDetailTab`; only written when an alert is selected and the tab isn't `details`) | `details` |
 
 **Hydration order**: URL params → store (on first mount). Afterwards: store → URL (`replaceState`).
 

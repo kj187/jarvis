@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import { enUS } from 'date-fns/locale'
@@ -7,11 +7,12 @@ import { TruncatableChip } from '@/components/ui/truncatable-chip'
 import { cn } from '@/lib/utils'
 import { Sheet } from '@/components/ui/sheet'
 import { AlertBadge, StatusBadge } from './AlertBadge'
-import { labelColorStyle } from '@/lib/alertUtils'
+import { labelColorStyle, findRelatedAlerts } from '@/lib/alertUtils'
 import { CommentsPanel } from '@/components/comments/CommentsPanel'
 import { useAlertComments } from '@/hooks/useAlertComments'
 import { AlertDetailHistorySection } from './AlertDetailHistorySection'
 import { AlertDetailAIPromptSection } from './AlertDetailAIPromptSection'
+import { AlertDetailRelatedSection } from './AlertDetailRelatedSection'
 import { AlertDetailSection } from './AlertDetailSection'
 import { AlertHeatmap } from './AlertHeatmap'
 import { SilenceForm } from '@/components/silences/SilenceForm'
@@ -24,6 +25,7 @@ import { useAuthStore } from '@/store/authStore'
 import { useLoginGuard } from '@/hooks/useLoginGuard'
 import { LoginModal } from '@/components/auth/LoginModal'
 import { useSettingsStore } from '@/store/useSettingsStore'
+import { useUIStore } from '@/store/uiStore'
 import { Button } from '@/components/ui/button'
 import { Tooltip } from '@/components/ui/tooltip'
 import { Input } from '@/components/ui/input'
@@ -234,7 +236,11 @@ export function AlertDetailPanel({
   const [promptCopied, setPromptCopied] = useState(false)
   const [expiredSilenceCollapsed, setExpiredSilenceCollapsed] = useState(true)
   const [expandedSilenceIds, setExpandedSilenceIds] = useState<Set<string>>(new Set())
-  const [activeTab, setActiveTab] = useState<'details' | 'history' | 'ai-prompt' | 'comments'>('details')
+  // Tab state lives in uiStore (synced to the `tab` URL param) so a shared
+  // link or reload lands on the same tab. Selecting another alert resets it
+  // to 'details' inside setSelectedFingerprint.
+  const activeTab = useUIStore((s) => s.detailTab)
+  const setActiveTab = useUIStore((s) => s.setDetailTab)
   const fmtTime = useFormatTime()
 
   const historyOffset = (historyPage - 1) * historyPageSize
@@ -261,6 +267,12 @@ export function AlertDetailPanel({
   // Shares its cache/network with CommentsPanel's own page-1 query (same key) —
   // only read here for the "Comments" tab count badge.
   const { data: commentsPage1 } = useAlertComments(alert?.fingerprint ?? '', alert?.clusterName ?? '', 1)
+  // Computed eagerly (not on tab open) because the "Related" tab label
+  // carries a count badge — cheap, O(alerts × labels) over in-memory data.
+  const relatedAlerts = useMemo(
+    () => (alert ? findRelatedAlerts(alert, allAlerts) : []),
+    [alert, allAlerts],
+  )
   const qc = useQueryClient()
 
   useEffect(() => {
@@ -270,7 +282,6 @@ export function AlertDetailPanel({
 
   useEffect(() => {
     setHistoryPage(1)
-    setActiveTab('details')
   }, [alert?.fingerprint, alert?.clusterName])
 
   useEffect(() => {
@@ -867,10 +878,11 @@ export function AlertDetailPanel({
         <div className="flex flex-wrap gap-1 border-b border-border bg-muted/30 px-5 pt-3">
           {(
             [
-              { key: 'details', label: 'Details' },
-              { key: 'history', label: 'History' },
-              { key: 'comments', label: 'Comments' },
-              { key: 'ai-prompt', label: 'AI Prompt' },
+              { key: 'details', label: 'Details', count: undefined },
+              { key: 'history', label: 'History', count: undefined },
+              { key: 'comments', label: 'Comments', count: commentsPage1?.total ?? 0 },
+              { key: 'related', label: 'Related', count: relatedAlerts.length },
+              { key: 'ai-prompt', label: 'AI Prompt', count: undefined },
             ] as const
           ).map((tab) => (
             <button
@@ -885,15 +897,15 @@ export function AlertDetailPanel({
               )}
             >
               {tab.label}
-              {tab.key === 'comments' && (
+              {tab.count !== undefined && (
                 <span
-                  data-testid="detail-tab-comments-count"
+                  data-testid={`detail-tab-${tab.key}-count`}
                   className={cn(
                     'inline-flex h-[15px] min-w-[15px] items-center justify-center rounded-full px-1 text-[10px] font-bold',
-                    activeTab === 'comments' ? 'bg-link/20 text-link' : 'bg-accent text-muted-foreground',
+                    activeTab === tab.key ? 'bg-link/20 text-link' : 'bg-accent text-muted-foreground',
                   )}
                 >
-                  {commentsPage1?.total ?? 0}
+                  {tab.count}
                 </span>
               )}
             </button>
@@ -1000,6 +1012,17 @@ export function AlertDetailPanel({
             setHistoryPage={setHistoryPage}
             setHistoryPageSize={setHistoryPageSize}
             alertmanagerUrl={alert.alertmanagerUrl}
+          />
+        )}
+
+        {/* Related tab — keyed by alert identity so switching alerts resets
+            the show-more pagination */}
+        {activeTab === 'related' && (
+          <AlertDetailRelatedSection
+            key={`${alert.clusterName}::${alert.fingerprint}`}
+            alert={alert}
+            related={relatedAlerts}
+            onSelectAlert={onSelectAlert}
           />
         )}
 
