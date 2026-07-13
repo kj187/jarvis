@@ -3,18 +3,27 @@ import { X, Lock, Plus, ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useUIStore } from '@/store/uiStore'
 import { useAlerts } from '@/hooks/useAlerts'
-import { getFilterableLabels } from '@/lib/alertUtils'
+import { getFilterableLabels, parseDurationValue } from '@/lib/alertUtils'
 import type { LabelMatcherOperator } from '@/types'
 
 const OPERATORS: LabelMatcherOperator[] = ['=', '!=', '=~', '!~']
+/** `>`/`<` are only meaningful for `@age` — never offered for normal labels (decision 1). */
+const AGE_OPERATORS: LabelMatcherOperator[] = ['>', '<']
+/** Always-suggested pseudo-fields that don't reliably appear via the live label snapshot:
+ * `@age` never does (excluded from `getFilterableLabels` — it's a moving target, not a
+ * static label), `@claimed-by` only when some alert is currently claimed. */
+const PSEUDO_FIELD_SUGGESTIONS = ['@age', '@claimed-by']
+const AGE_VALUE_SUGGESTIONS = ['5m', '15m', '30m', '1h', '4h', '1d']
 
 // ── Operator dropdown (styled to match the autocomplete) ──────────────────────
 
 function OperatorSelect({
   value,
+  operators,
   onChange,
 }: {
   value: LabelMatcherOperator
+  operators: LabelMatcherOperator[]
   onChange: (op: LabelMatcherOperator) => void
 }) {
   const [open, setOpen] = useState(false)
@@ -41,7 +50,7 @@ function OperatorSelect({
       </button>
       {open && (
         <div className="combo-dropdown absolute left-0 top-full z-50 -mt-px min-w-full overflow-hidden rounded-b border-x border-b border-border bg-popover shadow-lg">
-          {OPERATORS.map((op) => (
+          {operators.map((op) => (
             <button
               key={op}
               type="button"
@@ -71,6 +80,7 @@ function TagField({
   ariaLabel,
   autoFocus,
   maxWidthClass,
+  invalid,
 }: {
   values: string[]
   onChange: (next: string[]) => void
@@ -80,6 +90,8 @@ function TagField({
   ariaLabel: string
   autoFocus?: boolean
   maxWidthClass: string
+  /** Renders committed tags with a destructive style — e.g. an `@age` value that isn't a valid duration. */
+  invalid?: boolean
 }) {
   const [inputVal, setInputVal] = useState('')
   const [open, setOpen] = useState(false)
@@ -138,8 +150,13 @@ function TagField({
         {values.map((tag, i) => (
           <span
             key={i}
-            title={tag}
-            className="flex min-w-0 shrink items-center gap-0.5 rounded bg-accent px-1.5 py-0.5 text-[11px] text-accent-foreground"
+            title={invalid ? 'Invalid duration — use e.g. 15m, 2h, 1d' : tag}
+            className={cn(
+              'flex min-w-0 shrink items-center gap-0.5 rounded px-1.5 py-0.5 text-[11px]',
+              invalid
+                ? 'bg-destructive/15 text-destructive border border-destructive/50'
+                : 'bg-accent text-accent-foreground',
+            )}
           >
             <span className="min-w-0 truncate">{tag}</span>
             <button
@@ -235,21 +252,40 @@ function EditableMatcherChip({
 }) {
   const { name, operator, value } = matcher
   const valueTags = value ? value.split('|').filter(Boolean) : []
+  const isAgeField = name === '@age'
+  const ageInvalid = isAgeField && value !== '' && parseDurationValue(value) === null
 
   const valueOptions = useMemo(() => {
+    if (isAgeField) return AGE_VALUE_SUGGESTIONS
     if (name && labelValueMap.has(name)) {
       return Array.from(labelValueMap.get(name)!).sort()
     }
     const all = new Set<string>()
     labelValueMap.forEach((vals) => vals.forEach((v) => all.add(v)))
     return Array.from(all).sort()
-  }, [labelValueMap, name])
+  }, [labelValueMap, name, isAgeField])
 
   return (
-    <div className="flex items-center rounded border border-border bg-input min-h-7 max-w-full">
+    <div
+      className={cn(
+        'flex items-center rounded border bg-input min-h-7 max-w-full',
+        ageInvalid ? 'border-destructive' : 'border-border',
+      )}
+    >
       <TagField
         values={name ? [name] : []}
-        onChange={(arr) => onChange({ ...matcher, name: arr[0] ?? '' })}
+        onChange={(arr) => {
+          const nextName = arr[0] ?? ''
+          const nextIsAge = nextName === '@age'
+          const wasAgeOperator = operator === '>' || operator === '<'
+          // >/< are @age-only (decision 1) — snap the operator when the field
+          // switches into or out of @age so the dropdown never shows a stale,
+          // now-invalid operator.
+          let nextOperator = operator
+          if (nextIsAge && !wasAgeOperator) nextOperator = '>'
+          else if (!nextIsAge && wasAgeOperator) nextOperator = '='
+          onChange({ ...matcher, name: nextName, operator: nextOperator })
+        }}
         suggestions={labelNames}
         placeholder="label"
         single
@@ -260,6 +296,7 @@ function EditableMatcherChip({
       <div className="h-3.5 w-px bg-border shrink-0" />
       <OperatorSelect
         value={operator}
+        operators={isAgeField ? AGE_OPERATORS : OPERATORS}
         onChange={(op) => {
           const isRegex = op === '=~' || op === '!~'
           // = / != allow only a single value — collapse extras when leaving regex.
@@ -272,10 +309,11 @@ function EditableMatcherChip({
         values={valueTags}
         onChange={(arr) => onChange({ ...matcher, value: arr.join('|') })}
         suggestions={valueOptions}
-        placeholder="value"
-        single={operator === '=' || operator === '!='}
+        placeholder={isAgeField ? '15m' : 'value'}
+        single={operator === '=' || operator === '!=' || operator === '>' || operator === '<'}
         ariaLabel="Label value"
         maxWidthClass="max-w-[20rem]"
+        invalid={ageInvalid}
       />
       <button
         onClick={onRemove}
@@ -309,11 +347,18 @@ export function MatcherChipsBar({ allowAdd = false }: { allowAdd?: boolean }) {
     return map
   }, [allAlerts])
 
-  const labelNames = useMemo(() => Array.from(labelValueMap.keys()).sort(), [labelValueMap])
+  const labelNames = useMemo(() => {
+    const names = new Set(labelValueMap.keys())
+    PSEUDO_FIELD_SUGGESTIONS.forEach((n) => names.add(n))
+    return Array.from(names).sort()
+  }, [labelValueMap])
 
   function updateDraft(id: string, next: Draft) {
-    // Promote to a real filter as soon as both label and value are present.
-    if (next.name && next.value) {
+    // Promote to a real filter as soon as both label and value are present —
+    // except an @age draft with an unparseable duration, which must not
+    // commit as a chip that can never match (decision 3 + done-criterion).
+    const ageInvalid = next.name === '@age' && parseDurationValue(next.value) === null
+    if (next.name && next.value && !ageInvalid) {
       addLabelMatcher(next)
       setDrafts((d) => d.filter((x) => x.id !== id))
       return

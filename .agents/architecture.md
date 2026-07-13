@@ -508,8 +508,16 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
 ├── lib/
 │   ├── refetch.ts             → FALLBACK_REFETCH_INTERVAL_MS (60s) — safety-net refetch cadence;
 │   │                            WS push is the primary channel, reads hit in-memory snapshots only
-│   ├── alertUtils.ts          → getFilterableLabels, matchesLabelMatchers (filter-bar only,
-│   │                            substring regex + pseudo-labels — never for silence matching),
+│   ├── alertUtils.ts          → getFilterableLabels (pseudo-labels: `@receiver`/`receiver`,
+│   │                            `@cluster`, `@claimed-by` = `activeClaim.claimedBy ?? ''`;
+│   │                            `@age` deliberately excluded — it's `now - startsAt`, a moving
+│   │                            target, not a static label snapshot), parseDurationValue
+│   │                            (single-unit `\d+(s|m|h|d)` → ms, else null), matchesLabelMatchers
+│   │                            (filter-bar only, substring regex + pseudo-labels — never for
+│   │                            silence matching; `@age` handled as a special case ahead of the
+│   │                            label lookup — only `>`/`<` meaningful, via parseDurationValue
+│   │                            against `Date.now() - startsAt`; `>`/`<` on any other field is
+│   │                            always false — LabelMatcherOperator: `=`,`!=`,`=~`,`!~`,`>`,`<`),
 │   │                            safeRegex, anchoredRegex, silenceWouldMatchAlert (Alertmanager-exact:
 │   │                            anchored regex, real labels only — SilenceForm preview/overlap),
 │   │                            hasUnevaluableRegexMatcher, silenceMatchesAlert,
@@ -562,8 +570,14 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     ├── layout/
     │   ├── Header.tsx         → nav tabs, cluster status, WS indicator, polling/refresh, theme,
     │   │                        settings, create-silence, login/user-menu, mobile hamburger
-    │   └── MatcherChipsBar.tsx → chip-based label filter (=, !=, =~, !~), tag multi-value,
-    │                            suggestions, locked default-filter chips
+    │   └── MatcherChipsBar.tsx → chip-based label filter (=, !=, =~, !~, and @age-only >, <),
+    │                            tag multi-value, suggestions (always includes `@age`/`@claimed-by`
+    │                            via PSEUDO_FIELD_SUGGESTIONS — @age never appears from the live
+    │                            label snapshot, @claimed-by only when some alert is claimed),
+    │                            locked default-filter chips; operator auto-snaps to `>`/`=` when
+    │                            the field switches into/out of `@age`; an @age draft with an
+    │                            unparseable duration (red border, parseDurationValue) is never
+    │                            promoted from draft to a committed filter chip
     ├── alerts/
     │   ├── AlertsPage.tsx     → useWebSocket, filter/search, card|list + detail panel, fullscreen, pagination
     │   ├── AlertCardGrid.tsx  → grouped by settings `groupByLabel` (default severity), responsive

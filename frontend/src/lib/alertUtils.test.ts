@@ -14,6 +14,7 @@ import {
   buildAckSilenceBody,
   FAST_SILENCE_DURATIONS,
   matchesLabelMatchers,
+  parseDurationValue,
   silenceWouldMatchAlert,
   hasUnevaluableRegexMatcher,
   silenceMatchesAlert,
@@ -301,6 +302,47 @@ describe('getFilterableLabels', () => {
     expect(labels.alertname).toBe('X')
     expect(labels.instance).toBe('web1')
   })
+
+  it('sets @claimed-by to the active claim\'s claimedBy', () => {
+    const alert = makeAlert({
+      activeClaim: { id: 1, fingerprint: 'abc123', clusterName: 'cluster-a', claimedBy: 'julian', claimedAt: '2026-01-01T00:00:00Z' },
+    })
+    const labels = getFilterableLabels(alert)
+    expect(labels['@claimed-by']).toBe('julian')
+  })
+
+  it('sets @claimed-by to the empty string when unclaimed', () => {
+    const alert = makeAlert()
+    const labels = getFilterableLabels(alert)
+    expect(labels['@claimed-by']).toBe('')
+  })
+})
+
+describe('parseDurationValue', () => {
+  it('parses seconds, minutes, hours, days', () => {
+    expect(parseDurationValue('30s')).toBe(30_000)
+    expect(parseDurationValue('15m')).toBe(15 * 60_000)
+    expect(parseDurationValue('2h')).toBe(2 * 60 * 60_000)
+    expect(parseDurationValue('1d')).toBe(24 * 60 * 60_000)
+  })
+
+  it('trims whitespace', () => {
+    expect(parseDurationValue('  15m  ')).toBe(15 * 60_000)
+  })
+
+  it('accepts 0 as a valid value', () => {
+    expect(parseDurationValue('0m')).toBe(0)
+  })
+
+  it('returns null for invalid input', () => {
+    expect(parseDurationValue('')).toBeNull()
+    expect(parseDurationValue('15')).toBeNull()
+    expect(parseDurationValue('m')).toBeNull()
+    expect(parseDurationValue('15x')).toBeNull()
+    expect(parseDurationValue('1.5h')).toBeNull()
+    expect(parseDurationValue('15m ago')).toBeNull()
+    expect(parseDurationValue('-5m')).toBeNull()
+  })
 })
 
 describe('pickIdentifierLabel', () => {
@@ -462,6 +504,57 @@ describe('matchesLabelMatchers (filter-bar semantics — S-14)', () => {
     const alert = makeAlert({ labels: { alertname: 'X', env: 'prod' } })
     expect(matchesLabelMatchers(alert, [lm('env', '=~', '(')])).toBe(false)
     expect(matchesLabelMatchers(alert, [lm('env', '!~', '(')])).toBe(true)
+  })
+
+  it('@age >: matches when the alert is older than the duration', () => {
+    const alert = makeAlert({ startsAt: new Date(Date.now() - 20 * 60_000).toISOString() })
+    expect(matchesLabelMatchers(alert, [lm('@age', '>', '15m')])).toBe(true)
+    expect(matchesLabelMatchers(alert, [lm('@age', '>', '25m')])).toBe(false)
+  })
+
+  it('@age <: matches when the alert is younger than the duration', () => {
+    const alert = makeAlert({ startsAt: new Date(Date.now() - 10 * 60_000).toISOString() })
+    expect(matchesLabelMatchers(alert, [lm('@age', '<', '15m')])).toBe(true)
+    expect(matchesLabelMatchers(alert, [lm('@age', '<', '5m')])).toBe(false)
+  })
+
+  it('@age with an invalid duration value matches nothing', () => {
+    const alert = makeAlert({ startsAt: new Date(Date.now() - 20 * 60_000).toISOString() })
+    expect(matchesLabelMatchers(alert, [lm('@age', '>', 'bogus')])).toBe(false)
+    expect(matchesLabelMatchers(alert, [lm('@age', '<', 'bogus')])).toBe(false)
+  })
+
+  it('@age with an unsupported operator matches nothing', () => {
+    const alert = makeAlert({ startsAt: new Date(Date.now() - 20 * 60_000).toISOString() })
+    expect(matchesLabelMatchers(alert, [lm('@age', '=', '15m')])).toBe(false)
+    expect(matchesLabelMatchers(alert, [lm('@age', '!=', '15m')])).toBe(false)
+    expect(matchesLabelMatchers(alert, [lm('@age', '=~', '15m')])).toBe(false)
+    expect(matchesLabelMatchers(alert, [lm('@age', '!~', '15m')])).toBe(false)
+  })
+
+  it('> and < on a normal (non-@age) label never match', () => {
+    const alert = makeAlert({ labels: { alertname: 'X', env: 'prod' } })
+    expect(matchesLabelMatchers(alert, [lm('env', '>', 'prod')])).toBe(false)
+    expect(matchesLabelMatchers(alert, [lm('env', '<', 'prod')])).toBe(false)
+  })
+
+  it('@claimed-by = / != match against the active claim', () => {
+    const claimed = makeAlert({
+      activeClaim: { id: 1, fingerprint: 'abc123', clusterName: 'cluster-a', claimedBy: 'julian', claimedAt: '2026-01-01T00:00:00Z' },
+    })
+    const unclaimed = makeAlert()
+    expect(matchesLabelMatchers(claimed, [lm('@claimed-by', '=', 'julian')])).toBe(true)
+    expect(matchesLabelMatchers(unclaimed, [lm('@claimed-by', '=', 'julian')])).toBe(false)
+    expect(matchesLabelMatchers(unclaimed, [lm('@claimed-by', '!=', '')])).toBe(false)
+    expect(matchesLabelMatchers(claimed, [lm('@claimed-by', '!=', '')])).toBe(true)
+  })
+
+  it('@claimed-by =~ matches by pattern', () => {
+    const claimed = makeAlert({
+      activeClaim: { id: 1, fingerprint: 'abc123', clusterName: 'cluster-a', claimedBy: 'julian', claimedAt: '2026-01-01T00:00:00Z' },
+    })
+    expect(matchesLabelMatchers(claimed, [lm('@claimed-by', '=~', 'jul.*')])).toBe(true)
+    expect(matchesLabelMatchers(claimed, [lm('@claimed-by', '=~', 'mike')])).toBe(false)
   })
 })
 
