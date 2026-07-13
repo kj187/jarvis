@@ -85,12 +85,14 @@ make fixtures-unsilence            # expire test silences
 | Package | Test file | What is tested |
 |---|---|---|
 | `internal/config` | `config_test.go` | Config parsing, cluster-N iteration, HOST_ALIAS logic |
+| `internal/config` | `config_retention_test.go` | Retention env vars: defaults (all disabled), global→domain inheritance, per-domain override even when global is 0, comments never inherit the global, sweep-interval parsing, negative/non-integer values → startup error |
 | `internal/config` | `config_fuzz_test.go` | Fuzz: `parseSecretKey` never panics/errors, hex round-trip |
 | `internal/db` | `db_test.go` | `Migrate` idempotent, PRAGMA settings |
 | `internal/db` | `db_fuzz_test.go` | Fuzz: `RedactDSN` never panics, password never leaks |
 | `internal/cluster` | `registry_test.go` | `NewRegistry`, `Get`, `All` — single/multi-cluster |
 | `internal/history` | `store_test.go` | `UpsertFingerprint`, `GetOrCreateActiveEvent`, grace period (60s), `occurrence_count` logic |
 | `internal/history` | `store_extra_test.go` | `GetClaimHistory`, `RecordSilenceEvent`, `GetSilenceEvents`, `GetRecentResolved`, `SeedResolved`, silence templates |
+| `internal/history` | `store_retention_test.go` | Retention delete/detach methods (`store_retention.go`): `sweepableEventsCondition` — open firing/suppressed episode head survives any age, a superseded or resolved/expired row past cutoff is deleted; batching (1200 rows/batch 500); context-cancel stops the loop; detach nulls `event_id` only on rows referencing a soon-to-be-deleted event; released-claim/comment/silence-event cutoffs (active claims always survive); orphan fingerprint sweep (survives with any remaining event/claim/comment, deletes only true orphans past `last_seen_at` cutoff); re-fire after a full event sweep does not inflate `occurrence_count` |
 | `internal/history` | `alert_store_test.go` | `Set`/`Get`/`MarkResolved`/`RemoveByFingerprint` (thread safety via goroutines) |
 | `internal/history` | `silence_store_test.go` | `SilenceStore`: Set/Get copy semantics, Upsert, MarkExpired, Reset, concurrent access |
 | `internal/history` | `lifecycle_test.go` | Integration: FiringToResolved, SuppressedExpired, GracePeriod, ReoccurrenceAfterResolution, FullCycle |
@@ -99,6 +101,7 @@ make fixtures-unsilence            # expire test silences
 | `internal/history` | `enrich_test.go` | Alert enrichment (active claim attachment) |
 | `internal/history` | `optimization_test.go` | Query/indexing optimizations |
 | `internal/history` | `time_fuzz_test.go` | Fuzz: `parseNullableTimeString` never panics, err/Valid contract |
+| `internal/retention` | `sweeper_test.go` | `Sweeper`: disabled config → `Start` never calls the store; context cancelled before the first sweep stops cleanly; full sweep order + per-domain cutoffs against a `fakeStore` (comments → claims → silence events → detach → events → orphan, orphan cutoff = widest of the four); domains with no effective retention are skipped; one domain's error doesn't abort the rest; `jarvis_retention_*` metrics counted; nil `*metrics.Metrics` doesn't panic |
 | `internal/alertmanager` | `client_test.go` | HTTP client against `httptest.NewServer` |
 | `internal/alertmanager` | `auth_test.go` `oauth2_test.go` | Per-cluster upstream auth (basic/bearer/OAuth2) |
 | `internal/api` | `alerts_test.go` | Alert list/detail handler |

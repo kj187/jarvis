@@ -471,6 +471,54 @@ collectors and `jarvis_build_info`. `Metrics.Handler()` serves `GET /metrics`.
 
 ---
 
+## Data Retention Sweeper (`internal/retention`)
+
+Optional, env-var-only background deletion of old rows — user-facing docs:
+`docs/retention.md`; config: `Config.Retention` above.
+
+- `Sweeper` (`sweeper.go`), built via `retention.NewSweeper(store,
+  cfg.Retention, logger, m)` in `main.go`, started as `go
+  sweeper.Start(ctx)` alongside `recorder.Start(ctx)`. Its `store` param is
+  a small interface (not `*history.Store` directly) so it's testable
+  without a DB — `*history.Store` satisfies it structurally.
+- `Start` is a **no-op** when `cfg.Retention.Enabled()` is `false` (the
+  default) — no timer, no query, ever. Otherwise the first sweep runs 1
+  minute after `Start` (doesn't compete with boot), then every
+  `cfg.Retention.SweepInterval`.
+- `sweep()` runs domains in FK-safe order: comments (if
+  `EffectiveCommentsDays() > 0`) → released claims → silence events →
+  detach comment/claim survivors from soon-to-be-deleted events → events →
+  orphan fingerprints last (cutoff = the **widest** of all four effective
+  retentions, since a fingerprint may only vanish once nothing anywhere
+  still references it). One domain's error is logged and does **not**
+  abort the others.
+- `history/store_retention.go` holds the six store methods the Sweeper
+  calls, all batched (500 rows, `batchDeleteLoop`, short pause between
+  batches — Critical Invariant #8, SQLite single writer) and
+  context-cancellable:
+  `DeleteSweepableEventsBefore`, `DetachCommentsAndClaimsFromSweepableEventsBefore`,
+  `DeleteReleasedClaimsBefore`, `DeleteCommentsBefore`,
+  `DeleteSilenceEventsBefore`, `DeleteOrphanFingerprintsBefore`.
+- `sweepableEventsCondition` (shared SQL fragment, same file) decides which
+  `alert_events` rows are safe to delete: the episode is already closed
+  (`resolved`/`expired`), OR a newer event exists for the same
+  `(fingerprint, cluster_name)` (this row is superseded). It deliberately
+  does **not** use `ends_at` — no INSERT ever writes it, it's always NULL —
+  and never matches the newest row of a still-`firing`/`suppressed`
+  episode, however old, since the recorder only writes rows on status
+  *changes*.
+- Metrics: `jarvis_retention_sweeps_total`,
+  `jarvis_retention_deleted_rows_total{table}`,
+  `jarvis_retention_sweep_duration_seconds` (`docs/metrics.md`).
+- Known accepted side effect: a fingerprint's **global** `occurrence_count`
+  survives event deletion (lives on `alert_fingerprints`), but **per-cluster**
+  stats/heatmap are derived live from `alert_events` and shrink to the
+  retention window after a sweep. If a fingerprint survives only via a
+  surviving comment and later re-fires, `RecordStatusChange` finds no prior
+  event and does not increment `occurrence_count` (also doesn't reset it).
+
+---
+
 ## Frontend Component Tree (`frontend/src/`)
 
 ```
@@ -891,6 +939,7 @@ banner collapse state in AlertDetailPanel, default collapsed)
 | `JARVIS_CLUSTER_N_BASIC_AUTH_USER` `…_BASIC_AUTH_PASSWORD` `…_BEARER_TOKEN` | per-cluster upstream auth |
 | `JARVIS_CLUSTER_N_HEADER_<Name>` | arbitrary custom HTTP header sent with every upstream request (header name taken verbatim after `HEADER_`) |
 | `JARVIS_CLUSTER_N_OAUTH2_CLIENT_ID` `…_OAUTH2_CLIENT_SECRET` `…_OAUTH2_TOKEN_URL` `…_OAUTH2_SCOPES` | per-cluster OAuth2 client-credentials (takes priority over bearer/basic/headers) |
+| `JARVIS_RETENTION_DAYS` `…_EVENTS_DAYS` `…_CLAIMS_DAYS` `…_SILENCE_EVENTS_DAYS` `…_COMMENTS_DAYS` `…_SWEEP_INTERVAL` | data retention (`docs/retention.md`); `Config.Retention RetentionConfig`. All `*_DAYS` default `0` = disabled — an upgrade never silently deletes data. `EffectiveEventsDays`/`EffectiveClaimsDays`/`EffectiveSilenceEventsDays` inherit the global `Days` when their own override is `0`; `EffectiveCommentsDays` **never** inherits — only an explicit `JARVIS_RETENTION_COMMENTS_DAYS > 0` enables comment deletion. `SweepInterval` default `12h`. Negative values → startup error |
 
 ---
 
