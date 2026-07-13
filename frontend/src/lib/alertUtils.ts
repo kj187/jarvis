@@ -32,9 +32,14 @@ export function labelColorStyle(key: string, theme: 'dark' | 'light' = 'dark'): 
 
 /**
  * Returns an alert's labels augmented with pseudo-labels:
- * - @receiver  (comma-separated list of all receiver names)
- * - receiver   (alias for @receiver)
- * - @cluster   (cluster name)
+ * - @receiver     (comma-separated list of all receiver names)
+ * - receiver      (alias for @receiver)
+ * - @cluster      (cluster name)
+ * - @claimed-by   (active claim's claimedBy, or '' if unclaimed)
+ *
+ * `@age` is NOT included here — it's a moving target (`now - startsAt`), so
+ * it's handled as a special case directly in `matchesLabelMatchers` instead
+ * of being baked into a snapshot of static string labels.
  */
 export function getFilterableLabels(alert: EnrichedAlert): Record<string, string> {
   const labels: Record<string, string> = { ...alert.labels }
@@ -48,7 +53,22 @@ export function getFilterableLabels(alert: EnrichedAlert): Record<string, string
   labels['@receiver'] = receiverList
   labels['receiver'] = receiverList
   labels['@cluster'] = alert.clusterName
+  labels['@claimed-by'] = alert.activeClaim?.claimedBy ?? ''
   return labels
+}
+
+/**
+ * Parses a single-unit duration string (`30s`, `15m`, `2h`, `1d`) into
+ * milliseconds. Returns null for anything else — no combined units, no
+ * decimals, no negative values — consistent with `safeRegex`'s "invalid
+ * input → null, caller decides the no-match fallback" contract.
+ */
+export function parseDurationValue(input: string): number | null {
+  const match = /^(\d+)(s|m|h|d)$/.exec(input.trim())
+  if (!match) return null
+  const amount = Number(match[1])
+  const unitMs = { s: 1_000, m: 60_000, h: 3_600_000, d: 86_400_000 }[match[2] as 's' | 'm' | 'h' | 'd']
+  return amount * unitMs
 }
 
 // ── Affected-alert identifier ──────────────────────────────────────────────
@@ -124,6 +144,19 @@ export function matchesLabelMatchers(
   if (matchers.length === 0) return true
   const labels = getFilterableLabels(alert)
   return matchers.every((m) => {
+    // @age is dynamic (now - startsAt), so it's evaluated here instead of
+    // being materialized into getFilterableLabels' static label snapshot.
+    // Only >/< are meaningful for it; every other operator is a no-match by
+    // design (decision 2, idea 2.10).
+    if (m.name === '@age') {
+      if (m.operator !== '>' && m.operator !== '<') return false
+      const thresholdMs = parseDurationValue(m.value)
+      if (thresholdMs === null) return false
+      const ageMs = Date.now() - new Date(alert.startsAt).getTime()
+      return m.operator === '>' ? ageMs > thresholdMs : ageMs < thresholdMs
+    }
+    // >/< are @age-only operators (decision 1) — never match a normal label.
+    if (m.operator === '>' || m.operator === '<') return false
     const value = labels[m.name] ?? ''
     // Special handling for receiver/@receiver: they are comma-separated lists.
     // For equality operators, check if any receiver matches.

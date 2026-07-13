@@ -169,7 +169,7 @@ export interface AlertGroup {
 
 // ── Filter / UI ───────────────────────────────────────────────────────────────
 
-export type LabelMatcherOperator = '=' | '!=' | '=~' | '!~'
+export type LabelMatcherOperator = '=' | '!=' | '=~' | '!~' | '>' | '<'
 
 export interface LabelMatcher {
   id: string

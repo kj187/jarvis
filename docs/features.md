@@ -82,10 +82,20 @@ Jarvis exposes the full Alertmanager matcher syntax as an interactive chip UI. Y
 | `!=` | Negative exact match |
 | `=~` | Regex match |
 | `!~` | Negative regex match |
+| `>` / `<` | Older than / younger than — `@age` only |
+
+**Pseudo-fields** (not real Alertmanager labels, computed by Jarvis):
+| Field | Meaning |
+|---|---|
+| `@cluster` | Which configured Alertmanager cluster the alert came from |
+| `@receiver` (alias `receiver`) | Alertmanager receiver(s) the alert routes to |
+| `@claimed-by` | Who currently has the alert claimed — empty string means unclaimed, so `@claimed-by != ""` finds every claimed alert and `@claimed-by = <name>` finds one person's claims |
+| `@age` | Time since the alert started firing, compared with `>`/`<` and a single-unit duration: `@age > 15m`, `@age < 2h` (units: `s`, `m`, `h`, `d`) |
 
 **How filters compose:**
 - Multiple matchers are ANDed — an alert must match all chips to be shown
 - Regex matchers are validated client-side before being applied
+- An `@age` chip re-evaluates on every alert-list refresh, so it stays accurate without a dedicated ticker
 - Clicking a label chip on any alert card instantly adds an exact-match filter for that label
 
 **URL serialization:**
