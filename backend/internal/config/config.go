@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -36,6 +37,73 @@ type Config struct {
 	OIDCScopes       []string
 	OIDCAdminClaim   string // claim name that controls admin role (e.g. "groups", "cognito:groups")
 	OIDCAdminValue   string // value inside that claim that grants admin (e.g. "Administrator")
+
+	Retention RetentionConfig
+}
+
+// RetentionConfig holds the data-retention sweep settings. All Days fields
+// are 0 by default — retention is opt-in, an upgrade must never silently
+// delete data. See EffectiveEventsDays/EffectiveClaimsDays/
+// EffectiveSilenceEventsDays/EffectiveCommentsDays for override semantics.
+type RetentionConfig struct {
+	// Days is the global default retention in days. 0 disables retention
+	// entirely unless a per-domain override below is set.
+	Days int
+	// EventsDays/ClaimsDays/SilenceEventsDays override Days for their
+	// domain when > 0; 0/unset inherits Days.
+	EventsDays        int
+	ClaimsDays        int
+	SilenceEventsDays int
+	// CommentsDays is deliberately NOT inherited from Days — comments carry
+	// user-written context that should survive a re-firing alert. Only an
+	// explicit value > 0 enables comment deletion.
+	CommentsDays int
+	// SweepInterval is how often the background sweeper runs.
+	SweepInterval time.Duration
+}
+
+func effectiveRetentionDays(global, override int) int {
+	if override > 0 {
+		return override
+	}
+	return global
+}
+
+// EffectiveEventsDays returns the retention window for alert_events —
+// EventsDays if set, else the global Days.
+func (r RetentionConfig) EffectiveEventsDays() int {
+	return effectiveRetentionDays(r.Days, r.EventsDays)
+}
+
+// EffectiveClaimsDays returns the retention window for released alert_claims
+// — ClaimsDays if set, else the global Days.
+func (r RetentionConfig) EffectiveClaimsDays() int {
+	return effectiveRetentionDays(r.Days, r.ClaimsDays)
+}
+
+// EffectiveSilenceEventsDays returns the retention window for silence_events
+// — SilenceEventsDays if set, else the global Days.
+func (r RetentionConfig) EffectiveSilenceEventsDays() int {
+	return effectiveRetentionDays(r.Days, r.SilenceEventsDays)
+}
+
+// EffectiveCommentsDays returns the retention window for alert_comments.
+// Unlike the other domains it never inherits the global Days — only an
+// explicit CommentsDays > 0 enables comment deletion.
+func (r RetentionConfig) EffectiveCommentsDays() int {
+	if r.CommentsDays > 0 {
+		return r.CommentsDays
+	}
+	return 0
+}
+
+// Enabled reports whether any domain has an effective retention configured,
+// i.e. whether the sweeper has any work to do at all.
+func (r RetentionConfig) Enabled() bool {
+	return r.EffectiveEventsDays() > 0 ||
+		r.EffectiveClaimsDays() > 0 ||
+		r.EffectiveSilenceEventsDays() > 0 ||
+		r.EffectiveCommentsDays() > 0
 }
 
 // OAuth2Config holds OAuth2 client credentials for per-cluster Alertmanager authentication.
@@ -137,6 +205,11 @@ func Load() (*Config, error) {
 		oidcScopes = strings.Split(raw, ",")
 	}
 
+	retention, err := parseRetention()
+	if err != nil {
+		return nil, err
+	}
+
 	return &Config{
 		Port:             getEnv("JARVIS_PORT", "8080"),
 		LogLevel:         getEnv("JARVIS_LOG_LEVEL", "info"),
@@ -156,6 +229,57 @@ func Load() (*Config, error) {
 		OIDCScopes:       oidcScopes,
 		OIDCAdminClaim:   getEnv("JARVIS_OIDC_ADMIN_CLAIM", ""),
 		OIDCAdminValue:   getEnv("JARVIS_OIDC_ADMIN_VALUE", ""),
+		Retention:        retention,
+	}, nil
+}
+
+// parseRetentionDays reads a non-negative integer env var (days), defaulting
+// to 0 (disabled). Negative values are a startup error.
+func parseRetentionDays(key string) (int, error) {
+	raw := getEnv(key, "0")
+	v, err := strconv.Atoi(raw)
+	if err != nil {
+		return 0, fmt.Errorf("invalid %s: must be an integer, got %q", key, raw)
+	}
+	if v < 0 {
+		return 0, fmt.Errorf("invalid %s: must be >= 0, got %d", key, v)
+	}
+	return v, nil
+}
+
+// parseRetention reads all JARVIS_RETENTION_* env vars into a RetentionConfig.
+func parseRetention() (RetentionConfig, error) {
+	days, err := parseRetentionDays("JARVIS_RETENTION_DAYS")
+	if err != nil {
+		return RetentionConfig{}, err
+	}
+	eventsDays, err := parseRetentionDays("JARVIS_RETENTION_EVENTS_DAYS")
+	if err != nil {
+		return RetentionConfig{}, err
+	}
+	claimsDays, err := parseRetentionDays("JARVIS_RETENTION_CLAIMS_DAYS")
+	if err != nil {
+		return RetentionConfig{}, err
+	}
+	silenceEventsDays, err := parseRetentionDays("JARVIS_RETENTION_SILENCE_EVENTS_DAYS")
+	if err != nil {
+		return RetentionConfig{}, err
+	}
+	commentsDays, err := parseRetentionDays("JARVIS_RETENTION_COMMENTS_DAYS")
+	if err != nil {
+		return RetentionConfig{}, err
+	}
+	sweepInterval, err := time.ParseDuration(getEnv("JARVIS_RETENTION_SWEEP_INTERVAL", "12h"))
+	if err != nil {
+		return RetentionConfig{}, fmt.Errorf("invalid JARVIS_RETENTION_SWEEP_INTERVAL: %w", err)
+	}
+	return RetentionConfig{
+		Days:              days,
+		EventsDays:        eventsDays,
+		ClaimsDays:        claimsDays,
+		SilenceEventsDays: silenceEventsDays,
+		CommentsDays:      commentsDays,
+		SweepInterval:     sweepInterval,
 	}, nil
 }
 

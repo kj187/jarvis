@@ -219,9 +219,11 @@ type AlertGroup struct {
 
 // ── AlertHeatmap ─────────────────────────────────────────────────────────────
 
-// AlertHeatmapResponse carries raw firing-start timestamps for
-// /alerts/:fingerprint/heatmap; the frontend buckets them into cells so
-// day/hour boundaries are computed in the browser's local timezone.
+// AlertHeatmapResponse carries raw firing-event timestamps (recorded_at —
+// when Jarvis observed the event, matching "Last fired" and the history
+// log) for /alerts/:fingerprint/heatmap; the frontend buckets them into
+// cells so day/hour boundaries are computed in the browser's local
+// timezone.
 type AlertHeatmapResponse struct {
 	Range        string   `json:"range"`
 	FiringStarts []string `json:"firingStarts"`

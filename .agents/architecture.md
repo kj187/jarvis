@@ -332,7 +332,9 @@ GET    /auth/oidc/callback                       None        → exchanges code,
 POST   /setup                                    None  (RL)  Body: { username, password } (internal mode only; 403 if users exist)
 
 # ── WebSocket ────────────────────────────────────────────────────────────────
-WS     /ws                                       None        (origin checked against JARVIS_ALLOWED_ORIGINS)
+WS     /ws                                       full_protect?  (origin checked against JARVIS_ALLOWED_ORIGINS;
+#        in full_protect mode the upgrade request additionally requires a valid
+#        session cookie via RequireAuth — /ws streams the full alert snapshot)
 
 # ── Status / Version ─────────────────────────────────────────────────────────
 GET    /api/v1/status                            full_protect?  → { status, clusters, alerts, ws_clients }
@@ -347,16 +349,23 @@ GET    /api/v1/alerts/:fingerprint/history       full_protect?  → { events: Al
 GET    /api/v1/alerts/:fingerprint/timeline      full_protect?  → []AlertTimelineEntry  (merged alert+claim+silence history)
 GET    /api/v1/alerts/:fingerprint/stats         full_protect?  → AlertStats  ?cluster=
 GET    /api/v1/alerts/:fingerprint/heatmap       full_protect?  → AlertHeatmapResponse  ?cluster= &range=24h|7d|30d (required)
-#        raw firing-start timestamps (status='firing' alert_events rows, one per firing —
-#        the 60s grace period already prevents double-counting), capped at 10000, newest first
+#        firing-event timestamps (recorded_at of status='firing' alert_events rows, one per
+#        distinct starts_at episode — a silence expiring mid-episode replays as a fresh firing row
+#        with the *same* starts_at, so GetFiringStarts dedupes by starts_at; the 60s grace period
+#        only covers resolve+refire, not this suppressed/expired/firing sequence), capped at 10000,
+#        newest first. Uses recorded_at (when Jarvis observed the event), not starts_at (AM's
+#        upstream condition-start time), so heatmap buckets agree with "Last fired" / history log
+#        for the same event
 #        internally; range maps to a lookback window (24h/7d/30d). Bucketing into hourly/daily
 #        cells happens entirely in the frontend (lib/heatmapUtils.ts bucketFiringStarts) so
 #        day/hour boundaries use the browser's local timezone, not the server's.
 GET    /api/v1/alerts/:fingerprint/silence-events full_protect? → []SilenceEvent   (silence action timeline)
 
 # ── Comments ─────────────────────────────────────────────────────────────────
-GET    /api/v1/alerts/:fingerprint/comments      full_protect?  → []Comment
-POST   /api/v1/alerts/:fingerprint/comments      Auth  (write)  Body: { authorName, body, eventId? }
+GET    /api/v1/alerts/:fingerprint/comments      full_protect?  → { comments: Comment[], total }  ?limit= ?offset= ?cluster= (required)
+#        mirrors the history/timeline pagination pattern: default limit 20, max 100, offset >= 0
+#        (parseFingerprintClusterPagination); ORDER BY created_at DESC, id DESC (newest first)
+POST   /api/v1/alerts/:fingerprint/comments      Auth  (write)  Body: { authorName, body, eventId? }  (body capped at 10000 chars → 400)
 DELETE /api/v1/alerts/:fingerprint/comments/:id  Auth  (write)  (author-gated: user_id, else author_name)
 
 # ── Claims ───────────────────────────────────────────────────────────────────
@@ -462,6 +471,54 @@ collectors and `jarvis_build_info`. `Metrics.Handler()` serves `GET /metrics`.
 
 ---
 
+## Data Retention Sweeper (`internal/retention`)
+
+Optional, env-var-only background deletion of old rows — user-facing docs:
+`docs/retention.md`; config: `Config.Retention` above.
+
+- `Sweeper` (`sweeper.go`), built via `retention.NewSweeper(store,
+  cfg.Retention, logger, m)` in `main.go`, started as `go
+  sweeper.Start(ctx)` alongside `recorder.Start(ctx)`. Its `store` param is
+  a small interface (not `*history.Store` directly) so it's testable
+  without a DB — `*history.Store` satisfies it structurally.
+- `Start` is a **no-op** when `cfg.Retention.Enabled()` is `false` (the
+  default) — no timer, no query, ever. Otherwise the first sweep runs 1
+  minute after `Start` (doesn't compete with boot), then every
+  `cfg.Retention.SweepInterval`.
+- `sweep()` runs domains in FK-safe order: comments (if
+  `EffectiveCommentsDays() > 0`) → released claims → silence events →
+  detach comment/claim survivors from soon-to-be-deleted events → events →
+  orphan fingerprints last (cutoff = the **widest** of all four effective
+  retentions, since a fingerprint may only vanish once nothing anywhere
+  still references it). One domain's error is logged and does **not**
+  abort the others.
+- `history/store_retention.go` holds the six store methods the Sweeper
+  calls, all batched (500 rows, `batchDeleteLoop`, short pause between
+  batches — Critical Invariant #8, SQLite single writer) and
+  context-cancellable:
+  `DeleteSweepableEventsBefore`, `DetachCommentsAndClaimsFromSweepableEventsBefore`,
+  `DeleteReleasedClaimsBefore`, `DeleteCommentsBefore`,
+  `DeleteSilenceEventsBefore`, `DeleteOrphanFingerprintsBefore`.
+- `sweepableEventsCondition` (shared SQL fragment, same file) decides which
+  `alert_events` rows are safe to delete: the episode is already closed
+  (`resolved`/`expired`), OR a newer event exists for the same
+  `(fingerprint, cluster_name)` (this row is superseded). It deliberately
+  does **not** use `ends_at` — no INSERT ever writes it, it's always NULL —
+  and never matches the newest row of a still-`firing`/`suppressed`
+  episode, however old, since the recorder only writes rows on status
+  *changes*.
+- Metrics: `jarvis_retention_sweeps_total`,
+  `jarvis_retention_deleted_rows_total{table}`,
+  `jarvis_retention_sweep_duration_seconds` (`docs/metrics.md`).
+- Known accepted side effect: a fingerprint's **global** `occurrence_count`
+  survives event deletion (lives on `alert_fingerprints`), but **per-cluster**
+  stats/heatmap are derived live from `alert_events` and shrink to the
+  retention window after a sweep. If a fingerprint survives only via a
+  surviving comment and later re-fires, `RecordStatusChange` finds no prior
+  event and does not increment `occurrence_count` (also doesn't reset it).
+
+---
+
 ## Frontend Component Tree (`frontend/src/`)
 
 ```
@@ -481,7 +538,9 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
 │   │                            — both AlertDetailPanel and every AlertCard entry query it),
 │   │                            useRefreshAlerts
 │   ├── useAlertCounts.ts      → per-state alert counts for nav badges
-│   ├── useAlertComments.ts    → useAlertComments, useAddComment, useDeleteComment (all cluster-scoped)
+│   ├── useAlertComments.ts    → useAlertComments(fingerprint, cluster, page), useAddComment,
+│   │                            useDeleteComment (all cluster-scoped); COMMENTS_PAGE_SIZE = 20;
+│   │                            query key `['comments', fingerprint, clusterName, page]`
 │   ├── useAlertClaim.ts       → useActiveClaim, useClaimHistory, useSetClaim, useReleaseClaim,
 │   │                            useUpdateClaimNote, useClaimController (all cluster-scoped); USERNAME_KEY
 │   ├── useSilences.ts         → useSilences, useSilenceEvents, useUpsertSilence, useDeleteSilence,
@@ -497,8 +556,16 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
 ├── lib/
 │   ├── refetch.ts             → FALLBACK_REFETCH_INTERVAL_MS (60s) — safety-net refetch cadence;
 │   │                            WS push is the primary channel, reads hit in-memory snapshots only
-│   ├── alertUtils.ts          → getFilterableLabels, matchesLabelMatchers (filter-bar only,
-│   │                            substring regex + pseudo-labels — never for silence matching),
+│   ├── alertUtils.ts          → getFilterableLabels (pseudo-labels: `@receiver`/`receiver`,
+│   │                            `@cluster`, `@claimed-by` = `activeClaim.claimedBy ?? ''`;
+│   │                            `@age` deliberately excluded — it's `now - startsAt`, a moving
+│   │                            target, not a static label snapshot), parseDurationValue
+│   │                            (single-unit `\d+(s|m|h|d)` → ms, else null), matchesLabelMatchers
+│   │                            (filter-bar only, substring regex + pseudo-labels — never for
+│   │                            silence matching; `@age` handled as a special case ahead of the
+│   │                            label lookup — only `>`/`<` meaningful, via parseDurationValue
+│   │                            against `Date.now() - startsAt`; `>`/`<` on any other field is
+│   │                            always false — LabelMatcherOperator: `=`,`!=`,`=~`,`!~`,`>`,`<`),
 │   │                            safeRegex, anchoredRegex, silenceWouldMatchAlert (Alertmanager-exact:
 │   │                            anchored regex, real labels only — SilenceForm preview/overlap),
 │   │                            hasUnevaluableRegexMatcher, silenceMatchesAlert,
@@ -517,7 +584,19 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
 │   │                            computeLabelBreakdown (alerts-overview modal: per-label-name
 │   │                            value counts, alertname/severity pinned to the top regardless
 │   │                            of coverage, `receiver` alias + rest of HIDDEN_LABEL_KEYS
-│   │                            excluded from the generic loop — dedicated UI elsewhere)
+│   │                            excluded from the generic loop — dedicated UI elsewhere),
+│   │                            findRelatedAlerts (detail panel "Related" tab: alerts sharing ≥1
+│   │                            real label with equal non-empty value — no hardcoded key list;
+│   │                            skipped: alertname/severity/receiver/`@`-pseudo-labels/URL-valued
+│   │                            labels (runbook/dashboard links = alertname by another name);
+│   │                            self-excluded by fingerprint+cluster, not fingerprint alone — the
+│   │                            same fingerprint in another cluster IS related; scored by smoothed
+│   │                            IDF per shared pair, log((N+1)/df), so rare shared values outrank
+│   │                            snapshot-wide ones and universal labels still count slightly
+│   │                            instead of zeroing out, × time-proximity boost 1+exp(-|Δt|/30min)
+│   │                            on startsAt (unparseable date → no boost); ties: severityOrder →
+│   │                            startsAt desc; sharedKeys sorted rarest-first for chip display;
+│   │                            `max` param optional, uncapped by default)
 │   │                            ← single source, never duplicate in components
 │   │                            100% test coverage enforced (frontend/vitest.config.ts) — a narrow
 │   │                            exception to the functional-E2E-only strategy, see .agents/testing.md
@@ -539,8 +618,14 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     ├── layout/
     │   ├── Header.tsx         → nav tabs, cluster status, WS indicator, polling/refresh, theme,
     │   │                        settings, create-silence, login/user-menu, mobile hamburger
-    │   └── MatcherChipsBar.tsx → chip-based label filter (=, !=, =~, !~), tag multi-value,
-    │                            suggestions, locked default-filter chips
+    │   └── MatcherChipsBar.tsx → chip-based label filter (=, !=, =~, !~, and @age-only >, <),
+    │                            tag multi-value, suggestions (always includes `@age`/`@claimed-by`
+    │                            via PSEUDO_FIELD_SUGGESTIONS — @age never appears from the live
+    │                            label snapshot, @claimed-by only when some alert is claimed),
+    │                            locked default-filter chips; operator auto-snaps to `>`/`=` when
+    │                            the field switches into/out of `@age`; an @age draft with an
+    │                            unparseable duration (red border, parseDurationValue) is never
+    │                            promoted from draft to a committed filter chip
     ├── alerts/
     │   ├── AlertsPage.tsx     → useWebSocket, filter/search, card|list + detail panel, fullscreen, pagination
     │   ├── AlertCardGrid.tsx  → grouped by settings `groupByLabel` (default severity), responsive
@@ -556,23 +641,94 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │   │                        reordering (persisted: 'jarvis-list-section-order:<label>')
     │   ├── AlertListRow.tsx   → single/indented row
     │   ├── AlertDetailPanel.tsx → slide-over: labels/annotations + link buttons, stats & timeline,
-    │   │                          claim (useClaimController), comments, silence controls + Fast-Silence, AI-prompt section;
+    │   │                          claim (useClaimController), comments (CommentsPanel), silence
+    │   │                          controls + Fast-Silence, AI-prompt section;
+    │   │                          when the alert was opened from a multi-alert list/card group,
+    │   │                          `uiStore.selectedGroupKeys` holds the sibling selection keys and a
+    │   │                          fixed up/down chevron pair renders left of the sheet (position
+    │   │                          mirrors the sheet's own width breakpoints) to step through them —
+    │   │                          also bound to ArrowUp/ArrowDown globally while the panel is open
+    │   │                          (ignored while focus is in an input/textarea/contenteditable);
     │   │                          header (below the stats line, above the action buttons) embeds
     │   │                          AlertHeatmap directly — not a collapsible section, always visible;
     │   │                          close (X) is rendered inline in the header row next to the status
     │   │                          badges as a bordered button (Sheet's own absolute-positioned close
     │   │                          is suppressed via `hideCloseButton`) — was previously floating
     │   │                          top-right, forcing `pr-8` padding on every header row; sheet width
-    │   │                          is 10% narrower than Sheet's default (`sm:max-w-[37.8rem]
-    │   │                          lg:max-w-[50.4rem]` override, this panel only); the expired-silence
-    │   │                          banner is collapsible (default collapsed, ChevronDown/Up toggle),
-    │   │                          state persisted per-alert in localStorage
+    │   │                          is `sm:max-w-[37.8rem] lg:max-w-[50.4rem]` (10% narrower than
+    │   │                          Sheet's default, this panel only), fixed regardless of tab — the
+    │   │                          expired-silence banner is collapsible (default collapsed,
+    │   │                          ChevronDown/Up toggle), state persisted per-alert in localStorage
     │   │                          (`jarvis:collapsed:expired-silence:<fingerprint>:<cluster>`) — the
     │   │                          active-silence banner stays always expanded (actionable: extend
-    │   │                          buttons, expiry warning)
-    │   ├── AlertDetailSection.tsx → collapsible section wrapper used inside the detail panel
-    │   ├── AlertDetailHistorySection.tsx → stats + merged event timeline section (heatmap lives in
-    │   │                        AlertDetailPanel's header, not here — see above)
+    │   │                          buttons, expiry warning); below the silence banners (`mt-3` gap), a
+    │   │                          **"Details" / "History" / "Comments" / "Related" / "AI Prompt" tab
+    │   │                          bar** splits the rest of the panel — active tab = `uiStore.detailTab`
+    │   │                          (`DetailTab` union, synced to the `tab` URL param so reload/share
+    │   │                          lands on the same tab; reset to `'details'` inside
+    │   │                          `setSelectedFingerprint`, NOT in the panel). Tabs
+    │   │                          render "folder tab" style:
+    │   │                          the active tab sits flush on the content background with no bottom
+    │   │                          border (`-mb-px border-b-transparent bg-card`, visually merges into
+    │   │                          the content below it), inactive tabs sit on a muted strip
+    │   │                          (`bg-muted/30` row, `border-b border-border`) — chosen over a plain
+    │   │                          underline and over a segmented-pill control (both tried and rejected
+    │   │                          in review) because it reads unambiguously as navigation with hidden
+    │   │                          panels behind it. "Details" holds Annotations → Summary → Links →
+    │   │                          Labels (no divider under Summary/Links/Labels —
+    │   │                          `AlertDetailSection bordered={false}` — only Annotations keeps its
+    │   │                          divider, since the tab boundary already separates the group);
+    │   │                          "History" holds `AlertDetailHistorySection` (event timeline only —
+    │   │                          own tab now, no more collapsible sub-header inside it, the tab label
+    │   │                          itself is the heading); "Related" holds `AlertDetailRelatedSection`
+    │   │                          (other currently firing/suppressed alerts sharing real labels —
+    │   │                          `findRelatedAlerts` in `lib/alertUtils.ts`, smoothed-IDF specificity
+    │   │                          weighting × time-proximity boost, see the lib/ entry above for the
+    │   │                          scoring; deliberately NOT alertname/severity/URL-valued labels,
+    │   │                          cross-cluster matches allowed). Computed EAGERLY in the panel via
+    │   │                          `useMemo([alert, allAlerts])` — the tab label carries a live count
+    │   │                          badge like Comments, which requires the result before the tab opens
+    │   │                          (an earlier lazy+spinner variant was dropped for exactly that
+    │   │                          reason; the computation is O(alerts×labels) over in-memory data,
+    │   │                          microseconds); data comes from the already-loaded `['alerts']`
+    │   │                          cache via `useAlerts()` — no extra fetch. Rows render compact
+    │   │                          two-line (severity badge + alertname + cluster-if-different + start
+    │   │                          time / max 3 shared-label chips rarest-first + "+N" title-tooltip
+    │   │                          for the rest); top 10 shown, "Show 10 more (N remaining)" button
+    │   │                          appends chunks of 10 (`visibleCount` state, reset on alert switch
+    │   │                          via the panel's `<cluster>::<fingerprint>` key); row click swaps
+    │   │                          the panel to that alert via the same `onSelectAlert` jump used by
+    │   │                          `AffectedAlertRow` (which also resets the tab to Details);
+    │   │                          "AI Prompt" holds
+    │   │                          `AlertDetailAIPromptSection` (copy-to-clipboard prompt text, was
+    │   │                          previously a collapsed-by-default subsection at the bottom of
+    │   │                          History — split into its own tab since building an AI prompt is a
+    │   │                          different task than reading the event timeline); "Comments" holds
+    │   │                          `CommentsPanel` alone at full panel width. The Comments tab label
+    │   │                          always carries a count badge (shows `0`, not hidden at zero) fed by
+    │   │                          a `useAlertComments(fingerprint, cluster, 1)` call that shares its
+    │   │                          cache with `CommentsPanel`'s own page-1 query (same key, no extra
+    │   │                          network cost) — earlier revisions of this panel tried a side-by-side
+    │   │                          two-column layout (comments in their own sticky column, collapsible
+    │   │                          to a slim strip) but that was scrapped after user feedback in favor
+    │   │                          of tabs: one column, no responsive-breakpoint width math, comments
+    │   │                          get the full panel width when active
+    │   ├── AlertDetailSection.tsx → collapsible section wrapper used inside the detail panel;
+    │   │                        `bordered` prop (default `true`) toggles the bottom divider — `false`
+    │   │                        for sections meant to flow into the next one without a visual break
+    │   ├── AlertDetailHistorySection.tsx → merged event timeline table + pager (heatmap lives in
+    │   │                        AlertDetailPanel's header, not here — see above; AI-prompt is its own
+    │   │                        `AlertDetailAIPromptSection` component/tab, not part of this one)
+    │   ├── AlertDetailRelatedSection.tsx → own "Related" tab; presentational — receives the
+    │   │                        pre-computed `related` list from AlertDetailPanel (eager useMemo
+    │   │                        there feeds the tab count badge too), compact two-line rows, chunked
+    │   │                        show-more, row click jumps via `onSelectAlert` +
+    │   │                        `makeAlertSelectionKeyForAlert` (see tab-bar note above for full
+    │   │                        rationale)
+    │   ├── AlertDetailAIPromptSection.tsx → copy-to-clipboard AI-analysis prompt text (`promptText`
+    │   │                        built + cached in `AlertDetailPanel`'s `getCachedPrompt`); own tab,
+    │   │                        always expanded (no collapsible wrapper — the tab itself is the
+    │   │                        section boundary)
     │   ├── AlertHeatmap.tsx    → 24h/7d/30d range toggle + box-grid firing-pattern heatmap; used by
     │   │                        AlertDetailPanel's header, self-contained (owns its own
     │   │                        useAlertHeatmap query + range state); 7d renders as 7 day-rows of
@@ -588,7 +744,6 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │   │                        lib/heatmapUtils.ts — plain exports, not this .tsx file, so
     │   │                        react-refresh/only-export-components stays clean) — single source
     │   │                        for both the detail-panel heatmap and the card sparkline
-    │   ├── AlertComments.tsx  → comment list + input (author-gated delete)
     │   ├── AckButton.tsx      → one-click Fast-Silence (short-lived exact-match silence); active-only
     │   │                        (getEffectiveAlertState), auth-gated (useProtectedAction); hover/focus
     │   │                        popover menu (FAST_SILENCE_DURATIONS 30m/1h/4h/1d/1w) picks the duration;
@@ -607,6 +762,41 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │   ├── LabelChip.tsx      → label chip with hover operator dropdown
     │   ├── ViewToggle.tsx     → ⊞ / ☰ toggle
     │   └── EmptyState.tsx     → large empty-state icon (no alerts)
+    ├── comments/
+    │   ├── CommentsPanel.tsx  → list (paginated, newest first) + Write/Preview editor; the sole
+    │   │                        content of AlertDetailPanel's "Comments" tab (full panel width, no
+    │   │                        responsive width classes of its own — the panel's own outer scroll
+    │   │                        container handles scrolling); local `page` state resets to 1 on
+    │   │                        fingerprint/cluster change;
+    │   │                        keeps a second background query on page 1 (`useAlertComments(...,
+    │   │                        1)`, deduped by TanStack Query when already on page 1) purely as a
+    │   │                        "did a newer comment land" signal — if its `total` exceeds the
+    │   │                        currently-viewed page's `total` while `page > 1`, shows a "New
+    │   │                        comment — jump to latest" affordance instead of forcing the user
+    │   │                        back to page 1 (WS `comment_added` invalidation never touches local
+    │   │                        page state, only the query cache); editor is a plain `<textarea>`
+    │   │                        (no WYSIWYG) with a Write/Preview tab pair — Preview renders through
+    │   │                        the same lazy `CommentMarkdown`; `Ctrl/Cmd+Enter` submits; length
+    │   │                        counter appears once within 500 chars of the 10 000-char server cap
+    │   ├── CommentMarkdown.tsx → `react-markdown` + `remark-gfm`, `skipHtml` (no raw HTML, ever —
+    │   │                        this is why react-markdown was chosen over a `dangerouslySetInnerHTML`
+    │   │                        approach, invariant/workflow rule 4), `allowedElements` locked to
+    │   │                        `p, br, strong, em, del, code, pre, a, ul, ol, li, blockquote` (a
+    │   │                        comment is a note, not a document — no images/headings/tables);
+    │   │                        links get `target="_blank" rel="noopener noreferrer"`, URL
+    │   │                        sanitization is react-markdown's built-in default (`javascript:`
+    │   │                        etc. neutralized); code highlighting via `rehype-highlight` +
+    │   │                        `highlight.js/lib/core` with a small explicit language set (`bash,
+    │   │                        json, yaml, go, javascript, sql, ini`) instead of the ~190-language
+    │   │                        default bundle; theme is hand-written in `index.css` (`.hljs*`
+    │   │                        rules) against our own `--color-*` CSS variables, not an imported
+    │   │                        hljs theme, so it stays legible in dark AND light mode; this whole
+    │   │                        module is `React.lazy`-imported from `CommentsPanel` (not eagerly)
+    │   │                        so the main bundle doesn't grow for users who never open comments —
+    │   │                        it renders as its own chunk (~320 KB) in `pnpm build` output
+    │   └── (storage stays raw text in `alert_comments.body` — Markdown is a rendering-only
+    │       concern; old plain-text comments render unchanged, a stray `*`/`_` rendering as
+    │       emphasis in a legacy comment is accepted)
     ├── silences/
     │   ├── SilencesPage.tsx   → dedicated page: card|list, fullscreen, show/hide expired,
     │   │                        sort (expires/created), matcher-chip filter
@@ -650,6 +840,13 @@ interface UIStore {
   silencesViewMode: ViewMode                    // silences view (key 'jarvis-silencesViewMode')
   isFullscreen: boolean                         // NOT persisted
   selectedFingerprint: string | null            // NOT persisted (detail panel target)
+  selectedGroupKeys: string[] | null             // NOT persisted; sibling selection keys of the alert-list
+                                                //   group (list/card grouped view) the current selection came
+                                                //   from — null outside a group context. Set via
+                                                //   setSelectedFingerprint(fp, groupKeys); drives the
+                                                //   up/down group-navigation arrows in AlertDetailPanel.
+  detailTab: DetailTab                          // NOT persisted (detail-panel tab; synced to `tab` URL param;
+                                                //   setSelectedFingerprint/setActivePage reset it to 'details')
   filters: {
     state: string                              // default 'active'
     search: string
@@ -697,6 +894,7 @@ banner collapse state in AlertDetailPanel, default collapsed)
 | `q` | `node` | empty |
 | `matchers` | `[{"name":"env","operator":"=","value":"prod"}]` | empty — **only unlocked** matchers are serialized (locked ones come from Settings on mount) |
 | `alert` | `<cluster>::<fingerprint>` (URL-encoded selection key from `lib/alertSelection.ts`; legacy fingerprint-only still parsed) | empty |
+| `tab` | `related` (detail-panel tab, one of `DETAIL_TABS` in `uiStore.ts` — validated via `isDetailTab`; only written when an alert is selected and the tab isn't `details`) | `details` |
 
 **Hydration order**: URL params → store (on first mount). Afterwards: store → URL (`replaceState`).
 
@@ -709,7 +907,7 @@ banner collapse state in AlertDetailPanel, default collapsed)
 | `alerts_update` | `{ alerts: EnrichedAlert[] }` | `queryClient.setQueryData(['alerts'], alerts)` |
 | `claim_set` | `{ fingerprint, clusterName, claim }` | patch alerts cache + invalidate claim queries (cluster-scoped keys) |
 | `claim_released` | `{ fingerprint, clusterName, releasedBy }` | set `activeClaim` to `undefined` + invalidate claim queries |
-| `comment_added` | `{ fingerprint, comment }` | invalidate comments query (cluster-scoped key) |
+| `comment_added` | `{ fingerprint, comment }` | invalidate comments query by prefix key `['comments', fingerprint, clusterName]` — matches every paged query key (`..., page]`) for that alert, so whichever page is mounted refetches; local `page` state is untouched (see `CommentsPanel.tsx` above for the page>1 "jump to latest" affordance) |
 | `silences_update` | `{}` (pure invalidation signal) | `invalidateQueries(['silences'])` → refetch from the in-memory snapshot. Broadcast by the recorder when the silence snapshot diff changed vs. the previous poll, and by every silence mutation write-through (`applySilenceWriteThrough`) |
 
 ---
@@ -729,7 +927,7 @@ banner collapse state in AlertDetailPanel, default collapsed)
 
 | Var | Notes |
 |---|---|
-| `JARVIS_PORT` `JARVIS_LOG_LEVEL` `JARVIS_LOG_REQUESTS` `JARVIS_POLL_INTERVAL` | server basics — defaults: `8080`, `info`, `false`, `15s` |
+| `JARVIS_PORT` `JARVIS_LOG_LEVEL` `JARVIS_LOG_REQUESTS` `JARVIS_POLL_INTERVAL` | server basics — defaults: `8080`, `info`, `false`, `15s`. `JARVIS_POLL_INTERVAL` also drives the grace period: `main.go` sets `Store`'s grace period to `max(60s, 2×JARVIS_POLL_INTERVAL)` and `Recorder.claimReleaseDelay` to stay comfortably above it (Critical Invariant #1, `AGENTS.md`) |
 | `JARVIS_DB_DSN` | `postgres://` or `postgresql://` → PostgreSQL, anything else → SQLite file path. Default `/data/jarvis.db`. Never logged raw (`db.RedactDSN()`) |
 | `JARVIS_RUNBOOK_BASE_URL` | prefix for non-URL `runbook` values |
 | `JARVIS_ALLOWED_ORIGINS` | CORS + WS origin allow-list (no `*`), comma-separated |
@@ -741,6 +939,7 @@ banner collapse state in AlertDetailPanel, default collapsed)
 | `JARVIS_CLUSTER_N_BASIC_AUTH_USER` `…_BASIC_AUTH_PASSWORD` `…_BEARER_TOKEN` | per-cluster upstream auth |
 | `JARVIS_CLUSTER_N_HEADER_<Name>` | arbitrary custom HTTP header sent with every upstream request (header name taken verbatim after `HEADER_`) |
 | `JARVIS_CLUSTER_N_OAUTH2_CLIENT_ID` `…_OAUTH2_CLIENT_SECRET` `…_OAUTH2_TOKEN_URL` `…_OAUTH2_SCOPES` | per-cluster OAuth2 client-credentials (takes priority over bearer/basic/headers) |
+| `JARVIS_RETENTION_DAYS` `…_EVENTS_DAYS` `…_CLAIMS_DAYS` `…_SILENCE_EVENTS_DAYS` `…_COMMENTS_DAYS` `…_SWEEP_INTERVAL` | data retention (`docs/retention.md`); `Config.Retention RetentionConfig`. All `*_DAYS` default `0` = disabled — an upgrade never silently deletes data. `EffectiveEventsDays`/`EffectiveClaimsDays`/`EffectiveSilenceEventsDays` inherit the global `Days` when their own override is `0`; `EffectiveCommentsDays` **never** inherits — only an explicit `JARVIS_RETENTION_COMMENTS_DAYS > 0` enables comment deletion. `SweepInterval` default `12h`. Negative values → startup error |
 
 ---
 
@@ -782,7 +981,32 @@ with its own `*alertmanager.Client`); `Cluster.AlertmanagerURL` /
   in `history.SilenceStore` (in-memory snapshot per cluster, AlertStore
   pattern) — `GET /api/v1/silences` reads that snapshot and performs no
   upstream call. A failed silence fetch keeps the cluster's previous
-  snapshot (never blanks the silences page on a transient error).
+  snapshot (never blanks the silences page on a transient error). A failed
+  *alert* fetch (`Recorder.poll`, `recorder.go`) mirrors this: the cluster's
+  last successfully fetched alert list (`Recorder.lastGoodAlerts`) is reused
+  instead of contributing zero alerts for that poll, so a transient AM
+  outage never makes `applyPollResults`'s prev/curr diff read every alert of
+  that cluster as resolved (phantom resolves — false `resolved` events,
+  wrong `occurrence_count` increments, and premature claim releases on the
+  next re-fire).
+- **Startup reconciliation** (`Recorder.reconcileStartupResolves`,
+  `recorder.go`): `prevSnapshot` lives only in memory, so after a Jarvis
+  restart it starts empty regardless of what actually happened in the DB
+  while it was down. Without this, an alert that resolved during the
+  downtime keeps a dangling non-`resolved` last event forever, and its next
+  re-fire is silently swallowed by `RecordStatusChange`'s idempotency
+  (`firing == firing`, no insert) — no heatmap entry, no
+  `occurrence_count` bump, until some *later* cycle happens to notice. Fix:
+  on each cluster's first successful fetch since the Recorder was created
+  (tracked in `Recorder.reconciledClusters`, so this runs at most once per
+  cluster per process lifetime), `Store.GetOpenFingerprintsForCluster`
+  finds fingerprints whose latest event (within a 7-day window) isn't
+  `resolved`; any not present in that first fetch's alerts get
+  `RecordResolvedForCluster`'d with the startup time. The resolved
+  timestamp is therefore startup time, not the real (unrecoverable) time it
+  resolved during the downtime — a deliberate, documented approximation.
+  The normal grace period and idempotency rules apply unchanged to whatever
+  happens afterward.
 - `GET /api/v1/clusters` derives member health from `Cluster.MemberUpStates()`
   — the cached up-state written by every `FetchAlerts` (≤ one poll interval
   old), never a live ping. Members without poll state yet (first interval
@@ -817,6 +1041,11 @@ with its own `*alertmanager.Client`); `Cluster.AlertmanagerURL` /
 ![Alert lifecycle state machine](../docs/assets/alert-lifecycle.svg)
 
 (source: `docs/diagrams/alert-lifecycle.mmd`, re-render via `make diagrams`)
+
+Full user-facing lifecycle reference — episodes/`starts_at`, grace period,
+resolved buffer, claim auto-release, startup reconciliation, fetch-failure
+guarantees: `docs/alert-lifecycle.md` (keep it in sync with lifecycle
+changes like every other doc).
 
 ```
 firing → suppressed   (silence activated)

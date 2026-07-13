@@ -1,11 +1,9 @@
 import { format } from 'date-fns'
 import { enUS } from 'date-fns/locale'
-import { Check, Copy } from 'lucide-react'
 import type { Dispatch, SetStateAction } from 'react'
 import { cn } from '@/lib/utils'
 import { tzAbbr } from '@/lib/alertUtils'
 import type { AlertTimelineEntry } from '@/types'
-import { AlertDetailSection } from './AlertDetailSection'
 
 interface AlertDetailHistorySectionProps {
   timelineData: { entries: AlertTimelineEntry[]; total: number } | undefined
@@ -14,9 +12,6 @@ interface AlertDetailHistorySectionProps {
   setHistoryPage: Dispatch<SetStateAction<number>>
   setHistoryPageSize: Dispatch<SetStateAction<10 | 50 | 100>>
   alertmanagerUrl?: string
-  promptText: string
-  promptCopied: boolean
-  setPromptCopied: Dispatch<SetStateAction<boolean>>
 }
 
 type HistoryRow = {
@@ -55,9 +50,6 @@ export function AlertDetailHistorySection({
   setHistoryPage,
   setHistoryPageSize,
   alertmanagerUrl,
-  promptText,
-  promptCopied,
-  setPromptCopied,
 }: AlertDetailHistorySectionProps) {
   const actionColor: Record<string, string> = {
     'Alert fired': 'text-red-600 dark:text-red-400',
@@ -117,13 +109,16 @@ export function AlertDetailHistorySection({
   })()
 
   return (
-    <>
-      <AlertDetailSection title="History" defaultOpen={true} headerRight={pageSizeButtons}>
-        {!timelineData ? (
-          <p className="text-xs text-muted-foreground">Loading…</p>
-        ) : (
-          <div>
-            <div className="overflow-x-auto">
+    <div className="px-5 py-4">
+      <div className="mb-3 flex items-center justify-between">
+        <h3 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">History</h3>
+        {pageSizeButtons}
+      </div>
+      {!timelineData ? (
+        <p className="text-xs text-muted-foreground">Loading…</p>
+      ) : (
+        <div>
+          <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
                   <tr className="border-b border-border bg-accent/30">
@@ -209,29 +204,6 @@ export function AlertDetailHistorySection({
             )}
           </div>
         )}
-      </AlertDetailSection>
-
-      <AlertDetailSection title="AI Prompt" defaultOpen={false}>
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <p className="text-xs text-muted-foreground">Prompt with alert context for AI analysis</p>
-            <button
-              className="flex items-center gap-1 rounded border border-border px-2 py-1 text-xs hover:bg-accent cursor-pointer"
-              onClick={() => {
-                void navigator.clipboard.writeText(promptText)
-                setPromptCopied(true)
-                setTimeout(() => setPromptCopied(false), 2000)
-              }}
-            >
-              {promptCopied ? <Check className="h-3 w-3 text-green-400" /> : <Copy className="h-3 w-3" />}
-              {promptCopied ? 'Copied!' : 'Copy'}
-            </button>
-          </div>
-          <pre className="max-h-64 overflow-y-auto rounded bg-accent/30 p-3 text-[10px] leading-relaxed text-muted-foreground whitespace-pre-wrap break-words">
-            {promptText}
-          </pre>
-        </div>
-      </AlertDetailSection>
-    </>
+    </div>
   )
 }

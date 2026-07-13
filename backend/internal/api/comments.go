@@ -16,23 +16,25 @@ const (
 
 // GET /api/v1/alerts/:fingerprint/comments
 func (s *Server) getComments(c echo.Context) error {
-	fp := c.Param("fingerprint")
-	if !validateFingerprint(fp) {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid fingerprint")
+	fp, cluster, limit, offset, err := parseFingerprintClusterPagination(c)
+	if err != nil {
+		return err
 	}
-	cluster := c.QueryParam("cluster")
 	if cluster == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "cluster is required")
 	}
 
-	comments, err := s.store.GetComments(fp, cluster)
+	comments, total, err := s.store.GetComments(fp, cluster, limit, offset)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get comments")
 	}
 	if comments == nil {
 		comments = []models.Comment{}
 	}
-	return c.JSON(http.StatusOK, comments)
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"comments": comments,
+		"total":    total,
+	})
 }
 
 // POST /api/v1/alerts/:fingerprint/comments

@@ -1,4 +1,4 @@
-import { test, expect, waitForActiveAlerts, JARVIS_BASE_URL } from '../../support/fixtures'
+import { test, expect, waitForActiveAlerts, expandComments, JARVIS_BASE_URL } from '../../support/fixtures'
 import { dismissNoAuthNotice } from '../../support/auth'
 import { kubernetesAlerts } from '../../fixtures/alerts'
 
@@ -126,6 +126,7 @@ test('J4 comment_added WS event updates comments section without reload', async 
   await page.goto(`/?state=active&alert=${fingerprint}`)
   const panel = page.getByTestId('detail-panel')
   await expect(panel).toBeVisible()
+  await expandComments(panel)
 
   // Wait for WS to be connected before posting comment
   await expect(page.locator('[title="WebSocket connected"]').first()).toBeVisible({ timeout: 10_000 })

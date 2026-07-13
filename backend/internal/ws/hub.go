@@ -31,8 +31,12 @@ type Hub struct {
 	metrics    *metrics.Metrics
 }
 
-// NewHub creates a new Hub.
+// NewHub creates a new Hub. A nil logger is replaced with a no-op logger so
+// callers (tests) that don't care about hub logs can pass nil safely.
 func NewHub(allowedOrigins []string, logger *slog.Logger, m *metrics.Metrics) *Hub {
+	if logger == nil {
+		logger = slog.New(slog.DiscardHandler)
+	}
 	originSet := make(map[string]struct{}, len(allowedOrigins))
 	for _, o := range allowedOrigins {
 		originSet[o] = struct{}{}

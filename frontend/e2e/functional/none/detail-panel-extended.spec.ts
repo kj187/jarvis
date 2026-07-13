@@ -1,4 +1,4 @@
-import { test, expect, waitForActiveAlerts, JARVIS_BASE_URL } from '../../support/fixtures'
+import { test, expect, waitForActiveAlerts, expandComments, JARVIS_BASE_URL } from '../../support/fixtures'
 import { dismissNoAuthNotice } from '../../support/auth'
 import { kubernetesAlerts } from '../../fixtures/alerts'
 
@@ -82,7 +82,7 @@ test('D4 alert without URL annotations shows no Links section', async ({ page, a
   await expect(panel.getByRole('button', { name: /Links/ })).toHaveCount(0)
 })
 
-test('D12 AI prompt section is collapsed by default and copy works', async ({ page, am, jarvis }) => {
+test('D12 AI prompt tab shows the prompt and copy works', async ({ page, am, jarvis }) => {
   await dismissNoAuthNotice(page)
   await am.fire(kubernetesAlerts)
   await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, kubernetesAlerts.length)
@@ -96,19 +96,12 @@ test('D12 AI prompt section is collapsed by default and copy works', async ({ pa
   const panel = page.getByTestId('detail-panel')
   await expect(panel).toBeVisible()
 
-  // Find the AI Prompt section button — it's a button with the title text
-  const aiSectionBtn = panel.getByRole('button', { name: 'AI Prompt' })
-  await expect(aiSectionBtn).toBeVisible({ timeout: 5_000 })
-
-  // Section is collapsed by default — copy button not in DOM yet
+  // AI Prompt has its own tab — not shown until selected.
   const copyBtn = panel.getByRole('button', { name: 'Copy' })
   await expect(copyBtn).toHaveCount(0)
 
-  // Click the section button to expand
-  await aiSectionBtn.click()
-
-  // Copy button should now appear
-  await expect(copyBtn.first()).toBeVisible({ timeout: 3_000 })
+  await panel.getByTestId('detail-tab-ai-prompt').click()
+  await expect(copyBtn.first()).toBeVisible({ timeout: 5_000 })
 
   // Click copy — button should remain in DOM (clipboard op is fire-and-forget)
   await copyBtn.first().click()
@@ -256,6 +249,7 @@ test('D8 claim history entries appear in the history section', async ({ page, am
   await page.goto(`/?state=active&alert=${fingerprint}`)
   const panel = page.getByTestId('detail-panel')
   await expect(panel).toBeVisible()
+  await panel.getByTestId('detail-tab-history').click()
 
   // History section includes claim events — "Who" column shows the claimer
   await expect(panel.getByText('d8-claimer').first()).toBeVisible({ timeout: 8_000 })
@@ -283,6 +277,7 @@ test('D11 comments survive alert re-fire', async ({ page, am, jarvis }) => {
   await page.goto(`/?state=active&alert=${fingerprint}`)
   const panel = page.getByTestId('detail-panel')
   await expect(panel).toBeVisible()
+  await expandComments(panel)
 
   // Verify comment is visible initially
   await expect(panel.getByText('D11 persistent comment')).toBeVisible({ timeout: 8_000 })
@@ -294,5 +289,115 @@ test('D11 comments survive alert re-fire', async ({ page, am, jarvis }) => {
   // Reload and verify comment still exists
   await page.reload()
   await expect(page.getByTestId('detail-panel')).toBeVisible({ timeout: 10_000 })
+  await expandComments(page)
   await expect(page.getByText('D11 persistent comment')).toBeVisible({ timeout: 8_000 })
+})
+
+test('D12 comments pager stays hidden at or below the page size (5)', async ({ page, am, jarvis }) => {
+  await dismissNoAuthNotice(page)
+  await am.fire([
+    {
+      labels: { alertname: 'D12NoPagerAlert', severity: 'warning', cluster: 'e2e' },
+      annotations: { summary: 'D12 no-pager-yet test' },
+    },
+  ])
+  await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, 1)
+
+  const res = await fetch(`${JARVIS_BASE_URL}/api/v1/alerts`)
+  const alerts: any[] = await res.json()
+  const fingerprint = alerts[0].fingerprint
+
+  for (let i = 0; i < 5; i++) {
+    await jarvis.addComment(fingerprint, `comment number ${i}`, 'pager-tester')
+  }
+
+  await page.goto(`/?state=active&alert=${fingerprint}`)
+  const panel = page.getByTestId('detail-panel')
+  await expect(panel).toBeVisible()
+  await expandComments(panel)
+  await expect(panel.getByText('comment number 4')).toBeVisible({ timeout: 8_000 })
+
+  await expect(panel.getByTestId('comments-pager')).toHaveCount(0)
+})
+
+test('D12 comments panel paginates newest-first once past the page size', async ({ page, am, jarvis }) => {
+  await dismissNoAuthNotice(page)
+  await am.fire([
+    {
+      labels: { alertname: 'D12PaginationAlert', severity: 'warning', cluster: 'e2e' },
+      annotations: { summary: 'D12 pagination test' },
+    },
+  ])
+  await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, 1)
+
+  const res = await fetch(`${JARVIS_BASE_URL}/api/v1/alerts`)
+  const alerts: any[] = await res.json()
+  const fingerprint = alerts[0].fingerprint
+
+  // Page size is 5 — 7 comments produce 2 pages (5 + 2).
+  for (let i = 0; i < 7; i++) {
+    await jarvis.addComment(fingerprint, `comment number ${i}`, 'pager-tester')
+  }
+
+  await page.goto(`/?state=active&alert=${fingerprint}`)
+  const panel = page.getByTestId('detail-panel')
+  await expect(panel).toBeVisible()
+  await expandComments(panel)
+
+  const pagerLabel = panel.getByTestId('comments-pager-label')
+  await expect(pagerLabel).toHaveText('Page 1 of 2', { timeout: 8_000 })
+
+  // Newest first: comment 6 (added last) is on page 1.
+  await expect(panel.getByText('comment number 6')).toBeVisible()
+  await expect(panel.getByText('comment number 0')).not.toBeVisible()
+
+  await panel.getByRole('button', { name: 'Next page' }).click()
+  await expect(pagerLabel).toHaveText('Page 2 of 2')
+
+  // Oldest comment (0) is on the last page.
+  await expect(panel.getByText('comment number 0')).toBeVisible()
+})
+
+test('D13 comment markdown renders a fenced code block and neutralizes raw HTML', async ({ page, am, jarvis }) => {
+  await dismissNoAuthNotice(page)
+  await am.fire([
+    {
+      labels: { alertname: 'D13MarkdownAlert', severity: 'warning', cluster: 'e2e' },
+      annotations: { summary: 'D13 markdown rendering test' },
+    },
+  ])
+  await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, 1)
+
+  const res = await fetch(`${JARVIS_BASE_URL}/api/v1/alerts`)
+  const alerts: any[] = await res.json()
+  const fingerprint = alerts[0].fingerprint
+
+  const codeBody = '**bold text** and a [link](https://example.com/runbook)\n\n```bash\necho hello\n```'
+  await jarvis.addComment(fingerprint, codeBody, 'markdown-tester')
+
+  const xssBody = 'before <script>window.__jarvisXssFired = true</script> after'
+  await jarvis.addComment(fingerprint, xssBody, 'xss-tester')
+
+  await page.goto(`/?state=active&alert=${fingerprint}`)
+  const panel = page.getByTestId('detail-panel')
+  await expect(panel).toBeVisible()
+  await expandComments(panel)
+
+  const items = panel.getByTestId('detail-comment-item')
+  await expect(items.first()).toBeVisible({ timeout: 8_000 })
+
+  // Fenced code block renders as <pre><code>, not literal backticks.
+  const codeBlock = panel.locator('pre code', { hasText: 'echo hello' })
+  await expect(codeBlock).toBeVisible()
+
+  // Bold and link render as real elements.
+  await expect(panel.locator('strong', { hasText: 'bold text' })).toBeVisible()
+  const link = panel.locator('a[href="https://example.com/runbook"]')
+  await expect(link).toHaveAttribute('target', '_blank')
+  await expect(link).toHaveAttribute('rel', 'noopener noreferrer')
+
+  // Raw <script> is neither rendered as an element nor executed.
+  await expect(panel.locator('script', { hasText: '__jarvisXssFired' })).toHaveCount(0)
+  const xssFired = await page.evaluate(() => (window as any).__jarvisXssFired)
+  expect(xssFired).toBeUndefined()
 })

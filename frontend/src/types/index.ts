@@ -118,6 +118,11 @@ export interface Comment {
   createdAt: string
 }
 
+export interface CommentsPage {
+  comments: Comment[]
+  total: number
+}
+
 // ── Claim ────────────────────────────────────────────────────────────────────
 
 export type ClaimReleaseReason = 'manual' | 'resolved' | 'reclaimed'
@@ -164,7 +169,7 @@ export interface AlertGroup {
 
 // ── Filter / UI ───────────────────────────────────────────────────────────────
 
-export type LabelMatcherOperator = '=' | '!=' | '=~' | '!~'
+export type LabelMatcherOperator = '=' | '!=' | '=~' | '!~' | '>' | '<'
 
 export interface LabelMatcher {
   id: string
