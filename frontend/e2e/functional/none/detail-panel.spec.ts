@@ -1,4 +1,4 @@
-import { test, expect, waitForActiveAlerts, JARVIS_BASE_URL } from '../../support/fixtures'
+import { test, expect, waitForActiveAlerts, expandComments, JARVIS_BASE_URL } from '../../support/fixtures'
 import { dismissNoAuthNotice } from '../../support/auth'
 import { kubernetesAlerts } from '../../fixtures/alerts'
 
@@ -441,11 +441,12 @@ test.describe('D9: Add comment', () => {
     // Open detail
     await page.goto(`/?state=active&alert=${fingerprint}`)
     await page.waitForTimeout(500)
-    
+
     // Verify comment visible
+    await expandComments(page)
     const commentsSection = page.getByTestId('detail-comments-section')
     await expect(commentsSection).toBeVisible()
-    
+
     const commentItems = page.getByTestId('detail-comment-item')
     const commentTexts = await commentItems.allTextContents()
     
@@ -468,7 +469,8 @@ test.describe('D9: Add comment', () => {
     // Open detail
     await page.goto(`/?state=active&alert=${fingerprint}`)
     await page.waitForTimeout(500)
-    
+    await expandComments(page)
+
     // Verify comment metadata
     const commentAuthor = page.getByTestId('detail-comment-author').first()
     const commentTimestamp = page.getByTestId('detail-comment-timestamp').first()
@@ -491,7 +493,8 @@ test.describe('D9: Add comment', () => {
     const firstCard = page.getByTestId('alert-card').first()
     await firstCard.click()
     await page.waitForTimeout(500)
-    
+    await expandComments(page)
+
     // Find comment input
     const commentInput = page.getByTestId('detail-comment-input')
     if (await commentInput.isVisible()) {
@@ -528,7 +531,8 @@ test.describe('D10: Delete comment (author only)', () => {
     // Open detail (as same user)
     await page.goto(`/?state=active&alert=${fingerprint}`)
     await page.waitForTimeout(500)
-    
+    await expandComments(page)
+
     // Verify delete button visible
     const deleteButton = page.getByTestId('detail-comment-delete').first()
     if (await deleteButton.isVisible()) {
@@ -669,6 +673,7 @@ test.describe('D8: Owner edits claim note (immutable history)', () => {
     // immutable entry: both notes are present in the detail panel.
     const panel = page.getByTestId('detail-panel')
     await expect(panel).toContainText('second note')
+    await panel.getByTestId('detail-tab-history').click()
     await expect(panel).toContainText('first note')
 
     // Backend kept both claim rows immutably.

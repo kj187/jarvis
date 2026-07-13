@@ -9,6 +9,134 @@ instead of duplicating.
 
 ---
 
+## A fixed 60s grace period can't absorb a missed poll once the poll interval itself is ≥ 60s
+
+**Symptom**: Not yet observed in production — found by inspection while
+auditing the grace period (Critical Invariant #1). `RecordStatusChange`'s
+grace window was a hardcoded 60 seconds, but `JARVIS_POLL_INTERVAL` is a
+user-configurable duration with no upper bound enforced.
+**Cause**: The grace period exists specifically to absorb *one missed poll*
+between a genuine resolve and its immediate re-fire (so a single dropped
+poll cycle doesn't permanently split one episode into two). If the poll
+interval itself is configured at or above 60 seconds, a single missed poll
+can by definition never fit inside a fixed 60s window — the mechanism the
+invariant is supposed to provide stops working exactly when polls are
+sparse enough to need it most.
+**Rule**: The grace period must scale with the poll interval, not be a
+fixed constant. Fixed via `Store.SetGracePeriod` (`store.go`), set in
+`cmd/jarvis/main.go` to `max(60s, 2×JARVIS_POLL_INTERVAL)`.
+`Recorder.claimReleaseDelay` (now a `NewRecorder` parameter instead of a
+hardcoded 20 minutes) is derived alongside it to stay comfortably above the
+grace period — see Critical Invariant #1 in `AGENTS.md`. Any other
+hardcoded constant that exists to absorb "one poll cycle" of slack should
+be checked against the same scaling requirement.
+
+---
+
+## The 20-minute resolved-alert removal timer could delete an alert that had already re-fired
+
+**Symptom**: An alert resolved, then re-fired within the 20-minute
+"greyed-out" visibility window (correctly moved back into `AlertStore`'s
+active list by `Set()`). Up to 20 minutes later it could vanish from
+`GET /api/v1/alerts` for up to one poll interval, with nothing in the logs
+to explain it.
+**Cause**: `Recorder`'s post-resolve goroutine (`recorder.go`) scheduled a
+20-minute timer that called `AlertStore.RemoveByFingerprintForCluster` —
+which deleted the fingerprint from *both* the resolved buffer *and* the
+active list. If the alert had re-fired in the meantime, that delete from
+the active list was wrong: the alert was live again, and the timer had no
+way to know that (it only remembers the fingerprint+cluster it was
+scheduled for, not whether the underlying alert since changed state).
+**Rule**: A cleanup timer scheduled at time T for state observed at T must
+only ever undo *that* state — never blanket-delete by key, since the key
+might refer to something entirely different by the time the timer fires.
+Fixed by splitting the delete surface: `AlertStore.RemoveResolvedForCluster`
+(new) touches only the resolved buffer; `RemoveByFingerprintForCluster` was
+deleted since it had no other caller once the recorder switched to the
+narrower method.
+
+---
+
+## A Jarvis restart during an alert's downtime resolve permanently swallowed its next re-fire
+
+**Symptom**: An alert that fired, then genuinely resolved while Jarvis
+happened to be restarting, never got a `resolved` row in the DB. Its next
+real fire didn't create a new history/heatmap entry either — the alert just
+looked stuck in `firing` forever, quietly, until some unrelated later event
+touched it.
+**Cause**: The poll diff in `applyPollResults` only ever compares against
+`Recorder.prevSnapshot`, which is pure in-memory state. A fresh process
+starts with an empty `prevSnapshot`, so the first poll after a restart has
+nothing to diff against — an alert that vanished from Alertmanager during
+the downtime just silently stops appearing, with no "missing from curr"
+detection possible. The DB's last event for that `(fingerprint, cluster)`
+stays whatever it was before the restart (typically `firing`). When the
+alert fires again later, `RecordStatusChange`'s idempotency check
+(`last.Status == status` → no insert) treats it as an unchanged, still-open
+episode instead of a new one.
+**Rule**: See Critical Invariant #14's sibling fix in `AGENTS.md` /
+`reconcileStartupResolves` — DB state, not just in-memory `prevSnapshot`,
+has to be consulted once at startup. Any future "recorder decides lifecycle
+purely from `prevSnapshot`" logic needs the same startup bootstrap or it
+will repeat this gap after every restart, not just occasionally.
+
+---
+
+## A cluster's failed alert fetch was diffed as if every one of its alerts had resolved
+
+**Symptom**: The silence-fetch path already had a "snapshot only on a
+successful fetch" guard (`poll()` in `recorder.go`), but the equivalent
+alert-fetch path didn't. A cluster whose `FetchAlerts` fails (all HA members
+down, or the only member down for a single-member cluster) simply
+`continue`d past that cluster for the poll — its alerts were absent from
+`allAlerts` entirely.
+**Cause**: `applyPollResults`'s prev/curr diff treats "alert present in
+`prevSnapshot` but missing from the current poll" as resolved — the
+mechanism that correctly detects a real resolution can't distinguish "alert
+actually gone" from "we simply failed to ask this cluster this time". Below
+the 60s grace period a single missed poll self-heals (re-fire cancels the
+phantom resolve); at or above it, the DB gets permanent bogus
+resolved+firing pairs (`occurrence_count` increments, claim releases fire,
+and the alert visibly greys out in the UI for a poll cycle even in the
+sub-60s case).
+**Rule**: See Critical Invariant #14 in `AGENTS.md`. Fixed by
+`Recorder.lastGoodAlerts` (`recorder.go`) — a cluster's alerts from its last
+*successful* fetch are reused whenever the current fetch fails, so the diff,
+`AlertStore`, WS broadcast (hash unchanged → no broadcast), and claim logic
+all see a stable snapshot for a cluster that's merely unreachable, not
+resolved. Applies mainly to single-member clusters and genuine total
+outages, since `FetchAlerts` only errors when every HA member fails.
+
+---
+
+## A silence expiring mid-episode replays as a "new" firing row with the same `starts_at` — double-counts the heatmap
+
+**Symptom**: `GetFiringStarts` (`backend/internal/history/store.go`) was
+believed safe from double-counting because "the 60s grace period already
+prevents it" (old code comment). That's only true for resolve+refire.
+**Cause**: When a silence expires (or is deleted) while the alert is still
+actually firing in Alertmanager, the poll sequence is `suppressed →
+expired (poll N) → firing (poll N+1)` — the new firing row is written
+because the *last* event was `expired`, not `firing` (idempotency only
+skips inserts when the immediately preceding status matches). That new row
+carries the *same* `starts_at` as the original episode (AM never actually
+stopped firing), so one real firing episode produced two rows with
+status `firing` — `GetFiringStarts` counted both, double-counting the
+episode in the heatmap. The same pattern hits the grace-period edge case
+too, when the row immediately before a `resolved` row was `suppressed`.
+**Rule**: Episode identity for firing-episode dedup is `starts_at`
+(Alertmanager's upstream condition-start time), not "one row per firing
+status change". `GetFiringStarts` now groups by `starts_at` (via a
+`ROW_NUMBER() OVER (PARTITION BY starts_at ...)` subquery — a plain
+`GROUP BY` + `MIN(recorded_at)` fails on SQLite because aggregate
+expressions lose the column's declared `DATETIME` type, so
+`modernc.org/sqlite` scans the result as a string instead of `time.Time`;
+selecting the raw `recorded_at` column through a window-function subquery
+preserves it). `occurrence_count` and `GetStatsForCluster`'s per-cluster LAG
+query are unaffected — they only count firing-after-resolved transitions.
+
+---
+
 ## `jarvis.reset()` truncates `users` too — fatal for a helper called after login in a screenshot spec
 
 **Symptom**: `fireWithHeatmapHistory()` (see below) worked fine in `none`-mode

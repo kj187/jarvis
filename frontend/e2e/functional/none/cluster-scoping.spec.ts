@@ -108,10 +108,12 @@ test('X2 comments are strictly scoped by (fingerprint, cluster)', async ({ page 
   const homeComments = await getHome.json()
   const testComments = await getTest.json()
 
-  expect(homeComments).toHaveLength(1)
-  expect(testComments).toHaveLength(1)
-  expect(homeComments[0].body).toBe('comment-home')
-  expect(testComments[0].body).toBe('comment-test')
+  expect(homeComments.total).toBe(1)
+  expect(testComments.total).toBe(1)
+  expect(homeComments.comments).toHaveLength(1)
+  expect(testComments.comments).toHaveLength(1)
+  expect(homeComments.comments[0].body).toBe('comment-home')
+  expect(testComments.comments[0].body).toBe('comment-test')
 
   const wrongClusterDelete = await page.request.delete(
     `${JARVIS_BASE_URL}/api/v1/alerts/${fingerprint}/comments/${homeComment.id}?cluster=test`,
@@ -125,8 +127,8 @@ test('X2 comments are strictly scoped by (fingerprint, cluster)', async ({ page 
 
   const stillThere = await page.request.get(`${JARVIS_BASE_URL}/api/v1/alerts/${fingerprint}/comments?cluster=test`)
   const afterDeleteTestComments = await stillThere.json()
-  expect(afterDeleteTestComments).toHaveLength(1)
-  expect(afterDeleteTestComments[0].id).toBe(testComment.id)
+  expect(afterDeleteTestComments.comments).toHaveLength(1)
+  expect(afterDeleteTestComments.comments[0].id).toBe(testComment.id)
 })
 
 test('X3 active claim lookup is isolated per cluster', async ({ jarvis, page }) => {

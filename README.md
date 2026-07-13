@@ -33,7 +33,7 @@ Most Alertmanager UIs are read-only dashboards. Jarvis is built for teams that n
 - **Multi-cluster** — poll multiple Alertmanager instances simultaneously
 - **Alertmanager HA** — point one cluster at all members of an Alertmanager HA gossip cluster; alerts are deduplicated by fingerprint and the cluster stays healthy as long as any member responds
 - **Per-cluster upstream auth** — authenticate against protected Alertmanagers via OAuth2 client credentials (auto-refresh), bearer token, basic auth or custom headers
-- **Grace period** — 60s ghost-resolve prevention
+- **Grace period** — ghost-resolve prevention scaled to the poll interval (`max(60s, 2 × poll interval)`)
 - **Single binary** — Go backend embeds the Vite build; one container
 - **User authentication** — optional UI login, three modes: `none` (open), `internal` (built-in user management with admin panel), `oidc` (Keycloak, Authentik, Dex, any OIDC provider)
 
@@ -353,9 +353,11 @@ helm plugin install https://github.com/helm-unittest/helm-unittest --version v0.
 ## Documentation
 
 - [docs/architecture.md](docs/architecture.md) — data-flow overview: who talks to whom, and when (with diagram)
+- [docs/alert-lifecycle.md](docs/alert-lifecycle.md) — alert lifecycle: state machine, grace period, episodes, restart/outage guarantees (with diagram)
 - [docs/authentication-user.md](docs/authentication-user.md) — user login: providers (none / internal / OIDC), first-run wizard, roles, sessions, Helm
 - [docs/authentication-alertmanager.md](docs/authentication-alertmanager.md) — Alertmanager upstream auth: OAuth2 client credentials, bearer token, basic auth, custom headers
 - [docs/metrics.md](docs/metrics.md) — Prometheus `/metrics` endpoint: exported metrics, scrape config, ServiceMonitor
+- [docs/retention.md](docs/retention.md) — optional data-retention sweep: what gets deleted, `JARVIS_RETENTION_*` config, sweep order
 - [AGENTS.md](AGENTS.md) — AI-agent entry point: conventions, critical invariants, task router
 - [.agents/testing.md](.agents/testing.md) — full test strategy, matrix, and CI pipeline
 - [docs/security.md](docs/security.md) — security measures

@@ -135,17 +135,17 @@ func (s *AlertStore) SeedResolved(alerts []models.EnrichedAlert) {
 	}
 }
 
-// RemoveByFingerprint removes the alert from both active list and resolved buffer.
-func (s *AlertStore) RemoveByFingerprintForCluster(fingerprint, clusterName string) {
+// RemoveResolvedForCluster removes only the resolved-buffer entry for an
+// alert, leaving the active list untouched. Used by the recorder's 20-minute
+// removal timer: if the alert re-fired in the meantime, Set() already moved
+// it back into the active list (and cleared its buffer entry), so by the
+// time this timer fires there is normally nothing left to do here — but if
+// it re-fired *after* the timer's 20-minute wait already started, deleting
+// it by fingerprint+cluster from both places (as an earlier version of this
+// method did) would wrongly remove it from the active list too.
+func (s *AlertStore) RemoveResolvedForCluster(fingerprint, clusterName string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	filtered := s.alerts[:0]
-	for _, a := range s.alerts {
-		if a.Fingerprint != fingerprint || a.ClusterName != clusterName {
-			filtered = append(filtered, a)
-		}
-	}
-	s.alerts = append([]models.EnrichedAlert(nil), filtered...)
 	delete(s.resolvedBuffer, alertSnapshotKey(fingerprint, clusterName))
 }
 

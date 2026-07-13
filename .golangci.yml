@@ -26,3 +26,7 @@ linters:
         linters:
           - gosec
         text: "G202"
+      - path: "internal/history/store_retention.go"
+        linters:
+          - gosec
+        text: "G202"

@@ -39,6 +39,9 @@ sync with reality.
 | `jarvis_ws_broadcasts_total` | `type` | A WebSocket event is broadcast to clients |
 | `jarvis_http_requests_total` | `method`, `path`, `status` | Every HTTP request (labeled by route pattern, not raw URL) |
 | `jarvis_http_request_duration_seconds` | `method`, `path`, `status` | Histogram of HTTP request duration |
+| `jarvis_retention_sweeps_total` | — | A data-retention sweep completes (see [docs/retention.md](retention.md)). Only increments while retention is enabled — stays 0 forever on a default install |
+| `jarvis_retention_deleted_rows_total` | `table` | Rows deleted by the retention sweeper, by table (`alert_events`, `alert_claims`, `alert_comments`, `silence_events`, `alert_fingerprints`) |
+| `jarvis_retention_sweep_duration_seconds` | — | Histogram of a full sweep's duration across all tables |
 
 Runtime metrics (`go_*`, `process_*`) are included via the standard Prometheus
 Go/process collectors.
