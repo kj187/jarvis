@@ -82,10 +82,20 @@ Jarvis exposes the full Alertmanager matcher syntax as an interactive chip UI. Y
 | `!=` | Negative exact match |
 | `=~` | Regex match |
 | `!~` | Negative regex match |
+| `>` / `<` | Older than / younger than — `@age` only |
+
+**Pseudo-fields** (not real Alertmanager labels, computed by Jarvis):
+| Field | Meaning |
+|---|---|
+| `@cluster` | Which configured Alertmanager cluster the alert came from |
+| `@receiver` (alias `receiver`) | Alertmanager receiver(s) the alert routes to |
+| `@claimed-by` | Who currently has the alert claimed — empty string means unclaimed, so `@claimed-by != ""` finds every claimed alert and `@claimed-by = <name>` finds one person's claims |
+| `@age` | Time since the alert started firing, compared with `>`/`<` and a single-unit duration: `@age > 15m`, `@age < 2h` (units: `s`, `m`, `h`, `d`) |
 
 **How filters compose:**
 - Multiple matchers are ANDed — an alert must match all chips to be shown
 - Regex matchers are validated client-side before being applied
+- An `@age` chip re-evaluates on every alert-list refresh, so it stays accurate without a dedicated ticker
 - Clicking a label chip on any alert card instantly adds an exact-match filter for that label
 
 **URL serialization:**
@@ -164,21 +174,30 @@ Alerts are displayed as a flat list sorted by resolution time (newest first). A 
 - **Post-incident review:** After an incident you can look up exactly when an alert first fired, how long it stayed active, and how many times it re-fired before resolution — without relying on Prometheus or Grafana.
 - **Noise analysis:** Recurring alerts with high occurrence counts are easy to identify and prioritize for permanent fixes.
 - **Restarts are safe:** The history is not lost when Jarvis restarts, when Alertmanager is down for maintenance, or when the container is updated.
-- **Grace period:** If an alert resolves and re-fires within 60 seconds (e.g. due to a missed poll), Jarvis reopens the existing event instead of creating a phantom new one — keeping the history clean.
+- **Grace period:** If an alert resolves and re-fires within `max(60s, 2 × JARVIS_POLL_INTERVAL)` (e.g. due to a missed poll), Jarvis reopens the existing event instead of creating a phantom new one — keeping the history clean. Full lifecycle semantics: [docs/alert-lifecycle.md](alert-lifecycle.md).
 
 ---
 
 ## Alert Detail Panel
 
-Per-alert drawer with labels, annotations, firing history, occurrence stats, claim ownership, silence controls, and comments.
+Per-alert drawer with labels, annotations, firing history, occurrence stats, claim ownership, silence controls, comments, and an AI-analysis prompt — organized into tabs.
 
 ![Alert Detail Panel](assets/feature-detail-panel.png)
 
 The detail panel is the central hub for working with a single alert. It slides in from the right side of the screen without navigating away from the alert list, so you can open it, take action, close it, and move to the next alert without losing context.
 
-**Sections in the detail panel:**
+**Always visible (above the tabs):**
+- Alert name, cluster, severity, and claim chip in the header
+- First seen / last seen timestamps and total occurrence count
+- Firing heatmap (24h / 7d / 30d range toggle) — see [Firing Heatmap](#firing-heatmap)
+- Active/expired silence banners, if the alert is currently or was recently silenced
 
-**Labels & Annotations**
+**The panel is then split into five tabs:**
+
+**Details**
+
+![Detail Panel — Details tab](assets/feature-detail-tab-details.png)
+
 - Complete label set, rendered as key-value pairs
 - All annotations, including `description` and `summary`
 - **Dynamic link buttons**: any label or annotation whose value is an absolute URL (`http://` or `https://`) automatically renders as a clickable button using the key name as the label — no configuration needed. Examples: `dashboard=https://grafana.example.com/d/abc`, `ticket=https://jira.example.com/ISSUE-1`
@@ -187,31 +206,61 @@ The detail panel is the central hub for working with a single alert. It slides i
   - If the value is a plain string and `JARVIS_RUNBOOK_BASE_URL` is configured → the final URL is `RUNBOOK_BASE_URL` + value (e.g. `https://wiki.example.com/runbooks/my-alert`)
   - If the value is a plain string and `JARVIS_RUNBOOK_BASE_URL` is not set → no button is shown
 
-**Stats & Timeline**
-- First seen / last seen timestamps
-- Total occurrence count
-- Duration of the current firing period
-- Full event timeline: every state transition (`firing`, `suppressed`, `resolved`) with exact timestamps
-- Firing heatmap header (24h / 7d / 30d range toggle) — see [Firing Heatmap](#firing-heatmap)
+**History**
 
-**Claim ownership**
+![Detail Panel — History tab](assets/feature-detail-tab-history.png)
+
+- Full event timeline: every state transition (`firing`, `suppressed`, `resolved`) with exact timestamps
+- Merged with claim and silence actions for the same alert, so the whole handling story reads in one place
+- Paginated for long-running, frequently-firing alerts
+
+**Comments**
+
+![Detail Panel — Comments tab](assets/feature-detail-tab-comments.png)
+
+- Write freeform notes bound to the alert's fingerprint — supports Markdown (bold, links, lists, fenced code blocks with syntax highlighting for bash, JSON, YAML, Go, JavaScript, SQL, and INI)
+- Comments persist across re-fires: if the alert resolves and fires again later, the comment history is still there
+- The tab label carries a count badge, so you can see at a glance whether an alert already has notes without opening the tab
+- Useful for documenting investigation steps, linking to tickets, or leaving context for the next person on-call
+
+**Related**
+
+![Detail Panel — Related tab](assets/feature-detail-tab-related.png)
+
+- Answers *"is this alert part of a bigger problem?"* — lists other **currently firing or suppressed** alerts that share labels with the open alert, without leaving the panel
+- The tab label carries a count badge, so you can spot a correlated incident before even opening the tab
+- Each row shows the severity, alert name, the shared labels as chips (most specific first), the cluster name when the related alert lives in a different cluster, and when it started — click a row to jump to that alert's detail
+- Results are ranked, top 10 shown first with a **Show more** button for the rest
+
+*How relatedness is computed:*
+
+- Two alerts are related when they share at least one label with an identical value — any real label counts (`instance`, `namespace`, `pod`, `job`, custom labels like `entity` or `device`, …)
+- **Not** counted: `alertname` (fifty hosts firing the same rule is a grouping concern, not a shared blast radius), `severity`, `receiver`, and labels whose value is a URL (runbook/dashboard links are metadata, not identity)
+- **Rarity weighting**: a shared label value carried by only two alerts (`instance=web3`) weighs far more than one carried by half the snapshot (`namespace=prod`) — common labels devalue themselves automatically, so the top results are the alerts that share something genuinely specific with yours
+- **Time proximity**: alerts that started around the same time as the open alert get a score boost — started together usually means same incident
+- Cross-cluster matches are included on purpose: the same `instance` reported by two Alertmanager clusters is exactly the pattern worth surfacing
+- The comparison always runs against the *current* snapshot — even when you open a resolved alert from history, the tab answers "is this still hot elsewhere?"
+
+**AI Prompt**
+
+![Detail Panel — AI Prompt tab](assets/feature-detail-tab-ai-prompt.png)
+
+- Generates a ready-to-paste prompt for an LLM (alert name, cluster, severity, labels, annotations, and the recent history table), framed as an SRE root-cause-analysis request
+- One-click copy to clipboard — paste directly into Claude, ChatGPT, or any other AI assistant to get a head start on investigation
+
+**Claim ownership** (available regardless of tab)
 - Claim the alert to signal to your team that you are actively handling it
 - The claim is stored in Jarvis's database and survives page refreshes and restarts
 - Other team members can see who has claimed an alert on both the card and list view
 - Unclaim at any time
 
-When an alert is claimed, the owner's name appears as a chip in the detail panel header and as an "In progress" banner on the alert card. The claim history is recorded in the History table.
+When an alert is claimed, the owner's name appears as a chip in the detail panel header and as an "In progress" banner on the alert card. The claim history is recorded in the History tab.
 
 ![Alert Detail Panel — Claimed](assets/feature-detail-claimed.png)
 
 **Silence controls**
 - Create a new silence directly from the panel — the form opens pre-filled with the alert's labels
 - Extend or delete an existing silence if the alert is currently suppressed
-
-**Comments**
-- Write freeform notes bound to the alert's fingerprint
-- Comments persist across re-fires: if the alert resolves and fires again later, the comment history is still there
-- Useful for documenting investigation steps, linking to tickets, or leaving context for the next person on-call
 
 ---
 

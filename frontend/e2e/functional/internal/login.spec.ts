@@ -1,4 +1,4 @@
-import { test, expect, waitForActiveAlerts, JARVIS_BASE_URL } from '../../support/fixtures'
+import { test, expect, waitForActiveAlerts, expandComments, JARVIS_BASE_URL } from '../../support/fixtures'
 import { ensureInternalAdmin, loginInternal, INTERNAL_ADMIN } from '../../support/auth'
 
 /**
@@ -41,6 +41,7 @@ test('I2 write_protect mode shows internal username+password login modal on writ
 
   const panel = page.getByTestId('detail-panel')
   await expect(panel).toBeVisible()
+  await expandComments(panel)
 
   // Type a comment body and click Send — this triggers LoginModal in write_protect mode
   const commentInput = page.getByTestId('detail-comment-input')
@@ -78,6 +79,7 @@ test('I4 write_protect retry flow: login via modal then write action completes',
 
   const panel = page.getByTestId('detail-panel')
   await expect(panel).toBeVisible()
+  await expandComments(panel)
 
   // Type comment and submit without auth → LoginModal appears
   const commentInput = page.getByTestId('detail-comment-input')

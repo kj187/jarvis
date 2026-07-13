@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import { enUS } from 'date-fns/locale'
@@ -7,9 +7,12 @@ import { TruncatableChip } from '@/components/ui/truncatable-chip'
 import { cn } from '@/lib/utils'
 import { Sheet } from '@/components/ui/sheet'
 import { AlertBadge, StatusBadge } from './AlertBadge'
-import { labelColorStyle } from '@/lib/alertUtils'
-import { AlertComments } from './AlertComments'
+import { labelColorStyle, findRelatedAlerts } from '@/lib/alertUtils'
+import { CommentsPanel } from '@/components/comments/CommentsPanel'
+import { useAlertComments } from '@/hooks/useAlertComments'
 import { AlertDetailHistorySection } from './AlertDetailHistorySection'
+import { AlertDetailAIPromptSection } from './AlertDetailAIPromptSection'
+import { AlertDetailRelatedSection } from './AlertDetailRelatedSection'
 import { AlertDetailSection } from './AlertDetailSection'
 import { AlertHeatmap } from './AlertHeatmap'
 import { SilenceForm } from '@/components/silences/SilenceForm'
@@ -22,6 +25,7 @@ import { useAuthStore } from '@/store/authStore'
 import { useLoginGuard } from '@/hooks/useLoginGuard'
 import { LoginModal } from '@/components/auth/LoginModal'
 import { useSettingsStore } from '@/store/useSettingsStore'
+import { useUIStore } from '@/store/uiStore'
 import { Button } from '@/components/ui/button'
 import { Tooltip } from '@/components/ui/tooltip'
 import { Input } from '@/components/ui/input'
@@ -202,7 +206,7 @@ interface AlertDetailPanelProps {
   onAddLabelMatcher: (matcher: Omit<LabelMatcher, 'id'>) => void
   runbookBaseUrl?: string
   silences: Silence[]
-  onSelectAlert?: (selectionKey: string) => void
+  onSelectAlert?: (selectionKey: string, groupKeys?: string[] | null) => void
 }
 
 export function AlertDetailPanel({
@@ -214,7 +218,7 @@ export function AlertDetailPanel({
   onSelectAlert,
 }: AlertDetailPanelProps) {
   const [now, setNow] = useState(Date.now())
-  const [historyPageSize, setHistoryPageSize] = useState<10 | 50 | 100>(10)
+  const [historyPageSize, setHistoryPageSize] = useState<10 | 50 | 100>(50)
   const [historyPage, setHistoryPage] = useState(1)
   const [silenceFormTarget, setSilenceFormTarget] = useState<Silence | null>(null)
   const [showNewSilenceForm, setShowNewSilenceForm] = useState(false)
@@ -231,7 +235,43 @@ export function AlertDetailPanel({
   const claimName = user?.username ?? manualClaimName
   const [promptCopied, setPromptCopied] = useState(false)
   const [expiredSilenceCollapsed, setExpiredSilenceCollapsed] = useState(true)
+  const [expandedSilenceIds, setExpandedSilenceIds] = useState<Set<string>>(new Set())
+  // Tab state lives in uiStore (synced to the `tab` URL param) so a shared
+  // link or reload lands on the same tab. Selecting another alert resets it
+  // to 'details' inside setSelectedFingerprint.
+  const activeTab = useUIStore((s) => s.detailTab)
+  const setActiveTab = useUIStore((s) => s.setDetailTab)
+  const selectedGroupKeys = useUIStore((s) => s.selectedGroupKeys)
   const fmtTime = useFormatTime()
+
+  // Up/down arrow navigation between sibling alerts of the group (list/card
+  // grouped view) the current selection came from. `selectedGroupKeys` is
+  // null outside a group context, so the nav UI stays hidden there.
+  const groupNavIndex = alert && selectedGroupKeys
+    ? selectedGroupKeys.indexOf(makeAlertSelectionKeyForAlert(alert))
+    : -1
+  const groupNavEnabled = groupNavIndex !== -1 && (selectedGroupKeys?.length ?? 0) > 1
+
+  function navigateGroup(direction: 1 | -1) {
+    if (!onSelectAlert || !selectedGroupKeys || groupNavIndex === -1) return
+    const len = selectedGroupKeys.length
+    const nextIndex = (groupNavIndex + direction + len) % len
+    onSelectAlert(selectedGroupKeys[nextIndex], selectedGroupKeys)
+  }
+
+  useEffect(() => {
+    if (!groupNavEnabled) return
+    function onKeyDown(e: KeyboardEvent) {
+      const target = e.target as HTMLElement | null
+      if (target && ['INPUT', 'TEXTAREA'].includes(target.tagName)) return
+      if (target?.isContentEditable) return
+      if (e.key === 'ArrowUp') { e.preventDefault(); navigateGroup(-1) }
+      else if (e.key === 'ArrowDown') { e.preventDefault(); navigateGroup(1) }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groupNavEnabled, groupNavIndex, selectedGroupKeys])
 
   const historyOffset = (historyPage - 1) * historyPageSize
   const { data: timelineData } = useAlertTimeline(
@@ -254,6 +294,15 @@ export function AlertDetailPanel({
   const { mutate: deleteSilence } = useDeleteSilence()
   const { mutate: upsertSilence, isPending: isExtending } = useUpsertSilence()
   const { data: allAlerts = [] } = useAlerts()
+  // Shares its cache/network with CommentsPanel's own page-1 query (same key) —
+  // only read here for the "Comments" tab count badge.
+  const { data: commentsPage1 } = useAlertComments(alert?.fingerprint ?? '', alert?.clusterName ?? '', 1)
+  // Computed eagerly (not on tab open) because the "Related" tab label
+  // carries a count badge — cheap, O(alerts × labels) over in-memory data.
+  const relatedAlerts = useMemo(
+    () => (alert ? findRelatedAlerts(alert, allAlerts) : []),
+    [alert, allAlerts],
+  )
   const qc = useQueryClient()
 
   useEffect(() => {
@@ -440,10 +489,10 @@ export function AlertDetailPanel({
           <div className="absolute inset-0 z-10 bg-black/40 pointer-events-none" aria-hidden="true" />
         )}
         {/* Header */}
-        <div className="border-b border-border bg-card px-5 py-4">
-          <div className="flex items-start justify-between gap-3">
-            <h2 id="detail-panel-title" className="text-lg font-bold break-all">{alertname}</h2>
-            <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+        <div className="bg-muted/30 px-5 py-4">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+            <h2 id="detail-panel-title" className="min-w-0 text-lg font-bold break-words">{alertname}</h2>
+            <div className="flex flex-wrap items-center gap-1.5 sm:shrink-0 sm:justify-end">
               <span className="inline-flex items-center gap-1 rounded border border-border bg-muted px-2 py-0.5 text-xs font-medium">
                 <Server className="h-3 w-3 text-muted-foreground" />
                 {alert.clusterName}
@@ -479,7 +528,7 @@ export function AlertDetailPanel({
           </div>
 
           {/* Action buttons */}
-          <div className="mt-3 flex items-center justify-between gap-2">
+          <div className="mt-3 flex flex-wrap items-center gap-2">
             {alert.alertmanagerUrl && (
               <a
                 href={(() => {
@@ -501,7 +550,7 @@ export function AlertDetailPanel({
                 Go to Alertmanager
               </a>
             )}
-            <div className="flex shrink-0 items-center gap-2 ml-auto">
+            <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
               {activeClaim ? (
                 <div data-testid="detail-claim-badge" className={cn('flex h-8 min-w-0 max-w-[16rem] items-center gap-1.5 rounded-md border px-2', theme === 'light' ? 'border-blue-300 bg-blue-50' : 'border-blue-800 bg-blue-950/40')}>
                   <User className={cn('h-3 w-3 shrink-0', theme === 'light' ? 'text-blue-600' : 'text-blue-400')} />
@@ -641,29 +690,38 @@ export function AlertDetailPanel({
           const isExpiring = s.status.state === 'active' && remaining <= FIFTEEN_MIN
           const isDeleting = deletingId === s.id
           const isPending = s.status.state === 'pending'
+          const isExpanded = expandedSilenceIds.has(s.id)
+          const toggleExpanded = () => setExpandedSilenceIds((prev) => {
+            const next = new Set(prev)
+            if (next.has(s.id)) next.delete(s.id); else next.add(s.id)
+            return next
+          })
 
           return (
             <div
               key={s.id}
               className={cn(
-                'border-b border-border px-5 py-4',
-                isExpiring
-                  ? (theme === 'light' ? 'bg-yellow-50' : 'bg-yellow-900/30')
-                  : (theme === 'light' ? 'bg-muted' : 'bg-slate-900'),
+                'border-l-8 bg-muted/20 px-4 py-2.5',
+                isExpiring ? 'border-l-yellow-500' : 'border-l-blue-500/70',
               )}
             >
-              <div className="mb-3 flex items-center justify-between gap-2">
-                <div className={cn(
-                  'flex items-center gap-1.5 text-xs font-semibold',
-                  isPending
-                    ? 'text-muted-foreground'
-                    : isExpiring
-                      ? (theme === 'light' ? 'text-yellow-700' : 'text-yellow-300')
-                      : 'text-foreground',
-                )}>
-                  <BellOff className="h-3 w-3 shrink-0" />
-                  {isPending ? 'Silence pending' : 'Silence active'}
-                </div>
+              <div className="flex items-center justify-between gap-2">
+                <button
+                  onClick={toggleExpanded}
+                  className="flex min-w-0 cursor-pointer items-center gap-1.5 text-xs font-semibold"
+                  aria-expanded={isExpanded}
+                >
+                  {isExpanded ? <ChevronUp className="h-3 w-3 shrink-0 text-muted-foreground" /> : <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />}
+                  <BellOff className={cn('h-3 w-3 shrink-0', isExpiring ? (theme === 'light' ? 'text-yellow-700' : 'text-yellow-300') : 'text-foreground')} />
+                  <span className={isPending ? 'text-muted-foreground' : isExpiring ? (theme === 'light' ? 'text-yellow-700' : 'text-yellow-300') : 'text-foreground'}>
+                    {isPending ? 'Silence pending' : 'Silence active'}
+                  </span>
+                  <span className="truncate font-normal text-muted-foreground">
+                    · {isPending
+                      ? `starts ${format(new Date(s.startsAt), 'yyyy-MM-dd HH:mm', { locale: enUS })} ${tzAbbr}`
+                      : `${isExpiring ? 'expires' : 'ends'} in ${formatDuration(remaining)}`}
+                  </span>
+                </button>
                 <div className="flex shrink-0 items-center gap-2">
                   {isExpiring && (
                     <>
@@ -711,83 +769,90 @@ export function AlertDetailPanel({
                 </div>
               </div>
 
-              <div className="flex gap-5 overflow-hidden">
-                <div className="w-[55%] shrink-0 grid grid-cols-[120px_minmax(0,1fr)] gap-x-3 gap-y-0.5 text-xs self-start">
-                  <span className="text-muted-foreground">Silence ID</span>
-                  <a
-                    href={`${s.alertmanagerUrl}/#/silences/${s.id}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="font-mono text-muted-foreground truncate hover:text-foreground underline decoration-dotted"
-                  >
-                    {s.id}
-                  </a>
+              {isExpanded && (
+                <>
+                  <div className="mt-3 flex gap-5 overflow-hidden">
+                    <div className="w-[55%] shrink-0 grid grid-cols-[120px_minmax(0,1fr)] gap-x-3 gap-y-0.5 text-xs self-start">
+                      <span className="text-muted-foreground">Silence ID</span>
+                      <a
+                        href={`${s.alertmanagerUrl}/#/silences/${s.id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-mono text-muted-foreground truncate hover:text-foreground underline decoration-dotted"
+                      >
+                        {s.id}
+                      </a>
 
-                  <span className="text-muted-foreground">Created by</span>
-                  <span className={isExpiring ? (theme === 'light' ? 'text-yellow-800' : 'text-yellow-200') : 'text-foreground'}>{s.createdBy}</span>
+                      <span className="text-muted-foreground">Created by</span>
+                      <span className={isExpiring ? (theme === 'light' ? 'text-yellow-800' : 'text-yellow-200') : 'text-foreground'}>{s.createdBy}</span>
 
-                  <span className="text-muted-foreground">Created at</span>
-                  <span className={isExpiring ? (theme === 'light' ? 'text-yellow-700' : 'text-yellow-400') : 'text-muted-foreground'}>
-                    {format(new Date(s.updatedAt), 'yyyy-MM-dd HH:mm', { locale: enUS })} {tzAbbr}
-                  </span>
-
-                  {isPending ? (
-                    <>
-                      <span className="text-muted-foreground">Starts at</span>
-                      <span className="text-muted-foreground">
-                        {format(new Date(s.startsAt), 'yyyy-MM-dd HH:mm', { locale: enUS })} {tzAbbr}
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <span className="text-muted-foreground">{isExpiring ? 'Expires' : 'Ends'}</span>
+                      <span className="text-muted-foreground">Created at</span>
                       <span className={isExpiring ? (theme === 'light' ? 'text-yellow-700' : 'text-yellow-400') : 'text-muted-foreground'}>
-                        in {formatDuration(remaining)} ({format(new Date(s.endsAt), 'yyyy-MM-dd HH:mm', { locale: enUS })} {tzAbbr})
+                        {format(new Date(s.updatedAt), 'yyyy-MM-dd HH:mm', { locale: enUS })} {tzAbbr}
                       </span>
-                    </>
-                  )}
 
-                  {s.comment && (
-                    <>
-                      <span className="text-muted-foreground">Reason</span>
-                      <span className={isExpiring ? (theme === 'light' ? 'text-yellow-700' : 'text-yellow-400') : 'text-muted-foreground'}>{s.comment}</span>
-                    </>
-                  )}
-                </div>
+                      {isPending ? (
+                        <>
+                          <span className="text-muted-foreground">Starts at</span>
+                          <span className="text-muted-foreground">
+                            {format(new Date(s.startsAt), 'yyyy-MM-dd HH:mm', { locale: enUS })} {tzAbbr}
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="text-muted-foreground">{isExpiring ? 'Expires' : 'Ends'}</span>
+                          <span className={isExpiring ? (theme === 'light' ? 'text-yellow-700' : 'text-yellow-400') : 'text-muted-foreground'}>
+                            in {formatDuration(remaining)} ({format(new Date(s.endsAt), 'yyyy-MM-dd HH:mm', { locale: enUS })} {tzAbbr})
+                          </span>
+                        </>
+                      )}
 
-                <div className="flex flex-1 min-w-0 flex-wrap content-start gap-1">
-                  {s.matchers.map((m, i) => <MatcherChip key={i} matcher={m} />)}
-                </div>
-              </div>
+                      {s.comment && (
+                        <>
+                          <span className="text-muted-foreground">Reason</span>
+                          <span className={isExpiring ? (theme === 'light' ? 'text-yellow-700' : 'text-yellow-400') : 'text-muted-foreground'}>{s.comment}</span>
+                        </>
+                      )}
+                    </div>
 
-              {(() => {
-                const affected = allAlerts.filter((a) => a.status.silencedBy.includes(s.id))
-                if (affected.length === 0) return null
+                    <div className="flex flex-1 min-w-0 flex-wrap content-start gap-1">
+                      {s.matchers.map((m, i) => <MatcherChip key={i} matcher={m} />)}
+                    </div>
+                  </div>
 
-                return (
-                  <AffectedAlertsSection
-                    affected={affected}
-                    currentAlert={alert}
-                    onSelectAlert={onSelectAlert}
-                  />
-                )
-              })()}
+                  {(() => {
+                    const affected = allAlerts.filter((a) => a.status.silencedBy.includes(s.id))
+                    if (affected.length === 0) return null
+
+                    return (
+                      <AffectedAlertsSection
+                        affected={affected}
+                        currentAlert={alert}
+                        onSelectAlert={onSelectAlert}
+                      />
+                    )
+                  })()}
+                </>
+              )}
             </div>
           )
         })}
 
         {/* Expired silence banners */}
         {expiredSilences.map((s) => (
-          <div key={s.id} className={cn('border-b border-border px-5 py-3', theme === 'light' ? 'bg-muted' : 'bg-slate-950')}>
+          <div key={s.id} className="border-l-8 border-l-violet-500/70 bg-muted/20 px-4 py-2.5">
             <div className={cn('flex items-center justify-between gap-2', !expiredSilenceCollapsed && 'mb-3')}>
               <button
-                className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground cursor-pointer"
+                className="flex min-w-0 cursor-pointer items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground"
                 onClick={toggleExpiredSilenceCollapsed}
                 aria-expanded={!expiredSilenceCollapsed}
               >
-                {expiredSilenceCollapsed ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />}
+                {expiredSilenceCollapsed ? <ChevronDown className="h-3 w-3 shrink-0" /> : <ChevronUp className="h-3 w-3 shrink-0" />}
                 <BellOff className="h-3 w-3 shrink-0" />
                 Silence expired
+                <span className="truncate font-normal">
+                  · {formatDuration(now - new Date(s.endsAt).getTime())} ago
+                </span>
               </button>
               <div className="flex shrink-0 items-center gap-2">
                 <button
@@ -835,6 +900,51 @@ export function AlertDetailPanel({
           </div>
         ))}
 
+        {/* Tabs — Details / History / AI Prompt / Comments. "Folder tab" look:
+            active tab sits flush on the content background with no bottom
+            border (visually merges into what's below it), inactive tabs sit
+            on a muted strip — reads as a real nav with hidden panels behind
+            it, not decoration. */}
+        <div className="flex flex-wrap gap-1 border-b border-border bg-muted/30 px-5 pt-3">
+          {(
+            [
+              { key: 'details', label: 'Details', count: undefined },
+              { key: 'history', label: 'History', count: undefined },
+              { key: 'comments', label: 'Comments', count: commentsPage1?.total ?? 0 },
+              { key: 'related', label: 'Related', count: relatedAlerts.length },
+              { key: 'ai-prompt', label: 'AI Prompt', count: undefined },
+            ] as const
+          ).map((tab) => (
+            <button
+              key={tab.key}
+              data-testid={`detail-tab-${tab.key}`}
+              onClick={() => setActiveTab(tab.key)}
+              className={cn(
+                'relative top-px flex shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-t-md border px-3 py-2 text-xs font-semibold',
+                activeTab === tab.key
+                  ? '-mb-px border-border border-b-transparent bg-card text-foreground'
+                  : 'border-transparent bg-transparent text-muted-foreground hover:text-foreground',
+              )}
+            >
+              {tab.label}
+              {tab.count !== undefined && (
+                <span
+                  data-testid={`detail-tab-${tab.key}-count`}
+                  className={cn(
+                    'inline-flex h-[15px] min-w-[15px] items-center justify-center rounded-full px-1 text-[10px] font-bold',
+                    activeTab === tab.key ? 'bg-link/20 text-link' : 'bg-accent text-muted-foreground',
+                  )}
+                >
+                  {tab.count}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+
+        {/* Details tab */}
+        {activeTab === 'details' && (
+        <>
         {/* Annotations */}
         {annotationEntries.length > 0 && (
           <AlertDetailSection title="Annotations" defaultOpen={true} testId="detail-annotations-section">
@@ -851,7 +961,7 @@ export function AlertDetailPanel({
 
         {/* Summary / Description */}
         {(summaryText || descriptionText) && (
-          <AlertDetailSection title="Summary" defaultOpen={true}>
+          <AlertDetailSection title="Summary" defaultOpen={true} bordered={false}>
             <div className="space-y-2">
               {summaryText && (
                 <p className="text-sm text-foreground">{renderTextWithLinks(summaryText)}</p>
@@ -884,6 +994,7 @@ export function AlertDetailPanel({
               </>
             }
             defaultOpen={true}
+            bordered={false}
           >
             <div className="flex flex-wrap items-center gap-2">
               {linkButtons.map((btn) => (
@@ -903,7 +1014,7 @@ export function AlertDetailPanel({
         )}
 
         {/* Labels */}
-        <AlertDetailSection title="Labels" testId="detail-labels-section">
+        <AlertDetailSection title="Labels" testId="detail-labels-section" bordered={false}>
           <div className="grid grid-cols-2 gap-x-4 gap-y-2">
             <div className="space-y-2">{renderLabelColumn(leftLabels)}</div>
             <div className="space-y-2">{renderLabelColumn(rightLabels)}</div>
@@ -919,26 +1030,84 @@ export function AlertDetailPanel({
             </div>
           )}
         </AlertDetailSection>
+        </>
+        )}
 
-        {/* History */}
-        <AlertDetailHistorySection
-          timelineData={timelineData}
-          historyPage={historyPage}
-          historyPageSize={historyPageSize}
-          setHistoryPage={setHistoryPage}
-          setHistoryPageSize={setHistoryPageSize}
-          alertmanagerUrl={alert.alertmanagerUrl}
-          promptText={promptText}
-          promptCopied={promptCopied}
-          setPromptCopied={setPromptCopied}
-        />
+        {/* History tab (event timeline) */}
+        {activeTab === 'history' && (
+          <AlertDetailHistorySection
+            timelineData={timelineData}
+            historyPage={historyPage}
+            historyPageSize={historyPageSize}
+            setHistoryPage={setHistoryPage}
+            setHistoryPageSize={setHistoryPageSize}
+            alertmanagerUrl={alert.alertmanagerUrl}
+          />
+        )}
 
-        {/* Comments */}
-        <AlertDetailSection title="Comments" testId="detail-comments-section">
-          <AlertComments fingerprint={alert.fingerprint} clusterName={alert.clusterName} />
-        </AlertDetailSection>
+        {/* Related tab — keyed by alert identity so switching alerts resets
+            the show-more pagination */}
+        {activeTab === 'related' && (
+          <AlertDetailRelatedSection
+            key={`${alert.clusterName}::${alert.fingerprint}`}
+            alert={alert}
+            related={relatedAlerts}
+            onSelectAlert={onSelectAlert}
+          />
+        )}
+
+        {/* AI Prompt tab */}
+        {activeTab === 'ai-prompt' && (
+          <AlertDetailAIPromptSection
+            promptText={promptText}
+            promptCopied={promptCopied}
+            setPromptCopied={setPromptCopied}
+          />
+        )}
+
+        {/* Comments tab */}
+        {activeTab === 'comments' && (
+          <div data-testid="detail-comments-section" className="px-5 py-4">
+            <CommentsPanel fingerprint={alert.fingerprint} clusterName={alert.clusterName} />
+          </div>
+        )}
 
       </Sheet>
+
+      {/* Group navigation — rendered after the Sheet and overlapping its left
+          border by 1px so the box (same bg-card) reads as a seamless extension
+          of the panel with no divider line between them. */}
+      {groupNavEnabled && (
+        <div
+          className="fixed top-12 z-50 rounded-l-md border border-r-0 border-border bg-card right-0 sm:right-[calc(37.8rem-1px)] lg:right-[calc(50.4rem-1px)]"
+          data-testid="detail-panel-group-nav"
+        >
+          {/* Same two-layer background as the sheet header (bg-muted/30 over bg-card). */}
+          <div className="flex flex-col items-center rounded-l-md bg-muted/30">
+            <button
+              type="button"
+              onClick={() => navigateGroup(-1)}
+              title="Previous alert in group (↑)"
+              aria-label="Previous alert in group"
+              className="flex h-10 w-12 items-center justify-center rounded-tl-md text-muted-foreground hover:bg-accent hover:text-foreground cursor-pointer"
+            >
+              <ChevronUp className="h-5 w-5" />
+            </button>
+            <span className="w-full py-1 text-center text-[11px] font-semibold text-muted-foreground">
+              {groupNavIndex + 1}/{selectedGroupKeys?.length}
+            </span>
+            <button
+              type="button"
+              onClick={() => navigateGroup(1)}
+              title="Next alert in group (↓)"
+              aria-label="Next alert in group"
+              className="flex h-10 w-12 items-center justify-center rounded-bl-md text-muted-foreground hover:bg-accent hover:text-foreground cursor-pointer"
+            >
+              <ChevronDown className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Silence form sheet (new silence for this alert) */}
       {showNewSilenceForm && (

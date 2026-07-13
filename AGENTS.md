@@ -60,9 +60,16 @@ Tool-specific entry points map to the same files (no duplicated content):
 
 ## Critical Invariants — NEVER break
 
-1. **Grace Period (60s)**: Alert seen again within 60s after `resolved` →
-   reopen old event, create **no** new one. Prevents ghost-resolve entries on
-   poll misses.
+1. **Grace Period (`max(60s, 2×JARVIS_POLL_INTERVAL)`)**: Alert seen again
+   within the grace period after `resolved` → reopen old event, create **no**
+   new one. Prevents ghost-resolve entries on poll misses. Configured on
+   `Store` via `SetGracePeriod` (`cmd/jarvis/main.go`, derived from
+   `cfg.PollInterval`) so a poll interval ≥ 60s can't make a single missed
+   poll permanently split one episode into two — a fixed 60s window could
+   never absorb a miss at intervals that long. `Recorder.claimReleaseDelay`
+   must in turn exceed the grace period (also derived in `main.go`), or the
+   delayed claim-release check could run before a grace-period-eligible
+   re-fire has had a chance to reopen the event.
 2. **Increment `occurrence_count` only on second firing**: Not on the very
    first occurrence — only when `hadPreviousEvent = true`.
 3. **`getEffectiveAlertState`**: Alert `suppressed` + **all** active silences
@@ -112,6 +119,14 @@ Tool-specific entry points map to the same files (no duplicated content):
     with the number of open browser tabs. Breaking this silently (live
     proxying in `getSilences`/`getClusters`) roughly doubled AM CPU in a
     real deployment.
+14. **A failed cluster fetch must never trigger resolves.** The last
+    successful snapshot of that cluster stays authoritative — for alerts
+    (`Recorder.lastGoodAlerts`, `recorder.go`) exactly as for silences
+    (`SilenceStore`, "snapshot only on a successful fetch" in `poll()`).
+    Letting `applyPollResults`'s prev/curr diff see zero alerts for a
+    transiently-failing cluster reads as every one of its alerts resolving:
+    phantom `resolved` events, wrong `occurrence_count` increments, and
+    premature claim releases on the next re-fire.
 
 ## Workflow Rules — always follow
 

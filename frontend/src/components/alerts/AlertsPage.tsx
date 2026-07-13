@@ -6,7 +6,7 @@ import { AlertsOverviewModal } from './AlertsOverviewModal'
 import { MatcherChipsBar } from '@/components/layout/MatcherChipsBar'
 import { useAlerts } from '@/hooks/useAlerts'
 import { useSilences } from '@/hooks/useSilences'
-import { useUIStore } from '@/store/uiStore'
+import { useUIStore, isDetailTab } from '@/store/uiStore'
 import { useAuthStore } from '@/store/authStore'
 import { AlertCardGrid } from './AlertCardGrid'
 import { AlertListView } from './AlertListView'
@@ -34,8 +34,10 @@ function useURLState() {
     viewMode,
     filters,
     selectedFingerprint,
+    detailTab,
     setFilter,
     setSelectedFingerprint,
+    setDetailTab,
     clearLabelMatchers,
     addLabelMatcher,
   } = useUIStore()
@@ -50,7 +52,12 @@ function useURLState() {
     const q = params.get('q')
     if (q) setFilter('search', q)
     const alert = params.get('alert')
-    if (alert) setSelectedFingerprint(alert)
+    if (alert) {
+      setSelectedFingerprint(alert)
+      // After setSelectedFingerprint — it resets detailTab to 'details'.
+      const tab = params.get('tab')
+      if (isDetailTab(tab)) setDetailTab(tab)
+    }
     const matchersRaw = params.get('matchers')
     if (matchersRaw) {
       try {
@@ -77,10 +84,13 @@ function useURLState() {
         ({ name, operator, value }) => ({ name, operator, value }),
       )))
     }
-    if (selectedFingerprint) params.set('alert', selectedFingerprint)
+    if (selectedFingerprint) {
+      params.set('alert', selectedFingerprint)
+      if (detailTab !== 'details') params.set('tab', detailTab)
+    }
     const qs = params.toString()
     window.history.replaceState(null, '', qs ? `?${qs}` : window.location.pathname)
-  }, [viewMode, filters, selectedFingerprint])
+  }, [viewMode, filters, selectedFingerprint, detailTab])
 }
 
 // ── AlertsPage ────────────────────────────────────────────────────────────────
