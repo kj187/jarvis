@@ -38,15 +38,15 @@ func NewClient(baseURL string) *Client {
 // When auth is empty (zero value) the client behaves identically to NewClient.
 // Priority: OAuth2 (client_credentials) > BearerToken > BasicAuth > Headers.
 func NewClientWithAuth(baseURL string, auth Auth) *Client {
-	transport := http.DefaultTransport
+	var transport http.RoundTripper = &userAgentRoundTripper{base: http.DefaultTransport}
 	switch {
 	case auth.OAuth2 != nil:
 		transport = &oauth2RoundTripper{
-			base:   http.DefaultTransport,
+			base:   transport,
 			source: newOAuth2TokenSource(*auth.OAuth2),
 		}
 	case auth.BearerToken != "" || auth.BasicUser != "" || len(auth.Headers) > 0:
-		transport = &authRoundTripper{base: http.DefaultTransport, auth: auth}
+		transport = &authRoundTripper{base: transport, auth: auth}
 	}
 	return &Client{
 		baseURL: baseURL,

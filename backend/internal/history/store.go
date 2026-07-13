@@ -22,15 +22,35 @@ var (
 	ErrNotClaimOwner = errors.New("not claim owner")
 )
 
+// defaultGracePeriod is the grace period used until SetGracePeriod overrides
+// it. 60s is the invariant's historical baseline value.
+const defaultGracePeriod = 60 * time.Second
+
 // Store handles all database persistence for alerts.
 type Store struct {
 	db      *sql.DB
 	dialect idb.Dialect
+
+	// gracePeriod is Critical Invariant #1's window (AGENTS.md): a re-fire
+	// within this long of a recorded resolve reopens the old event instead
+	// of creating a new one. Set once at startup via SetGracePeriod, before
+	// the recorder starts polling — RecordStatusChange only reads it
+	// afterward, so no lock is needed.
+	gracePeriod time.Duration
 }
 
 // NewStore creates a new Store with the given database connection and dialect.
 func NewStore(database *sql.DB, dialect idb.Dialect) *Store {
-	return &Store{db: database, dialect: dialect}
+	return &Store{db: database, dialect: dialect, gracePeriod: defaultGracePeriod}
+}
+
+// SetGracePeriod overrides the grace period (Critical Invariant #1) used by
+// RecordStatusChange. Must be called before the recorder starts polling —
+// see the field's own doc comment. Callers should keep this at least
+// 2×JARVIS_POLL_INTERVAL, so a single missed poll can never make a
+// resolve+refire pair permanently split into two episodes.
+func (s *Store) SetGracePeriod(d time.Duration) {
+	s.gracePeriod = d
 }
 
 // ── Query helpers ─────────────────────────────────────────────────────────────
@@ -144,8 +164,9 @@ func (s *Store) UpsertFingerprint(fingerprint, alertname, clusterName string, la
 
 // RecordStatusChange records a status transition as an immutable append-only row.
 // Idempotent: if the last recorded status equals the new status, no row is inserted.
-// Grace Period (60s): if the alert re-fires within 60 s of a resolved row, that
-// resolved row is deleted and the prior firing row is returned — no new insert.
+// Grace Period (s.gracePeriod, defaults to 60s): if the alert re-fires within
+// that window of a resolved row, that resolved row is deleted and the prior
+// firing row is returned — no new insert.
 // occurrence_count is incremented only when re-firing after a full resolution.
 // The bool return reports whether a new event row was actually inserted —
 // callers that count lifecycle events (metrics) must rely on it instead of
@@ -170,9 +191,9 @@ func (s *Store) RecordStatusChange(
 		lastStatus = last.Status
 	}
 
-	// Grace Period: alert re-fires within 60 s of resolved → discard resolved row.
+	// Grace Period: alert re-fires within the configured window of resolved → discard resolved row.
 	if status == models.EventStatusFiring && lastStatus == models.EventStatusResolved {
-		if time.Since(last.RecordedAt) < 60*time.Second {
+		if time.Since(last.RecordedAt) < s.gracePeriod {
 			if _, err := s.exec(context.Background(), `DELETE FROM alert_events WHERE id = ?`, last.ID); err != nil {
 				return nil, false, fmt.Errorf("grace period delete resolved: %w", err)
 			}
@@ -245,6 +266,43 @@ func (s *Store) RecordResolvedForCluster(fingerprint, clusterName string, resolv
 	return err
 }
 
+// GetOpenFingerprintsForCluster returns fingerprints in the given cluster
+// whose most recent alert_event (recorded within window) is not "resolved"
+// — i.e. alerts the DB still considers open. Used for startup
+// reconciliation: after a Jarvis restart, in-memory prevSnapshot is empty,
+// so the normal poll diff can't tell "resolved during downtime" apart from
+// "just started" — this query finds the candidates directly in the DB.
+// Scoped to window so old/stale fingerprints from long-abandoned alerts
+// aren't dragged into every startup's reconciliation pass.
+func (s *Store) GetOpenFingerprintsForCluster(clusterName string, window time.Duration) ([]string, error) {
+	since := time.Now().UTC().Add(-window)
+	rows, err := s.query(context.Background(), `
+		SELECT fingerprint FROM alert_events
+		WHERE cluster_name = ? AND status != ? AND id IN (
+			SELECT MAX(id) FROM alert_events
+			WHERE cluster_name = ? AND recorded_at >= ?
+			GROUP BY fingerprint
+		)
+	`, clusterName, models.EventStatusResolved, clusterName, since)
+	if err != nil {
+		return nil, fmt.Errorf("get open fingerprints for cluster: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	fingerprints := make([]string, 0)
+	for rows.Next() {
+		var fp string
+		if err := rows.Scan(&fp); err != nil {
+			return nil, fmt.Errorf("scan open fingerprint: %w", err)
+		}
+		fingerprints = append(fingerprints, fp)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return fingerprints, nil
+}
+
 // GetHistory returns paginated alert events for a fingerprint (newest first).
 func (s *Store) GetHistory(fingerprint string, limit, offset int) ([]models.AlertEvent, int, error) {
 	return s.GetHistoryForCluster(fingerprint, "", limit, offset)
@@ -314,12 +372,20 @@ func (s *Store) GetHistoryForCluster(fingerprint, clusterName string, limit, off
 	return events, total, nil
 }
 
-// GetFiringStarts returns the start times of firing events for a fingerprint
-// (optionally cluster-scoped) since the given time, newest first, capped at
-// limit. One firing event = one event row with status "firing" — the grace
-// period (invariant #1: a resolve+refire within 60s reopens the existing
-// event) already prevents double-counting at write time, so no extra
-// dedup is needed here.
+// GetFiringStarts returns one recorded time per distinct firing episode for
+// a fingerprint (optionally cluster-scoped) since the given time, newest
+// first, capped at limit. Uses recorded_at (when Jarvis observed the
+// event), not starts_at (Alertmanager's upstream condition-start time), so
+// the heatmap bucketing agrees with "Last fired" and the history log —
+// otherwise a poll gap between AM's StartsAt and Jarvis first seeing it
+// makes the same single event appear at two different times in the UI.
+// Grouped by starts_at (Alertmanager's episode identity) so a silence
+// expiring mid-episode — which produces a fresh "firing" row (suppressed ->
+// expired -> firing, since the last event was "expired" not "firing") with
+// the *same* starts_at as the original episode — is counted once, not
+// twice. The grace period (invariant #1) only dedupes resolve+refire within
+// 60s; it does not cover this suppressed/expired/firing sequence, so the
+// dedup has to happen here.
 func (s *Store) GetFiringStarts(fingerprint, clusterName string, since time.Time, limit int) ([]time.Time, error) {
 	if limit <= 0 || limit > 10000 {
 		limit = 10000
@@ -334,9 +400,14 @@ func (s *Store) GetFiringStarts(fingerprint, clusterName string, since time.Time
 	args = append(args, limit)
 
 	rows, err := s.query(context.Background(), `
-		SELECT starts_at FROM alert_events
-		WHERE fingerprint = ? AND status = ? AND starts_at >= ?`+clusterFilter+`
-		ORDER BY starts_at DESC
+		SELECT recorded_at FROM (
+			SELECT recorded_at,
+			       ROW_NUMBER() OVER (PARTITION BY starts_at ORDER BY recorded_at ASC) AS rn
+			FROM alert_events
+			WHERE fingerprint = ? AND status = ? AND recorded_at >= ?`+clusterFilter+`
+		) episodes
+		WHERE rn = 1
+		ORDER BY recorded_at DESC
 		LIMIT ?
 	`, args...)
 	if err != nil {
@@ -606,27 +677,43 @@ func (s *Store) GetStatsForCluster(fingerprint, clusterName string) (*models.Ale
 
 // ── Comments ──────────────────────────────────────────────────────────────────
 
-// GetComments returns all comments for a (fingerprint, cluster) pair (newest first).
-func (s *Store) GetComments(fingerprint, clusterName string) ([]models.Comment, error) {
+// GetComments returns paginated comments for a (fingerprint, cluster) pair
+// (newest first) plus the total count across all pages.
+func (s *Store) GetComments(fingerprint, clusterName string, limit, offset int) ([]models.Comment, int, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	var total int
+	if err := s.queryRow(context.Background(), `
+		SELECT COUNT(*) FROM alert_comments WHERE fingerprint = ? AND cluster_name = ?
+	`, fingerprint, clusterName).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("count comments: %w", err)
+	}
+
 	rows, err := s.query(context.Background(), `
 		SELECT id, fingerprint, cluster_name, event_id, user_id, author_name, body, created_at
 		FROM alert_comments
 		WHERE fingerprint = ? AND cluster_name = ?
-		ORDER BY created_at DESC
-	`, fingerprint, clusterName)
+		ORDER BY created_at DESC, id DESC
+		LIMIT ? OFFSET ?
+	`, fingerprint, clusterName, limit, offset)
 	if err != nil {
-		return nil, fmt.Errorf("query comments: %w", err)
+		return nil, 0, fmt.Errorf("query comments: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 
-	var comments []models.Comment
+	comments := make([]models.Comment, 0)
 	for rows.Next() {
 		var c models.Comment
 		var eventID sql.NullInt64
 		var userID sql.NullString
 		var createdAt time.Time
 		if err := rows.Scan(&c.ID, &c.Fingerprint, &c.ClusterName, &eventID, &userID, &c.AuthorName, &c.Body, &createdAt); err != nil {
-			return nil, fmt.Errorf("scan comment: %w", err)
+			return nil, 0, fmt.Errorf("scan comment: %w", err)
 		}
 		c.CreatedAt = createdAt.UTC()
 		if eventID.Valid {
@@ -637,7 +724,10 @@ func (s *Store) GetComments(fingerprint, clusterName string) ([]models.Comment, 
 		}
 		comments = append(comments, c)
 	}
-	return comments, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+	return comments, total, nil
 }
 
 // GetComment returns a comment by ID scoped to (fingerprint, cluster).

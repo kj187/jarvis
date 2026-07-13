@@ -49,18 +49,20 @@ func newTestRecorder(t *testing.T) (*Recorder, *mockHub) {
 	store := NewStore(database, dialect)
 	alertStore := &AlertStore{}
 	rec := &Recorder{
-		alertStore:        alertStore,
-		silenceStore:      NewSilenceStore(),
-		store:             store,
-		hub:               hub,
-		interval:          time.Minute,
-		logger:            slog.Default(),
-		metrics:           metrics.New("test"),
-		prevSnapshot:      make(map[string]string),
-		prevSilenceInfo:   make(map[string]silenceInfoEntry),
-		prevAlertSilences: make(map[string][]string),
-		claimReleaseDelay: 10 * time.Millisecond,
-		registry:          cluster.NewRegistry(nil),
+		alertStore:         alertStore,
+		silenceStore:       NewSilenceStore(),
+		store:              store,
+		hub:                hub,
+		interval:           time.Minute,
+		logger:             slog.Default(),
+		metrics:            metrics.New("test"),
+		prevSnapshot:       make(map[string]string),
+		prevSilenceInfo:    make(map[string]silenceInfoEntry),
+		prevAlertSilences:  make(map[string][]string),
+		lastGoodAlerts:     make(map[string][]models.EnrichedAlert),
+		reconciledClusters: make(map[string]bool),
+		claimReleaseDelay:  10 * time.Millisecond,
+		registry:           cluster.NewRegistry(nil),
 	}
 	return rec, hub
 }
@@ -576,7 +578,9 @@ func TestRecorder_Metrics_NoCountOnRestartWithExistingEvents(t *testing.T) {
 type fakeAM struct {
 	srv          *httptest.Server
 	mu           sync.Mutex
+	alerts       []alertmanager.GettableAlert
 	silences     []alertmanager.GettableSilence
+	failAlerts   bool
 	failSilences bool
 }
 
@@ -589,7 +593,11 @@ func newFakeAM(t *testing.T, silences []alertmanager.GettableSilence) *fakeAM {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
 		case "/api/v2/alerts":
-			_ = json.NewEncoder(w).Encode([]alertmanager.GettableAlert{})
+			if f.failAlerts {
+				http.Error(w, "boom", http.StatusInternalServerError)
+				return
+			}
+			_ = json.NewEncoder(w).Encode(f.alerts)
 		case "/api/v2/silences":
 			if f.failSilences {
 				http.Error(w, "boom", http.StatusInternalServerError)
@@ -614,6 +622,18 @@ func (f *fakeAM) setSilences(silences []alertmanager.GettableSilence) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.silences = silences
+}
+
+func (f *fakeAM) setFailAlerts(fail bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.failAlerts = fail
+}
+
+func (f *fakeAM) setAlerts(alerts []alertmanager.GettableAlert) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.alerts = alerts
 }
 
 func TestPoll_StoresSilencesPerCluster(t *testing.T) {
@@ -661,6 +681,287 @@ func TestPoll_FailedSilenceFetchKeepsPreviousSnapshot(t *testing.T) {
 	}
 	if got := rec.silenceStore.GetCluster("b"); len(got) != 2 {
 		t.Errorf("cluster b snapshot len = %d, want 2 (must update while a fails)", len(got))
+	}
+}
+
+func alertEventStatuses(t *testing.T, rec *Recorder, fingerprint, clusterName string) []string {
+	t.Helper()
+	events, _, err := rec.store.GetHistoryForCluster(fingerprint, clusterName, 100, 0)
+	if err != nil {
+		t.Fatalf("GetHistoryForCluster: %v", err)
+	}
+	statuses := make([]string, len(events))
+	for i, e := range events {
+		statuses[i] = e.Status
+	}
+	return statuses
+}
+
+// TestRecorder_Poll_FailedClusterFetchKeepsPreviousAlertSnapshot verifies
+// WP1: a cluster whose alert fetch fails must not look like every one of its
+// alerts resolved. Mirrors TestPoll_FailedSilenceFetchKeepsPreviousSnapshot,
+// but for alerts (which additionally feed history events, occurrence counts,
+// and claim release — none of which may fire on a transient fetch failure).
+func TestRecorder_Poll_FailedClusterFetchKeepsPreviousAlertSnapshot(t *testing.T) {
+	amA := newFakeAM(t, nil)
+	amA.setAlerts([]alertmanager.GettableAlert{
+		{
+			Fingerprint: "fp1",
+			Status:      alertmanager.GettableAlertStatus{State: "active"},
+			Labels:      map[string]string{"alertname": "TestAlert"},
+			Annotations: map[string]string{},
+			StartsAt:    time.Now().UTC(),
+		},
+	})
+
+	rec, _ := newTestRecorder(t)
+	rec.registry = cluster.NewRegistry([]config.ClusterConfig{
+		{Name: "a", AlertmanagerURL: amA.srv.URL, AlertmanagerLinkURL: amA.srv.URL},
+	})
+
+	// Poll 1: successful fetch, alert A firing.
+	rec.poll(context.Background())
+	if got := alertEventStatuses(t, rec, "fp1", "a"); len(got) != 1 || got[0] != models.EventStatusFiring {
+		t.Fatalf("events after poll 1 = %v, want [firing]", got)
+	}
+	stats, err := rec.store.GetStatsForCluster("fp1", "a")
+	if err != nil {
+		t.Fatalf("GetStatsForCluster: %v", err)
+	}
+	if stats.OccurrenceCount != 1 {
+		t.Fatalf("OccurrenceCount after poll 1 = %d, want 1 (first occurrence, not incremented)", stats.OccurrenceCount)
+	}
+
+	// Poll 2: cluster fetch fails — must not resolve fp1.
+	amA.setFailAlerts(true)
+	rec.poll(context.Background())
+
+	if got := alertEventStatuses(t, rec, "fp1", "a"); len(got) != 1 || got[0] != models.EventStatusFiring {
+		t.Fatalf("events after failed poll = %v, want still [firing] (no phantom resolve)", got)
+	}
+	stats, err = rec.store.GetStatsForCluster("fp1", "a")
+	if err != nil {
+		t.Fatalf("GetStatsForCluster: %v", err)
+	}
+	if stats.OccurrenceCount != 1 {
+		t.Fatalf("OccurrenceCount after failed poll = %d, want 1 (unchanged)", stats.OccurrenceCount)
+	}
+	found := false
+	for _, a := range rec.alertStore.Get() {
+		if a.Fingerprint == "fp1" && a.ClusterName == "a" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("fp1 missing from AlertStore after failed poll, want it to remain visible")
+	}
+	if got := testutil.ToFloat64(rec.metrics.PollErrorsTotal.WithLabelValues("a", "alerts")); got != 1 {
+		t.Errorf("PollErrorsTotal[a,alerts] = %v, want 1", got)
+	}
+
+	// Poll 3: fetch recovers, alert A still firing — idempotent, no new row.
+	amA.setFailAlerts(false)
+	rec.poll(context.Background())
+	if got := alertEventStatuses(t, rec, "fp1", "a"); len(got) != 1 || got[0] != models.EventStatusFiring {
+		t.Fatalf("events after recovered poll (still firing) = %v, want still [firing]", got)
+	}
+
+	// Poll 4: alert A genuinely gone — only now does a resolved event appear.
+	amA.setAlerts(nil)
+	rec.poll(context.Background())
+	if got := alertEventStatuses(t, rec, "fp1", "a"); len(got) != 2 || got[0] != models.EventStatusResolved {
+		t.Fatalf("events after genuine resolve (newest first) = %v, want [resolved firing]", got)
+	}
+}
+
+// TestRecorder_Poll_FailedClusterOnlyFreezesThatCluster verifies that a
+// fetch failure on one cluster does not stop a healthy cluster's alerts from
+// being diffed normally in the same poll.
+func TestRecorder_Poll_FailedClusterOnlyFreezesThatCluster(t *testing.T) {
+	amA := newFakeAM(t, nil)
+	amA.setAlerts([]alertmanager.GettableAlert{
+		{Fingerprint: "fp-a", Status: alertmanager.GettableAlertStatus{State: "active"}, Labels: map[string]string{"alertname": "A"}, Annotations: map[string]string{}, StartsAt: time.Now().UTC()},
+	})
+	amB := newFakeAM(t, nil)
+	amB.setAlerts([]alertmanager.GettableAlert{
+		{Fingerprint: "fp-b", Status: alertmanager.GettableAlertStatus{State: "active"}, Labels: map[string]string{"alertname": "B"}, Annotations: map[string]string{}, StartsAt: time.Now().UTC()},
+	})
+
+	rec, _ := newTestRecorder(t)
+	rec.registry = cluster.NewRegistry([]config.ClusterConfig{
+		{Name: "a", AlertmanagerURL: amA.srv.URL, AlertmanagerLinkURL: amA.srv.URL},
+		{Name: "b", AlertmanagerURL: amB.srv.URL, AlertmanagerLinkURL: amB.srv.URL},
+	})
+	rec.poll(context.Background())
+
+	// Cluster a fails; cluster b's alert genuinely resolves in the same poll.
+	amA.setFailAlerts(true)
+	amB.setAlerts(nil)
+	rec.poll(context.Background())
+
+	if got := alertEventStatuses(t, rec, "fp-a", "a"); len(got) != 1 || got[0] != models.EventStatusFiring {
+		t.Errorf("events for frozen cluster a = %v, want still [firing] (no phantom resolve)", got)
+	}
+	if got := alertEventStatuses(t, rec, "fp-b", "b"); len(got) != 2 || got[0] != models.EventStatusResolved {
+		t.Errorf("events for healthy cluster b (newest first) = %v, want [resolved firing] (must still diff normally)", got)
+	}
+}
+
+// TestRecorder_Poll_StartupReconciliation_ResolvesStaleOpenAlertThenCountsGenuineRefire
+// covers WP3: a restart leaves prevSnapshot empty in memory even though the
+// DB still has an open "firing" row for an alert that actually resolved
+// during the downtime. The first poll after restart must reconcile that
+// (resolve it), and a later genuine re-fire (well past the 60s grace
+// window) must be counted as a new episode.
+func TestRecorder_Poll_StartupReconciliation_ResolvesStaleOpenAlertThenCountsGenuineRefire(t *testing.T) {
+	amA := newFakeAM(t, nil) // no alerts — this fingerprint actually resolved during the (simulated) downtime.
+
+	rec, _ := newTestRecorder(t)
+	rec.registry = cluster.NewRegistry([]config.ClusterConfig{
+		{Name: "a", AlertmanagerURL: amA.srv.URL, AlertmanagerLinkURL: amA.srv.URL},
+	})
+
+	// Pre-existing open firing event, as if written before a restart wiped prevSnapshot.
+	if err := rec.store.UpsertFingerprint("fp-x", "TestAlert", "a", nil); err != nil {
+		t.Fatalf("UpsertFingerprint: %v", err)
+	}
+	if _, _, err := rec.store.RecordStatusChange("fp-x", "a", amA.srv.URL, models.EventStatusFiring, time.Now().Add(-2*time.Hour), nil); err != nil {
+		t.Fatalf("RecordStatusChange: %v", err)
+	}
+
+	// First poll after "restart": alert is genuinely gone → reconciliation resolves it.
+	rec.poll(context.Background())
+
+	if got := alertEventStatuses(t, rec, "fp-x", "a"); len(got) != 2 || got[0] != models.EventStatusResolved {
+		t.Fatalf("events after reconciliation poll (newest first) = %v, want [resolved firing]", got)
+	}
+	stats, err := rec.store.GetStatsForCluster("fp-x", "a")
+	if err != nil {
+		t.Fatalf("GetStatsForCluster: %v", err)
+	}
+	if stats.OccurrenceCount != 1 {
+		t.Fatalf("OccurrenceCount after reconciliation resolve = %d, want 1 (resolve alone doesn't increment)", stats.OccurrenceCount)
+	}
+
+	// Push both rows' recorded_at back (preserving their relative order, so
+	// the resolved row still reads as "last") so the resolved row is past
+	// the 60s grace window at the next poll — a genuine new episode, not a
+	// grace-period blip.
+	if _, err := rec.store.exec(context.Background(),
+		`UPDATE alert_events SET recorded_at = ? WHERE fingerprint = ? AND status = ?`,
+		time.Now().Add(-3*time.Hour).UTC(), "fp-x", models.EventStatusFiring,
+	); err != nil {
+		t.Fatalf("backdate firing row: %v", err)
+	}
+	if _, err := rec.store.exec(context.Background(),
+		`UPDATE alert_events SET recorded_at = ? WHERE fingerprint = ? AND status = ?`,
+		time.Now().Add(-70*time.Second).UTC(), "fp-x", models.EventStatusResolved,
+	); err != nil {
+		t.Fatalf("backdate resolved row: %v", err)
+	}
+
+	amA.setAlerts([]alertmanager.GettableAlert{
+		{
+			Fingerprint: "fp-x",
+			Status:      alertmanager.GettableAlertStatus{State: "active"},
+			Labels:      map[string]string{"alertname": "TestAlert"},
+			Annotations: map[string]string{},
+			StartsAt:    time.Now().UTC(),
+		},
+	})
+	rec.poll(context.Background())
+
+	if got := alertEventStatuses(t, rec, "fp-x", "a"); len(got) != 3 || got[0] != models.EventStatusFiring {
+		t.Fatalf("events after genuine re-fire (newest first) = %v, want [firing resolved firing]", got)
+	}
+	stats, err = rec.store.GetStatsForCluster("fp-x", "a")
+	if err != nil {
+		t.Fatalf("GetStatsForCluster: %v", err)
+	}
+	if stats.OccurrenceCount != 2 {
+		t.Fatalf("OccurrenceCount after genuine re-fire = %d, want 2", stats.OccurrenceCount)
+	}
+}
+
+// TestRecorder_Poll_StartupReconciliation_NoOpWhenAlertStillPresent verifies
+// the idempotent case: if the alert is present in the first post-restart
+// snapshot, reconciliation must not touch it at all.
+func TestRecorder_Poll_StartupReconciliation_NoOpWhenAlertStillPresent(t *testing.T) {
+	amA := newFakeAM(t, nil)
+	amA.setAlerts([]alertmanager.GettableAlert{
+		{
+			Fingerprint: "fp-y",
+			Status:      alertmanager.GettableAlertStatus{State: "active"},
+			Labels:      map[string]string{"alertname": "TestAlert"},
+			Annotations: map[string]string{},
+			StartsAt:    time.Now().Add(-2 * time.Hour).UTC(),
+		},
+	})
+
+	rec, _ := newTestRecorder(t)
+	rec.registry = cluster.NewRegistry([]config.ClusterConfig{
+		{Name: "a", AlertmanagerURL: amA.srv.URL, AlertmanagerLinkURL: amA.srv.URL},
+	})
+
+	if err := rec.store.UpsertFingerprint("fp-y", "TestAlert", "a", nil); err != nil {
+		t.Fatalf("UpsertFingerprint: %v", err)
+	}
+	if _, _, err := rec.store.RecordStatusChange("fp-y", "a", amA.srv.URL, models.EventStatusFiring, time.Now().Add(-2*time.Hour), nil); err != nil {
+		t.Fatalf("RecordStatusChange: %v", err)
+	}
+
+	rec.poll(context.Background())
+
+	if got := alertEventStatuses(t, rec, "fp-y", "a"); len(got) != 1 || got[0] != models.EventStatusFiring {
+		t.Fatalf("events = %v, want still just [firing] (alert present, no reconciliation)", got)
+	}
+}
+
+// TestRecorder_Poll_StartupReconciliation_GracePeriodStillAppliesOnImmediateRefire
+// verifies reconciliation doesn't bypass the normal grace period: if the
+// alert reappears within 60s of the reconciliation resolve (a poll blip,
+// not a real gap), the existing firing row is reopened as usual.
+func TestRecorder_Poll_StartupReconciliation_GracePeriodStillAppliesOnImmediateRefire(t *testing.T) {
+	amA := newFakeAM(t, nil)
+
+	rec, _ := newTestRecorder(t)
+	rec.registry = cluster.NewRegistry([]config.ClusterConfig{
+		{Name: "a", AlertmanagerURL: amA.srv.URL, AlertmanagerLinkURL: amA.srv.URL},
+	})
+
+	startsAt := time.Now().Add(-2 * time.Hour)
+	if err := rec.store.UpsertFingerprint("fp-z", "TestAlert", "a", nil); err != nil {
+		t.Fatalf("UpsertFingerprint: %v", err)
+	}
+	if _, _, err := rec.store.RecordStatusChange("fp-z", "a", amA.srv.URL, models.EventStatusFiring, startsAt, nil); err != nil {
+		t.Fatalf("RecordStatusChange: %v", err)
+	}
+
+	// First poll: alert genuinely absent → reconciliation resolves it.
+	rec.poll(context.Background())
+
+	// Immediately (<60s) the alert reappears with the same starts_at — a
+	// missed-poll blip, not a real gap.
+	amA.setAlerts([]alertmanager.GettableAlert{
+		{
+			Fingerprint: "fp-z",
+			Status:      alertmanager.GettableAlertStatus{State: "active"},
+			Labels:      map[string]string{"alertname": "TestAlert"},
+			Annotations: map[string]string{},
+			StartsAt:    startsAt,
+		},
+	})
+	rec.poll(context.Background())
+
+	if got := alertEventStatuses(t, rec, "fp-z", "a"); len(got) != 1 || got[0] != models.EventStatusFiring {
+		t.Fatalf("events after immediate re-fire = %v, want still just [firing] (grace period reopened the original event)", got)
+	}
+	stats, err := rec.store.GetStatsForCluster("fp-z", "a")
+	if err != nil {
+		t.Fatalf("GetStatsForCluster: %v", err)
+	}
+	if stats.OccurrenceCount != 1 {
+		t.Fatalf("OccurrenceCount after grace-period re-fire = %d, want 1 (grace period doesn't increment)", stats.OccurrenceCount)
 	}
 }
 

@@ -129,10 +129,18 @@ func NewRouter(
 	e.Use(srv.firstRunRedirect)
 
 	// ── WebSocket ─────────────────────────────────────────────────────────────
-	e.GET("/ws", func(c echo.Context) error {
+	// full_protect: /ws streams the full alert snapshot plus claim/comment
+	// events, so it must be gated like the API routes below. The JWT session
+	// cookie is sent on the upgrade request, so RequireAuth works unchanged.
+	wsHandler := func(c echo.Context) error {
 		hub.ServeWS(c.Response().Writer, c.Request())
 		return nil
-	})
+	}
+	if cfg.AuthMode == "full_protect" {
+		e.GET("/ws", wsHandler, auth.RequireAuth(authProvider))
+	} else {
+		e.GET("/ws", wsHandler)
+	}
 
 	// ── Auth & Setup ──────────────────────────────────────────────────────────
 	// GET /setup is served by the SPA catch-all (index.html); no explicit route needed.

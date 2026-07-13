@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import { ChevronDown, ChevronUp } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 interface AlertDetailSectionProps {
   title: ReactNode
@@ -7,6 +8,9 @@ interface AlertDetailSectionProps {
   defaultOpen?: boolean
   headerRight?: ReactNode
   testId?: string
+  /** Divider below the section. Default true; set false for sections that
+   * flow into the next one without a visual break. */
+  bordered?: boolean
 }
 
 export function AlertDetailSection({
@@ -15,11 +19,12 @@ export function AlertDetailSection({
   defaultOpen = true,
   headerRight,
   testId,
+  bordered = true,
 }: AlertDetailSectionProps) {
   const [open, setOpen] = useState(defaultOpen)
 
   return (
-    <div data-testid={testId} className="border-b border-border py-4 px-5">
+    <div data-testid={testId} className={cn('py-4 px-5', bordered && 'border-b border-border')}>
       <button
         className="flex w-full items-center justify-between text-sm font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground cursor-pointer"
         onClick={() => setOpen((v) => !v)}

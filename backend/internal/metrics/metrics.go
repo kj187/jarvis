@@ -26,6 +26,10 @@ type Metrics struct {
 	WSBroadcastsTotal           *prometheus.CounterVec
 	HTTPRequestsTotal           *prometheus.CounterVec
 	HTTPRequestDuration         *prometheus.HistogramVec
+
+	RetentionSweepsTotal      prometheus.Counter
+	RetentionDeletedRowsTotal *prometheus.CounterVec
+	RetentionSweepDuration    prometheus.Histogram
 }
 
 // New creates a Metrics instance on a fresh registry, including the standard
@@ -81,6 +85,19 @@ func New(version string) *Metrics {
 			Help:    "HTTP request duration in seconds, by method, route pattern and status.",
 			Buckets: []float64{0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5},
 		}, []string{"method", "path", "status"}),
+		RetentionSweepsTotal: f.NewCounter(prometheus.CounterOpts{
+			Name: "jarvis_retention_sweeps_total",
+			Help: "Total number of data-retention sweeps run.",
+		}),
+		RetentionDeletedRowsTotal: f.NewCounterVec(prometheus.CounterOpts{
+			Name: "jarvis_retention_deleted_rows_total",
+			Help: "Total number of rows deleted by the data-retention sweeper, by table.",
+		}, []string{"table"}),
+		RetentionSweepDuration: f.NewHistogram(prometheus.HistogramOpts{
+			Name:    "jarvis_retention_sweep_duration_seconds",
+			Help:    "Duration of a full data-retention sweep across all tables.",
+			Buckets: []float64{0.01, 0.05, 0.1, 0.5, 1, 5, 10, 30, 60},
+		}),
 	}
 }
 

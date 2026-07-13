@@ -60,5 +60,8 @@ a container (no local tooling needed):
 make diagrams   # renders docs/diagrams/*.mmd → docs/assets/*.svg
 ```
 
+For how alert history is recorded — state machine, grace period, episodes,
+restart/outage guarantees — see [`alert-lifecycle.md`](alert-lifecycle.md).
+
 For the full engineering reference (data model, endpoints, component tree,
 state machine) see [`.agents/architecture.md`](../.agents/architecture.md).

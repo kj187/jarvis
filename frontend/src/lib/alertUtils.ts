@@ -32,9 +32,14 @@ export function labelColorStyle(key: string, theme: 'dark' | 'light' = 'dark'): 
 
 /**
  * Returns an alert's labels augmented with pseudo-labels:
- * - @receiver  (comma-separated list of all receiver names)
- * - receiver   (alias for @receiver)
- * - @cluster   (cluster name)
+ * - @receiver     (comma-separated list of all receiver names)
+ * - receiver      (alias for @receiver)
+ * - @cluster      (cluster name)
+ * - @claimed-by   (active claim's claimedBy, or '' if unclaimed)
+ *
+ * `@age` is NOT included here — it's a moving target (`now - startsAt`), so
+ * it's handled as a special case directly in `matchesLabelMatchers` instead
+ * of being baked into a snapshot of static string labels.
  */
 export function getFilterableLabels(alert: EnrichedAlert): Record<string, string> {
   const labels: Record<string, string> = { ...alert.labels }
@@ -48,7 +53,22 @@ export function getFilterableLabels(alert: EnrichedAlert): Record<string, string
   labels['@receiver'] = receiverList
   labels['receiver'] = receiverList
   labels['@cluster'] = alert.clusterName
+  labels['@claimed-by'] = alert.activeClaim?.claimedBy ?? ''
   return labels
+}
+
+/**
+ * Parses a single-unit duration string (`30s`, `15m`, `2h`, `1d`) into
+ * milliseconds. Returns null for anything else — no combined units, no
+ * decimals, no negative values — consistent with `safeRegex`'s "invalid
+ * input → null, caller decides the no-match fallback" contract.
+ */
+export function parseDurationValue(input: string): number | null {
+  const match = /^(\d+)(s|m|h|d)$/.exec(input.trim())
+  if (!match) return null
+  const amount = Number(match[1])
+  const unitMs = { s: 1_000, m: 60_000, h: 3_600_000, d: 86_400_000 }[match[2] as 's' | 'm' | 'h' | 'd']
+  return amount * unitMs
 }
 
 // ── Affected-alert identifier ──────────────────────────────────────────────
@@ -124,6 +144,19 @@ export function matchesLabelMatchers(
   if (matchers.length === 0) return true
   const labels = getFilterableLabels(alert)
   return matchers.every((m) => {
+    // @age is dynamic (now - startsAt), so it's evaluated here instead of
+    // being materialized into getFilterableLabels' static label snapshot.
+    // Only >/< are meaningful for it; every other operator is a no-match by
+    // design (decision 2, idea 2.10).
+    if (m.name === '@age') {
+      if (m.operator !== '>' && m.operator !== '<') return false
+      const thresholdMs = parseDurationValue(m.value)
+      if (thresholdMs === null) return false
+      const ageMs = Date.now() - new Date(alert.startsAt).getTime()
+      return m.operator === '>' ? ageMs > thresholdMs : ageMs < thresholdMs
+    }
+    // >/< are @age-only operators (decision 1) — never match a normal label.
+    if (m.operator === '>' || m.operator === '<') return false
     const value = labels[m.name] ?? ''
     // Special handling for receiver/@receiver: they are comma-separated lists.
     // For equality operators, check if any receiver matches.
@@ -596,6 +629,116 @@ export function computeLabelBreakdown(
   breakdowns.sort((a, b) => pinRank(a.name) - pinRank(b.name) || b.total - a.total)
 
   return breakdowns.slice(0, maxLabels)
+}
+
+// ── Related alerts (detail panel "Related" tab) ────────────────────────────
+
+/**
+ * Label keys never counted toward relatedness: `alertname` (same alertname
+ * on 50 hosts is a grouping concern, not a "same blast radius" signal),
+ * `severity` (classification, not identity), `receiver` and `@`-prefixed
+ * pseudo-labels (UI-synthesized, not real alert identity — and cross-cluster
+ * matches on real labels ARE the interesting case, so `@cluster` must not
+ * pin relations to one cluster).
+ */
+const RELATED_SKIP_KEYS = new Set(['alertname', 'severity', 'receiver'])
+
+/** Time-proximity decay constant: at Δt = 30min the boost has fallen to 1/e of its max. */
+const RELATED_TIME_DECAY_MS = 30 * 60 * 1000
+
+function isRelatedEligibleLabel(key: string, value: string | undefined): value is string {
+  if (!value || key.startsWith('@') || RELATED_SKIP_KEYS.has(key)) return false
+  // URL-valued labels (runbook/dashboard/wiki links — the same ones the
+  // Links section renders as buttons) are alert metadata, not identity:
+  // a shared runbook URL is just `alertname` by another name, so counting
+  // it would sneak the skipped alertname signal back in with a high IDF
+  // weight (rule-level URLs are rare values).
+  return !value.startsWith('http://') && !value.startsWith('https://')
+}
+
+export interface RelatedAlert {
+  alert: EnrichedAlert
+  /** Shared label keys, most specific (rarest value in the snapshot) first. */
+  sharedKeys: string[]
+}
+
+/**
+ * Alerts related to `target`: any alert in `all` (excluding `target` itself,
+ * identified by fingerprint + cluster — the selection key, so the same
+ * fingerprint firing in a different cluster is NOT treated as self) sharing
+ * at least one eligible label (see `RELATED_SKIP_KEYS`) with an equal,
+ * non-empty value.
+ *
+ * Ranking uses IDF-style specificity weighting instead of a flat shared-key
+ * count: each shared `label=value` pair contributes
+ * `log((N + 1) / df)` — `df` being how many alerts in the snapshot carry
+ * that exact pair — so a label value shared with only one other alert
+ * (`instance=web3`) far outweighs one carried by half the snapshot
+ * (`namespace=prod`), and near-universal labels devalue themselves without
+ * any hardcoded key list. The `+ 1` smoothing keeps a label carried by
+ * EVERY alert at a small positive weight (a 5-alert deployment where all
+ * share one `instance` must still relate them, not zero out).
+ *
+ * The summed label score is then multiplied by a time-proximity boost
+ * `1 + exp(-|Δt| / 30min)` (Δt between the two `startsAt` values, boost in
+ * (1, 2]): alerts that started around the same time as the target are far
+ * more likely to be the same incident than one firing for weeks. An
+ * unparseable `startsAt` on either side skips the boost (factor 1).
+ *
+ * Ties broken by severity (`severityOrder`, more severe first) then
+ * `startsAt` descending. Pass `max` to cap the result (e.g. for a
+ * "top 10 + N more" display) — omitted, the full ranked list is returned.
+ */
+export function findRelatedAlerts(
+  target: EnrichedAlert,
+  all: EnrichedAlert[],
+  max?: number,
+): RelatedAlert[] {
+  // Document frequency of every eligible label=value pair in the snapshot.
+  const freq = new Map<string, number>()
+  for (const alert of all) {
+    for (const [key, value] of Object.entries(alert.labels)) {
+      if (!isRelatedEligibleLabel(key, value)) continue
+      const pair = `${key}\u0000${value}`
+      freq.set(pair, (freq.get(pair) ?? 0) + 1)
+    }
+  }
+
+  const n = all.length
+  const targetStart = new Date(target.startsAt).getTime()
+  const scored: Array<{ entry: RelatedAlert; score: number }> = []
+  for (const candidate of all) {
+    const isSelf = candidate.fingerprint === target.fingerprint && candidate.clusterName === target.clusterName
+    if (isSelf) continue
+    const shared: Array<{ key: string; weight: number }> = []
+    for (const [key, value] of Object.entries(target.labels)) {
+      if (!isRelatedEligibleLabel(key, value) || candidate.labels[key] !== value) continue
+      // The pair is guaranteed present: `candidate` shares it and is in
+      // `all` (a history-viewed target may be absent from `all`, but its
+      // unshared pairs never reach this line).
+      const df = freq.get(`${key}\u0000${value}`)!
+      shared.push({ key, weight: Math.log((n + 1) / df) })
+    }
+    if (shared.length === 0) continue
+    shared.sort((a, b) => b.weight - a.weight)
+    const labelScore = shared.reduce((sum, s) => sum + s.weight, 0)
+    const dt = Math.abs(new Date(candidate.startsAt).getTime() - targetStart)
+    const timeBoost = Number.isFinite(dt) ? 1 + Math.exp(-dt / RELATED_TIME_DECAY_MS) : 1
+    scored.push({
+      entry: { alert: candidate, sharedKeys: shared.map((s) => s.key) },
+      score: labelScore * timeBoost,
+    })
+  }
+
+  scored.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score
+    const severityDiff =
+      severityOrder(a.entry.alert.labels.severity ?? 'none') - severityOrder(b.entry.alert.labels.severity ?? 'none')
+    if (severityDiff !== 0) return severityDiff
+    return new Date(b.entry.alert.startsAt).getTime() - new Date(a.entry.alert.startsAt).getTime()
+  })
+  const matches = scored.map((s) => s.entry)
+  return max != null ? matches.slice(0, max) : matches
 }
 
 const GROUP_MATCHER_SKIP = new Set(['receiver', '@receiver', '@cluster'])

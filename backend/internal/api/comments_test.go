@@ -28,8 +28,8 @@ func TestGetComments_Empty(t *testing.T) { //nolint:dupl
 	if rec.Code != http.StatusOK {
 		t.Errorf("status = %d, want 200", rec.Code)
 	}
-	if rec.Body.String() != "[]\n" {
-		t.Errorf("expected empty array, got %s", rec.Body.String())
+	if rec.Body.String() != "{\"comments\":[],\"total\":0}\n" {
+		t.Errorf("expected empty page, got %s", rec.Body.String())
 	}
 }
 
@@ -187,6 +187,51 @@ func TestGetComments_AfterAdd(t *testing.T) {
 	}
 	if !contains(rec2.Body.String(), "bob") {
 		t.Errorf("expected bob in comments: %s", rec2.Body.String())
+	}
+}
+
+func TestGetComments_Paginated(t *testing.T) {
+	srv, _, store := newTestServerFull(t)
+	seedFP(t, store, "1234567890abcdef")
+	e := echo.New()
+
+	for i := 0; i < 3; i++ {
+		body := map[string]interface{}{"authorName": "alice", "body": fmt.Sprintf("comment %d", i)}
+		b, _ := json.Marshal(body)
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/?cluster=c1", bytes.NewReader(b))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetParamNames("fingerprint")
+		c.SetParamValues("1234567890abcdef")
+		if err := srv.addComment(c); err != nil {
+			t.Fatalf("addComment %d: %v", i, err)
+		}
+	}
+
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/?cluster=c1&limit=2&offset=0", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("fingerprint")
+	c.SetParamValues("1234567890abcdef")
+	if err := srv.getComments(c); err != nil {
+		t.Fatalf("getComments: %v", err)
+	}
+
+	var page struct {
+		Comments []struct {
+			Body string `json:"body"`
+		} `json:"comments"`
+		Total int `json:"total"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &page); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if page.Total != 3 {
+		t.Errorf("total = %d, want 3", page.Total)
+	}
+	if len(page.Comments) != 2 || page.Comments[0].Body != "comment 2" {
+		t.Errorf("unexpected page: %+v", page.Comments)
 	}
 }
 

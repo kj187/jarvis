@@ -3,6 +3,7 @@ package history
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -232,6 +233,51 @@ func TestRecordStatusChange_GracePeriodExpired(t *testing.T) {
 	}
 }
 
+// TestRecordStatusChange_SetGracePeriod_WidensWindow verifies WP5:
+// SetGracePeriod lets a deployment with a longer JARVIS_POLL_INTERVAL widen
+// the grace window past the 60s default, so a single missed poll at that
+// interval still falls inside it.
+func TestRecordStatusChange_SetGracePeriod_WidensWindow(t *testing.T) {
+	s := newTestStore(t)
+	s.SetGracePeriod(3 * time.Minute)
+
+	s.UpsertFingerprint("fp1", "TestAlert", "homelab", nil) //nolint:errcheck
+
+	// Firing, then resolved 90s ago — inside the default 60s grace period's
+	// "expired" territory, but inside a widened 3-minute window.
+	s.db.ExecContext(context.Background(), //nolint:errcheck
+		`INSERT INTO alert_events (fingerprint, cluster_name, alertmanager_url, status, starts_at, recorded_at) VALUES (?, ?, ?, ?, ?, ?)`,
+		"fp1", "homelab", "http://am:9093", "firing",
+		time.Now().Add(-5*time.Minute), time.Now().Add(-3*time.Minute),
+	)
+	s.db.ExecContext(context.Background(), //nolint:errcheck
+		`INSERT INTO alert_events (fingerprint, cluster_name, alertmanager_url, status, starts_at, recorded_at) VALUES (?, ?, ?, ?, ?, ?)`,
+		"fp1", "homelab", "http://am:9093", "resolved",
+		time.Now().Add(-5*time.Minute), time.Now().Add(-90*time.Second),
+	)
+
+	ev, created, err := s.RecordStatusChange("fp1", "homelab", "http://am:9093", models.EventStatusFiring, time.Now(), nil)
+	if err != nil {
+		t.Fatalf("refire: %v", err)
+	}
+	if created {
+		t.Error("expected no new row (widened grace period should reopen the original event)")
+	}
+	if ev.Status != models.EventStatusFiring {
+		t.Errorf("Status = %q, want firing", ev.Status)
+	}
+
+	_, total, _ := s.GetHistory("fp1", 10, 0)
+	if total != 1 {
+		t.Errorf("total = %d, want 1 (resolved row deleted, no new firing row)", total)
+	}
+
+	st, _ := s.GetStats("fp1")
+	if st == nil || st.OccurrenceCount != 1 {
+		t.Errorf("OccurrenceCount = %+v, want 1 (grace period, no increment)", st)
+	}
+}
+
 func TestRecordStatusChange_Transitions(t *testing.T) {
 	s := newTestStore(t)
 
@@ -381,12 +427,12 @@ func TestComments(t *testing.T) {
 		t.Error("expected non-zero comment ID")
 	}
 
-	comments, err := s.GetComments("fp1", "c")
+	comments, total, err := s.GetComments("fp1", "c", 20, 0)
 	if err != nil {
 		t.Fatalf("GetComments: %v", err)
 	}
-	if len(comments) != 1 || comments[0].Body != "hello" {
-		t.Errorf("unexpected comments: %+v", comments)
+	if total != 1 || len(comments) != 1 || comments[0].Body != "hello" {
+		t.Errorf("unexpected comments: total=%d comments=%+v", total, comments)
 	}
 
 	deleted, err := s.DeleteComment(c.ID, "fp1", "c")
@@ -394,9 +440,63 @@ func TestComments(t *testing.T) {
 		t.Fatalf("DeleteComment: deleted=%v err=%v", deleted, err)
 	}
 
-	comments2, _ := s.GetComments("fp1", "c")
-	if len(comments2) != 0 {
-		t.Errorf("expected 0 comments after delete, got %d", len(comments2))
+	comments2, total2, _ := s.GetComments("fp1", "c", 20, 0)
+	if len(comments2) != 0 || total2 != 0 {
+		t.Errorf("expected 0 comments after delete, got %d (total %d)", len(comments2), total2)
+	}
+}
+
+func TestGetComments_PaginatedAndOrdered(t *testing.T) {
+	s := newTestStore(t)
+	s.UpsertFingerprint("fp1", "A", "c", nil) //nolint:errcheck
+
+	for i := 0; i < 5; i++ {
+		if _, err := s.AddComment("fp1", "c", nil, nil, "alice", fmt.Sprintf("comment %d", i)); err != nil {
+			t.Fatalf("AddComment %d: %v", i, err)
+		}
+	}
+
+	page1, total, err := s.GetComments("fp1", "c", 2, 0)
+	if err != nil {
+		t.Fatalf("GetComments page 1: %v", err)
+	}
+	if total != 5 {
+		t.Fatalf("total = %d, want 5", total)
+	}
+	if len(page1) != 2 || page1[0].Body != "comment 4" || page1[1].Body != "comment 3" {
+		t.Fatalf("unexpected page 1: %+v", page1)
+	}
+
+	page2, _, err := s.GetComments("fp1", "c", 2, 2)
+	if err != nil {
+		t.Fatalf("GetComments page 2: %v", err)
+	}
+	if len(page2) != 2 || page2[0].Body != "comment 2" || page2[1].Body != "comment 1" {
+		t.Fatalf("unexpected page 2: %+v", page2)
+	}
+}
+
+func TestGetComments_LimitClamped(t *testing.T) {
+	s := newTestStore(t)
+	s.UpsertFingerprint("fp1", "A", "c", nil) //nolint:errcheck
+	if _, err := s.AddComment("fp1", "c", nil, nil, "alice", "hi"); err != nil {
+		t.Fatalf("AddComment: %v", err)
+	}
+
+	comments, total, err := s.GetComments("fp1", "c", 0, -5)
+	if err != nil {
+		t.Fatalf("GetComments: %v", err)
+	}
+	if total != 1 || len(comments) != 1 {
+		t.Errorf("expected default limit/offset clamp to still return the row, got total=%d len=%d", total, len(comments))
+	}
+
+	comments2, _, err := s.GetComments("fp1", "c", 1000, 0)
+	if err != nil {
+		t.Fatalf("GetComments over-limit: %v", err)
+	}
+	if len(comments2) != 1 {
+		t.Errorf("expected clamped limit to still return the one row, got %d", len(comments2))
 	}
 }
 
@@ -421,7 +521,7 @@ func TestDeleteComment_WrongFingerprint(t *testing.T) {
 	}
 
 	// Original comment must still exist.
-	comments, _ := s.GetComments("fp1", "c")
+	comments, _, _ := s.GetComments("fp1", "c", 20, 0)
 	if len(comments) != 1 {
 		t.Errorf("expected comment to survive wrong-fingerprint delete, got %d comments", len(comments))
 	}
@@ -691,12 +791,21 @@ func TestUpdateSilenceTemplate(t *testing.T) {
 
 func insertAlertEvent(t *testing.T, s *Store, fingerprint, cluster, status string, startsAt time.Time) {
 	t.Helper()
+	insertAlertEventFull(t, s, fingerprint, cluster, status, startsAt, startsAt)
+}
+
+// insertAlertEventFull lets tests set starts_at (Alertmanager's episode
+// identity) and recorded_at (when Jarvis observed the event) independently
+// — needed to reproduce a silence-expiry replay, where a new event row gets
+// a fresh recorded_at but keeps the original episode's starts_at.
+func insertAlertEventFull(t *testing.T, s *Store, fingerprint, cluster, status string, startsAt, recordedAt time.Time) {
+	t.Helper()
 	if err := s.UpsertFingerprint(fingerprint, "TestAlert", cluster, nil); err != nil {
 		t.Fatalf("upsert fingerprint: %v", err)
 	}
 	if _, err := s.exec(context.Background(),
 		`INSERT INTO alert_events (fingerprint, cluster_name, alertmanager_url, status, starts_at, recorded_at) VALUES (?, ?, ?, ?, ?, ?)`,
-		fingerprint, cluster, "http://am:9093", status, startsAt, startsAt,
+		fingerprint, cluster, "http://am:9093", status, startsAt, recordedAt,
 	); err != nil {
 		t.Fatalf("insert alert event: %v", err)
 	}
@@ -773,6 +882,47 @@ func TestGetFiringStarts_LimitCapped(t *testing.T) {
 	}
 }
 
+func TestGetFiringStarts_DedupesSuppressedExpiredReplay(t *testing.T) {
+	s := newTestStore(t)
+	fingerprint := "aabbccddeeff0044"
+	now := time.Now().UTC()
+	episodeStart := now.Add(-3 * time.Hour)
+
+	// Same Alertmanager episode (starts_at unchanged throughout): silence
+	// activates and expires mid-episode, producing a "new" firing row that
+	// is really a continuation, not a new episode.
+	insertAlertEventFull(t, s, fingerprint, "homelab", models.EventStatusFiring, episodeStart, now.Add(-3*time.Hour))
+	insertAlertEventFull(t, s, fingerprint, "homelab", models.EventStatusSuppressed, episodeStart, now.Add(-2*time.Hour))
+	insertAlertEventFull(t, s, fingerprint, "homelab", models.EventStatusExpired, episodeStart, now.Add(-90*time.Minute))
+	insertAlertEventFull(t, s, fingerprint, "homelab", models.EventStatusFiring, episodeStart, now.Add(-80*time.Minute))
+
+	starts, err := s.GetFiringStarts(fingerprint, "homelab", now.Add(-24*time.Hour), 100)
+	if err != nil {
+		t.Fatalf("GetFiringStarts: %v", err)
+	}
+	if len(starts) != 1 {
+		t.Fatalf("len(starts) = %d, want 1 (same episode counted once): %v", len(starts), starts)
+	}
+}
+
+func TestGetFiringStarts_TwoRealEpisodesBothCounted(t *testing.T) {
+	s := newTestStore(t)
+	fingerprint := "aabbccddeeff0055"
+	now := time.Now().UTC()
+
+	insertAlertEventFull(t, s, fingerprint, "homelab", models.EventStatusFiring, now.Add(-5*time.Hour), now.Add(-5*time.Hour))
+	insertAlertEventFull(t, s, fingerprint, "homelab", models.EventStatusResolved, now.Add(-5*time.Hour), now.Add(-4*time.Hour))
+	insertAlertEventFull(t, s, fingerprint, "homelab", models.EventStatusFiring, now.Add(-3*time.Hour), now.Add(-3*time.Hour))
+
+	starts, err := s.GetFiringStarts(fingerprint, "homelab", now.Add(-24*time.Hour), 100)
+	if err != nil {
+		t.Fatalf("GetFiringStarts: %v", err)
+	}
+	if len(starts) != 2 {
+		t.Fatalf("len(starts) = %d, want 2 (distinct starts_at = distinct episodes): %v", len(starts), starts)
+	}
+}
+
 func TestGetFiringStarts_NoEvents(t *testing.T) {
 	s := newTestStore(t)
 
@@ -782,5 +932,49 @@ func TestGetFiringStarts_NoEvents(t *testing.T) {
 	}
 	if len(starts) != 0 {
 		t.Errorf("len(starts) = %d, want 0", len(starts))
+	}
+}
+
+func TestGetOpenFingerprintsForCluster_ReturnsOnlyNonResolved(t *testing.T) {
+	s := newTestStore(t)
+	now := time.Now().UTC()
+
+	// fp-open: last event firing → open.
+	insertAlertEvent(t, s, "fp-open", "homelab", models.EventStatusFiring, now.Add(-1*time.Hour))
+	// fp-suppressed: last event suppressed → also open (not resolved).
+	insertAlertEvent(t, s, "fp-suppressed", "homelab", models.EventStatusFiring, now.Add(-2*time.Hour))
+	insertAlertEvent(t, s, "fp-suppressed", "homelab", models.EventStatusSuppressed, now.Add(-1*time.Hour))
+	// fp-resolved: last event resolved → excluded.
+	insertAlertEvent(t, s, "fp-resolved", "homelab", models.EventStatusFiring, now.Add(-2*time.Hour))
+	insertAlertEvent(t, s, "fp-resolved", "homelab", models.EventStatusResolved, now.Add(-1*time.Hour))
+	// Different cluster — must not leak in.
+	insertAlertEvent(t, s, "fp-other-cluster", "other", models.EventStatusFiring, now.Add(-1*time.Hour))
+
+	open, err := s.GetOpenFingerprintsForCluster("homelab", 24*time.Hour)
+	if err != nil {
+		t.Fatalf("GetOpenFingerprintsForCluster: %v", err)
+	}
+	got := map[string]bool{}
+	for _, fp := range open {
+		got[fp] = true
+	}
+	if len(got) != 2 || !got["fp-open"] || !got["fp-suppressed"] {
+		t.Errorf("open fingerprints = %v, want exactly [fp-open fp-suppressed]", open)
+	}
+}
+
+func TestGetOpenFingerprintsForCluster_WindowExcludesOldEvents(t *testing.T) {
+	s := newTestStore(t)
+	now := time.Now().UTC()
+
+	insertAlertEvent(t, s, "fp-old", "homelab", models.EventStatusFiring, now.Add(-30*24*time.Hour))
+	insertAlertEvent(t, s, "fp-recent", "homelab", models.EventStatusFiring, now.Add(-1*time.Hour))
+
+	open, err := s.GetOpenFingerprintsForCluster("homelab", 7*24*time.Hour)
+	if err != nil {
+		t.Fatalf("GetOpenFingerprintsForCluster: %v", err)
+	}
+	if len(open) != 1 || open[0] != "fp-recent" {
+		t.Errorf("open fingerprints = %v, want exactly [fp-recent] (old event outside window excluded)", open)
 	}
 }

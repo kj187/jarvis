@@ -276,3 +276,59 @@ func TestAuthMode_ReadRoutes(t *testing.T) {
 		})
 	}
 }
+
+func TestWebSocket_FullProtectRequiresAuth(t *testing.T) {
+	srv := newTestRouterWithAuthMode(t, "full_protect")
+	defer srv.Close()
+	client := &http.Client{}
+
+	// Without a session cookie the request must be rejected by RequireAuth
+	// before reaching the WS handler — /ws streams the full alert snapshot,
+	// which is exactly the data full_protect gates.
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, srv.URL+"/ws", nil)
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("GET /ws: %v", err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("GET /ws without session = %d, want 401", resp.StatusCode)
+	}
+
+	// With a valid session cookie the request must pass the middleware and
+	// reach the WS handler: a plain GET without upgrade headers then fails
+	// the websocket handshake with 400 — anything but 401 proves passthrough.
+	token, err := auth.CreateToken([]byte("aaaabbbbccccddddeeeeffffgggghhhh"), &auth.User{
+		ID: "u1", Username: "alice", Role: "user", Provider: "internal",
+	})
+	if err != nil {
+		t.Fatalf("create token: %v", err)
+	}
+	req2, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, srv.URL+"/ws", nil)
+	req2.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: token})
+	resp2, err := client.Do(req2)
+	if err != nil {
+		t.Fatalf("GET /ws with session: %v", err)
+	}
+	_ = resp2.Body.Close()
+	if resp2.StatusCode == http.StatusUnauthorized {
+		t.Errorf("GET /ws with valid session = 401, want handler reached (e.g. 400 bad handshake)")
+	}
+}
+
+func TestWebSocket_WriteProtectStaysPublic(t *testing.T) {
+	srv := newTestRouterWithAuthMode(t, "write_protect")
+	defer srv.Close()
+
+	// In write_protect mode /ws stays public (read-only data): the request
+	// must reach the WS handler, which rejects a non-upgrade GET with 400.
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, srv.URL+"/ws", nil)
+	resp, err := (&http.Client{}).Do(req)
+	if err != nil {
+		t.Fatalf("GET /ws: %v", err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode == http.StatusUnauthorized {
+		t.Errorf("GET /ws in write_protect = 401, want handler reached (e.g. 400 bad handshake)")
+	}
+}

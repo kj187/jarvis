@@ -21,7 +21,7 @@ const PAGE_SIZE = 3
 interface AlertCardProps {
   alerts: EnrichedAlert[]
   silences: Silence[]
-  onClick: (selectionKey: string) => void
+  onClick: (selectionKey: string, groupKeys?: string[] | null) => void
   selectedFingerprint?: string | null
   onCreateSilence?: (alerts: EnrichedAlert[]) => void
   showSeverityBadge?: boolean
@@ -71,13 +71,15 @@ function AlertEntry({
   isSelected,
   commonLabelKeys,
   onCreateSilence,
+  groupKeys,
 }: {
   alert: EnrichedAlert
   silences: Silence[]
-  onClick: (selectionKey: string) => void
+  onClick: (selectionKey: string, groupKeys?: string[] | null) => void
   isSelected: boolean
   commonLabelKeys: Set<string>
   onCreateSilence?: (alerts: EnrichedAlert[]) => void
+  groupKeys: string[] | null
 }) {
   const { type: silenceType, silence, remaining } = getSilenceState(alert, silences)
   const expiredSilence = silenceType === null ? getExpiredSilence(alert, silences) : null
@@ -104,8 +106,8 @@ function AlertEntry({
       tabIndex={0}
       data-testid="alert-card"
       data-fingerprint={alert.fingerprint}
-      onClick={() => onClick(makeAlertSelectionKeyForAlert(alert))}
-      onKeyDown={(e) => e.key === 'Enter' && onClick(makeAlertSelectionKeyForAlert(alert))}
+      onClick={() => onClick(makeAlertSelectionKeyForAlert(alert), groupKeys)}
+      onKeyDown={(e) => e.key === 'Enter' && onClick(makeAlertSelectionKeyForAlert(alert), groupKeys)}
       className={cn(
         'group relative flex cursor-pointer items-start gap-1 border-l-2 border-transparent px-3 py-2.5 transition-colors focus:outline-none focus-visible:outline-none',
         claim
@@ -267,6 +269,7 @@ export function AlertCard({
 
   const visible = alerts.slice(0, visibleCount)
   const claimedCount = alerts.filter((a) => a.activeClaim != null).length
+  const groupKeys = alerts.length > 1 ? alerts.map(makeAlertSelectionKeyForAlert) : null
 
   const commonLabels = getCommonLabels(alerts)
   const commonLabelKeys = new Set(Object.keys(commonLabels))
@@ -346,6 +349,7 @@ export function AlertCard({
               isSelected={matchesAlertSelectionKey(alert, selectedFingerprint)}
               commonLabelKeys={commonLabelKeys}
               onCreateSilence={onCreateSilence}
+              groupKeys={groupKeys}
             />
           ))}
         </div>
