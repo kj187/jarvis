@@ -53,6 +53,32 @@ tests:
           path: spec.template.spec.containers[0].env[0].valueFrom.secretKeyRef.key
           value: database-url
 
+  - it: sets automountServiceAccountToken true and injects POD_NAME/POD_NAMESPACE by default (leaderElection.podLabel.enabled defaults true)
+    asserts:
+      - equal:
+          path: spec.template.spec.automountServiceAccountToken
+          value: true
+      - equal:
+          path: spec.template.spec.containers[0].env[1].name
+          value: POD_NAME
+      - equal:
+          path: spec.template.spec.containers[0].env[1].valueFrom.fieldRef.fieldPath
+          value: metadata.name
+      - equal:
+          path: spec.template.spec.containers[0].env[2].name
+          value: POD_NAMESPACE
+      - equal:
+          path: spec.template.spec.containers[0].env[2].valueFrom.fieldRef.fieldPath
+          value: metadata.namespace
+
+  - it: sets automountServiceAccountToken false when leaderElection.podLabel.enabled is false
+    set:
+      leaderElection.podLabel.enabled: false
+    asserts:
+      - equal:
+          path: spec.template.spec.automountServiceAccountToken
+          value: false
+
   - it: mounts emptyDir at /data when persistence disabled
     asserts:
       - equal:

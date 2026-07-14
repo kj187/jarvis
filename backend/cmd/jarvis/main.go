@@ -76,6 +76,12 @@ func main() {
 		el = leader.NewStaticElector()
 	}
 
+	// ── Leader Pod Label (D7) ─────────────────────────────────────────────────
+	// Informational only (every pod serves all traffic already) — best-effort,
+	// never fatal; no-op outside Kubernetes (no ServiceAccount mount).
+	podLabeler := leader.NewPodLabeler(logger)
+	el.Subscribe(podLabeler.OnLeadershipChange)
+
 	// ── WS Mutation Fanout ────────────────────────────────────────────────────
 	// D4: only user-mutation broadcasts (comments, claims, silences) go
 	// through this — alert-state broadcasts ride the D3 snapshot path

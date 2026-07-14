@@ -734,6 +734,60 @@ handled the HTTP request and must still reach every other pod's WS clients.
   a second test drives an oversized comment body through the same path to
   exercise the ref-fallback end-to-end, including the database refetch).
 
+### Leader pod label (`internal/leader.PodLabeler`, D7, Kubernetes only)
+
+Informational only — every pod serves all traffic regardless of leadership,
+so this is purely so `kubectl get pods -L jarvis.kj187.de/role` shows the
+current leader. No leader-only traffic routing exists or is planned.
+
+- `PodLabeler` is registered directly in `cmd/jarvis/main.go` as an
+  `Elector.Subscribe` callback (`el.Subscribe(podLabeler.OnLeadershipChange)`),
+  alongside `history.NewRecorder`'s own subscription — both fire on every
+  transition, independently (this is exactly why `Elector.Subscribe` takes a
+  callback rather than exposing a single channel).
+- On promotion: HTTP `PATCH` (merge-patch, `application/merge-patch+json`) to
+  this pod's own `/api/v1/namespaces/<ns>/pods/<name>`, setting
+  `metadata.labels."jarvis.kj187.de/role" = "leader"`. On step-down: the same
+  PATCH shape, `null`-ing the key out — a merge patch removes a key that way
+  and (unlike a JSON Patch "add") never fails if `metadata.labels` didn't
+  already exist. `PodLabeler` tracks whether *it* added the label
+  (`hasLabel`) so a step-down callback fired before ever being promoted
+  (`Elector.Subscribe` always fires once immediately with the current
+  state — see the `PGElector`/`StaticElector` note above) never issues a
+  pointless remove.
+- No client-go: a plain `net/http` client with the in-cluster
+  ServiceAccount's CA (`/var/run/secrets/kubernetes.io/serviceaccount/ca.crt`)
+  and bearer token (`.../token`), `KUBERNETES_SERVICE_HOST`/`_PORT` (both
+  auto-injected by Kubernetes into every pod) for the API server address, and
+  the Downward API env vars `POD_NAME`/`POD_NAMESPACE` for this pod's own
+  identity.
+- Kubernetes detection: `NewPodLabeler` reads the ServiceAccount token file;
+  if it's absent (compose, bare Docker — Jarvis has no ServiceAccount mount
+  there at all) or `POD_NAME`/`POD_NAMESPACE`/`KUBERNETES_SERVICE_HOST`/`_PORT`
+  are unset, it logs why and disables itself — every subsequent
+  `OnLeadershipChange` call is then a no-op. A failed PATCH is logged and
+  never fatal, matching the "decoration, not a dependency" framing above.
+- Chart (`charts/jarvis/templates/rbac.yaml`, gated by
+  `leaderElection.podLabel.enabled`, default `true`): a `Role` (`pods`:
+  `get`, `patch` — nothing broader) + matching `RoleBinding` to the chart's
+  own `ServiceAccount`. The `ServiceAccount` itself sets
+  `automountServiceAccountToken: false` (least privilege by default), so
+  `templates/deployment.yaml` sets it back to `true` at the **pod** level
+  when the toggle is on, and always injects `POD_NAME`/`POD_NAMESPACE` via
+  `fieldRef` (harmless when the toggle is off — `NewPodLabeler` already
+  disables via the missing token file in that case, checked first).
+- Test harness: `internal/leader/podlabel_test.go` (promotion issues the add
+  merge-patch with the exact key/value, step-down after a promotion issues
+  the null merge-patch, step-down *without* a prior promotion issues no
+  request at all, a disabled `PodLabeler` never makes a request, and
+  `NewPodLabeler` disables itself gracefully when there's no ServiceAccount
+  mount — true in every non-Kubernetes test/CI environment);
+  `charts/jarvis/tests/rbac_test.yaml` +
+  new cases in `deployment_test.yaml` (helm-unittest) cover both toggle
+  states: `Role`/`RoleBinding` render with exactly the `pods: get, patch`
+  rule and nothing at all when disabled; `automountServiceAccountToken`
+  flips `true`/`false` with the toggle.
+
 ---
 
 ## Frontend Component Tree (`frontend/src/`)
