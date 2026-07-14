@@ -1,3 +1,11 @@
+# SQLite (the default database.dsn below) is the zero-config path for
+# testing, evaluation, and homelab-scale single-replica deployments — it
+# requires replicaCount: 1 (validateReplicas below fails fast on a
+# misconfiguration). For production, high availability, horizontal scaling,
+# and long-term stability, switch to PostgreSQL (database.dsn:
+# postgres://...) — replicaCount can then be any value, coordinated via
+# leader election (exactly one pod polls Alertmanager/writes history at a
+# time; every pod serves reads/API/WS equally). See docs/persistence.md.
 replicaCount: 1
 
 image:
@@ -182,15 +190,30 @@ persistence:
 updateStrategy:
   type: ""
 
+# Requires PostgreSQL (database.dsn: postgres://...) — same reasoning as
+# replicaCount > 1 above; validateReplicas fails fast if combined with
+# SQLite + persistence.enabled.
 autoscaling:
   enabled: false
   minReplicas: 1
   maxReplicas: 3
   targetCPUUtilizationPercentage: 80
 
+# Prevents voluntary disruptions (node drains, cluster upgrades) from taking
+# down every replica at once. Off by default — meaningful only with
+# replicaCount/HPA > 1 (PostgreSQL); harmless but pointless at replicaCount: 1.
+podDisruptionBudget:
+  enabled: false
+  minAvailable: 1
+
 nodeSelector: {}
 tolerations: []
 affinity: {}
+
+# Passed through verbatim to spec.template.spec.topologySpreadConstraints —
+# spread replicas across nodes/zones for real HA. Empty by default (no
+# opinion imposed); meaningful only with replicaCount/HPA > 1 (PostgreSQL).
+topologySpreadConstraints: []
 
 # Additional environment variables injected into the container.
 # Useful for passing token paths, feature flags, or provider-specific config.

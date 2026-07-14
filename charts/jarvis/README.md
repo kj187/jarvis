@@ -124,10 +124,13 @@ Tests cover four suites (`deployment`, `configmap`, `secret`, `ingress`) and run
 | `persistence.accessMode` | string | `ReadWriteOnce` | PVC access mode |
 | `persistence.size` | string | `1Gi` | PVC size |
 | `resources` | object | `{}` | Resource requests/limits |
-| `autoscaling.enabled` | bool | `false` | Enable HPA |
+| `autoscaling.enabled` | bool | `false` | Enable HPA (requires PostgreSQL — same reasoning as `replicaCount` above) |
+| `podDisruptionBudget.enabled` | bool | `false` | Create a `PodDisruptionBudget` — prevents voluntary disruptions (node drains, upgrades) from taking down every replica at once. Meaningful only with `replicaCount`/HPA `> 1` (PostgreSQL) |
+| `podDisruptionBudget.minAvailable` | int | `1` | Minimum pods that must stay available during a voluntary disruption |
 | `nodeSelector` | object | `{}` | Node selector |
 | `tolerations` | list | `[]` | Pod tolerations |
 | `affinity` | object | `{}` | Pod affinity rules |
+| `topologySpreadConstraints` | list | `[]` | Passed through verbatim to `spec.template.spec.topologySpreadConstraints` — spread replicas across nodes/zones for real HA. Meaningful only with `replicaCount`/HPA `> 1` (PostgreSQL) |
 | `extraEnv` | list | `[]` | Additional environment variables for the container |
 | `extraVolumes` | list | `[]` | Additional volumes for the Pod |
 | `extraVolumeMounts` | list | `[]` | Additional volume mounts for the container |
