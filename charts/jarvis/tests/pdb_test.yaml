@@ -1,0 +1,33 @@
+suite: pdb
+templates:
+  - templates/pdb.yaml
+
+tests:
+  - it: renders nothing by default (podDisruptionBudget.enabled defaults false)
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: renders a PodDisruptionBudget when enabled
+    set:
+      podDisruptionBudget.enabled: true
+    asserts:
+      - hasDocuments:
+          count: 1
+      - isKind:
+          of: PodDisruptionBudget
+      - equal:
+          path: spec.minAvailable
+          value: 1
+      - equal:
+          path: spec.selector.matchLabels["app.kubernetes.io/instance"]
+          value: RELEASE-NAME
+
+  - it: honors a custom minAvailable
+    set:
+      podDisruptionBudget.enabled: true
+      podDisruptionBudget.minAvailable: 2
+    asserts:
+      - equal:
+          path: spec.minAvailable
+          value: 2

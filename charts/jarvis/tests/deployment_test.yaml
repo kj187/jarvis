@@ -119,6 +119,32 @@ tests:
           path: spec.replicas
           value: 3
 
+  - it: allows replicaCount > 1 with PostgreSQL even when persistence enabled
+    set:
+      persistence.enabled: true
+      replicaCount: 3
+      database.dsn: postgres://user:pass@host:5432/db
+    asserts:
+      - equal:
+          path: spec.replicas
+          value: 3
+
+  - it: renders topologySpreadConstraints when set
+    set:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+    asserts:
+      - equal:
+          path: spec.template.spec.topologySpreadConstraints[0].topologyKey
+          value: kubernetes.io/hostname
+
+  - it: omits topologySpreadConstraints by default
+    asserts:
+      - isNull:
+          path: spec.template.spec.topologySpreadConstraints
+
   - it: defaults to RollingUpdate strategy when persistence disabled
     asserts:
       - equal:

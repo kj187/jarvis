@@ -51,7 +51,7 @@ make e2e-screenshot NAME=card-view # regenerate ONE screenshot
 
 # ── Helm (no cluster needed — helm-unittest plugin required) ─
 helm lint charts/jarvis/           # Static chart validation
-helm unittest charts/jarvis/       # Unit tests (deployment, configmap, secret, ingress, servicemonitor, rbac)
+helm unittest charts/jarvis/       # Unit tests (deployment, configmap, secret, ingress, servicemonitor, rbac, pdb)
 
 # ── Everything via Makefile ──────────────────────────────────
 make test-all                      # backend + frontend + helm lint + helm unittest
