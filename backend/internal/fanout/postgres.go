@@ -13,7 +13,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// Binding Constants (tmp/fable/multi-replica.md D4) — use verbatim, do not rename.
+// Binding Constants (docs/persistence.md D4) — use verbatim, do not rename.
 const (
 	// NotifyChannel is the pg_notify channel WS mutation fanout uses.
 	NotifyChannel = "jarvis_ws"

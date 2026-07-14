@@ -97,8 +97,8 @@ helm install jarvis oci://ghcr.io/kj187/charts/jarvis \
   --set database.dsn='postgres://jarvis:secret@postgres.monitoring.svc:5432/jarvis?sslmode=require'
 ```
 
-> For Kubernetes production deployments, prefer PostgreSQL.
-> SQLite with a PVC is best kept for single-replica setups and tests.
+> For Kubernetes production deployments (multi-replica, HA), use PostgreSQL —
+> see [docs/persistence.md](docs/persistence.md). SQLite + PVC is single-replica only.
 
 All configuration options → [Configuration](#configuration) · [User Authentication](#user-authentication) · [Helm chart](#kubernetes--helm)
 
@@ -187,30 +187,21 @@ Notes:
 
 ### Database
 
-Jarvis supports two database backends — configured via `JARVIS_DB_DSN`:
+`JARVIS_DB_DSN` selects both the backend and the connection:
 
-**SQLite** (default — no setup required):
 ```env
 JARVIS_DB_DSN=/data/jarvis.db
-```
-
-**PostgreSQL** (external, persistent across container recreations):
-```env
+# or
 JARVIS_DB_DSN=postgres://jarvis:secret@postgres:5432/jarvis?sslmode=require
 ```
 
-> **TLS:** Use `sslmode=require` (or `sslmode=verify-full` with a CA cert) in production.
-> `sslmode=disable` transmits the database password in plain text and must not be used
-> outside of local ephemeral test containers.
-
-The dialect is detected automatically from the DSN prefix. Schema migrations run on every startup (idempotent — safe to restart). The password in `JARVIS_DB_DSN` is redacted in all log output.
-
-> **Local testing with PostgreSQL** — use `compose.test-dependencies.yml`:
-> ```bash
-> podman compose -f compose.dev.yml -f compose.test-dependencies.yml up -d
-> # Then set in .env (sslmode=disable is intentional for the local test container):
-> # JARVIS_DB_DSN=postgres://jarvis:jarvis@test-postgres:5432/jarvis?sslmode=disable
-> ```
+**SQLite (default) is for testing, evaluation, and homelab-scale
+single-replica deployments — zero setup required. For production, high
+availability, horizontal scaling (`replicaCount`/HPA `> 1`), and long-term
+stability, use PostgreSQL.** Schema, migration, TLS, DSN redaction,
+multi-replica leader election/failover, and Kubernetes deployment guidance
+(incl. a CloudNativePG example) all live in the canonical guide:
+**[docs/persistence.md](docs/persistence.md)**.
 
 ## User Authentication
 
@@ -270,7 +261,7 @@ For a threat model and full security discussion see [docs/security.md](docs/secu
 
 Jarvis ships a Helm chart published to GHCR as an OCI artifact alongside the Docker image. No separate Helm registry is needed.
 
-For Kubernetes production deployments, PostgreSQL is recommended. SQLite + PVC can work for single replica setups, but can become fragile with higher replica counts (for example due to PVC access mode and pod rescheduling constraints).
+For multi-replica/HA deployments (any `replicaCount`, HPA, `PodDisruptionBudget`, leader election, failover), use PostgreSQL — see [docs/persistence.md](docs/persistence.md). SQLite + PVC is single-replica only; the chart fails fast if that's misconfigured.
 
 ```bash
 helm install jarvis oci://ghcr.io/kj187/charts/jarvis \
@@ -353,6 +344,7 @@ helm plugin install https://github.com/helm-unittest/helm-unittest --version v0.
 ## Documentation
 
 - [docs/architecture.md](docs/architecture.md) — data-flow overview: who talks to whom, and when (with diagram)
+- [docs/persistence.md](docs/persistence.md) — database backends, multi-replica HA (leader election, snapshot distribution, failover), Kubernetes deployment, SQLite → PostgreSQL migration (with diagrams)
 - [docs/alert-lifecycle.md](docs/alert-lifecycle.md) — alert lifecycle: state machine, grace period, episodes, restart/outage guarantees (with diagram)
 - [docs/authentication-user.md](docs/authentication-user.md) — user login: providers (none / internal / OIDC), first-run wizard, roles, sessions, Helm
 - [docs/authentication-alertmanager.md](docs/authentication-alertmanager.md) — Alertmanager upstream auth: OAuth2 client credentials, bearer token, basic auth, custom headers

@@ -26,7 +26,7 @@ serviceAccount:
 leaderElection:
   podLabel:
     # Labels the current leader pod jarvis.kj187.de/role=leader (D7 in
-    # tmp/fable/multi-replica.md) — informational only, every pod serves all
+    # docs/persistence.md) — informational only, every pod serves all
     # traffic regardless of leadership. Requires a Role+RoleBinding (pods:
     # get, patch) and automountServiceAccountToken: true on the pod, both
     # rendered only while this is true. Meaningful only with PostgreSQL
