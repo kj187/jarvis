@@ -27,6 +27,7 @@ sync with reality.
 | `jarvis_ws_clients` | — | Number of currently connected WebSocket clients |
 | `jarvis_clusters_configured` | — | Number of configured Alertmanager clusters |
 | `jarvis_leader` | — | `1` if this pod currently holds Alertmanager-polling/history-write leadership, else `0`. Always `1` on SQLite (single replica by design) |
+| `jarvis_snapshot_stale` | — | `1` if a follower's consumed poll snapshot is older than 3× `JARVIS_POLL_INTERVAL` (a missed/delayed `pg_notify` and periodic resync both not having landed yet), else `0`. Always `0` while leader or on SQLite |
 
 ## Event counters
 
