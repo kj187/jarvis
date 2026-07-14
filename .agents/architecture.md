@@ -337,7 +337,8 @@ WS     /ws                                       full_protect?  (origin checked 
 #        session cookie via RequireAuth — /ws streams the full alert snapshot)
 
 # ── Status / Version ─────────────────────────────────────────────────────────
-GET    /api/v1/status                            full_protect?  → { status, clusters, alerts, ws_clients }
+GET    /api/v1/status                            full_protect?  → { status, clusters, alerts, ws_clients, leader }
+#        leader: this pod's current leader-election state (internal/leader) — always true on SQLite
 GET    /api/v1/info                              full_protect?  → { version }
 
 # ── Alerts (in-memory AlertStore) ────────────────────────────────────────────
@@ -467,6 +468,8 @@ collectors and `jarvis_build_info`. `Metrics.Handler()` serves `GET /metrics`.
   parallel + the shared DB write in `applyPollResults`), so a per-cluster
   label would misrepresent it; `jarvis_cluster_fetch_duration_seconds` is the
   per-member counterpart for isolating a slow upstream Alertmanager member.
+- `jarvis_leader` (gauge 0/1): this pod's current leader-election state — see
+  `internal/leader` section below. Always 1 on SQLite.
 - Full metric reference for operators: `docs/metrics.md`.
 
 ---
@@ -516,6 +519,63 @@ Optional, env-var-only background deletion of old rows — user-facing docs:
   retention window after a sweep. If a fingerprint survives only via a
   surviving comment and later re-fires, `RecordStatusChange` finds no prior
   event and does not increment `occurrence_count` (also doesn't reset it).
+
+---
+
+## Leader Election (`internal/leader`)
+
+Multi-replica groundwork (full design: `tmp/fable/multi-replica.md`). Exactly
+one pod at a time may run the leader-only side effects listed below; every
+pod still serves reads/API/WS equally regardless of leadership.
+
+- `Elector` interface: `IsLeader() bool`, `Run(ctx)`, `Subscribe(fn
+  func(isLeader bool))`. `Subscribe` — not a single channel — because there
+  are two independent consumers (`history.Recorder`'s promotion hook today;
+  the pod labeler in a later slice). Callbacks run sequentially on the
+  elector's own goroutine and must not block.
+- `StaticElector` (SQLite dialect): always leader, `Subscribe` fires
+  `fn(true)` once immediately. SQLite is single-writer/single-replica by
+  design (Critical Invariant #8), so there is never a follower to coordinate
+  with.
+- `PGElector` (PostgreSQL dialect): a dedicated connection (never the shared
+  pool) holds `pg_try_advisory_lock(0x4A525653, 1)`. Follower retry and
+  leader heartbeat both run on a 5s interval (`AcquireRetryInterval` /
+  `HeartbeatInterval`, overridable per-instance via `SetRetryInterval` for
+  fast tests — production leaves it at the default). The dedicated
+  connection dials through a `net.Dialer` with `KeepAliveConfig` (idle 5s,
+  interval 3s, count 3) so a hard node failure is detected and the session
+  lock released within a bounded time instead of the OS-default keepalive
+  timeout. Losing the connection releases the PostgreSQL session lock
+  automatically — no TTL bookkeeping needed for a crashed/killed leader.
+- Wired in `cmd/jarvis/main.go`: `StaticElector` or `PGElector` chosen by
+  `db.DetectDialect`, always on with PostgreSQL (no escape-hatch env var),
+  `go el.Run(ctx)` alongside the recorder/sweeper goroutines.
+- `history.Recorder` holds a narrow local `elector` interface (`IsLeader()`,
+  `Subscribe(...)`, structurally satisfied by `*leader.PGElector`/
+  `*leader.StaticElector` — mirrors `retention.Sweeper`'s narrow `store`
+  interface, so `history` doesn't import `internal/leader`). `nil` means
+  "always leader" (the pre-multi-replica default, used by every test that
+  constructs a `Recorder` directly). Gated side effects (all in
+  `applyPollResults`/`poll`, all still running on every pod's own local diff
+  computation — only the DB writes are skipped on a follower):
+  `UpsertFingerprint` + `RecordStatusChange`, `RecordResolvedForCluster`,
+  the delayed claim-release goroutine (re-checks `IsLeader()` again at fire
+  time — leadership can change during `claimReleaseDelay`),
+  `reconcileStartupResolves` (guarded via `reconciledClusters[cluster]`,
+  which a follower never marks done — so the moment a pod is promoted, its
+  very next poll, triggered immediately by the promotion hook via
+  `Trigger()`, reconciles exactly once), external-silence event recording.
+  Not gated: in-memory `AlertStore`/resolved-buffer bookkeeping and the WS
+  broadcasts — every pod keeps serving its own clients from its own poll
+  regardless of leadership.
+- `retention.Sweeper` holds the same narrow-interface pattern (`leaderChecker
+  { IsLeader() bool }`); `Start`'s sweep tick calls `shouldSweep()` first — a
+  follower skips the sweep entirely (a `nil` elector always sweeps, same
+  default-leader convention as above).
+- Metric: `jarvis_leader` (gauge 0/1), set from `Recorder`'s
+  `onLeadershipChange` (the elector's `Subscribe` callback). Also surfaced in
+  `GET /api/v1/status` as `"leader": bool` (via the `pollTriggerer` interface,
+  which `Recorder` satisfies alongside `Trigger()`).
 
 ---
 

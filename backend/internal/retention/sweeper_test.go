@@ -80,7 +80,7 @@ func (f *fakeStore) callNames() []string {
 
 func TestSweeper_Start_Disabled_NeverCallsStore(t *testing.T) {
 	f := &fakeStore{}
-	sw := NewSweeper(f, config.RetentionConfig{}, testLogger(), nil)
+	sw := NewSweeper(f, config.RetentionConfig{}, testLogger(), nil, nil)
 
 	done := make(chan struct{})
 	go func() {
@@ -102,7 +102,7 @@ func TestSweeper_Start_Disabled_NeverCallsStore(t *testing.T) {
 func TestSweeper_Start_ContextCancelStopsBeforeFirstSweep(t *testing.T) {
 	f := &fakeStore{}
 	cfg := config.RetentionConfig{Days: 30, SweepInterval: time.Hour}
-	sw := NewSweeper(f, cfg, testLogger(), nil)
+	sw := NewSweeper(f, cfg, testLogger(), nil, nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
@@ -132,7 +132,7 @@ func TestSweeper_Sweep_FullOrderAndCutoffs(t *testing.T) {
 		SilenceEventsDays: 60,
 		CommentsDays:      180,
 	}
-	sw := NewSweeper(f, cfg, testLogger(), nil)
+	sw := NewSweeper(f, cfg, testLogger(), nil, nil)
 
 	sw.sweep(context.Background())
 
@@ -174,7 +174,7 @@ func TestSweeper_Sweep_SkipsDisabledDomains(t *testing.T) {
 	// Only comments retention explicitly enabled; global + all other
 	// domains disabled.
 	cfg := config.RetentionConfig{CommentsDays: 180}
-	sw := NewSweeper(f, cfg, testLogger(), nil)
+	sw := NewSweeper(f, cfg, testLogger(), nil, nil)
 
 	sw.sweep(context.Background())
 
@@ -196,7 +196,7 @@ func TestSweeper_Sweep_SkipsDisabledDomains(t *testing.T) {
 func TestSweeper_Sweep_ErrorInOneDomainDoesNotAbortOthers(t *testing.T) {
 	f := &fakeStore{err: errors.New("boom")}
 	cfg := config.RetentionConfig{Days: 30}
-	sw := NewSweeper(f, cfg, testLogger(), nil)
+	sw := NewSweeper(f, cfg, testLogger(), nil, nil)
 
 	sw.sweep(context.Background())
 
@@ -222,7 +222,7 @@ func TestSweeper_Sweep_MetricsCounted(t *testing.T) {
 	}
 	cfg := config.RetentionConfig{Days: 30}
 	m := metrics.New("test")
-	sw := NewSweeper(f, cfg, testLogger(), m)
+	sw := NewSweeper(f, cfg, testLogger(), m, nil)
 
 	sw.sweep(context.Background())
 
@@ -249,7 +249,30 @@ func TestSweeper_Sweep_MetricsCounted(t *testing.T) {
 func TestSweeper_NilMetrics_DoesNotPanic(t *testing.T) {
 	f := &fakeStore{eventsN: 1}
 	cfg := config.RetentionConfig{Days: 30}
-	sw := NewSweeper(f, cfg, testLogger(), nil)
+	sw := NewSweeper(f, cfg, testLogger(), nil, nil)
 
 	sw.sweep(context.Background()) // must not panic with m == nil
+}
+
+// fakeLeaderChecker is a test double for leaderChecker (D3 step 4: the
+// retention sweeper is a leader-only side effect).
+type fakeLeaderChecker struct{ leader bool }
+
+func (f fakeLeaderChecker) IsLeader() bool { return f.leader }
+
+func TestSweeper_ShouldSweep_GatedByElector(t *testing.T) {
+	sw := NewSweeper(&fakeStore{}, config.RetentionConfig{}, testLogger(), nil, nil)
+	if !sw.shouldSweep() {
+		t.Error("nil elector must always sweep (SQLite / no leader election configured)")
+	}
+
+	sw.elector = fakeLeaderChecker{leader: false}
+	if sw.shouldSweep() {
+		t.Error("a follower must not sweep")
+	}
+
+	sw.elector = fakeLeaderChecker{leader: true}
+	if !sw.shouldSweep() {
+		t.Error("the leader must sweep")
+	}
 }

@@ -16,6 +16,7 @@ import (
 	"github.com/kj187/jarvis/backend/internal/config"
 	"github.com/kj187/jarvis/backend/internal/db"
 	"github.com/kj187/jarvis/backend/internal/history"
+	"github.com/kj187/jarvis/backend/internal/leader"
 	"github.com/kj187/jarvis/backend/internal/metrics"
 	"github.com/kj187/jarvis/backend/internal/retention"
 	"github.com/kj187/jarvis/backend/internal/static"
@@ -57,6 +58,17 @@ func main() {
 	registry := cluster.NewRegistry(cfg.Clusters)
 	if len(registry.All()) == 0 {
 		logger.Warn("no clusters configured")
+	}
+
+	// ── Leader Election ───────────────────────────────────────────────────────
+	// Always-on with PostgreSQL, no escape-hatch env var (Resolved Decision 1,
+	// tmp/fable/multi-replica.md). SQLite is single-writer/single-replica by
+	// design (Critical Invariant #8) — StaticElector is always leader.
+	var el leader.Elector
+	if dialect == db.DialectPostgres {
+		el = leader.NewPGElector(cfg.DBDSN, logger)
+	} else {
+		el = leader.NewStaticElector()
 	}
 
 	// ── Stores ────────────────────────────────────────────────────────────────
@@ -115,13 +127,14 @@ func main() {
 	go hub.Run()
 
 	// ── Recorder ──────────────────────────────────────────────────────────────
-	recorder := history.NewRecorder(registry, alertStore, silenceStore, store, hub, cfg.PollInterval, logger, m, claimReleaseDelay)
+	recorder := history.NewRecorder(registry, alertStore, silenceStore, store, hub, cfg.PollInterval, logger, m, claimReleaseDelay, el)
 	m.MustRegister(metrics.NewCollector(alertStore, hub, recorder.ClusterUpStates, len(registry.All())))
 
 	// ── Retention Sweeper ─────────────────────────────────────────────────────
 	// Fully opt-in: with the default config (all JARVIS_RETENTION_* unset)
-	// sweeper.Start is a no-op — no timer, no query, ever.
-	sweeper := retention.NewSweeper(store, cfg.Retention, logger, m)
+	// sweeper.Start is a no-op — no timer, no query, ever. Leader-gated
+	// (tmp/fable/multi-replica.md D3 step 4): a follower must never delete rows.
+	sweeper := retention.NewSweeper(store, cfg.Retention, logger, m, el)
 
 	// ── HTTP Router ───────────────────────────────────────────────────────────
 	router := api.NewRouter(alertStore, silenceStore, store, hub, registry, cfg, static.StaticFiles, recorder, authProvider, userStore, m)
@@ -138,6 +151,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	go el.Run(ctx)
 	go recorder.Start(ctx)
 	go sweeper.Start(ctx)
 

@@ -13,9 +13,12 @@ import (
 	"github.com/kj187/jarvis/backend/internal/ws"
 )
 
-// pollTriggerer allows the HTTP layer to request an immediate poll.
+// pollTriggerer allows the HTTP layer to request an immediate poll and to
+// read this pod's current leader-election state (tmp/fable/multi-replica.md)
+// for the /api/v1/status payload.
 type pollTriggerer interface {
 	Trigger()
+	IsLeader() bool
 }
 
 // Server holds shared dependencies for all API handlers.
