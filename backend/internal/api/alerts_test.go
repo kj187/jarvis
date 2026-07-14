@@ -13,6 +13,7 @@ import (
 	"github.com/kj187/jarvis/backend/internal/cluster"
 	"github.com/kj187/jarvis/backend/internal/config"
 	idb "github.com/kj187/jarvis/backend/internal/db"
+	"github.com/kj187/jarvis/backend/internal/fanout"
 	"github.com/kj187/jarvis/backend/internal/history"
 	"github.com/kj187/jarvis/backend/internal/metrics"
 	"github.com/kj187/jarvis/backend/internal/models"
@@ -39,7 +40,7 @@ func newTestServer(t *testing.T) (*Server, *history.AlertStore) {
 	registry := cluster.NewRegistry(nil)
 	cfg := &config.Config{}
 
-	return NewServer(alertStore, history.NewSilenceStore(), store, hub, registry, cfg, nil, auth.NoneProvider{}, userStore), alertStore
+	return NewServer(alertStore, history.NewSilenceStore(), store, hub, registry, cfg, nil, auth.NoneProvider{}, userStore, fanout.NoopFanout{}), alertStore
 }
 
 func TestGetAlerts_Empty(t *testing.T) {

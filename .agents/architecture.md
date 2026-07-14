@@ -664,6 +664,76 @@ polls; followers reconstruct their stores from PostgreSQL instead.
   change), and a follower's `Trigger()` reaches the leader well under the
   configured poll interval.
 
+### Cross-pod WS mutation fanout (`internal/fanout`, D4, PostgreSQL only)
+
+Snapshot distribution (D3, above) keeps alert-state broadcasts consistent
+across pods for free — every pod already derives `alerts_update`/the
+poll-time `silences_update` from its own poll or consumed snapshot. It does
+**not** cover mutation-driven broadcasts (a comment added, a claim set, a
+silence created/deleted via the API) — those originate on whichever pod
+handled the HTTP request and must still reach every other pod's WS clients.
+`internal/fanout` is the separate, narrower mechanism for exactly that.
+
+- `Fanout` interface: `Publish(ctx, message []byte, ref Ref)`,
+  `Run(ctx, onMessage func([]byte), onRef func(Ref))`. `Ref{Type,
+  Fingerprint, ClusterName, ID}` identifies a mutation well enough for the
+  receiving pod to look the row back up itself.
+- `NoopFanout` (SQLite dialect): `Publish` does nothing, `Run` blocks on
+  `ctx.Done()` — single replica, no other pod to fan out to.
+- `PGFanout` (PostgreSQL dialect): publishes via `pg_notify('jarvis_ws',
+  ...)` on the existing pooled `*sql.DB` (NOTIFY is a cheap statement, no
+  dedicated connection needed to publish); `Run` opens its own dedicated
+  LISTEN connection (same TCP-keepalive bound as D2/D3: idle 5s/interval
+  3s/count 3). The wire envelope is `{origin, message?, ref?}` — `origin` is
+  a random `uuid.NewString()` generated once per `PGFanout` instance, and
+  `consume` skips any notification whose `origin` matches its own (echo
+  suppression: without this, a pod would receive its own `Publish` back from
+  PostgreSQL, since NOTIFY delivers to every listening session including the
+  one that sent it — not just "other" ones). Fire-and-forget: unlike
+  snapshot distribution there is no durable resync fallback here; a missed
+  NOTIFY just skips that one live update; the next natural refetch still
+  converges.
+- Payload-size fallback: PostgreSQL's NOTIFY payload limit is ~8000 bytes.
+  If the encoded envelope with the full `message` would exceed
+  `maxNotifyPayloadBytes` (7800, a safety margin under that limit — reachable
+  in practice for `comment_added`, whose body can be up to 10,000 characters),
+  `Publish` sends `ref` alone instead. The receiving pod's `onRef` callback
+  refetches the authoritative row from the shared PostgreSQL database and
+  reconstructs the exact broadcast the originating pod would have sent — no
+  frontend changes needed, since the delivered WS message ends up
+  byte-equivalent either way.
+- `ws.Hub` gained `BuildEventJSON` (pure encode, no broadcast) and
+  `BroadcastRaw` (broadcast pre-encoded bytes, reads the event type back out
+  of the bytes for the `jarvis_ws_broadcasts_total` label) alongside the
+  existing `BroadcastJSON` (now a thin wrapper over both). `api.Server`'s new
+  `broadcastAndFanout(ctx, eventType, payload, ref)` is the single call site
+  every user-mutation handler uses: it builds once, broadcasts locally via
+  `BroadcastRaw`, and publishes via `fanout.Publish` — used by `addComment`
+  (`comments.go`), `setClaim`/`releaseClaim`/`updateClaimNote` (`claims.go`),
+  and `applySilenceWriteThrough` (`silences.go`, shared by silence
+  create/delete). Silence templates currently have no WS broadcast at all
+  (checked during D4 implementation) — nothing to fan out there yet.
+- Receiving side: `api.HandleFanoutMessage(hub)` (re-broadcasts bytes
+  unchanged) and `api.HandleFanoutRef(store, hub, logger)` (switches on
+  `ref.Type`: `comment_added` → `store.GetComment`, `claim_set`/
+  `claim_released` → `store.GetActiveClaim`, `silences_update` → re-broadcast
+  the empty struct directly, no lookup needed) are wired in
+  `cmd/jarvis/main.go` as `go wsFanout.Run(ctx, api.HandleFanoutMessage(hub),
+  api.HandleFanoutRef(store, hub, logger))`, alongside the elector/recorder/
+  sweeper goroutines. `wsFanout` itself is chosen the same way as `el` —
+  `fanout.NewPGFanout(database, cfg.DBDSN, logger)` on PostgreSQL,
+  `fanout.NoopFanout{}` on SQLite — and passed into `api.NewRouter`/
+  `api.NewServer`.
+- Test harness: `internal/fanout/postgres_test.go` (two `PGFanout` instances,
+  one database — delivery to the other instance only, echo suppression,
+  small-message inline delivery, oversized-message ref fallback, all
+  `JARVIS_TEST_POSTGRES_DSN`-gated) and
+  `internal/api/fanout_integration_test.go` (two full "pods" — own `Store`,
+  `Hub`, `PGFanout` each, sharing one database — a real `addComment` HTTP
+  call reaches both pods' WS clients exactly once, no echo double-delivery;
+  a second test drives an oversized comment body through the same path to
+  exercise the ref-fallback end-to-end, including the database refetch).
+
 ---
 
 ## Frontend Component Tree (`frontend/src/`)
@@ -1056,6 +1126,14 @@ banner collapse state in AlertDetailPanel, default collapsed)
 | `claim_released` | `{ fingerprint, clusterName, releasedBy }` | set `activeClaim` to `undefined` + invalidate claim queries |
 | `comment_added` | `{ fingerprint, comment }` | invalidate comments query by prefix key `['comments', fingerprint, clusterName]` — matches every paged query key (`..., page]`) for that alert, so whichever page is mounted refetches; local `page` state is untouched (see `CommentsPanel.tsx` above for the page>1 "jump to latest" affordance) |
 | `silences_update` | `{}` (pure invalidation signal) | `invalidateQueries(['silences'])` → refetch from the in-memory snapshot. Broadcast by the recorder when the silence snapshot diff changed vs. the previous poll, and by every silence mutation write-through (`applySilenceWriteThrough`) |
+
+`claim_set`/`claim_released`/`comment_added`/the write-through `silences_update`
+are mutation-driven and — on PostgreSQL, multi-replica — fanned out to every
+other pod via `internal/fanout` (D4, see the Leader Election section above)
+so a browser tab connected to any pod sees the same live update. The
+poll-driven `alerts_update` and the recorder's own `silences_update` are
+**not** fanned out — every pod already derives those from its own poll or
+consumed snapshot (D3).
 
 ---
 

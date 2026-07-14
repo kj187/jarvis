@@ -15,6 +15,7 @@ import (
 	"github.com/kj187/jarvis/backend/internal/cluster"
 	"github.com/kj187/jarvis/backend/internal/config"
 	"github.com/kj187/jarvis/backend/internal/db"
+	"github.com/kj187/jarvis/backend/internal/fanout"
 	"github.com/kj187/jarvis/backend/internal/history"
 	"github.com/kj187/jarvis/backend/internal/leader"
 	"github.com/kj187/jarvis/backend/internal/metrics"
@@ -73,6 +74,17 @@ func main() {
 		recorderDSN = cfg.DBDSN
 	} else {
 		el = leader.NewStaticElector()
+	}
+
+	// ── WS Mutation Fanout ────────────────────────────────────────────────────
+	// D4: only user-mutation broadcasts (comments, claims, silences) go
+	// through this — alert-state broadcasts ride the D3 snapshot path
+	// instead. NoopFanout on SQLite (single replica, no other pod to fan out to).
+	var wsFanout fanout.Fanout
+	if dialect == db.DialectPostgres {
+		wsFanout = fanout.NewPGFanout(database, cfg.DBDSN, logger)
+	} else {
+		wsFanout = fanout.NoopFanout{}
 	}
 
 	// ── Stores ────────────────────────────────────────────────────────────────
@@ -141,7 +153,7 @@ func main() {
 	sweeper := retention.NewSweeper(store, cfg.Retention, logger, m, el)
 
 	// ── HTTP Router ───────────────────────────────────────────────────────────
-	router := api.NewRouter(alertStore, silenceStore, store, hub, registry, cfg, static.StaticFiles, recorder, authProvider, userStore, m)
+	router := api.NewRouter(alertStore, silenceStore, store, hub, registry, cfg, static.StaticFiles, recorder, authProvider, userStore, m, wsFanout)
 
 	server := &http.Server{
 		Addr:         ":" + cfg.Port,
@@ -158,6 +170,7 @@ func main() {
 	go el.Run(ctx)
 	go recorder.Start(ctx)
 	go sweeper.Start(ctx)
+	go wsFanout.Run(ctx, api.HandleFanoutMessage(hub), api.HandleFanoutRef(store, hub, logger))
 
 	go func() {
 		logger.Info("jarvis started", "port", cfg.Port)

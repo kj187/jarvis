@@ -14,6 +14,7 @@ import (
 	"github.com/kj187/jarvis/backend/internal/cluster"
 	"github.com/kj187/jarvis/backend/internal/config"
 	idb "github.com/kj187/jarvis/backend/internal/db"
+	"github.com/kj187/jarvis/backend/internal/fanout"
 	"github.com/kj187/jarvis/backend/internal/history"
 	"github.com/kj187/jarvis/backend/internal/metrics"
 	"github.com/kj187/jarvis/backend/internal/users"
@@ -39,7 +40,7 @@ func newSetupServer(t *testing.T) (*Server, *users.Store) {
 	registry := cluster.NewRegistry(nil)
 	cfg := &config.Config{AuthProvider: "internal"}
 
-	srv := NewServer(alertStore, history.NewSilenceStore(), store, hub, registry, cfg, nil, auth.NewInternalProvider(userStore), userStore)
+	srv := NewServer(alertStore, history.NewSilenceStore(), store, hub, registry, cfg, nil, auth.NewInternalProvider(userStore), userStore, fanout.NoopFanout{})
 	return srv, userStore
 }
 

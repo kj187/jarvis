@@ -128,9 +128,13 @@ make fixtures-unsilence            # expire test silences
 | `internal/api` | `admin_handler_test.go` | admin user CRUD + role/self guards |
 | `internal/api` | `clusters_test.go` | Cluster health from cached poll up-state (up/degraded/all-down/no-poll-yet), zero live `/api/v2/status` calls, single-member `members` omission |
 | `internal/api` | `router_test.go` | Route registration, `/groups` before `/:fingerprint/*`, protection modes |
+| `internal/api` | `fanout_dispatch.go` / (covered by `fanout_integration_test.go`) | `HandleFanoutMessage`/`HandleFanoutRef` — receiving-side dispatch for cross-pod WS mutation fanout (D4) |
+| `internal/api` | `fanout_integration_test.go` | D4 integration (`JARVIS_TEST_POSTGRES_DSN`-gated): two full "pods" — own `Store`/`Hub`/`fanout.PGFanout` each, sharing one database — a real `addComment` HTTP call reaches both pods' WS clients exactly once (no echo double-delivery); a second test drives a 9000-char comment body through the same path to exercise the oversized-message Ref fallback end-to-end, including the database refetch on the receiving pod |
 | `internal/auth` | `jwt_test.go` `internal_provider_test.go` `middleware_test.go` | JWT sign/verify, RequireAuth/RequireAdmin |
 | `internal/users` | `store_test.go` | User CRUD, OIDC upsert, bcrypt |
-| `internal/ws` | `hub_test.go` | Broadcast, client register/unregister, slow client drop, `jarvis_ws_broadcasts_total` |
+| `internal/ws` | `hub_test.go` | Broadcast, client register/unregister, slow client drop, `jarvis_ws_broadcasts_total`, `BuildEventJSON`+`BroadcastRaw` produce the same metric label as `BroadcastJSON` |
+| `internal/fanout` | `postgres_test.go` | `PGFanout` (`JARVIS_TEST_POSTGRES_DSN`-gated): delivers to the other instance only (echo suppression via `origin`), small messages delivered inline, oversized messages (> `maxNotifyPayloadBytes`) fall back to a `Ref` instead |
+| `internal/fanout` | `noop_test.go` | `NoopFanout`: `Publish` is a no-op, `Run` blocks until `ctx` is cancelled |
 | `internal/metrics` | `collector_test.go` | `storeCollector` scrape-time output (`testutil.CollectAndCompare`), nil `clusterUp`, `jarvis_build_info`, duplicate-registration panic |
 | `internal/metrics` | `echo_test.go` | HTTP middleware: route-pattern label (not raw path), 404 → `unmatched`, skip list (`/metrics`/`/health`/`/ws`) |
 

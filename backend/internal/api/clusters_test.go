@@ -15,6 +15,7 @@ import (
 	"github.com/kj187/jarvis/backend/internal/cluster"
 	"github.com/kj187/jarvis/backend/internal/config"
 	idb "github.com/kj187/jarvis/backend/internal/db"
+	"github.com/kj187/jarvis/backend/internal/fanout"
 	"github.com/kj187/jarvis/backend/internal/history"
 	"github.com/kj187/jarvis/backend/internal/metrics"
 	"github.com/kj187/jarvis/backend/internal/models"
@@ -39,7 +40,7 @@ func newTestServerWithRegistry(t *testing.T, registry *cluster.Registry) *Server
 	hub := ws.NewHub(nil, nil, metrics.New("test"))
 	go hub.Run()
 
-	return NewServer(alertStore, history.NewSilenceStore(), store, hub, registry, &config.Config{}, nil, auth.NoneProvider{}, userStore)
+	return NewServer(alertStore, history.NewSilenceStore(), store, hub, registry, &config.Config{}, nil, auth.NoneProvider{}, userStore, fanout.NoopFanout{})
 }
 
 // healthMockAM serves an empty alert list (so FetchAlerts marks the member up)

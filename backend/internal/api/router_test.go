@@ -13,6 +13,7 @@ import (
 	"github.com/kj187/jarvis/backend/internal/cluster"
 	"github.com/kj187/jarvis/backend/internal/config"
 	idb "github.com/kj187/jarvis/backend/internal/db"
+	"github.com/kj187/jarvis/backend/internal/fanout"
 	"github.com/kj187/jarvis/backend/internal/history"
 	"github.com/kj187/jarvis/backend/internal/metrics"
 	"github.com/kj187/jarvis/backend/internal/users"
@@ -38,7 +39,7 @@ func newTestRouter(t *testing.T, origins []string) *httptest.Server {
 	registry := cluster.NewRegistry(nil)
 	cfg := &config.Config{AllowedOrigins: origins}
 
-	e := NewRouter(alertStore, history.NewSilenceStore(), store, hub, registry, cfg, embed.FS{}, &fakeTriggerer{}, auth.NoneProvider{}, userStore, metrics.New("test"))
+	e := NewRouter(alertStore, history.NewSilenceStore(), store, hub, registry, cfg, embed.FS{}, &fakeTriggerer{}, auth.NoneProvider{}, userStore, metrics.New("test"), fanout.NoopFanout{})
 	return httptest.NewServer(e)
 }
 
@@ -195,7 +196,7 @@ func newTestRouterWithAuthMode(t *testing.T, authMode string) *httptest.Server {
 		SecretKey:    []byte("aaaabbbbccccddddeeeeffffgggghhhh"),
 	}
 
-	e := NewRouter(alertStore, history.NewSilenceStore(), store, hub, registry, cfg, embed.FS{}, &fakeTriggerer{}, provider, userStore, metrics.New("test"))
+	e := NewRouter(alertStore, history.NewSilenceStore(), store, hub, registry, cfg, embed.FS{}, &fakeTriggerer{}, provider, userStore, metrics.New("test"), fanout.NoopFanout{})
 	return httptest.NewServer(e)
 }
 

@@ -15,6 +15,7 @@ import (
 	"github.com/kj187/jarvis/backend/internal/cluster"
 	"github.com/kj187/jarvis/backend/internal/config"
 	idb "github.com/kj187/jarvis/backend/internal/db"
+	"github.com/kj187/jarvis/backend/internal/fanout"
 	"github.com/kj187/jarvis/backend/internal/history"
 	"github.com/kj187/jarvis/backend/internal/metrics"
 	"github.com/kj187/jarvis/backend/internal/users"
@@ -44,7 +45,7 @@ func newTestServerWithAM(t *testing.T, amURL string) *Server {
 		{Name: "testcluster", AlertmanagerURL: amURL, AlertmanagerLinkURL: amURL},
 	})
 	cfg := &config.Config{}
-	return NewServer(alertStore, history.NewSilenceStore(), store, hub, registry, cfg, nil, auth.NoneProvider{}, userStore)
+	return NewServer(alertStore, history.NewSilenceStore(), store, hub, registry, cfg, nil, auth.NoneProvider{}, userStore, fanout.NoopFanout{})
 }
 
 // fakeTriggerer records poll-trigger requests from mutation handlers.

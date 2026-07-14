@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	amclient "github.com/kj187/jarvis/backend/internal/alertmanager"
 	"github.com/kj187/jarvis/backend/internal/auth"
+	"github.com/kj187/jarvis/backend/internal/fanout"
 	"github.com/kj187/jarvis/backend/internal/models"
 	"github.com/labstack/echo/v4"
 )
@@ -47,7 +48,7 @@ func (s *Server) applySilenceWriteThrough(cluster string, upsert *amclient.Getta
 	if expireID != "" {
 		s.silenceStore.MarkExpired(cluster, expireID)
 	}
-	s.hub.BroadcastJSON(models.WSTypeSilencesUpdate, struct{}{})
+	s.broadcastAndFanout(context.Background(), models.WSTypeSilencesUpdate, struct{}{}, fanout.Ref{Type: models.WSTypeSilencesUpdate})
 	if s.pollTrigger != nil {
 		s.pollTrigger.Trigger()
 	}

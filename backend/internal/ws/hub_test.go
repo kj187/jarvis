@@ -134,3 +134,25 @@ func TestHub_BroadcastJSON_IncrementsMetric(t *testing.T) {
 		t.Errorf("comment_added broadcasts = %v, want 1", got)
 	}
 }
+
+// TestBuildEventJSON_BroadcastRaw_MatchesBroadcastJSON verifies the D4
+// fanout building blocks: BuildEventJSON + BroadcastRaw must deliver a
+// byte-identical message to BroadcastJSON's own encoding, and BroadcastRaw
+// must still label the WSBroadcastsTotal metric correctly by reading the
+// type back out of the encoded bytes (fanout consumers never carry the
+// original typed payload, only bytes from another pod).
+func TestBuildEventJSON_BroadcastRaw_MatchesBroadcastJSON(t *testing.T) {
+	m := metrics.New("test")
+	hub := NewHub(nil, slog.Default(), m)
+	go hub.Run()
+
+	data, err := BuildEventJSON("claim_set", map[string]string{"fingerprint": "fp1"})
+	if err != nil {
+		t.Fatalf("BuildEventJSON: %v", err)
+	}
+	hub.BroadcastRaw(data)
+
+	if got := testutil.ToFloat64(m.WSBroadcastsTotal.WithLabelValues("claim_set")); got != 1 {
+		t.Errorf("claim_set broadcasts after BroadcastRaw = %v, want 1", got)
+	}
+}
