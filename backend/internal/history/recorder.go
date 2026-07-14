@@ -82,6 +82,27 @@ type Recorder struct {
 	// recording. nil means "always leader" (SQLite dialect, and tests that
 	// construct a Recorder without one) — the pre-multi-replica behavior.
 	elector elector
+
+	// dsn is the raw PostgreSQL connection string, used only to open the
+	// dedicated LISTEN connections in runPollLoop (jarvis_trigger) and
+	// runFollowerLoop (jarvis_snapshot) — separate from store's pooled *sql.DB,
+	// mirroring leader.PGElector's own dedicated-connection pattern. Empty for
+	// SQLite, where neither loop ever LISTENs.
+	dsn string
+
+	// followerMu guards followerSnapshots, populated only while this pod is a
+	// follower (D3): per-cluster alerts/member-up-state/freshness received via
+	// PostgreSQL snapshot rows instead of this pod's own poll. nil/empty while
+	// leader or on SQLite.
+	followerMu        sync.Mutex
+	followerSnapshots map[string]followerSnapshotEntry
+}
+
+// followerSnapshotEntry is one cluster's most recently consumed snapshot.
+type followerSnapshotEntry struct {
+	alerts   []models.EnrichedAlert
+	memberUp map[string]bool
+	takenAt  time.Time
 }
 
 type silenceInfoEntry struct {
@@ -137,6 +158,7 @@ func NewRecorder(
 	m *metrics.Metrics,
 	claimReleaseDelay time.Duration,
 	el elector,
+	dsn string,
 ) *Recorder {
 	r := &Recorder{
 		registry:           registry,
@@ -155,6 +177,8 @@ func NewRecorder(
 		reconciledClusters: make(map[string]bool),
 		claimReleaseDelay:  claimReleaseDelay,
 		elector:            el,
+		dsn:                dsn,
+		followerSnapshots:  make(map[string]followerSnapshotEntry),
 	}
 	if el != nil {
 		el.Subscribe(r.onLeadershipChange)
@@ -178,12 +202,18 @@ func (r *Recorder) onLeadershipChange(isLeader bool) {
 	if r.metrics != nil {
 		if isLeader {
 			r.metrics.Leader.Set(1)
+			// A promoted pod is no longer a follower — its stale-snapshot
+			// state (if any) no longer applies.
+			r.metrics.SnapshotStale.Set(0)
 		} else {
 			r.metrics.Leader.Set(0)
 		}
 	}
 	if !isLeader {
-		r.logger.Info("stepped down as leader")
+		// Also fires once on startup with the not-yet-connected initial state
+		// (PGElector.Subscribe/StaticElector.Subscribe both fire immediately —
+		// not necessarily a real step-down from prior leadership).
+		r.logger.Info("not leader (follower)")
 		return
 	}
 	r.logger.Info("promoted to leader")
@@ -197,8 +227,19 @@ func (r *Recorder) onLeadershipChange(isLeader bool) {
 // ClusterUpStates returns the last-poll-success flag per cluster and member
 // (cluster name -> member name -> up). Used by the metrics collector at
 // scrape time — reads each cluster's cached state only, never performs an
-// upstream HTTP call.
+// upstream HTTP call. While this pod is a follower (D3), member up-states
+// come from the last consumed snapshot instead of this pod's own (nonexistent)
+// poll — every pod still reports cluster health from *some* recent poll.
 func (r *Recorder) ClusterUpStates() map[string]map[string]bool {
+	if !r.IsLeader() {
+		r.followerMu.Lock()
+		defer r.followerMu.Unlock()
+		out := make(map[string]map[string]bool, len(r.followerSnapshots))
+		for name, entry := range r.followerSnapshots {
+			out[name] = entry.memberUp
+		}
+		return out
+	}
 	out := make(map[string]map[string]bool, len(r.registry.All()))
 	for _, cl := range r.registry.All() {
 		out[cl.Name] = cl.MemberUpStates()
@@ -207,22 +248,79 @@ func (r *Recorder) ClusterUpStates() map[string]map[string]bool {
 }
 
 // Trigger signals the recorder to run an immediate poll.
-// Non-blocking: if a trigger is already queued, this is a no-op.
+// Non-blocking: if a trigger is already queued, this is a no-op. A follower
+// cannot poll itself (D3 item 7): it forwards the request to the leader via
+// pg_notify(jarvis_trigger, ''); the leader's own runPollLoop LISTENs on that
+// channel and treats it exactly like a local Trigger() call.
 func (r *Recorder) Trigger() {
+	if !r.IsLeader() {
+		if err := r.store.NotifyTrigger(context.Background()); err != nil {
+			r.logger.Error("forward trigger to leader", "err", err)
+		}
+		return
+	}
+	r.triggerLocal()
+}
+
+// triggerLocal enqueues an immediate poll on this pod's own loop — the
+// leader's local path for Trigger(), and also invoked when this pod's
+// jarvis_trigger listener (runPollLoop) receives a forwarded trigger from a
+// follower.
+func (r *Recorder) triggerLocal() {
 	select {
 	case r.triggerCh <- struct{}{}:
 	default:
 	}
 }
 
-// Start begins the polling loop. It polls immediately and then at the
-// configured interval. The loop stops when ctx is cancelled.
+// Start seeds resolved alerts from the DB, then runs the poll loop — for
+// SQLite (or a Recorder built without an elector, e.g. most tests), that is
+// the only mode there ever is. On PostgreSQL, a mode supervisor instead
+// switches this pod between polling (leader) and consuming snapshots
+// (follower) on every leadership transition, restarting the active loop each
+// time (D3). The loop(s) stop when ctx is cancelled.
 func (r *Recorder) Start(ctx context.Context) {
 	if resolved, err := r.store.GetRecentResolved(7 * 24 * time.Hour); err == nil {
 		r.logger.Info("seeding resolved alerts from db", "count", len(resolved))
 		r.alertStore.SeedResolved(resolved)
 	} else {
 		r.logger.Warn("seed resolved alerts from db failed", "err", err)
+	}
+
+	if r.elector == nil || r.dsn == "" {
+		r.runPollLoop(ctx)
+		return
+	}
+
+	var (
+		modeMu     sync.Mutex
+		cancelMode context.CancelFunc = func() {}
+	)
+	r.elector.Subscribe(func(isLeader bool) {
+		modeMu.Lock()
+		defer modeMu.Unlock()
+		cancelMode()
+		modeCtx, cancel := context.WithCancel(ctx)
+		cancelMode = cancel
+		if isLeader {
+			go r.runPollLoop(modeCtx)
+		} else {
+			go r.runFollowerLoop(modeCtx)
+		}
+	})
+	<-ctx.Done()
+	modeMu.Lock()
+	cancelMode()
+	modeMu.Unlock()
+}
+
+// runPollLoop polls immediately and then at the configured interval, exactly
+// as Start did before multi-replica support. On PostgreSQL it additionally
+// LISTENs on jarvis_trigger, so a follower's forwarded Trigger() call reaches
+// the leader without waiting for the next tick.
+func (r *Recorder) runPollLoop(ctx context.Context) {
+	if r.dsn != "" {
+		go r.listenLoop(ctx, notifyChannelTrigger, r.interval, func(string) { r.triggerLocal() }, nil)
 	}
 	r.poll(ctx)
 	ticker := time.NewTicker(r.interval)
@@ -330,6 +428,13 @@ func (r *Recorder) poll(ctx context.Context) {
 	}
 
 	r.applyPollResults(ctx, allAlerts, currSilenceInfo)
+
+	// Persist + notify per-cluster snapshots for followers (D3). Leader-only
+	// (this method only ever runs while leader — see runPollLoop) and
+	// PostgreSQL-only (r.dsn is empty on SQLite).
+	if r.dsn != "" {
+		r.persistSnapshots(ctx, clusters)
+	}
 }
 
 // reconcileStartupResolves resolves alerts that actually went away while

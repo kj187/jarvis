@@ -108,7 +108,7 @@ func TestPGElector_Failover(t *testing.T) {
 	waitFor(t, 5*time.Second, func() bool { return follower.IsLeader() })
 }
 
-func TestPGElector_Subscribe_NotifiesOnPromotion(t *testing.T) {
+func TestPGElector_Subscribe_FiresImmediatelyThenOnPromotion(t *testing.T) {
 	dsn := postgresTestDSN(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -117,6 +117,11 @@ func TestPGElector_Subscribe_NotifiesOnPromotion(t *testing.T) {
 
 	var mu sync.Mutex
 	var transitions []bool
+	// Subscribe before Run: the immediate synchronous call sees the
+	// not-yet-connected state (false) — matches the documented Elector
+	// contract ("including once immediately for the initial state") and
+	// StaticElector's behavior, so Recorder's mode supervisor can rely on it
+	// uniformly across both Elector implementations.
 	e.Subscribe(func(v bool) {
 		mu.Lock()
 		transitions = append(transitions, v)
@@ -128,7 +133,7 @@ func TestPGElector_Subscribe_NotifiesOnPromotion(t *testing.T) {
 
 	mu.Lock()
 	defer mu.Unlock()
-	if len(transitions) != 1 || transitions[0] != true {
-		t.Fatalf("expected exactly one promotion transition [true], got %v", transitions)
+	if len(transitions) != 2 || transitions[0] != false || transitions[1] != true {
+		t.Fatalf("expected [false, true] (immediate + promotion), got %v", transitions)
 	}
 }

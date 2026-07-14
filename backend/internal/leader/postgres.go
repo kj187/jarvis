@@ -79,6 +79,7 @@ func (e *PGElector) Subscribe(fn func(bool)) {
 	e.subsMu.Lock()
 	e.subs = append(e.subs, fn)
 	e.subsMu.Unlock()
+	fn(e.IsLeader())
 }
 
 func (e *PGElector) setLeader(v bool) {

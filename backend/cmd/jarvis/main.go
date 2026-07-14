@@ -64,9 +64,13 @@ func main() {
 	// Always-on with PostgreSQL, no escape-hatch env var (Resolved Decision 1,
 	// tmp/fable/multi-replica.md). SQLite is single-writer/single-replica by
 	// design (Critical Invariant #8) — StaticElector is always leader.
+	// recorderDSN gates the Recorder's own snapshot/LISTEN machinery (D3) —
+	// left empty on SQLite, where none of it ever runs.
 	var el leader.Elector
+	var recorderDSN string
 	if dialect == db.DialectPostgres {
 		el = leader.NewPGElector(cfg.DBDSN, logger)
+		recorderDSN = cfg.DBDSN
 	} else {
 		el = leader.NewStaticElector()
 	}
@@ -127,7 +131,7 @@ func main() {
 	go hub.Run()
 
 	// ── Recorder ──────────────────────────────────────────────────────────────
-	recorder := history.NewRecorder(registry, alertStore, silenceStore, store, hub, cfg.PollInterval, logger, m, claimReleaseDelay, el)
+	recorder := history.NewRecorder(registry, alertStore, silenceStore, store, hub, cfg.PollInterval, logger, m, claimReleaseDelay, el, recorderDSN)
 	m.MustRegister(metrics.NewCollector(alertStore, hub, recorder.ClusterUpStates, len(registry.All())))
 
 	// ── Retention Sweeper ─────────────────────────────────────────────────────

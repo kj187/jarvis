@@ -298,6 +298,14 @@ CREATE INDEX IF NOT EXISTS idx_alert_claims_active               ON alert_claims
 CREATE INDEX IF NOT EXISTS idx_silence_events_fingerprint        ON silence_events(fingerprint, recorded_at DESC);
 CREATE INDEX IF NOT EXISTS idx_users_username                    ON users(username);
 CREATE INDEX IF NOT EXISTS idx_users_oidc_sub                    ON users(oidc_sub);
+
+-- PostgreSQL only (tmp/fable/multi-replica.md D3) — SQLite never creates or
+-- reads this table (single replica, no followers to feed).
+CREATE TABLE IF NOT EXISTS poll_snapshots (
+    cluster_name TEXT PRIMARY KEY,
+    payload      BYTEA NOT NULL,
+    taken_at     TIMESTAMPTZ NOT NULL
+);
 ```
 
 **SQLite settings** (on open): `SetMaxOpenConns(1)`, `PRAGMA journal_mode=WAL`, `PRAGMA foreign_keys=ON`, `PRAGMA busy_timeout=5000`. PostgreSQL uses the default pool (no `SetMaxOpenConns(1)`).
@@ -470,6 +478,9 @@ collectors and `jarvis_build_info`. `Metrics.Handler()` serves `GET /metrics`.
   per-member counterpart for isolating a slow upstream Alertmanager member.
 - `jarvis_leader` (gauge 0/1): this pod's current leader-election state — see
   `internal/leader` section below. Always 1 on SQLite.
+- `jarvis_snapshot_stale` (gauge 0/1): whether a follower's consumed poll
+  snapshot is older than 3× `JARVIS_POLL_INTERVAL` — see leader-only
+  polling below. Always 0 while leader or on SQLite.
 - Full metric reference for operators: `docs/metrics.md`.
 
 ---
@@ -547,6 +558,10 @@ pod still serves reads/API/WS equally regardless of leadership.
   lock released within a bounded time instead of the OS-default keepalive
   timeout. Losing the connection releases the PostgreSQL session lock
   automatically — no TTL bookkeeping needed for a crashed/killed leader.
+  `Subscribe` fires immediately with the current state (like
+  `StaticElector`), including the not-yet-connected initial `false` before
+  `Run` has acquired anything — callers must treat that as "not leader (yet)",
+  not "was just demoted".
 - Wired in `cmd/jarvis/main.go`: `StaticElector` or `PGElector` chosen by
   `db.DetectDialect`, always on with PostgreSQL (no escape-hatch env var),
   `go el.Run(ctx)` alongside the recorder/sweeper goroutines.
@@ -556,18 +571,18 @@ pod still serves reads/API/WS equally regardless of leadership.
   interface, so `history` doesn't import `internal/leader`). `nil` means
   "always leader" (the pre-multi-replica default, used by every test that
   constructs a `Recorder` directly). Gated side effects (all in
-  `applyPollResults`/`poll`, all still running on every pod's own local diff
-  computation — only the DB writes are skipped on a follower):
-  `UpsertFingerprint` + `RecordStatusChange`, `RecordResolvedForCluster`,
-  the delayed claim-release goroutine (re-checks `IsLeader()` again at fire
-  time — leadership can change during `claimReleaseDelay`),
-  `reconcileStartupResolves` (guarded via `reconciledClusters[cluster]`,
-  which a follower never marks done — so the moment a pod is promoted, its
-  very next poll, triggered immediately by the promotion hook via
-  `Trigger()`, reconciles exactly once), external-silence event recording.
-  Not gated: in-memory `AlertStore`/resolved-buffer bookkeeping and the WS
-  broadcasts — every pod keeps serving its own clients from its own poll
-  regardless of leadership.
+  `applyPollResults`/`poll`, only reachable while leader — see leader-only
+  polling below): `UpsertFingerprint` + `RecordStatusChange`,
+  `RecordResolvedForCluster`, the delayed claim-release goroutine
+  (re-checks `IsLeader()` again at fire time — leadership can change during
+  `claimReleaseDelay`), `reconcileStartupResolves` (guarded via
+  `reconciledClusters[cluster]`, which a follower never marks done — so the
+  moment a pod is promoted, its very next poll, triggered immediately by the
+  promotion hook via `Trigger()`, reconciles exactly once), external-silence
+  event recording. Not gated: in-memory `AlertStore`/resolved-buffer
+  bookkeeping and the WS broadcasts — every pod keeps serving its own
+  clients regardless of leadership (fed by its own poll while leader, by
+  consumed snapshots while follower — see below).
 - `retention.Sweeper` holds the same narrow-interface pattern (`leaderChecker
   { IsLeader() bool }`); `Start`'s sweep tick calls `shouldSweep()` first — a
   follower skips the sweep entirely (a `nil` elector always sweeps, same
@@ -576,6 +591,78 @@ pod still serves reads/API/WS equally regardless of leadership.
   `onLeadershipChange` (the elector's `Subscribe` callback). Also surfaced in
   `GET /api/v1/status` as `"leader": bool` (via the `pollTriggerer` interface,
   which `Recorder` satisfies alongside `Trigger()`).
+
+### Leader-only polling + snapshot distribution (D3, PostgreSQL only)
+
+Alertmanager load must not scale with `replicaCount`: only the leader ever
+polls; followers reconstruct their stores from PostgreSQL instead.
+
+- `Recorder.Start` seeds resolved alerts, then picks a mode. SQLite (or a
+  Recorder built without an elector/dsn, e.g. most unit tests) always calls
+  `runPollLoop` — today's unconditional-poll behavior, unchanged. On
+  PostgreSQL, a **mode supervisor** subscribes a second callback to the
+  elector (alongside `onLeadershipChange`'s metrics/trigger callback) that
+  cancels whichever loop is currently running and starts the other
+  (`runPollLoop` while leader, `runFollowerLoop` while follower) on every
+  transition, including the very first (immediate) `Subscribe` callback.
+- `runPollLoop` is the pre-multi-replica ticker/trigger loop, plus (dialect
+  PostgreSQL) a background `listenLoop` on the `jarvis_trigger` channel: a
+  follower's forwarded `Trigger()` call reaches the leader this way and is
+  turned into a local trigger (`triggerLocal`) without waiting for the next
+  tick.
+- After each successful `poll()` → `applyPollResults()`, the leader calls
+  `persistSnapshots`: for every configured cluster, gzip'd-JSON-encode
+  `{alerts, silences, memberUp}` (Resolved Decision 3) from the just-updated
+  `AlertStore`/`SilenceStore`/`cluster.Cluster.MemberUpStates()`, upsert it
+  into `poll_snapshots` (`Store.PersistSnapshot`), then
+  `pg_notify('jarvis_snapshot', clusterName)` (`Store.NotifySnapshotChanged`).
+  No-ops on SQLite (`Store`'s snapshot methods self-guard on dialect; the
+  loop only calls them when `Recorder.dsn != ""`, which main.go only sets
+  for PostgreSQL).
+- `runFollowerLoop` never polls Alertmanager. On start it does a full resync
+  (`resyncAllSnapshots`: `Store.GetAllSnapshots` → decode every cluster's
+  row), then runs a `listenLoop` on `jarvis_snapshot`: each notification's
+  payload is the changed cluster's name, resynced individually
+  (`resyncSnapshot` → `Store.GetSnapshot`); a full resync also runs
+  periodically as a NOTIFY-miss fallback (`listenLoop`'s `onIdle`, firing
+  every `JARVIS_POLL_INTERVAL` if no notification arrived). Every decoded
+  cluster's silences go straight into `SilenceStore` (already the per-cluster
+  cache); alerts are cached per-cluster in `Recorder.followerSnapshots`
+  (`followerMu`-guarded) and re-merged into the whole `AlertStore` on every
+  update (`rebuildFollowerAlertStore` — `AlertStore.Set` always replaces the
+  full store, so a per-cluster update must re-merge everything), then
+  broadcasts via the existing `broadcastAlertsIfChanged`.
+- `Recorder.ClusterUpStates()` (the metrics-collector-facing view) sources
+  member up-states from `followerSnapshots` while follower instead of the
+  local (never-polled) `cluster.Cluster.MemberUpStates()` — a follower still
+  reports accurate cluster health, borrowed from the leader's snapshot.
+- Staleness: `rebuildFollowerAlertStore` compares each cached snapshot's
+  `takenAt` against `3 × JARVIS_POLL_INTERVAL` (Binding Constant) and sets
+  `jarvis_snapshot_stale` (gauge 0/1) accordingly; a promotion resets it to 0
+  (`onLeadershipChange`).
+- `Recorder.Trigger()`: while leader, enqueues locally (`triggerLocal`,
+  unchanged); while follower, calls `Store.NotifyTrigger` (`pg_notify`,
+  channel `jarvis_trigger`) instead of touching its own (suspended) poll
+  loop — this is what the leader's `runPollLoop` listener above consumes.
+- `listenLoop`/`dialListener`/`consumeNotifications` (in
+  `recorder_snapshot.go`) are Recorder-local — a dedicated (non-pooled) `pgx.Conn`
+  per LISTEN, same TCP-keepalive bound as the elector (D2: idle 5s/interval
+  3s/count 3), `LISTEN <channel>` once, then `WaitForNotification` in a loop
+  with a `resyncInterval` timeout standing in for the periodic fallback;
+  reconnects with a fresh LISTEN on connection loss. `history` still doesn't
+  import `internal/leader` (pgx is used directly, same as `leader.PGElector`
+  does internally) — this is a separate, parallel use of the same driver,
+  not a dependency on that package.
+- Test harness: `internal/history/recorder_multireplica_test.go` runs two
+  full `Recorder`s, each with its own real `leader.PGElector`, sharing one
+  PostgreSQL test database and one fake Alertmanager
+  (`JARVIS_TEST_POSTGRES_DSN`-gated) — exactly one polls, the other converges
+  via snapshots without ever touching its own `cluster.Cluster`, a leader
+  kill promotes the follower which then polls and reconciles, a
+  resolve+refire pair straddling the handoff still reopens under the grace
+  period (Critical Invariant #1 regression-tested across a leadership
+  change), and a follower's `Trigger()` reaches the leader well under the
+  configured poll interval.
 
 ---
 
