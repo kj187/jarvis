@@ -68,6 +68,11 @@ make down-alertmanager
 make up-postgres                   # test PostgreSQL on 5432 (jarvis/jarvis/jarvis) — for JARVIS_DB_DSN=postgres://…
 make down-postgres
 
+# ── PostgreSQL-backed backend tests (env-gated) ──────────────
+make up-postgres
+JARVIS_TEST_POSTGRES_DSN='postgres://jarvis:jarvis@localhost:5432/jarvis?sslmode=disable' \
+  go test ./internal/history/...   # unset → these tests t.Skip; CI always sets it (postgres:17 service container)
+
 # ── Manual test fixtures against the dev stack ───────────────
 make fixtures-create               # fire 23 Kubernetes-themed test alerts (label test_suite=jarvis)
 make fixtures-remove               # resolve those alerts
@@ -91,6 +96,8 @@ make fixtures-unsilence            # expire test silences
 | `internal/db` | `db_fuzz_test.go` | Fuzz: `RedactDSN` never panics, password never leaks |
 | `internal/cluster` | `registry_test.go` | `NewRegistry`, `Get`, `All` — single/multi-cluster |
 | `internal/history` | `store_test.go` | `UpsertFingerprint`, `GetOrCreateActiveEvent`, grace period (60s), `occurrence_count` logic |
+| `internal/history` | `store_postgres_test.go` | `postgresTestDSN` (skip gate), `newTestPostgresStores(t, n)` — n independent `*sql.DB` connections against one truncated PostgreSQL test database, the multi-replica situation in miniature (reused by later multi-replica-plan slices' elector/recorder/fanout tests) |
+| `internal/history` | `store_concurrency_test.go` | D5 (`AGENTS.md`-pending invariant): `RecordStatusChange` raced concurrently — one Store (SQLite) and 10 Stores on one PostgreSQL database (`JARVIS_TEST_POSTGRES_DSN`-gated) — exactly one resulting event row, no duplicate from a non-atomic idempotency-check-then-insert; 2 racing Postgres connections proved too narrow a window to reproduce the bug reliably (20/20 false-negative runs in development), hence 10 |
 | `internal/history` | `store_extra_test.go` | `GetClaimHistory`, `RecordSilenceEvent`, `GetSilenceEvents`, `GetRecentResolved`, `SeedResolved`, silence templates |
 | `internal/history` | `store_retention_test.go` | Retention delete/detach methods (`store_retention.go`): `sweepableEventsCondition` — open firing/suppressed episode head survives any age, a superseded or resolved/expired row past cutoff is deleted; batching (1200 rows/batch 500); context-cancel stops the loop; detach nulls `event_id` only on rows referencing a soon-to-be-deleted event; released-claim/comment/silence-event cutoffs (active claims always survive); orphan fingerprint sweep (survives with any remaining event/claim/comment, deletes only true orphans past `last_seen_at` cutoff); re-fire after a full event sweep does not inflate `occurrence_count` |
 | `internal/history` | `alert_store_test.go` | `Set`/`Get`/`MarkResolved`/`RemoveByFingerprint` (thread safety via goroutines) |
@@ -281,6 +288,8 @@ dco:                 # PR-only: every commit must carry a Signed-off-by trailer 
 secrets:             # gitleaks secret scanning
 
 backend:
+  - services.postgres: postgres:17 container, health-checked; JARVIS_TEST_POSTGRES_DSN set for the
+    test step so every PostgreSQL-gated test (internal/history) runs on every PR, not just locally
   - go test -v -race -coverprofile=coverage.out ./... | go-junit-report → report.xml
   - Coverage summary → GITHUB_STEP_SUMMARY (go tool cover -func)
   - dorny/test-reporter uploads report.xml as "Backend Test Results"

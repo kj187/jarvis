@@ -75,16 +75,64 @@ func rebind(dialect idb.Dialect, query string) string {
 	return b.String()
 }
 
+// queryer is satisfied by both *sql.DB and *sql.Tx, so query helpers can run
+// either directly on the pool or inside a transaction (see withTx).
+type queryer interface {
+	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
+	QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error)
+	QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row
+}
+
+func (s *Store) execOn(q queryer, ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
+	return q.ExecContext(ctx, rebind(s.dialect, query), args...)
+}
+
+func (s *Store) queryRowOn(q queryer, ctx context.Context, query string, args ...interface{}) *sql.Row {
+	return q.QueryRowContext(ctx, rebind(s.dialect, query), args...)
+}
+
+func (s *Store) queryOn(q queryer, ctx context.Context, query string, args ...interface{}) (*sql.Rows, error) {
+	return q.QueryContext(ctx, rebind(s.dialect, query), args...)
+}
+
 func (s *Store) exec(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
-	return s.db.ExecContext(ctx, rebind(s.dialect, query), args...)
+	return s.execOn(s.db, ctx, query, args...)
 }
 
 func (s *Store) queryRow(ctx context.Context, query string, args ...interface{}) *sql.Row {
-	return s.db.QueryRowContext(ctx, rebind(s.dialect, query), args...)
+	return s.queryRowOn(s.db, ctx, query, args...)
 }
 
 func (s *Store) query(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error) {
-	return s.db.QueryContext(ctx, rebind(s.dialect, query), args...)
+	return s.queryOn(s.db, ctx, query, args...)
+}
+
+// withTx runs fn inside a transaction, committing on success and rolling
+// back on error or panic. Critical Invariant #D5: RecordStatusChange's
+// read-last → grace-delete → insert → count-update sequence must be atomic,
+// so a demoted leader mid-sequence during failover can't interleave with the
+// newly promoted leader's write of the same episode.
+func (s *Store) withTx(ctx context.Context, fn func(tx *sql.Tx) error) (err error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer func() {
+		if p := recover(); p != nil {
+			_ = tx.Rollback()
+			panic(p)
+		}
+	}()
+	if err := fn(tx); err != nil {
+		if rbErr := tx.Rollback(); rbErr != nil && !errors.Is(rbErr, sql.ErrTxDone) {
+			return fmt.Errorf("%w (rollback: %v)", err, rbErr)
+		}
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit tx: %w", err)
+	}
+	return nil
 }
 
 func parseNullableTimeValue(raw interface{}) (sql.NullTime, error) {
@@ -127,15 +175,19 @@ func parseNullableTimeString(value string) (sql.NullTime, error) {
 // PostgreSQL: appends RETURNING id and uses QueryRowContext.
 // SQLite: uses ExecContext + LastInsertId.
 func (s *Store) insertReturningID(ctx context.Context, query string, args ...interface{}) (int64, error) {
-	q := rebind(s.dialect, query)
+	return s.insertReturningIDOn(s.db, ctx, query, args...)
+}
+
+func (s *Store) insertReturningIDOn(q queryer, ctx context.Context, query string, args ...interface{}) (int64, error) {
+	rq := rebind(s.dialect, query)
 	if s.dialect == idb.DialectPostgres {
 		var id int64
-		if err := s.db.QueryRowContext(ctx, q+" RETURNING id", args...).Scan(&id); err != nil {
+		if err := q.QueryRowContext(ctx, rq+" RETURNING id", args...).Scan(&id); err != nil {
 			return 0, err
 		}
 		return id, nil
 	}
-	res, err := s.db.ExecContext(ctx, q, args...)
+	res, err := q.ExecContext(ctx, rq, args...)
 	if err != nil {
 		return 0, err
 	}
@@ -176,72 +228,97 @@ func (s *Store) RecordStatusChange(
 	startsAt time.Time,
 	annotations map[string]string,
 ) (*models.AlertEvent, bool, error) {
-	last, err := s.getLastEventForCluster(fingerprint, clusterName)
+	ctx := context.Background()
+	var (
+		event   *models.AlertEvent
+		created bool
+	)
+	err := s.withTx(ctx, func(tx *sql.Tx) error {
+		// D5: serialize concurrent writers for this episode. PostgreSQL only —
+		// SQLite is already single-writer via SetMaxOpenConns(1), so a second
+		// transaction can't even begin until this one commits or rolls back.
+		if s.dialect == idb.DialectPostgres {
+			lockKey := fingerprint + ":" + clusterName
+			if _, err := tx.ExecContext(ctx, rebind(s.dialect, `SELECT pg_advisory_xact_lock(hashtext(?))`), lockKey); err != nil {
+				return fmt.Errorf("acquire episode lock: %w", err)
+			}
+		}
+
+		last, err := s.getLastEventForClusterOn(tx, ctx, fingerprint, clusterName)
+		if err != nil {
+			return err
+		}
+
+		// Idempotency: same status → return existing row unchanged.
+		if last != nil && last.Status == status {
+			event, created = last, false
+			return nil
+		}
+
+		lastStatus := ""
+		if last != nil {
+			lastStatus = last.Status
+		}
+
+		// Grace Period: alert re-fires within the configured window of resolved → discard resolved row.
+		if status == models.EventStatusFiring && lastStatus == models.EventStatusResolved {
+			if time.Since(last.RecordedAt) < s.gracePeriod {
+				if _, err := s.execOn(tx, ctx, `DELETE FROM alert_events WHERE id = ?`, last.ID); err != nil {
+					return fmt.Errorf("grace period delete resolved: %w", err)
+				}
+				prev, err := s.getLastEventForClusterOn(tx, ctx, fingerprint, clusterName)
+				if err != nil {
+					return err
+				}
+				if prev != nil {
+					event, created = prev, false
+					return nil
+				}
+				// No prior row after deletion — fall through to insert a fresh firing row.
+				// Reset lastStatus so occurrence_count is not incremented.
+				lastStatus = ""
+			}
+		}
+
+		annJSON, err := json.Marshal(annotations)
+		if err != nil {
+			return fmt.Errorf("marshal annotations: %w", err)
+		}
+		now := time.Now().UTC()
+		id, err := s.insertReturningIDOn(tx, ctx, `
+			INSERT INTO alert_events (fingerprint, cluster_name, alertmanager_url, status, starts_at, annotations, recorded_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?)
+		`, fingerprint, clusterName, amURL, status, startsAt.UTC(), string(annJSON), now)
+		if err != nil {
+			return fmt.Errorf("insert status change: %w", err)
+		}
+
+		// Increment occurrence_count only on genuine re-fire after full resolution.
+		if status == models.EventStatusFiring && lastStatus == models.EventStatusResolved {
+			if _, err := s.execOn(tx, ctx,
+				`UPDATE alert_fingerprints SET occurrence_count = occurrence_count + 1 WHERE fingerprint = ? AND cluster_name = ?`,
+				fingerprint, clusterName,
+			); err != nil {
+				return fmt.Errorf("increment occurrence_count: %w", err)
+			}
+		}
+
+		event = &models.AlertEvent{
+			ID:              id,
+			Fingerprint:     fingerprint,
+			ClusterName:     clusterName,
+			AlertmanagerURL: amURL,
+			Status:          status,
+			StartsAt:        startsAt.UTC(),
+			RecordedAt:      now,
+		}
+		created = true
+		return nil
+	})
 	if err != nil {
 		return nil, false, err
 	}
-
-	// Idempotency: same status → return existing row unchanged.
-	if last != nil && last.Status == status {
-		return last, false, nil
-	}
-
-	lastStatus := ""
-	if last != nil {
-		lastStatus = last.Status
-	}
-
-	// Grace Period: alert re-fires within the configured window of resolved → discard resolved row.
-	if status == models.EventStatusFiring && lastStatus == models.EventStatusResolved {
-		if time.Since(last.RecordedAt) < s.gracePeriod {
-			if _, err := s.exec(context.Background(), `DELETE FROM alert_events WHERE id = ?`, last.ID); err != nil {
-				return nil, false, fmt.Errorf("grace period delete resolved: %w", err)
-			}
-			prev, err := s.getLastEventForCluster(fingerprint, clusterName)
-			if err != nil {
-				return nil, false, err
-			}
-			if prev != nil {
-				return prev, false, nil
-			}
-			// No prior row after deletion — fall through to insert a fresh firing row.
-			// Reset lastStatus so occurrence_count is not incremented.
-			lastStatus = ""
-		}
-	}
-
-	annJSON, err := json.Marshal(annotations)
-	if err != nil {
-		return nil, false, fmt.Errorf("marshal annotations: %w", err)
-	}
-	now := time.Now().UTC()
-	id, err := s.insertReturningID(context.Background(), `
-		INSERT INTO alert_events (fingerprint, cluster_name, alertmanager_url, status, starts_at, annotations, recorded_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
-	`, fingerprint, clusterName, amURL, status, startsAt.UTC(), string(annJSON), now)
-	if err != nil {
-		return nil, false, fmt.Errorf("insert status change: %w", err)
-	}
-
-	// Increment occurrence_count only on genuine re-fire after full resolution.
-	if status == models.EventStatusFiring && lastStatus == models.EventStatusResolved {
-		if _, err := s.exec(context.Background(),
-			`UPDATE alert_fingerprints SET occurrence_count = occurrence_count + 1 WHERE fingerprint = ? AND cluster_name = ?`,
-			fingerprint, clusterName,
-		); err != nil {
-			return nil, false, fmt.Errorf("increment occurrence_count: %w", err)
-		}
-	}
-
-	return &models.AlertEvent{
-		ID:              id,
-		Fingerprint:     fingerprint,
-		ClusterName:     clusterName,
-		AlertmanagerURL: amURL,
-		Status:          status,
-		StartsAt:        startsAt.UTC(),
-		RecordedAt:      now,
-	}, true, nil
+	return event, created, nil
 }
 
 // RecordResolved inserts a resolved row for a fingerprint, inheriting cluster
@@ -1138,6 +1215,10 @@ func (s *Store) GetSilenceEventsForCluster(fingerprint, clusterName string) ([]m
 // ── Internal helpers ──────────────────────────────────────────────────────────
 
 func (s *Store) getLastEventForCluster(fingerprint, clusterName string) (*models.AlertEvent, error) {
+	return s.getLastEventForClusterOn(s.db, context.Background(), fingerprint, clusterName)
+}
+
+func (s *Store) getLastEventForClusterOn(q queryer, ctx context.Context, fingerprint, clusterName string) (*models.AlertEvent, error) {
 	var e models.AlertEvent
 	var startsAt, recordedAt time.Time
 	var endsAt sql.NullTime
@@ -1147,7 +1228,7 @@ func (s *Store) getLastEventForCluster(fingerprint, clusterName string) (*models
 		clusterFilter = " AND cluster_name = ?"
 		args = append(args, clusterName)
 	}
-	err := s.queryRow(context.Background(), `
+	err := s.queryRowOn(q, ctx, `
 		SELECT id, fingerprint, cluster_name, alertmanager_url, status, starts_at, ends_at, recorded_at
 		FROM alert_events WHERE fingerprint = ?`+clusterFilter+`
 		ORDER BY recorded_at DESC LIMIT 1
