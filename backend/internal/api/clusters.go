@@ -73,5 +73,6 @@ func (s *Server) getStatus(c echo.Context) error {
 		"clusters":   len(s.registry.All()),
 		"alerts":     totalAlerts,
 		"ws_clients": s.hub.ClientCount(),
+		"leader":     s.pollTrigger.IsLeader(),
 	})
 }

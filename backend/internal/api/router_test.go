@@ -38,7 +38,7 @@ func newTestRouter(t *testing.T, origins []string) *httptest.Server {
 	registry := cluster.NewRegistry(nil)
 	cfg := &config.Config{AllowedOrigins: origins}
 
-	e := NewRouter(alertStore, history.NewSilenceStore(), store, hub, registry, cfg, embed.FS{}, nil, auth.NoneProvider{}, userStore, metrics.New("test"))
+	e := NewRouter(alertStore, history.NewSilenceStore(), store, hub, registry, cfg, embed.FS{}, &fakeTriggerer{}, auth.NoneProvider{}, userStore, metrics.New("test"))
 	return httptest.NewServer(e)
 }
 
@@ -195,7 +195,7 @@ func newTestRouterWithAuthMode(t *testing.T, authMode string) *httptest.Server {
 		SecretKey:    []byte("aaaabbbbccccddddeeeeffffgggghhhh"),
 	}
 
-	e := NewRouter(alertStore, history.NewSilenceStore(), store, hub, registry, cfg, embed.FS{}, nil, provider, userStore, metrics.New("test"))
+	e := NewRouter(alertStore, history.NewSilenceStore(), store, hub, registry, cfg, embed.FS{}, &fakeTriggerer{}, provider, userStore, metrics.New("test"))
 	return httptest.NewServer(e)
 }
 

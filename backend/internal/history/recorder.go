@@ -21,6 +21,15 @@ type broadcaster interface {
 	BroadcastJSON(eventType string, payload interface{})
 }
 
+// elector is the minimal leader-election view Recorder needs from
+// internal/leader.Elector — kept narrow so history doesn't import
+// internal/leader (mirrors internal/retention's narrow store interface).
+// Satisfied structurally by *leader.PGElector and *leader.StaticElector.
+type elector interface {
+	IsLeader() bool
+	Subscribe(fn func(isLeader bool))
+}
+
 // Recorder polls all Alertmanager clusters and persists alert lifecycle events.
 type Recorder struct {
 	registry     *cluster.Registry
@@ -66,6 +75,13 @@ type Recorder struct {
 	broadcastMu       sync.Mutex
 	lastBroadcastHash uint64
 	hasBroadcast      bool
+
+	// elector gates the history-write side effects (tmp/fable/multi-replica.md
+	// D3 step 4): RecordStatusChange/RecordResolvedForCluster, occurrence_count,
+	// delayed claim-release, reconcileStartupResolves, external-silence event
+	// recording. nil means "always leader" (SQLite dialect, and tests that
+	// construct a Recorder without one) — the pre-multi-replica behavior.
+	elector elector
 }
 
 type silenceInfoEntry struct {
@@ -120,8 +136,9 @@ func NewRecorder(
 	logger *slog.Logger,
 	m *metrics.Metrics,
 	claimReleaseDelay time.Duration,
+	el elector,
 ) *Recorder {
-	return &Recorder{
+	r := &Recorder{
 		registry:           registry,
 		alertStore:         alertStore,
 		silenceStore:       silenceStore,
@@ -137,7 +154,44 @@ func NewRecorder(
 		lastGoodAlerts:     make(map[string][]models.EnrichedAlert),
 		reconciledClusters: make(map[string]bool),
 		claimReleaseDelay:  claimReleaseDelay,
+		elector:            el,
 	}
+	if el != nil {
+		el.Subscribe(r.onLeadershipChange)
+	}
+	return r
+}
+
+// IsLeader reports whether this pod currently holds Alertmanager-polling /
+// history-write leadership. Always true when no elector was configured
+// (SQLite dialect, or a Recorder built directly in tests) — the single-writer
+// case has exactly one writer already.
+func (r *Recorder) IsLeader() bool {
+	return r.elector == nil || r.elector.IsLeader()
+}
+
+// onLeadershipChange is registered with the elector (D2/D7 in
+// tmp/fable/multi-replica.md: Subscribe, not a single channel, since the pod
+// labeler (slice 4) is a second independent consumer). Must not block —
+// Subscribe callbacks run sequentially on the elector's own goroutine.
+func (r *Recorder) onLeadershipChange(isLeader bool) {
+	if r.metrics != nil {
+		if isLeader {
+			r.metrics.Leader.Set(1)
+		} else {
+			r.metrics.Leader.Set(0)
+		}
+	}
+	if !isLeader {
+		r.logger.Info("stepped down as leader")
+		return
+	}
+	r.logger.Info("promoted to leader")
+	// Poll immediately rather than waiting up to a full interval: the
+	// once-per-cluster reconcileStartupResolves guard in poll() only runs
+	// while IsLeader() is true, so a newly promoted leader needs a poll to
+	// pick it up (D3 item 4: "new leader runs reconcileStartupResolves once").
+	r.Trigger()
 }
 
 // ClusterUpStates returns the last-poll-success flag per cluster and member
@@ -256,7 +310,11 @@ func (r *Recorder) poll(ctx context.Context) {
 			r.silenceStore.Set(res.name, res.silences)
 		}
 		r.lastGoodAlerts[res.name] = res.alerts
-		if !r.reconciledClusters[res.name] {
+		// Only the leader may run startup reconciliation (D3 step 4): a
+		// follower leaves reconciledClusters[res.name] false, so the moment
+		// this pod is promoted, its next poll (triggered immediately by
+		// onLeadershipChange) picks the reconciliation up exactly once.
+		if !r.reconciledClusters[res.name] && r.IsLeader() {
 			r.reconcileStartupResolves(res.name, res.alerts)
 			r.reconciledClusters[res.name] = true
 		}
@@ -375,101 +433,120 @@ func (r *Recorder) applyPollResults(
 	r.prevAlertSilences = currAlertSilences
 	r.prevMu.Unlock()
 
-	// Record new external silence "created" events (only when not already tracked by Jarvis).
-	for _, e := range newSilenceEntries {
-		exists, err := r.store.HasSilenceEventsForSilenceIDInCluster(e.silenceID, e.info.clusterName)
-		if err != nil {
-			r.logger.Error("check silence events for silence_id", "silence", e.silenceID, "err", err)
-			continue
+	// External-silence event recording is a leader-only side effect (D3 step
+	// 4): a follower must not write silence_events rows.
+	if r.IsLeader() {
+		// Record new external silence "created" events (only when not already tracked by Jarvis).
+		for _, e := range newSilenceEntries {
+			exists, err := r.store.HasSilenceEventsForSilenceIDInCluster(e.silenceID, e.info.clusterName)
+			if err != nil {
+				r.logger.Error("check silence events for silence_id", "silence", e.silenceID, "err", err)
+				continue
+			}
+			if exists {
+				continue
+			}
+			performer := e.info.createdBy
+			if performer == "" {
+				performer = "system"
+			}
+			if _, err := r.store.RecordSilenceEvent(e.fingerprint, e.silenceID, e.info.clusterName, "created", performer, e.info.comment); err != nil {
+				r.logger.Error("record silence created event", "fp", e.fingerprint, "silence", e.silenceID, "err", err)
+			}
 		}
-		if exists {
-			continue
-		}
-		performer := e.info.createdBy
-		if performer == "" {
-			performer = "system"
-		}
-		if _, err := r.store.RecordSilenceEvent(e.fingerprint, e.silenceID, e.info.clusterName, "created", performer, e.info.comment); err != nil {
-			r.logger.Error("record silence created event", "fp", e.fingerprint, "silence", e.silenceID, "err", err)
+
+		// Record silence expiry events outside the lock.
+		for _, e := range expiredEntries {
+			performer := e.info.createdBy
+			if performer == "" {
+				performer = "system"
+			}
+			if _, err := r.store.RecordSilenceEvent(e.fingerprint, e.silenceID, e.info.clusterName, "expired", performer, e.info.comment); err != nil {
+				r.logger.Error("record silence expired event", "fp", e.fingerprint, "silence", e.silenceID, "err", err)
+			}
 		}
 	}
 
-	// Record silence expiry events outside the lock.
-	for _, e := range expiredEntries {
-		performer := e.info.createdBy
-		if performer == "" {
-			performer = "system"
-		}
-		if _, err := r.store.RecordSilenceEvent(e.fingerprint, e.silenceID, e.info.clusterName, "expired", performer, e.info.comment); err != nil {
-			r.logger.Error("record silence expired event", "fp", e.fingerprint, "silence", e.silenceID, "err", err)
-		}
-	}
-
-	// Persist events.
+	// Persisting events (UpsertFingerprint + RecordStatusChange +
+	// RecordResolvedForCluster) is leader-only (D3 step 4) — a follower still
+	// computed the diff above for its own in-memory AlertStore, but must not
+	// write history.
 	now := time.Now().UTC()
-	for i := range allAlerts {
-		a := &allAlerts[i]
-		alertKey := recorderAlertKey(a.Fingerprint, a.ClusterName)
-		if err := r.store.UpsertFingerprint(a.Fingerprint, a.Labels["alertname"], a.ClusterName, a.Labels); err != nil {
-			r.logger.Error("upsert fingerprint", "fp", a.Fingerprint, "err", err)
-			continue
-		}
+	if r.IsLeader() {
+		for i := range allAlerts {
+			a := &allAlerts[i]
+			alertKey := recorderAlertKey(a.Fingerprint, a.ClusterName)
+			if err := r.store.UpsertFingerprint(a.Fingerprint, a.Labels["alertname"], a.ClusterName, a.Labels); err != nil {
+				r.logger.Error("upsert fingerprint", "fp", a.Fingerprint, "err", err)
+				continue
+			}
 
-		// Map AM status to event status.
-		eventStatus := models.EventStatusFiring
-		switch a.Status.State {
-		case "suppressed":
-			eventStatus = models.EventStatusSuppressed
-		case "active", "unprocessed":
-			// Check if previously suppressed → expired transition.
-			if prev[alertKey] == "suppressed" {
-				eventStatus = models.EventStatusExpired
-			} else {
-				eventStatus = models.EventStatusFiring
+			// Map AM status to event status.
+			eventStatus := models.EventStatusFiring
+			switch a.Status.State {
+			case "suppressed":
+				eventStatus = models.EventStatusSuppressed
+			case "active", "unprocessed":
+				// Check if previously suppressed → expired transition.
+				if prev[alertKey] == "suppressed" {
+					eventStatus = models.EventStatusExpired
+				} else {
+					eventStatus = models.EventStatusFiring
+				}
+			}
+
+			if _, created, err := r.store.RecordStatusChange(a.Fingerprint, a.ClusterName, a.AlertmanagerURL,
+				eventStatus, a.StartsAt, a.Annotations); err != nil {
+				r.logger.Error("record status change", "fp", a.Fingerprint, "err", err)
+			} else if created && r.metrics != nil {
+				// Count exactly the events the store persisted — the store owns the
+				// idempotency and grace-period decisions, so the metric can't drift.
+				r.metrics.AlertEventsTotal.WithLabelValues(a.ClusterName, eventStatus).Inc()
 			}
 		}
 
-		if _, created, err := r.store.RecordStatusChange(a.Fingerprint, a.ClusterName, a.AlertmanagerURL,
-			eventStatus, a.StartsAt, a.Annotations); err != nil {
-			r.logger.Error("record status change", "fp", a.Fingerprint, "err", err)
-		} else if created && r.metrics != nil {
-			// Count exactly the events the store persisted — the store owns the
-			// idempotency and grace-period decisions, so the metric can't drift.
-			r.metrics.AlertEventsTotal.WithLabelValues(a.ClusterName, eventStatus).Inc()
+		// Resolve missing alerts.
+		if len(resolvedAlerts) > 0 {
+			for _, ra := range resolvedAlerts {
+				if err := r.store.RecordResolvedForCluster(ra.fingerprint, ra.clusterName, now); err != nil {
+					r.logger.Error("record resolved", "fp", ra.fingerprint, "cluster", ra.clusterName, "err", err)
+				} else if r.metrics != nil {
+					r.metrics.AlertEventsTotal.WithLabelValues(ra.clusterName, models.EventStatusResolved).Inc()
+				}
+			}
+			for _, ra := range resolvedAlerts {
+				go func(ra resolvedAlert) {
+					select {
+					case <-ctx.Done():
+						return
+					case <-time.After(r.claimReleaseDelay):
+					}
+					// Re-check leadership at fire time — it may have changed
+					// during the delay (D3 step 4: delayed claim-release is
+					// leader-only).
+					if !r.IsLeader() {
+						return
+					}
+					still, err := r.store.IsStillResolvedForCluster(ra.fingerprint, ra.clusterName)
+					if err != nil {
+						r.logger.Error("check still resolved for claim release", "fp", ra.fingerprint, "cluster", ra.clusterName, "err", err)
+						return
+					}
+					if !still {
+						return
+					}
+					if err := r.store.ReleaseClaimsForResolvedInCluster(ra.fingerprint, ra.clusterName); err != nil {
+						r.logger.Error("delayed release claims for resolved", "fp", ra.fingerprint, "cluster", ra.clusterName, "err", err)
+					}
+				}(ra)
+			}
 		}
 	}
 
-	// Resolve missing alerts.
+	// In-memory resolved-buffer bookkeeping runs on every pod regardless of
+	// leadership — it only feeds this pod's own AlertStore/WS clients, no DB
+	// write involved (every pod serves reads/WS equally).
 	if len(resolvedAlerts) > 0 {
-		for _, ra := range resolvedAlerts {
-			if err := r.store.RecordResolvedForCluster(ra.fingerprint, ra.clusterName, now); err != nil {
-				r.logger.Error("record resolved", "fp", ra.fingerprint, "cluster", ra.clusterName, "err", err)
-			} else if r.metrics != nil {
-				r.metrics.AlertEventsTotal.WithLabelValues(ra.clusterName, models.EventStatusResolved).Inc()
-			}
-		}
-		for _, ra := range resolvedAlerts {
-			go func(ra resolvedAlert) {
-				select {
-				case <-ctx.Done():
-					return
-				case <-time.After(r.claimReleaseDelay):
-				}
-				still, err := r.store.IsStillResolvedForCluster(ra.fingerprint, ra.clusterName)
-				if err != nil {
-					r.logger.Error("check still resolved for claim release", "fp", ra.fingerprint, "cluster", ra.clusterName, "err", err)
-					return
-				}
-				if !still {
-					return
-				}
-				if err := r.store.ReleaseClaimsForResolvedInCluster(ra.fingerprint, ra.clusterName); err != nil {
-					r.logger.Error("delayed release claims for resolved", "fp", ra.fingerprint, "cluster", ra.clusterName, "err", err)
-				}
-			}(ra)
-		}
-
-		// Keep resolved alerts in-memory for 20 minutes (greyed out), then remove.
 		for _, ra := range resolvedAlerts {
 			r.alertStore.MarkResolvedForCluster(ra.fingerprint, ra.clusterName)
 			go func(ra resolvedAlert) {

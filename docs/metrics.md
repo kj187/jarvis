@@ -26,6 +26,7 @@ sync with reality.
 | `jarvis_alertmanager_up` | `cluster`, `member` | `1` if the last poll of that Alertmanager HA member succeeded, else `0`. Single-member clusters emit their one member; a cluster stays healthy overall as long as at least one member is up |
 | `jarvis_ws_clients` | — | Number of currently connected WebSocket clients |
 | `jarvis_clusters_configured` | — | Number of configured Alertmanager clusters |
+| `jarvis_leader` | — | `1` if this pod currently holds Alertmanager-polling/history-write leadership, else `0`. Always `1` on SQLite (single replica by design) |
 
 ## Event counters
 

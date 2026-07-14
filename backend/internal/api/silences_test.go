@@ -52,6 +52,8 @@ type fakeTriggerer struct{ calls int }
 
 func (f *fakeTriggerer) Trigger() { f.calls++ }
 
+func (f *fakeTriggerer) IsLeader() bool { return true }
+
 // guardAM builds an Alertmanager test server that fails the test on ANY
 // request — GET /api/v1/silences must be served purely from the snapshot.
 func guardAM(t *testing.T) *httptest.Server {
