@@ -80,6 +80,7 @@ Tests cover four suites (`deployment`, `configmap`, `secret`, `ingress`) and run
 | `serviceAccount.create` | bool | `true` | Create a ServiceAccount |
 | `serviceAccount.annotations` | object | `{}` | ServiceAccount annotations |
 | `serviceAccount.name` | string | `""` | ServiceAccount name (auto-generated when empty) |
+| `leaderElection.podLabel.enabled` | bool | `true` | Label the current leader pod `jarvis.kj187.de/role=leader` (informational only — every pod serves all traffic). Renders a `Role`+`RoleBinding` (`pods`: `get`, `patch`) and sets `automountServiceAccountToken: true` on the pod; meaningful only with PostgreSQL and `replicaCount`/HPA `> 1`, harmless to leave on otherwise |
 | `podAnnotations` | object | `{}` | Pod annotations |
 | `podSecurityContext` | object | `{runAsNonRoot: true, runAsUser: 65532, ...}` | Pod-level security context |
 | `securityContext` | object | `{allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, ...}` | Container-level security context |
@@ -272,7 +273,9 @@ config:
 
 ### Vault JWT auth with projected ServiceAccount token
 
-Use `serviceAccountTokenProjection` to obtain a short-lived, audience-scoped token without relying on the pod-level `automountServiceAccountToken`. Pair it with `extraEnv` to point the app at the token file and with `automountServiceAccountToken: false` to disable the default mount.
+Use `serviceAccountTokenProjection` to obtain a short-lived, audience-scoped token without relying on the pod-level `automountServiceAccountToken`. Pair it with `extraEnv` to point the app at the token file.
+
+Note: `automountServiceAccountToken` on the pod is otherwise driven by `leaderElection.podLabel.enabled` (default `true` — the leader pod label needs the default token to call the Kubernetes API, see the values table above). Set `leaderElection.podLabel.enabled: false` too if you want only the projected workload token mounted and nothing else.
 
 ```yaml
 serviceAccount:
@@ -282,12 +285,11 @@ serviceAccount:
   annotations:
     vault.hashicorp.com/role: jarvis
 
-# Disable the default automount — the projected volume below takes its place.
-podAnnotations:
-  # Kubernetes 1.24+: disable at pod level via spec field (set via values):
-  {}
-# If your cluster supports it, set automountServiceAccountToken: false on the
-# ServiceAccount instead and leave the pod annotation empty.
+# Skip mounting the default token entirely — only the projected workload
+# token below is needed.
+leaderElection:
+  podLabel:
+    enabled: false
 
 serviceAccountTokenProjection:
   enabled: true

@@ -46,6 +46,10 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       serviceAccountName: {{ include "jarvis.serviceAccountName" . }}
+      {{- /* Only needed for the leader pod label PATCH (D7 in tmp/fable/multi-replica.md) — the
+             ServiceAccount itself sets automountServiceAccountToken: false, so this must be
+             explicit at the pod level whenever the feature is on. */}}
+      automountServiceAccountToken: {{ .Values.leaderElection.podLabel.enabled }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
@@ -81,6 +85,17 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.database.existingSecret | default (include "jarvis.fullname" .) }}
                   key: {{ .Values.database.existingSecretKey }}
+            {{- /* Downward API — pod identity for the leader pod label PATCH (D7).
+                   Harmless when leaderElection.podLabel.enabled is false: PodLabeler
+                   disables itself via the missing ServiceAccount token mount first. */}}
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
             {{- if ne .Values.auth.provider "none" }}
             - name: JARVIS_SECRET_KEY
               valueFrom:

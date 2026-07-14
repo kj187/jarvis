@@ -1,0 +1,52 @@
+suite: rbac (leader pod label, D7 in tmp/fable/multi-replica.md)
+templates:
+  - templates/rbac.yaml
+
+tests:
+  - it: renders Role + RoleBinding by default (leaderElection.podLabel.enabled defaults true)
+    asserts:
+      - hasDocuments:
+          count: 2
+      - documentIndex: 0
+        isKind:
+          of: Role
+      - documentIndex: 1
+        isKind:
+          of: RoleBinding
+
+  - it: Role grants only pods get/patch — nothing broader
+    asserts:
+      - documentIndex: 0
+        equal:
+          path: rules[0].apiGroups
+          value: [""]
+      - documentIndex: 0
+        equal:
+          path: rules[0].resources
+          value: ["pods"]
+      - documentIndex: 0
+        equal:
+          path: rules[0].verbs
+          value: ["get", "patch"]
+
+  - it: RoleBinding references the chart's ServiceAccount and the matching Role
+    asserts:
+      - documentIndex: 1
+        equal:
+          path: subjects[0].kind
+          value: ServiceAccount
+      - documentIndex: 1
+        equal:
+          path: subjects[0].name
+          value: RELEASE-NAME-jarvis
+      - documentIndex: 1
+        equal:
+          path: roleRef.name
+          value: RELEASE-NAME-jarvis-leader-pod-label
+
+  - it: renders nothing when leaderElection.podLabel.enabled is false
+    set:
+      leaderElection.podLabel.enabled: false
+    asserts:
+      - hasDocuments:
+          count: 0

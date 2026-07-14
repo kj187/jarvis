@@ -51,7 +51,7 @@ make e2e-screenshot NAME=card-view # regenerate ONE screenshot
 
 # ── Helm (no cluster needed — helm-unittest plugin required) ─
 helm lint charts/jarvis/           # Static chart validation
-helm unittest charts/jarvis/       # Unit tests (deployment, configmap, secret, ingress)
+helm unittest charts/jarvis/       # Unit tests (deployment, configmap, secret, ingress, servicemonitor, rbac)
 
 # ── Everything via Makefile ──────────────────────────────────
 make test-all                      # backend + frontend + helm lint + helm unittest
@@ -113,7 +113,8 @@ make fixtures-unsilence            # expire test silences
 | `internal/history` | `time_fuzz_test.go` | Fuzz: `parseNullableTimeString` never panics, err/Valid contract |
 | `internal/retention` | `sweeper_test.go` | `Sweeper`: disabled config → `Start` never calls the store; context cancelled before the first sweep stops cleanly; full sweep order + per-domain cutoffs against a `fakeStore` (comments → claims → silence events → detach → events → orphan, orphan cutoff = widest of the four); domains with no effective retention are skipped; one domain's error doesn't abort the rest; `jarvis_retention_*` metrics counted; nil `*metrics.Metrics` doesn't panic; `shouldSweep()` gated by a `fakeLeaderChecker` (nil elector always sweeps, follower never sweeps, leader sweeps) |
 | `internal/leader` | `static_test.go` | `StaticElector`: always leader, `Subscribe` fires `fn(true)` synchronously |
-| `internal/leader` | `postgres_test.go` | `PGElector` (`JARVIS_TEST_POSTGRES_DSN`-gated): exactly one of two electors racing the same DSN becomes leader; killing the leader's `Run` context releases the session lock and the follower is promoted within seconds; `Subscribe` fires exactly one `[true]` transition on promotion |
+| `internal/leader` | `postgres_test.go` | `PGElector` (`JARVIS_TEST_POSTGRES_DSN`-gated): exactly one of two electors racing the same DSN becomes leader; killing the leader's `Run` context releases the session lock and the follower is promoted within seconds; `Subscribe` fires immediately with the current (not-yet-connected `false`) state, then `true` on promotion — `[false, true]` |
+| `internal/leader` | `podlabel_test.go` | `PodLabeler` (D7): promotion issues the add merge-patch (`jarvis.kj187.de/role=leader`) with the exact method/path/`Content-Type`/bearer token/body; step-down after a promotion issues the null merge-patch; step-down *without* a prior promotion issues no request (guards against `Subscribe`'s immediate-fire initial `false`); a disabled `PodLabeler` never makes a request; `NewPodLabeler` disables itself gracefully with no ServiceAccount mount (true in every non-Kubernetes test/CI environment) |
 | `internal/history` | `recorder_leader_test.go` | D3-step-4 leader gating via a `fakeElector`: a follower skips `RecordStatusChange`/`RecordResolvedForCluster` (in-memory `AlertStore` still updates); the nil-elector default and an explicit leader=true elector both still write history; `reconcileStartupResolves` only runs once promoted (`reconciledClusters` guard); the delayed claim-release goroutine re-checks leadership at fire time and skips if demoted mid-delay |
 | `internal/alertmanager` | `client_test.go` | HTTP client against `httptest.NewServer` |
 | `internal/alertmanager` | `auth_test.go` `oauth2_test.go` | Per-cluster upstream auth (basic/bearer/OAuth2) |

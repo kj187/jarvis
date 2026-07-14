@@ -1,0 +1,29 @@
+{{- if .Values.leaderElection.podLabel.enabled }}
+{{- /* Grants exactly the one-request PATCH the leader pod label needs (D7 in
+       tmp/fable/multi-replica.md) — no client-go, no broader Kubernetes API access. */}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "jarvis.fullname" . }}-leader-pod-label
+  labels:
+    {{- include "jarvis.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "jarvis.fullname" . }}-leader-pod-label
+  labels:
+    {{- include "jarvis.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "jarvis.fullname" . }}-leader-pod-label
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "jarvis.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}
