@@ -33,18 +33,34 @@ type store interface {
 	DeleteOrphanFingerprintsBefore(ctx context.Context, cutoff time.Time, batch int) (int64, error)
 }
 
+// leaderChecker is the minimal leader-election view Sweeper needs from
+// internal/leader.Elector — kept narrow so retention doesn't import
+// internal/leader (mirrors the store interface above). nil means "always
+// leader" (SQLite dialect, and tests that don't configure one).
+type leaderChecker interface {
+	IsLeader() bool
+}
+
 // Sweeper periodically deletes old rows per the configured retention rules.
 type Sweeper struct {
 	store   store
 	cfg     config.RetentionConfig
 	logger  *slog.Logger
 	metrics *metrics.Metrics
+	elector leaderChecker
 }
 
 // NewSweeper creates a Sweeper. m may be nil (same nil-safe pattern as
-// history.NewRecorder / ws.NewHub).
-func NewSweeper(s store, cfg config.RetentionConfig, logger *slog.Logger, m *metrics.Metrics) *Sweeper {
-	return &Sweeper{store: s, cfg: cfg, logger: logger, metrics: m}
+// history.NewRecorder / ws.NewHub). el may also be nil, meaning "always
+// leader" — the retention sweeper is one of the D3-step-4 leader-only side
+// effects (docs/persistence.md): only the leader may delete rows.
+func NewSweeper(s store, cfg config.RetentionConfig, logger *slog.Logger, m *metrics.Metrics, el leaderChecker) *Sweeper {
+	return &Sweeper{store: s, cfg: cfg, logger: logger, metrics: m, elector: el}
+}
+
+// shouldSweep reports whether this pod may run a sweep right now.
+func (sw *Sweeper) shouldSweep() bool {
+	return sw.elector == nil || sw.elector.IsLeader()
 }
 
 // Start runs the sweep loop until ctx is cancelled. No-ops immediately if
@@ -65,7 +81,9 @@ func (sw *Sweeper) Start(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-timer.C:
-			sw.sweep(ctx)
+			if sw.shouldSweep() {
+				sw.sweep(ctx)
+			}
 			timer.Reset(sw.cfg.SweepInterval)
 		}
 	}

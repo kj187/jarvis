@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"os"
 	"testing"
 )
 
@@ -98,6 +99,40 @@ func TestMigrate_TablesExist(t *testing.T) {
 		if count != 1 {
 			t.Errorf("table %q not found after Migrate()", table)
 		}
+	}
+}
+
+// TestMigrate_Postgres_PollSnapshotsTableExists is env-gated (JARVIS_TEST_POSTGRES_DSN):
+// poll_snapshots is PostgreSQL-only (docs/persistence.md D3) — never
+// created on SQLite.
+func TestMigrate_Postgres_PollSnapshotsTableExists(t *testing.T) {
+	dsn := os.Getenv("JARVIS_TEST_POSTGRES_DSN")
+	if dsn == "" {
+		t.Skip("JARVIS_TEST_POSTGRES_DSN not set — skipping PostgreSQL-backed test")
+	}
+	// openPostgres directly (not the dialect-dispatching Open) — this test is
+	// always PostgreSQL, and Open's SQLite branch reaching os.MkdirAll(path)
+	// on a value derived from JARVIS_TEST_POSTGRES_DSN otherwise trips gosec's
+	// taint analysis (G703) even though that branch can never execute here.
+	database, dialect, err := openPostgres(dsn)
+	if err != nil {
+		t.Fatalf("openPostgres() error: %v", err)
+	}
+	defer func() { _ = database.Close() }()
+
+	if err := Migrate(database, dialect); err != nil {
+		t.Fatalf("Migrate() error: %v", err)
+	}
+
+	var count int
+	err = database.QueryRowContext(context.Background(),
+		`SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'poll_snapshots'`,
+	).Scan(&count)
+	if err != nil {
+		t.Fatalf("check poll_snapshots table: %v", err)
+	}
+	if count != 1 {
+		t.Error("poll_snapshots table not found after Migrate() on PostgreSQL")
 	}
 }
 

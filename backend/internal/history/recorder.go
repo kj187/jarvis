@@ -21,6 +21,15 @@ type broadcaster interface {
 	BroadcastJSON(eventType string, payload interface{})
 }
 
+// elector is the minimal leader-election view Recorder needs from
+// internal/leader.Elector — kept narrow so history doesn't import
+// internal/leader (mirrors internal/retention's narrow store interface).
+// Satisfied structurally by *leader.PGElector and *leader.StaticElector.
+type elector interface {
+	IsLeader() bool
+	Subscribe(fn func(isLeader bool))
+}
+
 // Recorder polls all Alertmanager clusters and persists alert lifecycle events.
 type Recorder struct {
 	registry     *cluster.Registry
@@ -66,6 +75,34 @@ type Recorder struct {
 	broadcastMu       sync.Mutex
 	lastBroadcastHash uint64
 	hasBroadcast      bool
+
+	// elector gates the history-write side effects (docs/persistence.md
+	// D3 step 4): RecordStatusChange/RecordResolvedForCluster, occurrence_count,
+	// delayed claim-release, reconcileStartupResolves, external-silence event
+	// recording. nil means "always leader" (SQLite dialect, and tests that
+	// construct a Recorder without one) — the pre-multi-replica behavior.
+	elector elector
+
+	// dsn is the raw PostgreSQL connection string, used only to open the
+	// dedicated LISTEN connections in runPollLoop (jarvis_trigger) and
+	// runFollowerLoop (jarvis_snapshot) — separate from store's pooled *sql.DB,
+	// mirroring leader.PGElector's own dedicated-connection pattern. Empty for
+	// SQLite, where neither loop ever LISTENs.
+	dsn string
+
+	// followerMu guards followerSnapshots, populated only while this pod is a
+	// follower (D3): per-cluster alerts/member-up-state/freshness received via
+	// PostgreSQL snapshot rows instead of this pod's own poll. nil/empty while
+	// leader or on SQLite.
+	followerMu        sync.Mutex
+	followerSnapshots map[string]followerSnapshotEntry
+}
+
+// followerSnapshotEntry is one cluster's most recently consumed snapshot.
+type followerSnapshotEntry struct {
+	alerts   []models.EnrichedAlert
+	memberUp map[string]bool
+	takenAt  time.Time
 }
 
 type silenceInfoEntry struct {
@@ -120,8 +157,10 @@ func NewRecorder(
 	logger *slog.Logger,
 	m *metrics.Metrics,
 	claimReleaseDelay time.Duration,
+	el elector,
+	dsn string,
 ) *Recorder {
-	return &Recorder{
+	r := &Recorder{
 		registry:           registry,
 		alertStore:         alertStore,
 		silenceStore:       silenceStore,
@@ -137,14 +176,70 @@ func NewRecorder(
 		lastGoodAlerts:     make(map[string][]models.EnrichedAlert),
 		reconciledClusters: make(map[string]bool),
 		claimReleaseDelay:  claimReleaseDelay,
+		elector:            el,
+		dsn:                dsn,
+		followerSnapshots:  make(map[string]followerSnapshotEntry),
 	}
+	if el != nil {
+		el.Subscribe(r.onLeadershipChange)
+	}
+	return r
+}
+
+// IsLeader reports whether this pod currently holds Alertmanager-polling /
+// history-write leadership. Always true when no elector was configured
+// (SQLite dialect, or a Recorder built directly in tests) — the single-writer
+// case has exactly one writer already.
+func (r *Recorder) IsLeader() bool {
+	return r.elector == nil || r.elector.IsLeader()
+}
+
+// onLeadershipChange is registered with the elector (D2/D7 in
+// docs/persistence.md: Subscribe, not a single channel, since the pod
+// labeler (slice 4) is a second independent consumer). Must not block —
+// Subscribe callbacks run sequentially on the elector's own goroutine.
+func (r *Recorder) onLeadershipChange(isLeader bool) {
+	if r.metrics != nil {
+		if isLeader {
+			r.metrics.Leader.Set(1)
+			// A promoted pod is no longer a follower — its stale-snapshot
+			// state (if any) no longer applies.
+			r.metrics.SnapshotStale.Set(0)
+		} else {
+			r.metrics.Leader.Set(0)
+		}
+	}
+	if !isLeader {
+		// Also fires once on startup with the not-yet-connected initial state
+		// (PGElector.Subscribe/StaticElector.Subscribe both fire immediately —
+		// not necessarily a real step-down from prior leadership).
+		r.logger.Info("not leader (follower)")
+		return
+	}
+	r.logger.Info("promoted to leader")
+	// Poll immediately rather than waiting up to a full interval: the
+	// once-per-cluster reconcileStartupResolves guard in poll() only runs
+	// while IsLeader() is true, so a newly promoted leader needs a poll to
+	// pick it up (D3 item 4: "new leader runs reconcileStartupResolves once").
+	r.Trigger()
 }
 
 // ClusterUpStates returns the last-poll-success flag per cluster and member
 // (cluster name -> member name -> up). Used by the metrics collector at
 // scrape time — reads each cluster's cached state only, never performs an
-// upstream HTTP call.
+// upstream HTTP call. While this pod is a follower (D3), member up-states
+// come from the last consumed snapshot instead of this pod's own (nonexistent)
+// poll — every pod still reports cluster health from *some* recent poll.
 func (r *Recorder) ClusterUpStates() map[string]map[string]bool {
+	if !r.IsLeader() {
+		r.followerMu.Lock()
+		defer r.followerMu.Unlock()
+		out := make(map[string]map[string]bool, len(r.followerSnapshots))
+		for name, entry := range r.followerSnapshots {
+			out[name] = entry.memberUp
+		}
+		return out
+	}
 	out := make(map[string]map[string]bool, len(r.registry.All()))
 	for _, cl := range r.registry.All() {
 		out[cl.Name] = cl.MemberUpStates()
@@ -153,22 +248,79 @@ func (r *Recorder) ClusterUpStates() map[string]map[string]bool {
 }
 
 // Trigger signals the recorder to run an immediate poll.
-// Non-blocking: if a trigger is already queued, this is a no-op.
+// Non-blocking: if a trigger is already queued, this is a no-op. A follower
+// cannot poll itself (D3 item 7): it forwards the request to the leader via
+// pg_notify(jarvis_trigger, ''); the leader's own runPollLoop LISTENs on that
+// channel and treats it exactly like a local Trigger() call.
 func (r *Recorder) Trigger() {
+	if !r.IsLeader() {
+		if err := r.store.NotifyTrigger(context.Background()); err != nil {
+			r.logger.Error("forward trigger to leader", "err", err)
+		}
+		return
+	}
+	r.triggerLocal()
+}
+
+// triggerLocal enqueues an immediate poll on this pod's own loop — the
+// leader's local path for Trigger(), and also invoked when this pod's
+// jarvis_trigger listener (runPollLoop) receives a forwarded trigger from a
+// follower.
+func (r *Recorder) triggerLocal() {
 	select {
 	case r.triggerCh <- struct{}{}:
 	default:
 	}
 }
 
-// Start begins the polling loop. It polls immediately and then at the
-// configured interval. The loop stops when ctx is cancelled.
+// Start seeds resolved alerts from the DB, then runs the poll loop — for
+// SQLite (or a Recorder built without an elector, e.g. most tests), that is
+// the only mode there ever is. On PostgreSQL, a mode supervisor instead
+// switches this pod between polling (leader) and consuming snapshots
+// (follower) on every leadership transition, restarting the active loop each
+// time (D3). The loop(s) stop when ctx is cancelled.
 func (r *Recorder) Start(ctx context.Context) {
 	if resolved, err := r.store.GetRecentResolved(7 * 24 * time.Hour); err == nil {
 		r.logger.Info("seeding resolved alerts from db", "count", len(resolved))
 		r.alertStore.SeedResolved(resolved)
 	} else {
 		r.logger.Warn("seed resolved alerts from db failed", "err", err)
+	}
+
+	if r.elector == nil || r.dsn == "" {
+		r.runPollLoop(ctx)
+		return
+	}
+
+	var (
+		modeMu     sync.Mutex
+		cancelMode context.CancelFunc = func() {}
+	)
+	r.elector.Subscribe(func(isLeader bool) {
+		modeMu.Lock()
+		defer modeMu.Unlock()
+		cancelMode()
+		modeCtx, cancel := context.WithCancel(ctx)
+		cancelMode = cancel
+		if isLeader {
+			go r.runPollLoop(modeCtx)
+		} else {
+			go r.runFollowerLoop(modeCtx)
+		}
+	})
+	<-ctx.Done()
+	modeMu.Lock()
+	cancelMode()
+	modeMu.Unlock()
+}
+
+// runPollLoop polls immediately and then at the configured interval, exactly
+// as Start did before multi-replica support. On PostgreSQL it additionally
+// LISTENs on jarvis_trigger, so a follower's forwarded Trigger() call reaches
+// the leader without waiting for the next tick.
+func (r *Recorder) runPollLoop(ctx context.Context) {
+	if r.dsn != "" {
+		go r.listenLoop(ctx, notifyChannelTrigger, r.interval, func(string) { r.triggerLocal() }, nil)
 	}
 	r.poll(ctx)
 	ticker := time.NewTicker(r.interval)
@@ -256,7 +408,11 @@ func (r *Recorder) poll(ctx context.Context) {
 			r.silenceStore.Set(res.name, res.silences)
 		}
 		r.lastGoodAlerts[res.name] = res.alerts
-		if !r.reconciledClusters[res.name] {
+		// Only the leader may run startup reconciliation (D3 step 4): a
+		// follower leaves reconciledClusters[res.name] false, so the moment
+		// this pod is promoted, its next poll (triggered immediately by
+		// onLeadershipChange) picks the reconciliation up exactly once.
+		if !r.reconciledClusters[res.name] && r.IsLeader() {
 			r.reconcileStartupResolves(res.name, res.alerts)
 			r.reconciledClusters[res.name] = true
 		}
@@ -272,6 +428,13 @@ func (r *Recorder) poll(ctx context.Context) {
 	}
 
 	r.applyPollResults(ctx, allAlerts, currSilenceInfo)
+
+	// Persist + notify per-cluster snapshots for followers (D3). Leader-only
+	// (this method only ever runs while leader — see runPollLoop) and
+	// PostgreSQL-only (r.dsn is empty on SQLite).
+	if r.dsn != "" {
+		r.persistSnapshots(ctx, clusters)
+	}
 }
 
 // reconcileStartupResolves resolves alerts that actually went away while
@@ -375,101 +538,120 @@ func (r *Recorder) applyPollResults(
 	r.prevAlertSilences = currAlertSilences
 	r.prevMu.Unlock()
 
-	// Record new external silence "created" events (only when not already tracked by Jarvis).
-	for _, e := range newSilenceEntries {
-		exists, err := r.store.HasSilenceEventsForSilenceIDInCluster(e.silenceID, e.info.clusterName)
-		if err != nil {
-			r.logger.Error("check silence events for silence_id", "silence", e.silenceID, "err", err)
-			continue
+	// External-silence event recording is a leader-only side effect (D3 step
+	// 4): a follower must not write silence_events rows.
+	if r.IsLeader() {
+		// Record new external silence "created" events (only when not already tracked by Jarvis).
+		for _, e := range newSilenceEntries {
+			exists, err := r.store.HasSilenceEventsForSilenceIDInCluster(e.silenceID, e.info.clusterName)
+			if err != nil {
+				r.logger.Error("check silence events for silence_id", "silence", e.silenceID, "err", err)
+				continue
+			}
+			if exists {
+				continue
+			}
+			performer := e.info.createdBy
+			if performer == "" {
+				performer = "system"
+			}
+			if _, err := r.store.RecordSilenceEvent(e.fingerprint, e.silenceID, e.info.clusterName, "created", performer, e.info.comment); err != nil {
+				r.logger.Error("record silence created event", "fp", e.fingerprint, "silence", e.silenceID, "err", err)
+			}
 		}
-		if exists {
-			continue
-		}
-		performer := e.info.createdBy
-		if performer == "" {
-			performer = "system"
-		}
-		if _, err := r.store.RecordSilenceEvent(e.fingerprint, e.silenceID, e.info.clusterName, "created", performer, e.info.comment); err != nil {
-			r.logger.Error("record silence created event", "fp", e.fingerprint, "silence", e.silenceID, "err", err)
+
+		// Record silence expiry events outside the lock.
+		for _, e := range expiredEntries {
+			performer := e.info.createdBy
+			if performer == "" {
+				performer = "system"
+			}
+			if _, err := r.store.RecordSilenceEvent(e.fingerprint, e.silenceID, e.info.clusterName, "expired", performer, e.info.comment); err != nil {
+				r.logger.Error("record silence expired event", "fp", e.fingerprint, "silence", e.silenceID, "err", err)
+			}
 		}
 	}
 
-	// Record silence expiry events outside the lock.
-	for _, e := range expiredEntries {
-		performer := e.info.createdBy
-		if performer == "" {
-			performer = "system"
-		}
-		if _, err := r.store.RecordSilenceEvent(e.fingerprint, e.silenceID, e.info.clusterName, "expired", performer, e.info.comment); err != nil {
-			r.logger.Error("record silence expired event", "fp", e.fingerprint, "silence", e.silenceID, "err", err)
-		}
-	}
-
-	// Persist events.
+	// Persisting events (UpsertFingerprint + RecordStatusChange +
+	// RecordResolvedForCluster) is leader-only (D3 step 4) — a follower still
+	// computed the diff above for its own in-memory AlertStore, but must not
+	// write history.
 	now := time.Now().UTC()
-	for i := range allAlerts {
-		a := &allAlerts[i]
-		alertKey := recorderAlertKey(a.Fingerprint, a.ClusterName)
-		if err := r.store.UpsertFingerprint(a.Fingerprint, a.Labels["alertname"], a.ClusterName, a.Labels); err != nil {
-			r.logger.Error("upsert fingerprint", "fp", a.Fingerprint, "err", err)
-			continue
-		}
+	if r.IsLeader() {
+		for i := range allAlerts {
+			a := &allAlerts[i]
+			alertKey := recorderAlertKey(a.Fingerprint, a.ClusterName)
+			if err := r.store.UpsertFingerprint(a.Fingerprint, a.Labels["alertname"], a.ClusterName, a.Labels); err != nil {
+				r.logger.Error("upsert fingerprint", "fp", a.Fingerprint, "err", err)
+				continue
+			}
 
-		// Map AM status to event status.
-		eventStatus := models.EventStatusFiring
-		switch a.Status.State {
-		case "suppressed":
-			eventStatus = models.EventStatusSuppressed
-		case "active", "unprocessed":
-			// Check if previously suppressed → expired transition.
-			if prev[alertKey] == "suppressed" {
-				eventStatus = models.EventStatusExpired
-			} else {
-				eventStatus = models.EventStatusFiring
+			// Map AM status to event status.
+			eventStatus := models.EventStatusFiring
+			switch a.Status.State {
+			case "suppressed":
+				eventStatus = models.EventStatusSuppressed
+			case "active", "unprocessed":
+				// Check if previously suppressed → expired transition.
+				if prev[alertKey] == "suppressed" {
+					eventStatus = models.EventStatusExpired
+				} else {
+					eventStatus = models.EventStatusFiring
+				}
+			}
+
+			if _, created, err := r.store.RecordStatusChange(a.Fingerprint, a.ClusterName, a.AlertmanagerURL,
+				eventStatus, a.StartsAt, a.Annotations); err != nil {
+				r.logger.Error("record status change", "fp", a.Fingerprint, "err", err)
+			} else if created && r.metrics != nil {
+				// Count exactly the events the store persisted — the store owns the
+				// idempotency and grace-period decisions, so the metric can't drift.
+				r.metrics.AlertEventsTotal.WithLabelValues(a.ClusterName, eventStatus).Inc()
 			}
 		}
 
-		if _, created, err := r.store.RecordStatusChange(a.Fingerprint, a.ClusterName, a.AlertmanagerURL,
-			eventStatus, a.StartsAt, a.Annotations); err != nil {
-			r.logger.Error("record status change", "fp", a.Fingerprint, "err", err)
-		} else if created && r.metrics != nil {
-			// Count exactly the events the store persisted — the store owns the
-			// idempotency and grace-period decisions, so the metric can't drift.
-			r.metrics.AlertEventsTotal.WithLabelValues(a.ClusterName, eventStatus).Inc()
+		// Resolve missing alerts.
+		if len(resolvedAlerts) > 0 {
+			for _, ra := range resolvedAlerts {
+				if err := r.store.RecordResolvedForCluster(ra.fingerprint, ra.clusterName, now); err != nil {
+					r.logger.Error("record resolved", "fp", ra.fingerprint, "cluster", ra.clusterName, "err", err)
+				} else if r.metrics != nil {
+					r.metrics.AlertEventsTotal.WithLabelValues(ra.clusterName, models.EventStatusResolved).Inc()
+				}
+			}
+			for _, ra := range resolvedAlerts {
+				go func(ra resolvedAlert) {
+					select {
+					case <-ctx.Done():
+						return
+					case <-time.After(r.claimReleaseDelay):
+					}
+					// Re-check leadership at fire time — it may have changed
+					// during the delay (D3 step 4: delayed claim-release is
+					// leader-only).
+					if !r.IsLeader() {
+						return
+					}
+					still, err := r.store.IsStillResolvedForCluster(ra.fingerprint, ra.clusterName)
+					if err != nil {
+						r.logger.Error("check still resolved for claim release", "fp", ra.fingerprint, "cluster", ra.clusterName, "err", err)
+						return
+					}
+					if !still {
+						return
+					}
+					if err := r.store.ReleaseClaimsForResolvedInCluster(ra.fingerprint, ra.clusterName); err != nil {
+						r.logger.Error("delayed release claims for resolved", "fp", ra.fingerprint, "cluster", ra.clusterName, "err", err)
+					}
+				}(ra)
+			}
 		}
 	}
 
-	// Resolve missing alerts.
+	// In-memory resolved-buffer bookkeeping runs on every pod regardless of
+	// leadership — it only feeds this pod's own AlertStore/WS clients, no DB
+	// write involved (every pod serves reads/WS equally).
 	if len(resolvedAlerts) > 0 {
-		for _, ra := range resolvedAlerts {
-			if err := r.store.RecordResolvedForCluster(ra.fingerprint, ra.clusterName, now); err != nil {
-				r.logger.Error("record resolved", "fp", ra.fingerprint, "cluster", ra.clusterName, "err", err)
-			} else if r.metrics != nil {
-				r.metrics.AlertEventsTotal.WithLabelValues(ra.clusterName, models.EventStatusResolved).Inc()
-			}
-		}
-		for _, ra := range resolvedAlerts {
-			go func(ra resolvedAlert) {
-				select {
-				case <-ctx.Done():
-					return
-				case <-time.After(r.claimReleaseDelay):
-				}
-				still, err := r.store.IsStillResolvedForCluster(ra.fingerprint, ra.clusterName)
-				if err != nil {
-					r.logger.Error("check still resolved for claim release", "fp", ra.fingerprint, "cluster", ra.clusterName, "err", err)
-					return
-				}
-				if !still {
-					return
-				}
-				if err := r.store.ReleaseClaimsForResolvedInCluster(ra.fingerprint, ra.clusterName); err != nil {
-					r.logger.Error("delayed release claims for resolved", "fp", ra.fingerprint, "cluster", ra.clusterName, "err", err)
-				}
-			}(ra)
-		}
-
-		// Keep resolved alerts in-memory for 20 minutes (greyed out), then remove.
 		for _, ra := range resolvedAlerts {
 			r.alertStore.MarkResolvedForCluster(ra.fingerprint, ra.clusterName)
 			go func(ra resolvedAlert) {

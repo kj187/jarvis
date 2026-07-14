@@ -15,6 +15,7 @@ import (
 	"github.com/kj187/jarvis/backend/internal/cluster"
 	"github.com/kj187/jarvis/backend/internal/config"
 	idb "github.com/kj187/jarvis/backend/internal/db"
+	"github.com/kj187/jarvis/backend/internal/fanout"
 	"github.com/kj187/jarvis/backend/internal/history"
 	"github.com/kj187/jarvis/backend/internal/metrics"
 	"github.com/kj187/jarvis/backend/internal/users"
@@ -44,13 +45,15 @@ func newTestServerWithAM(t *testing.T, amURL string) *Server {
 		{Name: "testcluster", AlertmanagerURL: amURL, AlertmanagerLinkURL: amURL},
 	})
 	cfg := &config.Config{}
-	return NewServer(alertStore, history.NewSilenceStore(), store, hub, registry, cfg, nil, auth.NoneProvider{}, userStore)
+	return NewServer(alertStore, history.NewSilenceStore(), store, hub, registry, cfg, nil, auth.NoneProvider{}, userStore, fanout.NoopFanout{})
 }
 
 // fakeTriggerer records poll-trigger requests from mutation handlers.
 type fakeTriggerer struct{ calls int }
 
 func (f *fakeTriggerer) Trigger() { f.calls++ }
+
+func (f *fakeTriggerer) IsLeader() bool { return true }
 
 // guardAM builds an Alertmanager test server that fails the test on ANY
 // request — GET /api/v1/silences must be served purely from the snapshot.

@@ -53,6 +53,32 @@ tests:
           path: spec.template.spec.containers[0].env[0].valueFrom.secretKeyRef.key
           value: database-url
 
+  - it: sets automountServiceAccountToken true and injects POD_NAME/POD_NAMESPACE by default (leaderElection.podLabel.enabled defaults true)
+    asserts:
+      - equal:
+          path: spec.template.spec.automountServiceAccountToken
+          value: true
+      - equal:
+          path: spec.template.spec.containers[0].env[1].name
+          value: POD_NAME
+      - equal:
+          path: spec.template.spec.containers[0].env[1].valueFrom.fieldRef.fieldPath
+          value: metadata.name
+      - equal:
+          path: spec.template.spec.containers[0].env[2].name
+          value: POD_NAMESPACE
+      - equal:
+          path: spec.template.spec.containers[0].env[2].valueFrom.fieldRef.fieldPath
+          value: metadata.namespace
+
+  - it: sets automountServiceAccountToken false when leaderElection.podLabel.enabled is false
+    set:
+      leaderElection.podLabel.enabled: false
+    asserts:
+      - equal:
+          path: spec.template.spec.automountServiceAccountToken
+          value: false
+
   - it: mounts emptyDir at /data when persistence disabled
     asserts:
       - equal:
@@ -92,6 +118,32 @@ tests:
       - equal:
           path: spec.replicas
           value: 3
+
+  - it: allows replicaCount > 1 with PostgreSQL even when persistence enabled
+    set:
+      persistence.enabled: true
+      replicaCount: 3
+      database.dsn: postgres://user:pass@host:5432/db
+    asserts:
+      - equal:
+          path: spec.replicas
+          value: 3
+
+  - it: renders topologySpreadConstraints when set
+    set:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+    asserts:
+      - equal:
+          path: spec.template.spec.topologySpreadConstraints[0].topologyKey
+          value: kubernetes.io/hostname
+
+  - it: omits topologySpreadConstraints by default
+    asserts:
+      - isNull:
+          path: spec.template.spec.topologySpreadConstraints
 
   - it: defaults to RollingUpdate strategy when persistence disabled
     asserts:

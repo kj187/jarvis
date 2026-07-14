@@ -298,6 +298,14 @@ CREATE INDEX IF NOT EXISTS idx_alert_claims_active               ON alert_claims
 CREATE INDEX IF NOT EXISTS idx_silence_events_fingerprint        ON silence_events(fingerprint, recorded_at DESC);
 CREATE INDEX IF NOT EXISTS idx_users_username                    ON users(username);
 CREATE INDEX IF NOT EXISTS idx_users_oidc_sub                    ON users(oidc_sub);
+
+-- PostgreSQL only (docs/persistence.md D3) — SQLite never creates or
+-- reads this table (single replica, no followers to feed).
+CREATE TABLE IF NOT EXISTS poll_snapshots (
+    cluster_name TEXT PRIMARY KEY,
+    payload      BYTEA NOT NULL,
+    taken_at     TIMESTAMPTZ NOT NULL
+);
 ```
 
 **SQLite settings** (on open): `SetMaxOpenConns(1)`, `PRAGMA journal_mode=WAL`, `PRAGMA foreign_keys=ON`, `PRAGMA busy_timeout=5000`. PostgreSQL uses the default pool (no `SetMaxOpenConns(1)`).
@@ -337,7 +345,8 @@ WS     /ws                                       full_protect?  (origin checked 
 #        session cookie via RequireAuth — /ws streams the full alert snapshot)
 
 # ── Status / Version ─────────────────────────────────────────────────────────
-GET    /api/v1/status                            full_protect?  → { status, clusters, alerts, ws_clients }
+GET    /api/v1/status                            full_protect?  → { status, clusters, alerts, ws_clients, leader }
+#        leader: this pod's current leader-election state (internal/leader) — always true on SQLite
 GET    /api/v1/info                              full_protect?  → { version }
 
 # ── Alerts (in-memory AlertStore) ────────────────────────────────────────────
@@ -467,6 +476,11 @@ collectors and `jarvis_build_info`. `Metrics.Handler()` serves `GET /metrics`.
   parallel + the shared DB write in `applyPollResults`), so a per-cluster
   label would misrepresent it; `jarvis_cluster_fetch_duration_seconds` is the
   per-member counterpart for isolating a slow upstream Alertmanager member.
+- `jarvis_leader` (gauge 0/1): this pod's current leader-election state — see
+  `internal/leader` section below. Always 1 on SQLite.
+- `jarvis_snapshot_stale` (gauge 0/1): whether a follower's consumed poll
+  snapshot is older than 3× `JARVIS_POLL_INTERVAL` — see leader-only
+  polling below. Always 0 while leader or on SQLite.
 - Full metric reference for operators: `docs/metrics.md`.
 
 ---
@@ -516,6 +530,263 @@ Optional, env-var-only background deletion of old rows — user-facing docs:
   retention window after a sweep. If a fingerprint survives only via a
   surviving comment and later re-fires, `RecordStatusChange` finds no prior
   event and does not increment `occurrence_count` (also doesn't reset it).
+
+---
+
+## Leader Election (`internal/leader`)
+
+Multi-replica groundwork (full design: `docs/persistence.md`). Exactly
+one pod at a time may run the leader-only side effects listed below; every
+pod still serves reads/API/WS equally regardless of leadership.
+
+- `Elector` interface: `IsLeader() bool`, `Run(ctx)`, `Subscribe(fn
+  func(isLeader bool))`. `Subscribe` — not a single channel — because there
+  are two independent consumers (`history.Recorder`'s promotion hook today;
+  the pod labeler in a later slice). Callbacks run sequentially on the
+  elector's own goroutine and must not block.
+- `StaticElector` (SQLite dialect): always leader, `Subscribe` fires
+  `fn(true)` once immediately. SQLite is single-writer/single-replica by
+  design (Critical Invariant #8), so there is never a follower to coordinate
+  with.
+- `PGElector` (PostgreSQL dialect): a dedicated connection (never the shared
+  pool) holds `pg_try_advisory_lock(0x4A525653, 1)`. Follower retry and
+  leader heartbeat both run on a 5s interval (`AcquireRetryInterval` /
+  `HeartbeatInterval`, overridable per-instance via `SetRetryInterval` for
+  fast tests — production leaves it at the default). The dedicated
+  connection dials through a `net.Dialer` with `KeepAliveConfig` (idle 5s,
+  interval 3s, count 3) so a hard node failure is detected and the session
+  lock released within a bounded time instead of the OS-default keepalive
+  timeout. Losing the connection releases the PostgreSQL session lock
+  automatically — no TTL bookkeeping needed for a crashed/killed leader.
+  `Subscribe` fires immediately with the current state (like
+  `StaticElector`), including the not-yet-connected initial `false` before
+  `Run` has acquired anything — callers must treat that as "not leader (yet)",
+  not "was just demoted".
+- Wired in `cmd/jarvis/main.go`: `StaticElector` or `PGElector` chosen by
+  `db.DetectDialect`, always on with PostgreSQL (no escape-hatch env var),
+  `go el.Run(ctx)` alongside the recorder/sweeper goroutines.
+- `history.Recorder` holds a narrow local `elector` interface (`IsLeader()`,
+  `Subscribe(...)`, structurally satisfied by `*leader.PGElector`/
+  `*leader.StaticElector` — mirrors `retention.Sweeper`'s narrow `store`
+  interface, so `history` doesn't import `internal/leader`). `nil` means
+  "always leader" (the pre-multi-replica default, used by every test that
+  constructs a `Recorder` directly). Gated side effects (all in
+  `applyPollResults`/`poll`, only reachable while leader — see leader-only
+  polling below): `UpsertFingerprint` + `RecordStatusChange`,
+  `RecordResolvedForCluster`, the delayed claim-release goroutine
+  (re-checks `IsLeader()` again at fire time — leadership can change during
+  `claimReleaseDelay`), `reconcileStartupResolves` (guarded via
+  `reconciledClusters[cluster]`, which a follower never marks done — so the
+  moment a pod is promoted, its very next poll, triggered immediately by the
+  promotion hook via `Trigger()`, reconciles exactly once), external-silence
+  event recording. Not gated: in-memory `AlertStore`/resolved-buffer
+  bookkeeping and the WS broadcasts — every pod keeps serving its own
+  clients regardless of leadership (fed by its own poll while leader, by
+  consumed snapshots while follower — see below).
+- `retention.Sweeper` holds the same narrow-interface pattern (`leaderChecker
+  { IsLeader() bool }`); `Start`'s sweep tick calls `shouldSweep()` first — a
+  follower skips the sweep entirely (a `nil` elector always sweeps, same
+  default-leader convention as above).
+- Metric: `jarvis_leader` (gauge 0/1), set from `Recorder`'s
+  `onLeadershipChange` (the elector's `Subscribe` callback). Also surfaced in
+  `GET /api/v1/status` as `"leader": bool` (via the `pollTriggerer` interface,
+  which `Recorder` satisfies alongside `Trigger()`).
+
+### Leader-only polling + snapshot distribution (D3, PostgreSQL only)
+
+Alertmanager load must not scale with `replicaCount`: only the leader ever
+polls; followers reconstruct their stores from PostgreSQL instead.
+
+- `Recorder.Start` seeds resolved alerts, then picks a mode. SQLite (or a
+  Recorder built without an elector/dsn, e.g. most unit tests) always calls
+  `runPollLoop` — today's unconditional-poll behavior, unchanged. On
+  PostgreSQL, a **mode supervisor** subscribes a second callback to the
+  elector (alongside `onLeadershipChange`'s metrics/trigger callback) that
+  cancels whichever loop is currently running and starts the other
+  (`runPollLoop` while leader, `runFollowerLoop` while follower) on every
+  transition, including the very first (immediate) `Subscribe` callback.
+- `runPollLoop` is the pre-multi-replica ticker/trigger loop, plus (dialect
+  PostgreSQL) a background `listenLoop` on the `jarvis_trigger` channel: a
+  follower's forwarded `Trigger()` call reaches the leader this way and is
+  turned into a local trigger (`triggerLocal`) without waiting for the next
+  tick.
+- After each successful `poll()` → `applyPollResults()`, the leader calls
+  `persistSnapshots`: for every configured cluster, gzip'd-JSON-encode
+  `{alerts, silences, memberUp}` (Resolved Decision 3) from the just-updated
+  `AlertStore`/`SilenceStore`/`cluster.Cluster.MemberUpStates()`, upsert it
+  into `poll_snapshots` (`Store.PersistSnapshot`), then
+  `pg_notify('jarvis_snapshot', clusterName)` (`Store.NotifySnapshotChanged`).
+  No-ops on SQLite (`Store`'s snapshot methods self-guard on dialect; the
+  loop only calls them when `Recorder.dsn != ""`, which main.go only sets
+  for PostgreSQL).
+- `runFollowerLoop` never polls Alertmanager. On start it does a full resync
+  (`resyncAllSnapshots`: `Store.GetAllSnapshots` → decode every cluster's
+  row), then runs a `listenLoop` on `jarvis_snapshot`: each notification's
+  payload is the changed cluster's name, resynced individually
+  (`resyncSnapshot` → `Store.GetSnapshot`); a full resync also runs
+  periodically as a NOTIFY-miss fallback (`listenLoop`'s `onIdle`, firing
+  every `JARVIS_POLL_INTERVAL` if no notification arrived). Every decoded
+  cluster's silences go straight into `SilenceStore` (already the per-cluster
+  cache); alerts are cached per-cluster in `Recorder.followerSnapshots`
+  (`followerMu`-guarded) and re-merged into the whole `AlertStore` on every
+  update (`rebuildFollowerAlertStore` — `AlertStore.Set` always replaces the
+  full store, so a per-cluster update must re-merge everything), then
+  broadcasts via the existing `broadcastAlertsIfChanged`.
+- `Recorder.ClusterUpStates()` (the metrics-collector-facing view) sources
+  member up-states from `followerSnapshots` while follower instead of the
+  local (never-polled) `cluster.Cluster.MemberUpStates()` — a follower still
+  reports accurate cluster health, borrowed from the leader's snapshot.
+- Staleness: `rebuildFollowerAlertStore` compares each cached snapshot's
+  `takenAt` against `3 × JARVIS_POLL_INTERVAL` (Binding Constant) and sets
+  `jarvis_snapshot_stale` (gauge 0/1) accordingly; a promotion resets it to 0
+  (`onLeadershipChange`).
+- `Recorder.Trigger()`: while leader, enqueues locally (`triggerLocal`,
+  unchanged); while follower, calls `Store.NotifyTrigger` (`pg_notify`,
+  channel `jarvis_trigger`) instead of touching its own (suspended) poll
+  loop — this is what the leader's `runPollLoop` listener above consumes.
+- `listenLoop`/`dialListener`/`consumeNotifications` (in
+  `recorder_snapshot.go`) are Recorder-local — a dedicated (non-pooled) `pgx.Conn`
+  per LISTEN, same TCP-keepalive bound as the elector (D2: idle 5s/interval
+  3s/count 3), `LISTEN <channel>` once, then `WaitForNotification` in a loop
+  with a `resyncInterval` timeout standing in for the periodic fallback;
+  reconnects with a fresh LISTEN on connection loss. `history` still doesn't
+  import `internal/leader` (pgx is used directly, same as `leader.PGElector`
+  does internally) — this is a separate, parallel use of the same driver,
+  not a dependency on that package.
+- Test harness: `internal/history/recorder_multireplica_test.go` runs two
+  full `Recorder`s, each with its own real `leader.PGElector`, sharing one
+  PostgreSQL test database and one fake Alertmanager
+  (`JARVIS_TEST_POSTGRES_DSN`-gated) — exactly one polls, the other converges
+  via snapshots without ever touching its own `cluster.Cluster`, a leader
+  kill promotes the follower which then polls and reconciles, a
+  resolve+refire pair straddling the handoff still reopens under the grace
+  period (Critical Invariant #1 regression-tested across a leadership
+  change), and a follower's `Trigger()` reaches the leader well under the
+  configured poll interval.
+
+### Cross-pod WS mutation fanout (`internal/fanout`, D4, PostgreSQL only)
+
+Snapshot distribution (D3, above) keeps alert-state broadcasts consistent
+across pods for free — every pod already derives `alerts_update`/the
+poll-time `silences_update` from its own poll or consumed snapshot. It does
+**not** cover mutation-driven broadcasts (a comment added, a claim set, a
+silence created/deleted via the API) — those originate on whichever pod
+handled the HTTP request and must still reach every other pod's WS clients.
+`internal/fanout` is the separate, narrower mechanism for exactly that.
+
+- `Fanout` interface: `Publish(ctx, message []byte, ref Ref)`,
+  `Run(ctx, onMessage func([]byte), onRef func(Ref))`. `Ref{Type,
+  Fingerprint, ClusterName, ID}` identifies a mutation well enough for the
+  receiving pod to look the row back up itself.
+- `NoopFanout` (SQLite dialect): `Publish` does nothing, `Run` blocks on
+  `ctx.Done()` — single replica, no other pod to fan out to.
+- `PGFanout` (PostgreSQL dialect): publishes via `pg_notify('jarvis_ws',
+  ...)` on the existing pooled `*sql.DB` (NOTIFY is a cheap statement, no
+  dedicated connection needed to publish); `Run` opens its own dedicated
+  LISTEN connection (same TCP-keepalive bound as D2/D3: idle 5s/interval
+  3s/count 3). The wire envelope is `{origin, message?, ref?}` — `origin` is
+  a random `uuid.NewString()` generated once per `PGFanout` instance, and
+  `consume` skips any notification whose `origin` matches its own (echo
+  suppression: without this, a pod would receive its own `Publish` back from
+  PostgreSQL, since NOTIFY delivers to every listening session including the
+  one that sent it — not just "other" ones). Fire-and-forget: unlike
+  snapshot distribution there is no durable resync fallback here; a missed
+  NOTIFY just skips that one live update; the next natural refetch still
+  converges.
+- Payload-size fallback: PostgreSQL's NOTIFY payload limit is ~8000 bytes.
+  If the encoded envelope with the full `message` would exceed
+  `maxNotifyPayloadBytes` (7800, a safety margin under that limit — reachable
+  in practice for `comment_added`, whose body can be up to 10,000 characters),
+  `Publish` sends `ref` alone instead. The receiving pod's `onRef` callback
+  refetches the authoritative row from the shared PostgreSQL database and
+  reconstructs the exact broadcast the originating pod would have sent — no
+  frontend changes needed, since the delivered WS message ends up
+  byte-equivalent either way.
+- `ws.Hub` gained `BuildEventJSON` (pure encode, no broadcast) and
+  `BroadcastRaw` (broadcast pre-encoded bytes, reads the event type back out
+  of the bytes for the `jarvis_ws_broadcasts_total` label) alongside the
+  existing `BroadcastJSON` (now a thin wrapper over both). `api.Server`'s new
+  `broadcastAndFanout(ctx, eventType, payload, ref)` is the single call site
+  every user-mutation handler uses: it builds once, broadcasts locally via
+  `BroadcastRaw`, and publishes via `fanout.Publish` — used by `addComment`
+  (`comments.go`), `setClaim`/`releaseClaim`/`updateClaimNote` (`claims.go`),
+  and `applySilenceWriteThrough` (`silences.go`, shared by silence
+  create/delete). Silence templates currently have no WS broadcast at all
+  (checked during D4 implementation) — nothing to fan out there yet.
+- Receiving side: `api.HandleFanoutMessage(hub)` (re-broadcasts bytes
+  unchanged) and `api.HandleFanoutRef(store, hub, logger)` (switches on
+  `ref.Type`: `comment_added` → `store.GetComment`, `claim_set`/
+  `claim_released` → `store.GetActiveClaim`, `silences_update` → re-broadcast
+  the empty struct directly, no lookup needed) are wired in
+  `cmd/jarvis/main.go` as `go wsFanout.Run(ctx, api.HandleFanoutMessage(hub),
+  api.HandleFanoutRef(store, hub, logger))`, alongside the elector/recorder/
+  sweeper goroutines. `wsFanout` itself is chosen the same way as `el` —
+  `fanout.NewPGFanout(database, cfg.DBDSN, logger)` on PostgreSQL,
+  `fanout.NoopFanout{}` on SQLite — and passed into `api.NewRouter`/
+  `api.NewServer`.
+- Test harness: `internal/fanout/postgres_test.go` (two `PGFanout` instances,
+  one database — delivery to the other instance only, echo suppression,
+  small-message inline delivery, oversized-message ref fallback, all
+  `JARVIS_TEST_POSTGRES_DSN`-gated) and
+  `internal/api/fanout_integration_test.go` (two full "pods" — own `Store`,
+  `Hub`, `PGFanout` each, sharing one database — a real `addComment` HTTP
+  call reaches both pods' WS clients exactly once, no echo double-delivery;
+  a second test drives an oversized comment body through the same path to
+  exercise the ref-fallback end-to-end, including the database refetch).
+
+### Leader pod label (`internal/leader.PodLabeler`, D7, Kubernetes only)
+
+Informational only — every pod serves all traffic regardless of leadership,
+so this is purely so `kubectl get pods -L jarvis.kj187.de/role` shows the
+current leader. No leader-only traffic routing exists or is planned.
+
+- `PodLabeler` is registered directly in `cmd/jarvis/main.go` as an
+  `Elector.Subscribe` callback (`el.Subscribe(podLabeler.OnLeadershipChange)`),
+  alongside `history.NewRecorder`'s own subscription — both fire on every
+  transition, independently (this is exactly why `Elector.Subscribe` takes a
+  callback rather than exposing a single channel).
+- On promotion: HTTP `PATCH` (merge-patch, `application/merge-patch+json`) to
+  this pod's own `/api/v1/namespaces/<ns>/pods/<name>`, setting
+  `metadata.labels."jarvis.kj187.de/role" = "leader"`. On step-down: the same
+  PATCH shape, `null`-ing the key out — a merge patch removes a key that way
+  and (unlike a JSON Patch "add") never fails if `metadata.labels` didn't
+  already exist. `PodLabeler` tracks whether *it* added the label
+  (`hasLabel`) so a step-down callback fired before ever being promoted
+  (`Elector.Subscribe` always fires once immediately with the current
+  state — see the `PGElector`/`StaticElector` note above) never issues a
+  pointless remove.
+- No client-go: a plain `net/http` client with the in-cluster
+  ServiceAccount's CA (`/var/run/secrets/kubernetes.io/serviceaccount/ca.crt`)
+  and bearer token (`.../token`), `KUBERNETES_SERVICE_HOST`/`_PORT` (both
+  auto-injected by Kubernetes into every pod) for the API server address, and
+  the Downward API env vars `POD_NAME`/`POD_NAMESPACE` for this pod's own
+  identity.
+- Kubernetes detection: `NewPodLabeler` reads the ServiceAccount token file;
+  if it's absent (compose, bare Docker — Jarvis has no ServiceAccount mount
+  there at all) or `POD_NAME`/`POD_NAMESPACE`/`KUBERNETES_SERVICE_HOST`/`_PORT`
+  are unset, it logs why and disables itself — every subsequent
+  `OnLeadershipChange` call is then a no-op. A failed PATCH is logged and
+  never fatal, matching the "decoration, not a dependency" framing above.
+- Chart (`charts/jarvis/templates/rbac.yaml`, gated by
+  `leaderElection.podLabel.enabled`, default `true`): a `Role` (`pods`:
+  `get`, `patch` — nothing broader) + matching `RoleBinding` to the chart's
+  own `ServiceAccount`. The `ServiceAccount` itself sets
+  `automountServiceAccountToken: false` (least privilege by default), so
+  `templates/deployment.yaml` sets it back to `true` at the **pod** level
+  when the toggle is on, and always injects `POD_NAME`/`POD_NAMESPACE` via
+  `fieldRef` (harmless when the toggle is off — `NewPodLabeler` already
+  disables via the missing token file in that case, checked first).
+- Test harness: `internal/leader/podlabel_test.go` (promotion issues the add
+  merge-patch with the exact key/value, step-down after a promotion issues
+  the null merge-patch, step-down *without* a prior promotion issues no
+  request at all, a disabled `PodLabeler` never makes a request, and
+  `NewPodLabeler` disables itself gracefully when there's no ServiceAccount
+  mount — true in every non-Kubernetes test/CI environment);
+  `charts/jarvis/tests/rbac_test.yaml` +
+  new cases in `deployment_test.yaml` (helm-unittest) cover both toggle
+  states: `Role`/`RoleBinding` render with exactly the `pods: get, patch`
+  rule and nothing at all when disabled; `automountServiceAccountToken`
+  flips `true`/`false` with the toggle.
 
 ---
 
@@ -909,6 +1180,14 @@ banner collapse state in AlertDetailPanel, default collapsed)
 | `claim_released` | `{ fingerprint, clusterName, releasedBy }` | set `activeClaim` to `undefined` + invalidate claim queries |
 | `comment_added` | `{ fingerprint, comment }` | invalidate comments query by prefix key `['comments', fingerprint, clusterName]` — matches every paged query key (`..., page]`) for that alert, so whichever page is mounted refetches; local `page` state is untouched (see `CommentsPanel.tsx` above for the page>1 "jump to latest" affordance) |
 | `silences_update` | `{}` (pure invalidation signal) | `invalidateQueries(['silences'])` → refetch from the in-memory snapshot. Broadcast by the recorder when the silence snapshot diff changed vs. the previous poll, and by every silence mutation write-through (`applySilenceWriteThrough`) |
+
+`claim_set`/`claim_released`/`comment_added`/the write-through `silences_update`
+are mutation-driven and — on PostgreSQL, multi-replica — fanned out to every
+other pod via `internal/fanout` (D4, see the Leader Election section above)
+so a browser tab connected to any pod sees the same live update. The
+poll-driven `alerts_update` and the recorder's own `silences_update` are
+**not** fanned out — every pod already derives those from its own poll or
+consumed snapshot (D3).
 
 ---
 

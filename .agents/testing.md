@@ -51,7 +51,7 @@ make e2e-screenshot NAME=card-view # regenerate ONE screenshot
 
 # ── Helm (no cluster needed — helm-unittest plugin required) ─
 helm lint charts/jarvis/           # Static chart validation
-helm unittest charts/jarvis/       # Unit tests (deployment, configmap, secret, ingress)
+helm unittest charts/jarvis/       # Unit tests (deployment, configmap, secret, ingress, servicemonitor, rbac, pdb)
 
 # ── Everything via Makefile ──────────────────────────────────
 make test-all                      # backend + frontend + helm lint + helm unittest
@@ -67,6 +67,11 @@ make up-alertmanager               # test Alertmanager on port 9094
 make down-alertmanager
 make up-postgres                   # test PostgreSQL on 5432 (jarvis/jarvis/jarvis) — for JARVIS_DB_DSN=postgres://…
 make down-postgres
+
+# ── PostgreSQL-backed backend tests (env-gated) ──────────────
+make up-postgres
+JARVIS_TEST_POSTGRES_DSN='postgres://jarvis:jarvis@localhost:5432/jarvis?sslmode=disable' \
+  go test ./internal/history/...   # unset → these tests t.Skip; CI always sets it (postgres:17 service container)
 
 # ── Manual test fixtures against the dev stack ───────────────
 make fixtures-create               # fire 23 Kubernetes-themed test alerts (label test_suite=jarvis)
@@ -87,21 +92,30 @@ make fixtures-unsilence            # expire test silences
 | `internal/config` | `config_test.go` | Config parsing, cluster-N iteration, HOST_ALIAS logic |
 | `internal/config` | `config_retention_test.go` | Retention env vars: defaults (all disabled), global→domain inheritance, per-domain override even when global is 0, comments never inherit the global, sweep-interval parsing, negative/non-integer values → startup error |
 | `internal/config` | `config_fuzz_test.go` | Fuzz: `parseSecretKey` never panics/errors, hex round-trip |
-| `internal/db` | `db_test.go` | `Migrate` idempotent, PRAGMA settings |
+| `internal/db` | `db_test.go` | `Migrate` idempotent, PRAGMA settings; `poll_snapshots` table exists after `Migrate` on PostgreSQL (`JARVIS_TEST_POSTGRES_DSN`-gated, uses `openPostgres` directly rather than dialect-dispatching `Open` — avoids a gosec G703 false-positive-in-spirit from `Open`'s SQLite branch reaching `os.MkdirAll`) |
 | `internal/db` | `db_fuzz_test.go` | Fuzz: `RedactDSN` never panics, password never leaks |
 | `internal/cluster` | `registry_test.go` | `NewRegistry`, `Get`, `All` — single/multi-cluster |
 | `internal/history` | `store_test.go` | `UpsertFingerprint`, `GetOrCreateActiveEvent`, grace period (60s), `occurrence_count` logic |
+| `internal/history` | `store_postgres_test.go` | `postgresTestDSN` (skip gate), `newTestPostgresStores(t, n)` — n independent `*sql.DB` connections against one truncated PostgreSQL test database, the multi-replica situation in miniature (reused by later multi-replica-plan slices' elector/recorder/fanout tests) |
+| `internal/history` | `store_concurrency_test.go` | D5 (`AGENTS.md`-pending invariant): `RecordStatusChange` raced concurrently — one Store (SQLite) and 10 Stores on one PostgreSQL database (`JARVIS_TEST_POSTGRES_DSN`-gated) — exactly one resulting event row, no duplicate from a non-atomic idempotency-check-then-insert; 2 racing Postgres connections proved too narrow a window to reproduce the bug reliably (20/20 false-negative runs in development), hence 10 |
 | `internal/history` | `store_extra_test.go` | `GetClaimHistory`, `RecordSilenceEvent`, `GetSilenceEvents`, `GetRecentResolved`, `SeedResolved`, silence templates |
 | `internal/history` | `store_retention_test.go` | Retention delete/detach methods (`store_retention.go`): `sweepableEventsCondition` — open firing/suppressed episode head survives any age, a superseded or resolved/expired row past cutoff is deleted; batching (1200 rows/batch 500); context-cancel stops the loop; detach nulls `event_id` only on rows referencing a soon-to-be-deleted event; released-claim/comment/silence-event cutoffs (active claims always survive); orphan fingerprint sweep (survives with any remaining event/claim/comment, deletes only true orphans past `last_seen_at` cutoff); re-fire after a full event sweep does not inflate `occurrence_count` |
 | `internal/history` | `alert_store_test.go` | `Set`/`Get`/`MarkResolved`/`RemoveByFingerprint` (thread safety via goroutines) |
 | `internal/history` | `silence_store_test.go` | `SilenceStore`: Set/Get copy semantics, Upsert, MarkExpired, Reset, concurrent access |
 | `internal/history` | `lifecycle_test.go` | Integration: FiringToResolved, SuppressedExpired, GracePeriod, ReoccurrenceAfterResolution, FullCycle |
 | `internal/history` | `recorder_test.go` | Diff logic: firing/resolved/suppressed/expired transitions; poll fills `SilenceStore` per cluster, failed silence fetch keeps previous snapshot; `silences_update` broadcast only when the silence snapshot changed |
+| `internal/history` | `recorder_leader_test.go` | D3-step-4 leader gating via a `fakeElector`: a follower skips `RecordStatusChange`/`RecordResolvedForCluster` (in-memory `AlertStore` still updates); the nil-elector default and an explicit leader=true elector both still write history; `reconcileStartupResolves` only runs once promoted (`reconciledClusters` guard); the delayed claim-release goroutine re-checks leadership at fire time and skips if demoted mid-delay |
+| `internal/history` | `snapshot.go` / `snapshot_test.go` | `encodeSnapshot`/`decodeSnapshot` gzip'd-JSON round-trip; `Store.PersistSnapshot`/`GetSnapshot`/`GetAllSnapshots`/`NotifySnapshotChanged`/`NotifyTrigger` — no-op on SQLite, persist/upsert/read-back and real `pg_notify` delivery on PostgreSQL (`JARVIS_TEST_POSTGRES_DSN`-gated, via a raw `pgx.Conn` LISTEN client independent of Recorder's own listener) |
+| `internal/history` | `recorder_multireplica_test.go` | Slice-2 integration: two full `Recorder`s, each with a real `leader.PGElector`, sharing one PostgreSQL database and one fake Alertmanager (`JARVIS_TEST_POSTGRES_DSN`-gated) — exactly one polls, the follower converges via snapshots without ever touching its own `cluster.Cluster` (`MemberUpStates()` stays empty on the follower's own registry while `ClusterUpStates()` is populated from the snapshot); leader kill → follower promotes, polls, and reconciles; a resolve+refire pair straddling the handoff still reopens under the grace period (Critical Invariant #1 across a leadership change); a follower's `Trigger()` reaches the leader well under the poll interval |
 | `internal/history` | `claim_cluster_test.go` | Cluster-scoped claim isolation (same fingerprint in multiple clusters) |
 | `internal/history` | `enrich_test.go` | Alert enrichment (active claim attachment) |
 | `internal/history` | `optimization_test.go` | Query/indexing optimizations |
 | `internal/history` | `time_fuzz_test.go` | Fuzz: `parseNullableTimeString` never panics, err/Valid contract |
-| `internal/retention` | `sweeper_test.go` | `Sweeper`: disabled config → `Start` never calls the store; context cancelled before the first sweep stops cleanly; full sweep order + per-domain cutoffs against a `fakeStore` (comments → claims → silence events → detach → events → orphan, orphan cutoff = widest of the four); domains with no effective retention are skipped; one domain's error doesn't abort the rest; `jarvis_retention_*` metrics counted; nil `*metrics.Metrics` doesn't panic |
+| `internal/retention` | `sweeper_test.go` | `Sweeper`: disabled config → `Start` never calls the store; context cancelled before the first sweep stops cleanly; full sweep order + per-domain cutoffs against a `fakeStore` (comments → claims → silence events → detach → events → orphan, orphan cutoff = widest of the four); domains with no effective retention are skipped; one domain's error doesn't abort the rest; `jarvis_retention_*` metrics counted; nil `*metrics.Metrics` doesn't panic; `shouldSweep()` gated by a `fakeLeaderChecker` (nil elector always sweeps, follower never sweeps, leader sweeps) |
+| `internal/leader` | `static_test.go` | `StaticElector`: always leader, `Subscribe` fires `fn(true)` synchronously |
+| `internal/leader` | `postgres_test.go` | `PGElector` (`JARVIS_TEST_POSTGRES_DSN`-gated): exactly one of two electors racing the same DSN becomes leader; killing the leader's `Run` context releases the session lock and the follower is promoted within seconds; `Subscribe` fires immediately with the current (not-yet-connected `false`) state, then `true` on promotion — `[false, true]` |
+| `internal/leader` | `podlabel_test.go` | `PodLabeler` (D7): promotion issues the add merge-patch (`jarvis.kj187.de/role=leader`) with the exact method/path/`Content-Type`/bearer token/body; step-down after a promotion issues the null merge-patch; step-down *without* a prior promotion issues no request (guards against `Subscribe`'s immediate-fire initial `false`); a disabled `PodLabeler` never makes a request; `NewPodLabeler` disables itself gracefully with no ServiceAccount mount (true in every non-Kubernetes test/CI environment) |
+| `internal/history` | `recorder_leader_test.go` | D3-step-4 leader gating via a `fakeElector`: a follower skips `RecordStatusChange`/`RecordResolvedForCluster` (in-memory `AlertStore` still updates); the nil-elector default and an explicit leader=true elector both still write history; `reconcileStartupResolves` only runs once promoted (`reconciledClusters` guard); the delayed claim-release goroutine re-checks leadership at fire time and skips if demoted mid-delay |
 | `internal/alertmanager` | `client_test.go` | HTTP client against `httptest.NewServer` |
 | `internal/alertmanager` | `auth_test.go` `oauth2_test.go` | Per-cluster upstream auth (basic/bearer/OAuth2) |
 | `internal/api` | `alerts_test.go` | Alert list/detail handler |
@@ -115,9 +129,13 @@ make fixtures-unsilence            # expire test silences
 | `internal/api` | `admin_handler_test.go` | admin user CRUD + role/self guards |
 | `internal/api` | `clusters_test.go` | Cluster health from cached poll up-state (up/degraded/all-down/no-poll-yet), zero live `/api/v2/status` calls, single-member `members` omission |
 | `internal/api` | `router_test.go` | Route registration, `/groups` before `/:fingerprint/*`, protection modes |
+| `internal/api` | `fanout_dispatch.go` / (covered by `fanout_integration_test.go`) | `HandleFanoutMessage`/`HandleFanoutRef` — receiving-side dispatch for cross-pod WS mutation fanout (D4) |
+| `internal/api` | `fanout_integration_test.go` | D4 integration (`JARVIS_TEST_POSTGRES_DSN`-gated): two full "pods" — own `Store`/`Hub`/`fanout.PGFanout` each, sharing one database — a real `addComment` HTTP call reaches both pods' WS clients exactly once (no echo double-delivery); a second test drives a 9000-char comment body through the same path to exercise the oversized-message Ref fallback end-to-end, including the database refetch on the receiving pod |
 | `internal/auth` | `jwt_test.go` `internal_provider_test.go` `middleware_test.go` | JWT sign/verify, RequireAuth/RequireAdmin |
 | `internal/users` | `store_test.go` | User CRUD, OIDC upsert, bcrypt |
-| `internal/ws` | `hub_test.go` | Broadcast, client register/unregister, slow client drop, `jarvis_ws_broadcasts_total` |
+| `internal/ws` | `hub_test.go` | Broadcast, client register/unregister, slow client drop, `jarvis_ws_broadcasts_total`, `BuildEventJSON`+`BroadcastRaw` produce the same metric label as `BroadcastJSON` |
+| `internal/fanout` | `postgres_test.go` | `PGFanout` (`JARVIS_TEST_POSTGRES_DSN`-gated): delivers to the other instance only (echo suppression via `origin`), small messages delivered inline, oversized messages (> `maxNotifyPayloadBytes`) fall back to a `Ref` instead |
+| `internal/fanout` | `noop_test.go` | `NoopFanout`: `Publish` is a no-op, `Run` blocks until `ctx` is cancelled |
 | `internal/metrics` | `collector_test.go` | `storeCollector` scrape-time output (`testutil.CollectAndCompare`), nil `clusterUp`, `jarvis_build_info`, duplicate-registration panic |
 | `internal/metrics` | `echo_test.go` | HTTP middleware: route-pattern label (not raw path), 404 → `unmatched`, skip list (`/metrics`/`/health`/`/ws`) |
 
@@ -281,6 +299,8 @@ dco:                 # PR-only: every commit must carry a Signed-off-by trailer 
 secrets:             # gitleaks secret scanning
 
 backend:
+  - services.postgres: postgres:17 container, health-checked; JARVIS_TEST_POSTGRES_DSN set for the
+    test step so every PostgreSQL-gated test (internal/history) runs on every PR, not just locally
   - go test -v -race -coverprofile=coverage.out ./... | go-junit-report → report.xml
   - Coverage summary → GITHUB_STEP_SUMMARY (go tool cover -func)
   - dorny/test-reporter uploads report.xml as "Backend Test Results"

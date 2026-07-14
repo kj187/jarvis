@@ -1,0 +1,36 @@
+---
+title: Jarvis multi-replica — failover sequence
+config:
+  theme: neutral
+---
+sequenceDiagram
+    participant AM as Alertmanager
+    participant PG as PostgreSQL
+    participant A as Pod A (leader)
+    participant B as Pod B (follower)
+    participant K8s as Kubernetes API
+
+    Note over A,B: Steady state
+    A->>PG: pg_try_advisory_lock (held)
+    loop every JARVIS_POLL_INTERVAL
+        A->>AM: poll alerts + silences
+        A->>PG: persist snapshot + NOTIFY jarvis_snapshot
+        PG-->>B: notification
+        B->>PG: GetSnapshot(cluster)
+        B->>B: merge into own AlertStore/SilenceStore
+    end
+    B->>PG: retry pg_try_advisory_lock every 5s (fails — held by A)
+
+    Note over A: Pod A killed / evicted / node dies
+    A--xPG: connection lost
+    PG->>PG: session ends, advisory lock released
+
+    Note over B: within ~5s (retry interval)<br/>or ~15-20s (hard node failure, TCP keepalive bound)
+    B->>PG: pg_try_advisory_lock — acquired
+    PG-->>B: promoted
+    B->>K8s: PATCH pod label jarvis.kj187.de/role=leader
+    B->>PG: reconcileStartupResolves (catch-up)
+    B->>AM: poll alerts + silences
+    B->>PG: persist snapshot + NOTIFY jarvis_snapshot
+
+    Note over B: Pod B is now leader — polling,<br/>writing history, persisting snapshots

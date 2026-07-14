@@ -30,6 +30,9 @@ type Metrics struct {
 	RetentionSweepsTotal      prometheus.Counter
 	RetentionDeletedRowsTotal *prometheus.CounterVec
 	RetentionSweepDuration    prometheus.Histogram
+
+	Leader        prometheus.Gauge
+	SnapshotStale prometheus.Gauge
 }
 
 // New creates a Metrics instance on a fresh registry, including the standard
@@ -97,6 +100,14 @@ func New(version string) *Metrics {
 			Name:    "jarvis_retention_sweep_duration_seconds",
 			Help:    "Duration of a full data-retention sweep across all tables.",
 			Buckets: []float64{0.01, 0.05, 0.1, 0.5, 1, 5, 10, 30, 60},
+		}),
+		Leader: f.NewGauge(prometheus.GaugeOpts{
+			Name: "jarvis_leader",
+			Help: "Whether this pod currently holds Alertmanager-polling/history-write leadership (1) or not (0). Always 1 on SQLite (single replica by design).",
+		}),
+		SnapshotStale: f.NewGauge(prometheus.GaugeOpts{
+			Name: "jarvis_snapshot_stale",
+			Help: "Whether this follower's consumed poll snapshot is older than 3x the poll interval (1) or fresh (0). Always 0 while leader or on SQLite.",
 		}),
 	}
 }

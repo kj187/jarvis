@@ -2,6 +2,7 @@ package ws
 
 import (
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"sync"
@@ -96,20 +97,49 @@ func (h *Hub) Run() {
 	}
 }
 
-// BroadcastJSON encodes a typed WS event and queues it for broadcast.
-func (h *Hub) BroadcastJSON(eventType string, payload interface{}) {
+// BuildEventJSON encodes a typed WS event exactly as BroadcastJSON does,
+// without queuing it — callers that also need to fan the same bytes out to
+// other pods (D4, docs/persistence.md: internal/fanout) build once
+// with this and pass the result to both BroadcastRaw and Fanout.Publish, so
+// every pod's clients receive byte-identical messages regardless of which
+// pod originated the mutation.
+func BuildEventJSON(eventType string, payload interface{}) ([]byte, error) {
 	p, err := json.Marshal(payload)
 	if err != nil {
-		h.logger.Error("marshal ws payload", "err", err)
-		return
+		return nil, fmt.Errorf("marshal ws payload: %w", err)
 	}
 	event := models.WSEvent{Type: eventType, Payload: p}
 	data, err := json.Marshal(event)
 	if err != nil {
-		h.logger.Error("marshal ws event", "err", err)
+		return nil, fmt.Errorf("marshal ws event: %w", err)
+	}
+	return data, nil
+}
+
+// BroadcastJSON encodes a typed WS event and queues it for broadcast to this
+// pod's own clients only — see BroadcastRaw for the cross-pod-fanout case.
+func (h *Hub) BroadcastJSON(eventType string, payload interface{}) {
+	data, err := BuildEventJSON(eventType, payload)
+	if err != nil {
+		h.logger.Error("build ws event", "type", eventType, "err", err)
 		return
 	}
+	h.BroadcastRaw(data)
+}
+
+// BroadcastRaw queues an already-encoded WS event (see BuildEventJSON) for
+// broadcast to this pod's own clients — used directly by fanout consumers
+// that received the bytes from another pod, so they don't need to
+// re-marshal a typed payload value, only pass the bytes through. The event
+// type for the WSBroadcastsTotal metric label is read back out of data
+// itself (models.WSEvent.Type), so callers never need to track it separately.
+func (h *Hub) BroadcastRaw(data []byte) {
 	if h.metrics != nil {
+		var event models.WSEvent
+		eventType := "unknown"
+		if err := json.Unmarshal(data, &event); err == nil {
+			eventType = event.Type
+		}
 		h.metrics.WSBroadcastsTotal.WithLabelValues(eventType).Inc()
 	}
 	h.broadcast <- data
