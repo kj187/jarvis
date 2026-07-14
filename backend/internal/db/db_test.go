@@ -103,7 +103,7 @@ func TestMigrate_TablesExist(t *testing.T) {
 }
 
 // TestMigrate_Postgres_PollSnapshotsTableExists is env-gated (JARVIS_TEST_POSTGRES_DSN):
-// poll_snapshots is PostgreSQL-only (tmp/fable/multi-replica.md D3) — never
+// poll_snapshots is PostgreSQL-only (docs/persistence.md D3) — never
 // created on SQLite.
 func TestMigrate_Postgres_PollSnapshotsTableExists(t *testing.T) {
 	dsn := os.Getenv("JARVIS_TEST_POSTGRES_DSN")

@@ -1,4 +1,4 @@
-// Package leader implements multi-replica leader election (tmp/fable/multi-replica.md, D2):
+// Package leader implements multi-replica leader election (docs/persistence.md, D2):
 // exactly one pod polls Alertmanager, writes history, and runs retention —
 // coordinated via a PostgreSQL session-level advisory lock. SQLite deployments
 // never have more than one replica, so they use StaticElector instead.
@@ -9,7 +9,7 @@ import "context"
 // Elector is satisfied by PGElector (PostgreSQL dialect) and StaticElector
 // (SQLite dialect). Subscribe — not a single channel — because there are two
 // independent consumers (history.Recorder's promotion hook and the pod
-// labeler, tmp/fable/multi-replica.md D7): a shared channel would deliver
+// labeler, docs/persistence.md D7): a shared channel would deliver
 // each transition to only one of them.
 type Elector interface {
 	// IsLeader reports whether this process currently holds leadership.

@@ -76,7 +76,7 @@ type Recorder struct {
 	lastBroadcastHash uint64
 	hasBroadcast      bool
 
-	// elector gates the history-write side effects (tmp/fable/multi-replica.md
+	// elector gates the history-write side effects (docs/persistence.md
 	// D3 step 4): RecordStatusChange/RecordResolvedForCluster, occurrence_count,
 	// delayed claim-release, reconcileStartupResolves, external-silence event
 	// recording. nil means "always leader" (SQLite dialect, and tests that
@@ -195,7 +195,7 @@ func (r *Recorder) IsLeader() bool {
 }
 
 // onLeadershipChange is registered with the elector (D2/D7 in
-// tmp/fable/multi-replica.md: Subscribe, not a single channel, since the pod
+// docs/persistence.md: Subscribe, not a single channel, since the pod
 // labeler (slice 4) is a second independent consumer). Must not block —
 // Subscribe callbacks run sequentially on the elector's own goroutine.
 func (r *Recorder) onLeadershipChange(isLeader bool) {

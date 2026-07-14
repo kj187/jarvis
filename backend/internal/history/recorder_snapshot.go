@@ -14,7 +14,7 @@ import (
 )
 
 // snapshotKeepAliveIdle/Interval/Count and listenRetryInterval mirror
-// internal/leader's Binding Constants (tmp/fable/multi-replica.md D2): the
+// internal/leader's Binding Constants (docs/persistence.md D2): the
 // same TCP-keepalive bound on hard-node-failure detection applies to every
 // dedicated PostgreSQL connection, elector or LISTEN alike.
 const (

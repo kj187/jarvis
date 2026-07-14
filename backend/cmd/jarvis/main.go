@@ -63,7 +63,7 @@ func main() {
 
 	// ── Leader Election ───────────────────────────────────────────────────────
 	// Always-on with PostgreSQL, no escape-hatch env var (Resolved Decision 1,
-	// tmp/fable/multi-replica.md). SQLite is single-writer/single-replica by
+	// docs/persistence.md). SQLite is single-writer/single-replica by
 	// design (Critical Invariant #8) — StaticElector is always leader.
 	// recorderDSN gates the Recorder's own snapshot/LISTEN machinery (D3) —
 	// left empty on SQLite, where none of it ever runs.
@@ -155,7 +155,7 @@ func main() {
 	// ── Retention Sweeper ─────────────────────────────────────────────────────
 	// Fully opt-in: with the default config (all JARVIS_RETENTION_* unset)
 	// sweeper.Start is a no-op — no timer, no query, ever. Leader-gated
-	// (tmp/fable/multi-replica.md D3 step 4): a follower must never delete rows.
+	// (docs/persistence.md D3 step 4): a follower must never delete rows.
 	sweeper := retention.NewSweeper(store, cfg.Retention, logger, m, el)
 
 	// ── HTTP Router ───────────────────────────────────────────────────────────

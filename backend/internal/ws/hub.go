@@ -99,7 +99,7 @@ func (h *Hub) Run() {
 
 // BuildEventJSON encodes a typed WS event exactly as BroadcastJSON does,
 // without queuing it — callers that also need to fan the same bytes out to
-// other pods (D4, tmp/fable/multi-replica.md: internal/fanout) build once
+// other pods (D4, docs/persistence.md: internal/fanout) build once
 // with this and pass the result to both BroadcastRaw and Fanout.Publish, so
 // every pod's clients receive byte-identical messages regardless of which
 // pod originated the mutation.

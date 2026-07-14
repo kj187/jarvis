@@ -1,6 +1,6 @@
 {{- if .Values.leaderElection.podLabel.enabled }}
 {{- /* Grants exactly the one-request PATCH the leader pod label needs (D7 in
-       tmp/fable/multi-replica.md) — no client-go, no broader Kubernetes API access. */}}
+       docs/persistence.md) — no client-go, no broader Kubernetes API access. */}}
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
