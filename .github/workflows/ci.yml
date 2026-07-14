@@ -73,7 +73,7 @@ jobs:
         working-directory: backend
     services:
       postgres:
-        image: postgres:17
+        image: index.docker.io/library/postgres@sha256:4ffc96598f8965ee5b33b4186ab4f1ca4df7f4f0325f06d17c19d18e51d3f107 # ratchet:postgres:17
         env:
           POSTGRES_DB: jarvis
           POSTGRES_USER: jarvis
