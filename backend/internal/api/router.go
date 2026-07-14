@@ -15,6 +15,7 @@ import (
 	"github.com/kj187/jarvis/backend/internal/auth"
 	"github.com/kj187/jarvis/backend/internal/cluster"
 	"github.com/kj187/jarvis/backend/internal/config"
+	"github.com/kj187/jarvis/backend/internal/fanout"
 	"github.com/kj187/jarvis/backend/internal/history"
 	"github.com/kj187/jarvis/backend/internal/metrics"
 	"github.com/kj187/jarvis/backend/internal/users"
@@ -55,6 +56,7 @@ func NewRouter(
 	authProvider auth.Provider,
 	userStore *users.Store,
 	m *metrics.Metrics,
+	f fanout.Fanout,
 ) *echo.Echo {
 	e := echo.New()
 	e.HideBanner = true
@@ -118,7 +120,7 @@ func NewRouter(
 		}))
 	}
 
-	srv := NewServer(alertStore, silenceStore, store, hub, registry, cfg, recorder, authProvider, userStore)
+	srv := NewServer(alertStore, silenceStore, store, hub, registry, cfg, recorder, authProvider, userStore, f)
 
 	// Wire JWT secret key into auth middleware.
 	if len(cfg.SecretKey) > 0 {

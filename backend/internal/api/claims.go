@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/kj187/jarvis/backend/internal/auth"
+	"github.com/kj187/jarvis/backend/internal/fanout"
 	"github.com/kj187/jarvis/backend/internal/history"
 	"github.com/kj187/jarvis/backend/internal/models"
 	"github.com/labstack/echo/v4"
@@ -75,11 +76,11 @@ func (s *Server) setClaim(c echo.Context) error {
 
 	s.alertStore.SetActiveClaim(fp, cluster, claim)
 
-	s.hub.BroadcastJSON(models.WSTypeClaimSet, map[string]interface{}{
+	s.broadcastAndFanout(c.Request().Context(), models.WSTypeClaimSet, map[string]interface{}{
 		"fingerprint": fp,
 		"clusterName": cluster,
 		"claim":       claim,
-	})
+	}, fanout.Ref{Type: models.WSTypeClaimSet, Fingerprint: fp, ClusterName: cluster})
 
 	return c.JSON(http.StatusCreated, claim)
 }
@@ -113,11 +114,11 @@ func (s *Server) releaseClaim(c echo.Context) error {
 
 	s.alertStore.ClearActiveClaim(fp, cluster)
 
-	s.hub.BroadcastJSON(models.WSTypeClaimReleased, map[string]interface{}{
+	s.broadcastAndFanout(c.Request().Context(), models.WSTypeClaimReleased, map[string]interface{}{
 		"fingerprint": fp,
 		"clusterName": cluster,
 		"releasedBy":  by,
-	})
+	}, fanout.Ref{Type: models.WSTypeClaimReleased, Fingerprint: fp, ClusterName: cluster, ID: by})
 
 	return c.NoContent(http.StatusNoContent)
 }
@@ -169,11 +170,11 @@ func (s *Server) updateClaimNote(c echo.Context) error {
 
 	s.alertStore.SetActiveClaim(fp, cluster, claim)
 
-	s.hub.BroadcastJSON(models.WSTypeClaimSet, map[string]interface{}{
+	s.broadcastAndFanout(c.Request().Context(), models.WSTypeClaimSet, map[string]interface{}{
 		"fingerprint": fp,
 		"clusterName": cluster,
 		"claim":       claim,
-	})
+	}, fanout.Ref{Type: models.WSTypeClaimSet, Fingerprint: fp, ClusterName: cluster})
 
 	return c.JSON(http.StatusOK, claim)
 }

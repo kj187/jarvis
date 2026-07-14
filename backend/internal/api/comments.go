@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/kj187/jarvis/backend/internal/auth"
+	"github.com/kj187/jarvis/backend/internal/fanout"
 	"github.com/kj187/jarvis/backend/internal/models"
 	"github.com/labstack/echo/v4"
 )
@@ -86,10 +87,10 @@ func (s *Server) addComment(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to add comment")
 	}
 
-	s.hub.BroadcastJSON("comment_added", map[string]interface{}{
+	s.broadcastAndFanout(c.Request().Context(), "comment_added", map[string]interface{}{
 		"fingerprint": fp,
 		"comment":     comment,
-	})
+	}, fanout.Ref{Type: "comment_added", Fingerprint: fp, ClusterName: cluster, ID: strconv.FormatInt(comment.ID, 10)})
 
 	return c.JSON(http.StatusCreated, comment)
 }

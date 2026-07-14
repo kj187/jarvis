@@ -12,6 +12,7 @@ import (
 	"github.com/kj187/jarvis/backend/internal/cluster"
 	"github.com/kj187/jarvis/backend/internal/config"
 	idb "github.com/kj187/jarvis/backend/internal/db"
+	"github.com/kj187/jarvis/backend/internal/fanout"
 	"github.com/kj187/jarvis/backend/internal/history"
 	"github.com/kj187/jarvis/backend/internal/metrics"
 	"github.com/kj187/jarvis/backend/internal/models"
@@ -41,7 +42,7 @@ func newTestServerFull(t *testing.T) (*Server, *history.AlertStore, *history.Sto
 	registry := cluster.NewRegistry(nil)
 	cfg := &config.Config{}
 
-	return NewServer(alertStore, history.NewSilenceStore(), store, hub, registry, cfg, nil, auth.NoneProvider{}, userStore), alertStore, store
+	return NewServer(alertStore, history.NewSilenceStore(), store, hub, registry, cfg, nil, auth.NoneProvider{}, userStore, fanout.NoopFanout{}), alertStore, store
 }
 
 // seedFP inserts a fingerprint row so FK constraints in claims/comments pass.
