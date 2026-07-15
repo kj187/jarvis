@@ -1,3 +1,24 @@
+<a name="v1.9.0"></a>
+## [v1.9.0](https://github.com/kj187/jarvis/compare/v1.8.0...v1.9.0) (2026-07-15)
+
+### Bug Fixes
+
+* **db:** make RecordStatusChange transactional and lock-guarded ([#108](https://github.com/kj187/jarvis/issues/108))
+* **frontend:** hide [@claimed](https://github.com/claimed)-by pseudo-label from label chips ([#107](https://github.com/kj187/jarvis/issues/107))
+
+### Documentation
+
+* canonical persistence guide + doc consolidation (D8) ([#116](https://github.com/kj187/jarvis/issues/116))
+
+### Features
+
+* **alerts:** leader-only polling + PostgreSQL snapshot distribution ([#110](https://github.com/kj187/jarvis/issues/110))
+* **config:** ServiceMonitor relabelings, annotations, honorLabels ([#117](https://github.com/kj187/jarvis/issues/117))
+* **config:** Helm chart HA deployment surface (PDB, topology spread) ([#113](https://github.com/kj187/jarvis/issues/113))
+* **config:** leader pod label via Kubernetes API PATCH (no client-go) ([#112](https://github.com/kj187/jarvis/issues/112))
+* **config:** PostgreSQL leader election + leader-gated history writes ([#109](https://github.com/kj187/jarvis/issues/109))
+* **ws:** cross-pod mutation fanout via PostgreSQL LISTEN/NOTIFY ([#111](https://github.com/kj187/jarvis/issues/111))
+
 <a name="v1.8.0"></a>
 ## [v1.8.0](https://github.com/kj187/jarvis/compare/v1.7.0...v1.8.0) (2026-07-13)
 
@@ -18,6 +39,7 @@
 * **deps:** bump docker/build-push-action from 7.2.0 to 7.3.0 ([#93](https://github.com/kj187/jarvis/issues/93))
 * **deps:** bump golang.org/x/crypto from 0.53.0 to 0.54.0 in /backend ([#92](https://github.com/kj187/jarvis/issues/92))
 * **deps:** bump github/codeql-action/upload-sarif ([#89](https://github.com/kj187/jarvis/issues/89))
+* **release:** prepare v1.8.0
 
 ### Documentation
 
