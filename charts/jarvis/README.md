@@ -92,6 +92,10 @@ Tests cover four suites (`deployment`, `configmap`, `secret`, `ingress`) and run
 | `metrics.serviceMonitor.interval` | string | `30s` | Scrape interval |
 | `metrics.serviceMonitor.scrapeTimeout` | string | `10s` | Scrape timeout |
 | `metrics.serviceMonitor.labels` | object | `{}` | Extra labels on the `ServiceMonitor` (e.g. to match a `kube-prometheus-stack` release selector) |
+| `metrics.serviceMonitor.annotations` | object | `{}` | Extra annotations on the `ServiceMonitor` |
+| `metrics.serviceMonitor.relabelings` | list | `[]` | Prometheus Operator `Endpoint.relabelings` (target relabeling before scrape) |
+| `metrics.serviceMonitor.metricRelabelings` | list | `[]` | Prometheus Operator `Endpoint.metricRelabelings` (metric relabeling after scrape) |
+| `metrics.serviceMonitor.honorLabels` | bool | `false` | `Endpoint.honorLabels` — keep `false` unless you specifically want Jarvis's own metric labels (e.g. `cluster`) to win over scrape-time labels on a collision |
 | `metrics.podAnnotations` | bool | `false` | Add `prometheus.io/scrape`, `prometheus.io/port`, `prometheus.io/path` pod annotations instead (annotation-based scraping) |
 | `ingress.enabled` | bool | `false` | Enable Ingress |
 | `ingress.className` | string | `""` | Ingress class name |

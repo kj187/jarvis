@@ -58,3 +58,69 @@ tests:
       - equal:
           path: metadata.labels.release
           value: kube-prometheus-stack
+
+  - it: omits relabelings and metricRelabelings by default
+    set:
+      metrics.serviceMonitor.enabled: true
+    asserts:
+      - isNull:
+          path: spec.endpoints[0].relabelings
+      - isNull:
+          path: spec.endpoints[0].metricRelabelings
+
+  - it: applies custom relabelings
+    set:
+      metrics.serviceMonitor.enabled: true
+      metrics.serviceMonitor.relabelings:
+        - sourceLabels: ["__meta_kubernetes_pod_node_name"]
+          targetLabel: node
+    asserts:
+      - equal:
+          path: spec.endpoints[0].relabelings[0].sourceLabels[0]
+          value: __meta_kubernetes_pod_node_name
+      - equal:
+          path: spec.endpoints[0].relabelings[0].targetLabel
+          value: node
+
+  - it: applies custom metricRelabelings
+    set:
+      metrics.serviceMonitor.enabled: true
+      metrics.serviceMonitor.metricRelabelings:
+        - sourceLabels: ["__name__"]
+          regex: "go_.*"
+          action: drop
+    asserts:
+      - equal:
+          path: spec.endpoints[0].metricRelabelings[0].regex
+          value: "go_.*"
+      - equal:
+          path: spec.endpoints[0].metricRelabelings[0].action
+          value: drop
+
+  - it: omits annotations and honorLabels by default
+    set:
+      metrics.serviceMonitor.enabled: true
+    asserts:
+      - isNull:
+          path: metadata.annotations
+      - isNull:
+          path: spec.endpoints[0].honorLabels
+
+  - it: applies custom annotations
+    set:
+      metrics.serviceMonitor.enabled: true
+      metrics.serviceMonitor.annotations:
+        argocd.argoproj.io/sync-options: Prune=false
+    asserts:
+      - equal:
+          path: metadata.annotations["argocd.argoproj.io/sync-options"]
+          value: Prune=false
+
+  - it: sets honorLabels when enabled
+    set:
+      metrics.serviceMonitor.enabled: true
+      metrics.serviceMonitor.honorLabels: true
+    asserts:
+      - equal:
+          path: spec.endpoints[0].honorLabels
+          value: true
