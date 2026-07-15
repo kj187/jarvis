@@ -64,6 +64,18 @@ metrics:
     interval: 30s
     scrapeTimeout: 10s
     labels: {}
+    annotations: {}
+    # Prometheus Operator Endpoint.relabelings / metricRelabelings — passed
+    # through verbatim (same shape as the upstream CRD), e.g. to drop noisy
+    # metrics or rewrite target labels before/after scraping.
+    relabelings: []
+    metricRelabelings: []
+    # Endpoint.honorLabels. Keep false (default): on a label collision, the
+    # scrape-time label wins and Jarvis's own label (e.g. "cluster", the
+    # Alertmanager cluster name — see backend/internal/metrics/metrics.go) is
+    # renamed to exported_<name> instead of being silently dropped. Only set
+    # true if you specifically want Jarvis's own labels to take precedence.
+    honorLabels: false
   # Alternative to serviceMonitor for annotation-based scraping setups.
   podAnnotations: false
 
