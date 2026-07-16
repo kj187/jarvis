@@ -42,6 +42,17 @@ JARVIS_DB_DSN=postgres://jarvis:secret@postgres:5432/jarvis?sslmode=require
   test container.
 - **Redaction**: the password in `JARVIS_DB_DSN` is redacted (`db.RedactDSN`)
   before it ever reaches a log line — the raw DSN is never logged.
+- **Connection-pool cap**: `JARVIS_DB_MAX_OPEN_CONNS` (default `10`) caps
+  the PostgreSQL pool per pod; idle connections are kept up to the same cap
+  so request bursts reuse connections instead of churning them
+  (`ConnMaxLifetime=30m`, `ConnMaxIdleTime=5m`). Each pod additionally holds
+  one dedicated connection for leader election and one for the
+  LISTEN/NOTIFY WS fanout. Size it so
+  `replicas × (JARVIS_DB_MAX_OPEN_CONNS + 2)` stays well below the server's
+  `max_connections` minus its reserved slots — an unbounded pool has
+  exhausted the connection slots of a shared RDS instance in production
+  (`FATAL: remaining connection slots are reserved …`, SQLSTATE 53300).
+  Ignored for SQLite, which is always single-connection.
 - **Local PostgreSQL for testing**: `make up-postgres` starts a disposable
   container on port 5432 (`jarvis`/`jarvis`/`jarvis`); point
   `JARVIS_DB_DSN=postgres://jarvis:jarvis@localhost:5432/jarvis?sslmode=disable`

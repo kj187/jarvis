@@ -32,6 +32,20 @@ tests:
           path: data.JARVIS_POLL_INTERVAL
           value: 30s
 
+  - it: sets JARVIS_DB_MAX_OPEN_CONNS to 10 by default
+    asserts:
+      - equal:
+          path: data.JARVIS_DB_MAX_OPEN_CONNS
+          value: "10"
+
+  - it: sets JARVIS_DB_MAX_OPEN_CONNS from database.maxOpenConns
+    set:
+      database.maxOpenConns: 25
+    asserts:
+      - equal:
+          path: data.JARVIS_DB_MAX_OPEN_CONNS
+          value: "25"
+
   - it: includes JARVIS_RUNBOOK_BASE_URL when set
     set:
       config.runbookBaseURL: https://wiki.example.com/runbooks/

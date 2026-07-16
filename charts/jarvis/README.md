@@ -114,6 +114,7 @@ Tests cover four suites (`deployment`, `configmap`, `secret`, `ingress`) and run
 | `database.dsn` | string | `/data/jarvis.db` | Database DSN (SQLite path or `postgres://` URL; PostgreSQL recommended for production) |
 | `database.existingSecret` | string | `""` | Use an existing Secret for the DSN instead |
 | `database.existingSecretKey` | string | `dsn` | Key in the existing Secret |
+| `database.maxOpenConns` | int | `10` | PostgreSQL connection-pool cap per pod (`JARVIS_DB_MAX_OPEN_CONNS`); ignored for SQLite. Keep `replicaCount × maxOpenConns` well below the server's `max_connections` |
 | `auth.provider` | string | `none` | Authentication mode: `none`, `internal`, or `oidc` |
 | `auth.mode` | string | `""` | Protection level when provider ≠ `none`: `write_protect` (default) or `full_protect` |
 | `auth.secretKey` | string | `""` | JWT signing key (min 32 random bytes). Use `auth.existingSecret` in production. |
