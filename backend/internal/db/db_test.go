@@ -21,6 +21,56 @@ func TestOpen_InMemory(t *testing.T) {
 	}
 }
 
+func TestOpen_SQLite_IgnoresMaxOpenConns(t *testing.T) {
+	// SQLite must stay single-writer (AGENTS.md invariant 8) no matter what
+	// pool size the caller asks for.
+	database, _, err := Open(":memory:", WithMaxOpenConns(50))
+	if err != nil {
+		t.Fatalf("Open() error: %v", err)
+	}
+	defer func() { _ = database.Close() }()
+
+	if got := database.Stats().MaxOpenConnections; got != 1 {
+		t.Errorf("MaxOpenConnections = %d, want 1", got)
+	}
+}
+
+// TestOpen_Postgres_PoolLimits is env-gated (JARVIS_TEST_POSTGRES_DSN):
+// an unbounded pool exhausted RDS connection slots in production
+// (SQLSTATE 53300), so openPostgres must always cap the pool.
+func TestOpen_Postgres_PoolLimits(t *testing.T) {
+	dsn := os.Getenv("JARVIS_TEST_POSTGRES_DSN")
+	if dsn == "" {
+		t.Skip("JARVIS_TEST_POSTGRES_DSN not set — skipping PostgreSQL-backed test")
+	}
+
+	t.Run("default", func(t *testing.T) {
+		database, _, err := openPostgres(dsn, defaultPoolConfig())
+		if err != nil {
+			t.Fatalf("openPostgres() error: %v", err)
+		}
+		defer func() { _ = database.Close() }()
+
+		if got := database.Stats().MaxOpenConnections; got != defaultMaxOpenConns {
+			t.Errorf("MaxOpenConnections = %d, want %d", got, defaultMaxOpenConns)
+		}
+	})
+
+	t.Run("custom", func(t *testing.T) {
+		cfg := defaultPoolConfig()
+		WithMaxOpenConns(3)(&cfg)
+		database, _, err := openPostgres(dsn, cfg)
+		if err != nil {
+			t.Fatalf("openPostgres() error: %v", err)
+		}
+		defer func() { _ = database.Close() }()
+
+		if got := database.Stats().MaxOpenConnections; got != 3 {
+			t.Errorf("MaxOpenConnections = %d, want 3", got)
+		}
+	})
+}
+
 func TestDetectDialect(t *testing.T) {
 	cases := []struct {
 		dsn  string
@@ -114,7 +164,7 @@ func TestMigrate_Postgres_PollSnapshotsTableExists(t *testing.T) {
 	// always PostgreSQL, and Open's SQLite branch reaching os.MkdirAll(path)
 	// on a value derived from JARVIS_TEST_POSTGRES_DSN otherwise trips gosec's
 	// taint analysis (G703) even though that branch can never execute here.
-	database, dialect, err := openPostgres(dsn)
+	database, dialect, err := openPostgres(dsn, defaultPoolConfig())
 	if err != nil {
 		t.Fatalf("openPostgres() error: %v", err)
 	}

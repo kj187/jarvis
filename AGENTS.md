@@ -91,8 +91,10 @@ Tool-specific entry points map to the same files (no duplicated content):
 7. **`cursor: pointer` on all clickable elements** — globally in CSS:
    `a, button, [role="button"] { cursor: pointer }`.
 8. **SQLite single writer**: `SetMaxOpenConns(1)` + WAL mode — only for the
-   SQLite dialect. PostgreSQL uses the default pool. Never add
-   `SetMaxOpenConns(1)` for PostgreSQL.
+   SQLite dialect. PostgreSQL uses a **capped** pool
+   (`JARVIS_DB_MAX_OPEN_CONNS`, default 10, MaxIdle = MaxOpen) — never
+   unbounded (an unbounded pool exhausted RDS connection slots in
+   production, SQLSTATE 53300) and never `SetMaxOpenConns(1)`.
 9. **`JARVIS_DB_DSN` never logged raw**: `db.RedactDSN()` must wrap the DSN
    before any log call. Password stays out of logs.
 10. **`rebind()` in `history/store.go`**: All SQL queries use `?`

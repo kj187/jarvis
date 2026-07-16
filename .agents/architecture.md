@@ -308,7 +308,7 @@ CREATE TABLE IF NOT EXISTS poll_snapshots (
 );
 ```
 
-**SQLite settings** (on open): `SetMaxOpenConns(1)`, `PRAGMA journal_mode=WAL`, `PRAGMA foreign_keys=ON`, `PRAGMA busy_timeout=5000`. PostgreSQL uses the default pool (no `SetMaxOpenConns(1)`).
+**SQLite settings** (on open): `SetMaxOpenConns(1)`, `PRAGMA journal_mode=WAL`, `PRAGMA foreign_keys=ON`, `PRAGMA busy_timeout=5000`. PostgreSQL uses a capped pool: `JARVIS_DB_MAX_OPEN_CONNS` (default 10) sets MaxOpen **and** MaxIdle (so bursts reuse connections instead of churning them), plus `ConnMaxLifetime=30m` / `ConnMaxIdleTime=5m` — never unbounded, never `SetMaxOpenConns(1)` (Critical Invariant #8).
 
 ---
 
@@ -1208,6 +1208,7 @@ consumed snapshot (D3).
 |---|---|
 | `JARVIS_PORT` `JARVIS_LOG_LEVEL` `JARVIS_LOG_REQUESTS` `JARVIS_POLL_INTERVAL` | server basics — defaults: `8080`, `info`, `false`, `15s`. `JARVIS_POLL_INTERVAL` also drives the grace period: `main.go` sets `Store`'s grace period to `max(60s, 2×JARVIS_POLL_INTERVAL)` and `Recorder.claimReleaseDelay` to stay comfortably above it (Critical Invariant #1, `AGENTS.md`) |
 | `JARVIS_DB_DSN` | `postgres://` or `postgresql://` → PostgreSQL, anything else → SQLite file path. Default `/data/jarvis.db`. Never logged raw (`db.RedactDSN()`) |
+| `JARVIS_DB_MAX_OPEN_CONNS` | PostgreSQL pool cap per pod (default `10`, must be ≥ 1; MaxIdle = MaxOpen). Ignored for SQLite (always 1). Size pods × cap below the server's `max_connections` |
 | `JARVIS_RUNBOOK_BASE_URL` | prefix for non-URL `runbook` values |
 | `JARVIS_ALLOWED_ORIGINS` | CORS + WS origin allow-list (no `*`), comma-separated |
 | `JARVIS_AUTH_PROVIDER` `JARVIS_AUTH_MODE` | auth; provider default `none`; mode defaults to `write_protect` when provider ≠ none |

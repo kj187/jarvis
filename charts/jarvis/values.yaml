@@ -185,6 +185,11 @@ database:
   # When set, `dsn` above is ignored.
   existingSecret: ""
   existingSecretKey: dsn
+  # Max open connections to PostgreSQL per pod (JARVIS_DB_MAX_OPEN_CONNS).
+  # Idle connections are kept up to the same cap. Ignored for SQLite.
+  # Size it so replicaCount × maxOpenConns stays well below the server's
+  # max_connections (minus reserved slots).
+  maxOpenConns: 10
 
 # Persistent storage for the SQLite database file.
 # Ignored when using PostgreSQL (database.dsn starts with "postgres://").
