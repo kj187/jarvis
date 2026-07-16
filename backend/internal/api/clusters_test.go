@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/labstack/echo/v4"
 
@@ -180,6 +181,53 @@ func TestGetClusters_AllMembersDown_Unhealthy(t *testing.T) {
 	got := getClustersResponse(t, srv)
 	if got[0].Healthy {
 		t.Error("Healthy = true, want false (all members down)")
+	}
+}
+
+func TestGetStatus_IncludesPollIntervalSeconds(t *testing.T) {
+	database, dialect, err := idb.Open(":memory:")
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	if err := idb.Migrate(database, dialect); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	t.Cleanup(func() { _ = database.Close() })
+
+	hub := ws.NewHub(nil, nil, metrics.New("test"))
+	go hub.Run()
+
+	srv := NewServer(
+		&history.AlertStore{},
+		history.NewSilenceStore(),
+		history.NewStore(database, dialect),
+		hub,
+		cluster.NewRegistry(nil),
+		&config.Config{PollInterval: 45 * time.Second},
+		&fakeTriggerer{},
+		auth.NoneProvider{},
+		users.NewStore(database, dialect),
+		fanout.NoopFanout{},
+	)
+
+	e := echo.New()
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/status", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	if err := srv.getStatus(c); err != nil {
+		t.Fatalf("getStatus: %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+
+	var got map[string]interface{}
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if got["poll_interval_seconds"] != float64(45) {
+		t.Errorf("poll_interval_seconds = %v, want 45", got["poll_interval_seconds"])
 	}
 }
 

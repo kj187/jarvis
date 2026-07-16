@@ -69,10 +69,11 @@ func (s *Server) getClusters(c echo.Context) error {
 func (s *Server) getStatus(c echo.Context) error {
 	totalAlerts := len(s.alertStore.Get())
 	return c.JSON(http.StatusOK, map[string]interface{}{
-		"status":     "ok",
-		"clusters":   len(s.registry.All()),
-		"alerts":     totalAlerts,
-		"ws_clients": s.hub.ClientCount(),
-		"leader":     s.pollTrigger.IsLeader(),
+		"status":                "ok",
+		"clusters":              len(s.registry.All()),
+		"alerts":                totalAlerts,
+		"ws_clients":            s.hub.ClientCount(),
+		"leader":                s.pollTrigger.IsLeader(),
+		"poll_interval_seconds": s.cfg.PollInterval.Seconds(),
 	})
 }
