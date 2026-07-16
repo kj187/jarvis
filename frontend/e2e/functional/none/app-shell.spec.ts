@@ -114,7 +114,7 @@ test('A3 mobile hamburger (<768px) reveals header controls', async ({ page }) =>
   // Controls now visible after opening hamburger.
   // DOM has two "Refresh now" buttons: desktop (CSS-hidden at <768px) + mobile panel.
   // Use .last() to target the mobile panel button that's actually visible.
-  await expect(page.getByTitle('Refresh now').last()).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Refresh now' }).last()).toBeVisible()
 })
 
 test('A4 WebSocket indicator is visible and green when connected', async ({ page }) => {
@@ -134,7 +134,7 @@ test('A5 manual refresh works', async ({ page, am, jarvis }) => {
   await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, kubernetesAlerts.length)
   await page.goto('/?state=active')
 
-  const refreshBtn = page.getByTitle('Refresh now')
+  const refreshBtn = page.getByRole('button', { name: 'Refresh now' })
   await expect(refreshBtn).toBeVisible()
   await refreshBtn.click()
   await expect(refreshBtn).toBeVisible()

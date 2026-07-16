@@ -295,6 +295,7 @@ export function fetchStatus(): Promise<{
   clusters: number
   alerts: number
   ws_clients: number
+  poll_interval_seconds: number
 }> {
   return request('/status')
 }
