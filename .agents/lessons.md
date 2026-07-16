@@ -9,6 +9,26 @@ instead of duplicating.
 
 ---
 
+## Go's default database/sql pool is unbounded — it exhausted RDS connection slots in production
+
+**Symptom**: `stats`/`heatmap` requests returned 500 with
+`FATAL: remaining connection slots are reserved for roles with privileges
+of the "pg_use_reserved_connections" role (SQLSTATE 53300)` — the RDS
+instance had no free connection slots left, across multiple pods at once.
+**Cause**: `openPostgres` never configured the pool. `database/sql`
+defaults are `MaxOpenConns=0` (unlimited) and `MaxIdleConns=2`: every
+request burst opened as many connections as there were parallel queries,
+then closed almost all of them again (churn), multiplied by the number of
+pods — until the server's `max_connections` was gone. SQLite never hits
+this because invariant #8 forces `SetMaxOpenConns(1)`.
+**Rule**: Never ship a `database/sql` pool with default settings against a
+shared PostgreSQL. Cap it (`JARVIS_DB_MAX_OPEN_CONNS`, default 10) and set
+`MaxIdleConns = MaxOpenConns` so bursts reuse connections instead of
+churning them. Full sizing guidance (leader-election + fanout connections,
+reserved slots): `docs/persistence.md → Connection-pool cap`.
+
+---
+
 ## A fixed 60s grace period can't absorb a missed poll once the poll interval itself is ≥ 60s
 
 **Symptom**: Not yet observed in production — found by inspection while

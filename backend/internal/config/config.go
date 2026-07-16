@@ -20,6 +20,11 @@ type Config struct {
 	// DBDSN is the database connection string. Starts with "postgres://" or
 	// "postgresql://" for PostgreSQL; anything else is treated as a SQLite file path.
 	DBDSN          string
+	// DBMaxOpenConns caps the PostgreSQL connection pool per pod (idle
+	// connections are kept up to the same cap). Ignored for SQLite, which is
+	// always single-connection. Size it so pods × DBMaxOpenConns stays well
+	// below the server's max_connections.
+	DBMaxOpenConns int
 	RunbookBaseURL string
 	AllowedOrigins []string
 	Clusters       []ClusterConfig
@@ -210,12 +215,22 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 
+	dbMaxOpenConnsRaw := getEnv("JARVIS_DB_MAX_OPEN_CONNS", "10")
+	dbMaxOpenConns, err := strconv.Atoi(dbMaxOpenConnsRaw)
+	if err != nil {
+		return nil, fmt.Errorf("invalid JARVIS_DB_MAX_OPEN_CONNS: must be an integer, got %q", dbMaxOpenConnsRaw)
+	}
+	if dbMaxOpenConns < 1 {
+		return nil, fmt.Errorf("invalid JARVIS_DB_MAX_OPEN_CONNS: must be >= 1, got %d", dbMaxOpenConns)
+	}
+
 	return &Config{
 		Port:             getEnv("JARVIS_PORT", "8080"),
 		LogLevel:         getEnv("JARVIS_LOG_LEVEL", "info"),
 		LogRequests:      getEnvBool("JARVIS_LOG_REQUESTS", false),
 		PollInterval:     pollInterval,
 		DBDSN:            getEnv("JARVIS_DB_DSN", "/data/jarvis.db"),
+		DBMaxOpenConns:   dbMaxOpenConns,
 		RunbookBaseURL:   getEnv("JARVIS_RUNBOOK_BASE_URL", ""),
 		AllowedOrigins:   allowedOrigins,
 		Clusters:         clusters,

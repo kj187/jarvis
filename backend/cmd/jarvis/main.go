@@ -42,13 +42,13 @@ func main() {
 	slog.SetDefault(logger)
 
 	// ── Database ──────────────────────────────────────────────────────────────
-	database, dialect, err := db.Open(cfg.DBDSN)
+	database, dialect, err := db.Open(cfg.DBDSN, db.WithMaxOpenConns(cfg.DBMaxOpenConns))
 	if err != nil {
 		logger.Error("open database", "dialect", db.DetectDialect(cfg.DBDSN), "err", err)
 		os.Exit(1)
 	}
 	defer func() { _ = database.Close() }()
-	logger.Info("database connected", "dialect", dialect, "dsn", db.RedactDSN(cfg.DBDSN))
+	logger.Info("database connected", "dialect", dialect, "dsn", db.RedactDSN(cfg.DBDSN), "max_open_conns", cfg.DBMaxOpenConns)
 
 	if err := db.Migrate(database, dialect); err != nil {
 		logger.Error("migrate database", "err", err)

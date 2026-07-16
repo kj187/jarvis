@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 	_ "modernc.org/sqlite"
@@ -45,12 +46,49 @@ func RedactDSN(dsn string) string {
 	return redacted
 }
 
+// Pool defaults for PostgreSQL. An unbounded pool exhausted the connection
+// slots of a shared RDS instance in production (SQLSTATE 53300): every
+// request burst opened fresh connections (database/sql default MaxIdleConns
+// of 2 closed them right after), multiplied by the number of pods. MaxIdle
+// equals MaxOpen so burst connections are reused instead of churned.
+const (
+	defaultMaxOpenConns    = 10
+	defaultConnMaxLifetime = 30 * time.Minute
+	defaultConnMaxIdleTime = 5 * time.Minute
+)
+
+type poolConfig struct {
+	maxOpenConns int
+}
+
+func defaultPoolConfig() poolConfig {
+	return poolConfig{maxOpenConns: defaultMaxOpenConns}
+}
+
+// Option customizes how Open configures the connection pool.
+type Option func(*poolConfig)
+
+// WithMaxOpenConns caps the PostgreSQL connection pool (per process; idle
+// connections are kept up to the same cap). Values < 1 are ignored. SQLite
+// is unaffected — it is always single-connection.
+func WithMaxOpenConns(n int) Option {
+	return func(c *poolConfig) {
+		if n >= 1 {
+			c.maxOpenConns = n
+		}
+	}
+}
+
 // Open opens a database connection for the given DSN and returns the
 // connection and its dialect. Use RedactDSN before logging the DSN.
-func Open(dsn string) (*sql.DB, Dialect, error) {
+func Open(dsn string, opts ...Option) (*sql.DB, Dialect, error) {
+	cfg := defaultPoolConfig()
+	for _, opt := range opts {
+		opt(&cfg)
+	}
 	switch DetectDialect(dsn) {
 	case DialectPostgres:
-		return openPostgres(dsn)
+		return openPostgres(dsn, cfg)
 	default:
 		return openSQLite(dsn)
 	}
@@ -95,11 +133,16 @@ func openSQLite(path string) (*sql.DB, Dialect, error) {
 	return database, DialectSQLite, nil
 }
 
-func openPostgres(dsn string) (*sql.DB, Dialect, error) {
+func openPostgres(dsn string, cfg poolConfig) (*sql.DB, Dialect, error) {
 	database, err := sql.Open("pgx", dsn)
 	if err != nil {
 		return nil, DialectPostgres, fmt.Errorf("open postgres: %w", err)
 	}
+
+	database.SetMaxOpenConns(cfg.maxOpenConns)
+	database.SetMaxIdleConns(cfg.maxOpenConns)
+	database.SetConnMaxLifetime(defaultConnMaxLifetime)
+	database.SetConnMaxIdleTime(defaultConnMaxIdleTime)
 
 	if err := database.PingContext(context.Background()); err != nil {
 		_ = database.Close()

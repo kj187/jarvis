@@ -8,6 +8,7 @@ data:
   JARVIS_PORT: "8080"
   JARVIS_LOG_LEVEL: {{ .Values.config.logLevel | quote }}
   JARVIS_POLL_INTERVAL: {{ .Values.config.pollInterval | quote }}
+  JARVIS_DB_MAX_OPEN_CONNS: {{ .Values.database.maxOpenConns | quote }}
   {{- if .Values.config.runbookBaseURL }}
   JARVIS_RUNBOOK_BASE_URL: {{ .Values.config.runbookBaseURL | quote }}
   {{- end }}
