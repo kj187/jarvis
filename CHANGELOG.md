@@ -1,3 +1,14 @@
+<a name="v1.9.1"></a>
+## [v1.9.1](https://github.com/kj187/jarvis/compare/v1.9.0...v1.9.1) (2026-07-16)
+
+### Bug Fixes
+
+* **db:** cap PostgreSQL connection pool to stop RDS slot exhaustion ([#120](https://github.com/kj187/jarvis/issues/120))
+
+### Features
+
+* **frontend:** explain refresh in tooltip incl. backend poll interval ([#119](https://github.com/kj187/jarvis/issues/119))
+
 <a name="v1.9.0"></a>
 ## [v1.9.0](https://github.com/kj187/jarvis/compare/v1.8.0...v1.9.0) (2026-07-15)
 
@@ -5,6 +16,10 @@
 
 * **db:** make RecordStatusChange transactional and lock-guarded ([#108](https://github.com/kj187/jarvis/issues/108))
 * **frontend:** hide [@claimed](https://github.com/claimed)-by pseudo-label from label chips ([#107](https://github.com/kj187/jarvis/issues/107))
+
+### Chores
+
+* **release:** prepare v1.9.0
 
 ### Documentation
 
