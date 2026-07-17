@@ -304,7 +304,10 @@ backend:
   - go test -v -race -coverprofile=coverage.out ./... | go-junit-report → report.xml
   - Coverage summary → GITHUB_STEP_SUMMARY (go tool cover -func)
   - dorny/test-reporter uploads report.xml as "Backend Test Results"
-  - upload-artifact: coverage.out + report.xml; coverage upload to Codecov
+  - upload-artifact: coverage.out + report.xml; coverage upload to Codecov (flag `backend`;
+    backend-only by design — frontend vitest coverage measures only lib/alertUtils.ts and would
+    misrepresent frontend coverage. Status checks configured in codecov.yml: project auto ±1%,
+    patch 70% ±5% — thresholds absorb goroutine-timing coverage noise from -race runs)
   - govulncheck ./...
   - golangci-lint run   # includes gosec (enabled in .golangci.yml)
   - fuzz targets, 20s each (FuzzRedactDSN, FuzzParseNullableTimeString, FuzzParseSecretKey,
