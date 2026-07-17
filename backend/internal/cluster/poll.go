@@ -15,6 +15,15 @@ import (
 // used by the caller to record a per-member fetch-duration metric. May be nil.
 type FetchDurationFunc func(member string, seconds float64)
 
+// fetchRetryDelay is the pause before the single retry FetchAlerts and
+// FetchSilences make on a retryable per-member error — long enough to let a
+// one-off transient reset (e.g. a service-mesh sidecar tearing down a
+// connection) clear. The retry is a second, independent request with its own
+// 10s client timeout, so the worst case for a hard-down member roughly
+// doubles (≈20s per poll instead of ≈10s); polls run sequentially and never
+// overlap, a slow poll just delays the next tick.
+const fetchRetryDelay = 250 * time.Millisecond
+
 // FetchAlerts polls all members in parallel and returns the deduplicated,
 // enriched alert set for this cluster (see mergeAlerts). Returns an error
 // only when ALL members failed — a single member's failure does not fail the
@@ -38,6 +47,16 @@ func (c *Cluster) FetchAlerts(ctx context.Context, onDuration FetchDurationFunc)
 			defer wg.Done()
 			start := time.Now()
 			alerts, err := m.Client.GetAlerts(ctx)
+			if err != nil && ctx.Err() == nil && isRetryableUpstreamError(err) {
+				// A single transient upstream blip is common and self-heals
+				// immediately — one retry avoids logging/alerting on it as a
+				// poll failure (see CreateSilence/DeleteSilence, which apply
+				// the same retry-once policy on the write side). onDuration
+				// deliberately reports the total including the retry: the
+				// metric reflects this member's contribution to poll latency.
+				sleepCtx(ctx, fetchRetryDelay)
+				alerts, err = m.Client.GetAlerts(ctx)
+			}
 			if onDuration != nil {
 				onDuration(m.Name, time.Since(start).Seconds())
 			}
@@ -97,6 +116,10 @@ func (c *Cluster) FetchSilences(ctx context.Context, onDuration FetchDurationFun
 			defer wg.Done()
 			start := time.Now()
 			silences, err := m.Client.GetSilences(ctx)
+			if err != nil && ctx.Err() == nil && isRetryableUpstreamError(err) {
+				sleepCtx(ctx, fetchRetryDelay)
+				silences, err = m.Client.GetSilences(ctx)
+			}
 			if onDuration != nil {
 				onDuration(m.Name, time.Since(start).Seconds())
 			}
@@ -128,7 +151,7 @@ func (c *Cluster) FetchSilences(ctx context.Context, onDuration FetchDurationFun
 // order); on transport failure or a 5xx response, retries once against the
 // next healthy member. Never sent to all members — gossip replicates
 // silences between real HA members, so posting to every member would create
-// duplicates. Does NOT retry a 4xx response (see isRetryableWriteError) — the
+// duplicates. Does NOT retry a 4xx response (see isRetryableUpstreamError) — the
 // request reached Alertmanager and was rejected on its merits (invalid
 // matcher, bad ID, …); a second member will reject it identically, so
 // retrying only adds latency and (for a non-idempotent create) risks a
@@ -146,7 +169,7 @@ func (c *Cluster) CreateSilence(ctx context.Context, s alertmanager.PostableSile
 			return id, nil
 		}
 		lastErr = err
-		if !isRetryableWriteError(err) {
+		if !isRetryableUpstreamError(err) {
 			return "", err
 		}
 	}
@@ -166,24 +189,35 @@ func (c *Cluster) DeleteSilence(ctx context.Context, id string) error {
 			return nil
 		}
 		lastErr = err
-		if !isRetryableWriteError(err) {
+		if !isRetryableUpstreamError(err) {
 			return err
 		}
 	}
 	return lastErr
 }
 
-// isRetryableWriteError reports whether a failed write is worth retrying
-// against another member: true for transport/network errors and 5xx
-// responses, false for a 4xx *alertmanager.AMError — Alertmanager received
-// and rejected the request on its merits, and every member enforces the
-// same validation.
-func isRetryableWriteError(err error) bool {
+// isRetryableUpstreamError reports whether a failed request (read or write)
+// is worth retrying: true for transport/network errors and 5xx responses,
+// false for a 4xx *alertmanager.AMError — Alertmanager received and
+// rejected the request on its merits, and a retry (against the same or
+// another member, both enforce identical validation) would get the same
+// answer.
+func isRetryableUpstreamError(err error) bool {
 	var amErr *alertmanager.AMError
 	if errors.As(err, &amErr) {
 		return amErr.StatusCode >= 500
 	}
 	return true
+}
+
+// sleepCtx sleeps for d or returns early if ctx is cancelled.
+func sleepCtx(ctx context.Context, d time.Duration) {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+	case <-t.C:
+	}
 }
 
 // attemptCount caps write retries at 2: the first healthy member, plus one retry.
