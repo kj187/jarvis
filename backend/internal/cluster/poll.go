@@ -24,6 +24,20 @@ type FetchDurationFunc func(member string, seconds float64)
 // overlap, a slow poll just delays the next tick.
 const fetchRetryDelay = 250 * time.Millisecond
 
+// fetchWithRetry calls fetch once and, on a retryable error (see
+// isRetryableUpstreamError), waits fetchRetryDelay and calls it exactly once
+// more — shared by FetchAlerts and FetchSilences so a single transient
+// upstream blip self-heals silently instead of failing that member's fetch
+// for the poll cycle.
+func fetchWithRetry[T any](ctx context.Context, fetch func() (T, error)) (T, error) {
+	v, err := fetch()
+	if err != nil && ctx.Err() == nil && isRetryableUpstreamError(err) {
+		sleepCtx(ctx, fetchRetryDelay)
+		v, err = fetch()
+	}
+	return v, err
+}
+
 // FetchAlerts polls all members in parallel and returns the deduplicated,
 // enriched alert set for this cluster (see mergeAlerts). Returns an error
 // only when ALL members failed — a single member's failure does not fail the
@@ -46,17 +60,12 @@ func (c *Cluster) FetchAlerts(ctx context.Context, onDuration FetchDurationFunc)
 		go func(idx int, m *Member) {
 			defer wg.Done()
 			start := time.Now()
-			alerts, err := m.Client.GetAlerts(ctx)
-			if err != nil && ctx.Err() == nil && isRetryableUpstreamError(err) {
-				// A single transient upstream blip is common and self-heals
-				// immediately — one retry avoids logging/alerting on it as a
-				// poll failure (see CreateSilence/DeleteSilence, which apply
-				// the same retry-once policy on the write side). onDuration
-				// deliberately reports the total including the retry: the
-				// metric reflects this member's contribution to poll latency.
-				sleepCtx(ctx, fetchRetryDelay)
-				alerts, err = m.Client.GetAlerts(ctx)
-			}
+			// onDuration deliberately reports the total including a retry:
+			// the metric reflects this member's true contribution to poll
+			// latency.
+			alerts, err := fetchWithRetry(ctx, func() ([]alertmanager.GettableAlert, error) {
+				return m.Client.GetAlerts(ctx)
+			})
 			if onDuration != nil {
 				onDuration(m.Name, time.Since(start).Seconds())
 			}
@@ -115,11 +124,9 @@ func (c *Cluster) FetchSilences(ctx context.Context, onDuration FetchDurationFun
 		go func(idx int, m *Member) {
 			defer wg.Done()
 			start := time.Now()
-			silences, err := m.Client.GetSilences(ctx)
-			if err != nil && ctx.Err() == nil && isRetryableUpstreamError(err) {
-				sleepCtx(ctx, fetchRetryDelay)
-				silences, err = m.Client.GetSilences(ctx)
-			}
+			silences, err := fetchWithRetry(ctx, func() ([]alertmanager.GettableSilence, error) {
+				return m.Client.GetSilences(ctx)
+			})
 			if onDuration != nil {
 				onDuration(m.Name, time.Since(start).Seconds())
 			}
