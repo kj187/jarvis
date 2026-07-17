@@ -51,6 +51,95 @@ func twoMemberCluster(name string, urls ...string) *Cluster {
 	return buildCluster(config.ClusterConfig{Name: name, Members: members})
 }
 
+// countingServer serves the standard alerts/silences endpoints but answers
+// the first `failures` requests to failPath with failStatus. The returned
+// func reports how many requests a path has received — used to assert the
+// exact number of fetch attempts (retry-once semantics).
+func countingServer(t *testing.T, failPath string, failStatus, failures int, alerts []alertmanager.GettableAlert) (*httptest.Server, func(string) int) {
+	t.Helper()
+	var mu sync.Mutex
+	counts := map[string]int{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		counts[r.URL.Path]++
+		n := counts[r.URL.Path]
+		mu.Unlock()
+		if r.URL.Path == failPath && n <= failures {
+			http.Error(w, "transient", failStatus)
+			return
+		}
+		switch r.URL.Path {
+		case "/api/v2/alerts":
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(alerts)
+		case "/api/v2/silences":
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode([]alertmanager.GettableSilence{})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	requests := func(path string) int { mu.Lock(); defer mu.Unlock(); return counts[path] }
+	return srv, requests
+}
+
+func TestFetchAlerts_TransientMemberError_RetriedOnce(t *testing.T) {
+	srv, requests := countingServer(t, "/api/v2/alerts", http.StatusServiceUnavailable, 1,
+		[]alertmanager.GettableAlert{{Fingerprint: "fp1"}})
+	cl := twoMemberCluster("prod", srv.URL)
+
+	alerts, err := cl.FetchAlerts(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("FetchAlerts: %v (a single transient 5xx must be absorbed by the retry)", err)
+	}
+	if len(alerts) != 1 {
+		t.Fatalf("len(alerts) = %d, want 1", len(alerts))
+	}
+	if got := requests("/api/v2/alerts"); got != 2 {
+		t.Errorf("alert requests = %d, want 2 (initial + one retry)", got)
+	}
+	if !cl.MemberUpStates()[config.DeriveMemberName(srv.URL)] {
+		t.Error("member must be marked up after the retry succeeded")
+	}
+}
+
+func TestFetchSilences_TransientMemberError_RetriedOnce(t *testing.T) {
+	srv, requests := countingServer(t, "/api/v2/silences", http.StatusServiceUnavailable, 1, nil)
+	cl := twoMemberCluster("prod", srv.URL)
+
+	if _, err := cl.FetchSilences(context.Background(), nil); err != nil {
+		t.Fatalf("FetchSilences: %v (a single transient 5xx must be absorbed by the retry)", err)
+	}
+	if got := requests("/api/v2/silences"); got != 2 {
+		t.Errorf("silence requests = %d, want 2 (initial + one retry)", got)
+	}
+}
+
+func TestFetchAlerts_PersistentMemberError_ExactlyOneRetry(t *testing.T) {
+	srv, requests := countingServer(t, "/api/v2/alerts", http.StatusInternalServerError, 1000, nil)
+	cl := twoMemberCluster("prod", srv.URL)
+
+	if _, err := cl.FetchAlerts(context.Background(), nil); err == nil {
+		t.Fatal("expected error when the member keeps failing")
+	}
+	if got := requests("/api/v2/alerts"); got != 2 {
+		t.Errorf("alert requests = %d, want 2 (retry capped at one)", got)
+	}
+}
+
+func TestFetchAlerts_4xxNotRetried(t *testing.T) {
+	srv, requests := countingServer(t, "/api/v2/alerts", http.StatusForbidden, 1000, nil)
+	cl := twoMemberCluster("prod", srv.URL)
+
+	if _, err := cl.FetchAlerts(context.Background(), nil); err == nil {
+		t.Fatal("expected error on a 4xx response")
+	}
+	if got := requests("/api/v2/alerts"); got != 1 {
+		t.Errorf("alert requests = %d, want 1 (4xx is a definitive answer, not retryable)", got)
+	}
+}
+
 func TestFetchAlerts_MemberDown_OtherMemberStillServesAlerts(t *testing.T) {
 	up := alertsServer(t, []alertmanager.GettableAlert{{Fingerprint: "fp1", Status: alertmanager.GettableAlertStatus{State: "active"}}})
 	down := downServer(t)
