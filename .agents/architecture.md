@@ -1300,11 +1300,25 @@ with its own `*alertmanager.Client`); `Cluster.AlertmanagerURL` /
   retrying once against the next member on transport failure or a 5xx
   response — never to all members, since gossip already replicates and
   posting to every member would create duplicates. Does NOT retry a 4xx
-  (`isRetryableWriteError` in `poll.go`): Alertmanager already evaluated and
-  rejected the request on its merits, so a second member would reject it
+  (`isRetryableUpstreamError` in `poll.go`): Alertmanager already evaluated
+  and rejected the request on its merits, so a second member would reject it
   identically — retrying only adds latency and, for the non-idempotent
   create, risks a duplicate if the first response was lost after
   Alertmanager had already applied the write.
+- `Cluster.FetchAlerts` / `FetchSilences` apply the same
+  `isRetryableUpstreamError` policy on the read side: a per-member fetch
+  that fails with a transport error or 5xx gets one immediate retry (after
+  `fetchRetryDelay`, 250ms) against that same member before being counted as
+  a failure; a 4xx is definitive and never retried. This absorbs a single
+  transient upstream blip (e.g. a service-mesh sidecar resetting the
+  connection) without it ever reaching `poll()`'s error
+  logging/`PollErrorsTotal` — only a fetch that fails twice in a row is a
+  real, loggable problem. To make the 4xx distinction visible to reads,
+  `alertmanager.Client.get` returns `*AMError` for any non-2xx (it used to
+  return a plain formatted error; only the write methods built `AMError`).
+  The `onDuration` metric callback reports the total fetch duration
+  including a retry — deliberate, it reflects the member's true
+  contribution to poll latency.
 - Enrichment (`cluster/enrich.go`, `enrichMerged`) — moved here from
   `history` — builds `EnrichedAlert` (incl. `@receiver` label) from merged
   alerts; lives in `cluster` because `history` imports `cluster` (not the

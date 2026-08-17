@@ -132,7 +132,11 @@ func (f *PGFanout) consume(ctx context.Context, conn *pgx.Conn, onMessage func([
 			if ctx.Err() != nil {
 				return
 			}
-			f.logger.Warn("fanout: connection lost, reconnecting", "err", err)
+			// Info, not Warn: the Run loop immediately redials and re-LISTENs
+			// (see below) — an occasional drop here (e.g. a pooler/proxy
+			// recycling long-lived connections on a fixed lifetime) is
+			// expected and self-healing, not an operator-actionable failure.
+			f.logger.Info("fanout: connection lost, reconnecting", "err", err)
 			return
 		}
 		var env envelope

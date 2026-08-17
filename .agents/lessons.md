@@ -9,6 +9,66 @@ instead of duplicating.
 
 ---
 
+## Hourly PostgreSQL LISTEN reconnects and occasional single-poll 503s are expected noise, not bugs — but they were logged loud enough to trip infra error-count alerting
+
+**Symptom**: Production (2-replica, PostgreSQL) logs showed `fanout:
+connection lost, reconnecting` / `listen: connection lost, reconnecting`
+(`err":"unexpected EOF"`) on a near-exact ~60-minute cadence per pod, plus
+occasional `fetch silences failed ... alertmanager returned 503 ...
+upstream connect error or disconnect/reset before headers` for one cluster
+every few hours. Both were logged at `Warn`, and the infra's log-based
+alerting fired once enough of these accumulated — even though neither
+represented a real outage.
+**Cause**: The per-connection survival pattern in the logs pins it down to
+an **application-idle timeout of exactly 1h that TCP keepalives don't
+reset**: the leader pod lost its `fanout` (jarvis_ws) *and* `listen`
+(jarvis_trigger) connections hourly — both channels are silent unless a
+user mutates something; the follower lost *only* `fanout` — its snapshot
+LISTEN receives a NOTIFY every poll interval (real payload) and survived;
+the elector connections (a real query every 5s) never dropped, so
+leadership never flapped. The aggressive TCP keepalives (5s idle/3s
+interval/3 count, D2) were flowing on all of them, so whatever killed the
+idle ones counts only application data, not TCP-level keepalive ACKs —
+and Envoy's TCP-proxy default `idle_timeout` is exactly 1 hour, with the
+mesh already proven in the path (see below). "unexpected EOF" = an active
+close, not a silent drop; keepalives tuned for silent failures can't
+prevent it. Separately, the 503 came from an Envoy/Istio-shaped error
+string ("upstream connect error … reset reason: connection termination"),
+i.e. a service-mesh sidecar in front of that cluster's Alertmanager
+occasionally resetting a connection — a one-off blip, not a sustained
+failure, but `FetchAlerts`/`FetchSilences` had no retry on the read side
+(only the write path, `CreateSilence`/`DeleteSilence`, retried on a
+5xx/transport error). Related latent bug found while fixing this: the
+write path's 4xx/5xx distinction never worked for reads because
+`alertmanager.Client.get` returned a plain `fmt.Errorf` for non-2xx —
+only the write methods built `*AMError`. `get` now returns `*AMError`
+too, so `isRetryableUpstreamError` can actually see the status code.
+**Rule**: A reconnect loop that already self-heals immediately (the `Run`/
+`listenLoop` loops in `internal/fanout/postgres.go` and
+`internal/history/recorder_snapshot.go` redial and re-`LISTEN` right away)
+doesn't need `Warn` — logged at `Info`, still visible on inspection, no
+longer countable as an "error" by naive log-volume alerting. For upstream
+reads, apply the same retry-once policy the write path already had:
+`isRetryableUpstreamError` (renamed from `isRetryableWriteError` — it now
+covers both) gates one immediate retry (`fetchRetryDelay`, 250ms) in
+`Cluster.FetchAlerts`/`FetchSilences` before a per-member failure counts —
+see `.agents/architecture.md`. General principle: log level should track
+*operator actionability*, not just "an error occurred" — a self-healing
+retry loop and a transient blip that a one-shot retry absorbs are both
+"nothing wild," and treating them as `Warn`/`Error` just teaches the infra
+alerting (and the on-call human) to ignore real signals mixed in with them.
+Open option if the hourly reconnects should disappear entirely instead of
+being tolerated: send real payload on the idle LISTEN connections (a
+periodic `SELECT 1`/Ping between `WaitForNotification` calls — the
+snapshot listener's survival proves payload resets the timer), or raise
+the mesh sidecar's idle timeout for the PostgreSQL egress. Tolerating them
+is safe for `listen:` (trigger misses only delay reconciliation to the
+next poll; snapshots have the periodic-resync fallback), and near-safe for
+`fanout:` (fire-and-forget, no resync — a WS mutation broadcast landing in
+the sub-second redial window is lost until the browser's next refetch).
+
+---
+
 ## Go's default database/sql pool is unbounded — it exhausted RDS connection slots in production
 
 **Symptom**: `stats`/`heatmap` requests returned 500 with

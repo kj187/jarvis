@@ -219,7 +219,11 @@ func (r *Recorder) consumeNotifications(ctx context.Context, conn *pgx.Conn, res
 				}
 				continue
 			}
-			r.logger.Warn("listen: connection lost, reconnecting", "err", err)
+			// Info, not Warn: listenLoop immediately redials and re-LISTENs
+			// (see below) — an occasional drop here (e.g. a pooler/proxy
+			// recycling long-lived connections on a fixed lifetime) is
+			// expected and self-healing, not an operator-actionable failure.
+			r.logger.Info("listen: connection lost, reconnecting", "err", err)
 			return
 		}
 		onNotify(n.Payload)

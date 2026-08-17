@@ -1,0 +1,27 @@
+# Codecov configuration — https://docs.codecov.com/docs/codecov-yaml
+#
+# Only backend coverage is uploaded (flag `backend` in ci.yml). Frontend
+# coverage is deliberately NOT uploaded: vitest coverage is scoped to
+# `src/lib/alertUtils.ts` only (E2E-only test strategy, see
+# frontend/vitest.config.ts) — uploading a single 100%-covered file would
+# misrepresent frontend coverage.
+#
+# Thresholds exist because Go coverage of concurrent code (recorder, poller,
+# WS) is slightly nondeterministic under -race: goroutine timing decides which
+# branches run, so identical code can measure ±<1% between runs. Without a
+# threshold the default (target: auto, threshold: 0%) turns that noise into
+# red codecov/project checks.
+
+coverage:
+  status:
+    project:
+      default:
+        target: auto
+        threshold: 1%
+    patch:
+      default:
+        target: 70%
+        threshold: 5%
+
+comment:
+  require_changes: true

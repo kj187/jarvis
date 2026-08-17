@@ -1,9 +1,21 @@
+<a name="v1.9.2"></a>
+## [v1.9.2](https://github.com/kj187/jarvis/compare/v1.9.1...v1.9.2) (2026-07-17)
+
+### Bug Fixes
+
+* **config:** add codecov.yml with thresholds to stop flaky coverage checks ([#127](https://github.com/kj187/jarvis/issues/127))
+* **db:** stop self-healing PostgreSQL reconnects and transient AM 503s from paging ([#126](https://github.com/kj187/jarvis/issues/126))
+
 <a name="v1.9.1"></a>
 ## [v1.9.1](https://github.com/kj187/jarvis/compare/v1.9.0...v1.9.1) (2026-07-16)
 
 ### Bug Fixes
 
 * **db:** cap PostgreSQL connection pool to stop RDS slot exhaustion ([#120](https://github.com/kj187/jarvis/issues/120))
+
+### Chores
+
+* **release:** prepare v1.9.1
 
 ### Features
 
