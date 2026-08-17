@@ -4,7 +4,7 @@ import "context"
 
 // StaticElector is the SQLite-dialect Elector: SQLite deployments are single
 // writer and single replica by design (Critical Invariant #8, D6 in
-// tmp/fable/multi-replica.md), so there is never a follower to coordinate
+// docs/persistence.md), so there is never a follower to coordinate
 // with — this process is always leader.
 type StaticElector struct{}
 

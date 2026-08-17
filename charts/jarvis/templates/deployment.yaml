@@ -46,7 +46,7 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       serviceAccountName: {{ include "jarvis.serviceAccountName" . }}
-      {{- /* Only needed for the leader pod label PATCH (D7 in tmp/fable/multi-replica.md) — the
+      {{- /* Only needed for the leader pod label PATCH (D7 in docs/persistence.md) — the
              ServiceAccount itself sets automountServiceAccountToken: false, so this must be
              explicit at the pod level whenever the feature is on. */}}
       automountServiceAccountToken: {{ .Values.leaderElection.podLabel.enabled }}

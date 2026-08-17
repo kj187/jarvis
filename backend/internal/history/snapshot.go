@@ -15,7 +15,7 @@ import (
 	"github.com/kj187/jarvis/backend/internal/models"
 )
 
-// Binding Constants (tmp/fable/multi-replica.md) — use verbatim, do not rename.
+// Binding Constants (docs/persistence.md) — use verbatim, do not rename.
 const (
 	notifyChannelSnapshot = "jarvis_snapshot"
 	notifyChannelTrigger  = "jarvis_trigger"

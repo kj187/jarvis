@@ -154,11 +154,11 @@ To remove or modify a default filter, open Settings → Default Filter → click
 
 ## Resolved View
 
-Full alert history persisted in SQLite — survives container restarts and Alertmanager reconnects.
+Full alert history persisted in the database (SQLite or PostgreSQL — see [docs/persistence.md](persistence.md)) — survives container restarts and Alertmanager reconnects.
 
 ![Resolved View](assets/feature-resolved.png)
 
-The resolved view is Jarvis's history log. Every alert that has ever fired is recorded in SQLite with its complete lifecycle, and the resolved view shows all alerts that have reached a `resolved` state. This is the core capability that separates Jarvis from in-memory-only UIs.
+The resolved view is Jarvis's history log. Every alert that has ever fired is recorded in the database with its complete lifecycle, and the resolved view shows all alerts that have reached a `resolved` state. This is the core capability that separates Jarvis from in-memory-only UIs.
 
 Alerts are displayed as a flat list sorted by resolution time (newest first). A **page browser** at the top and bottom allows navigation through large result sets. The **per-page selector** (10 / 25 / 50 / 100) is persisted in localStorage so your preference is remembered across sessions.
 

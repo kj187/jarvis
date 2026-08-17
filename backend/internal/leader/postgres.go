@@ -11,7 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// Binding Constants (tmp/fable/multi-replica.md) — use verbatim, do not rename.
+// Binding Constants (docs/persistence.md) — use verbatim, do not rename.
 const (
 	// LockClassID / LockID identify the session-level advisory lock used for
 	// leader election: pg_try_advisory_lock(0x4A525653, 1). One lock for all

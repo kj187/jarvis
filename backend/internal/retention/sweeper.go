@@ -53,7 +53,7 @@ type Sweeper struct {
 // NewSweeper creates a Sweeper. m may be nil (same nil-safe pattern as
 // history.NewRecorder / ws.NewHub). el may also be nil, meaning "always
 // leader" — the retention sweeper is one of the D3-step-4 leader-only side
-// effects (tmp/fable/multi-replica.md): only the leader may delete rows.
+// effects (docs/persistence.md): only the leader may delete rows.
 func NewSweeper(s store, cfg config.RetentionConfig, logger *slog.Logger, m *metrics.Metrics, el leaderChecker) *Sweeper {
 	return &Sweeper{store: s, cfg: cfg, logger: logger, metrics: m, elector: el}
 }

@@ -13,7 +13,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// Binding Constants (tmp/fable/multi-replica.md D4) — use verbatim, do not rename.
+// Binding Constants (docs/persistence.md D4) — use verbatim, do not rename.
 const (
 	// NotifyChannel is the pg_notify channel WS mutation fanout uses.
 	NotifyChannel = "jarvis_ws"
@@ -132,7 +132,11 @@ func (f *PGFanout) consume(ctx context.Context, conn *pgx.Conn, onMessage func([
 			if ctx.Err() != nil {
 				return
 			}
-			f.logger.Warn("fanout: connection lost, reconnecting", "err", err)
+			// Info, not Warn: the Run loop immediately redials and re-LISTENs
+			// (see below) — an occasional drop here (e.g. a pooler/proxy
+			// recycling long-lived connections on a fixed lifetime) is
+			// expected and self-healing, not an operator-actionable failure.
+			f.logger.Info("fanout: connection lost, reconnecting", "err", err)
 			return
 		}
 		var env envelope

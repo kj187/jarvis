@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-// Binding Constants (tmp/fable/multi-replica.md D7) — use verbatim, do not rename.
+// Binding Constants (docs/persistence.md D7) — use verbatim, do not rename.
 const (
 	// PodLabelKey/PodLabelValue: jarvis.kj187.de/role=leader. Informational
 	// only — every pod serves all traffic regardless of leadership, this is

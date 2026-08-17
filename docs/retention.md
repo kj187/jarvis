@@ -70,7 +70,15 @@ A single background loop (`internal/retention.Sweeper`) starts 1 minute
 after Jarvis boots (so it doesn't compete with startup), then runs every
 `JARVIS_RETENTION_SWEEP_INTERVAL`. Each domain is deleted in batches of 500
 rows with a short pause in between, so a large sweep never holds the
-SQLite single-writer lock for one long transaction.
+SQLite-specific single-writer lock for one long transaction (PostgreSQL has
+no such lock — the batching there is purely to avoid one oversized
+transaction, not to avoid blocking other writers).
+
+**Multi-replica (PostgreSQL only)**: the sweep is a leader-only duty — see
+[docs/persistence.md](persistence.md#high-availability--multi-replica-postgresql-only).
+A follower never sweeps; only the current leader runs `Sweeper.Start`'s
+timer loop, so retention still runs exactly once per interval regardless of
+`replicaCount`.
 
 Order matters, because of foreign keys and the fingerprint-orphan check:
 
@@ -108,8 +116,10 @@ updates three Prometheus metrics — see
 
 ## Non-goals (v1)
 
-- No `VACUUM`/file compaction — SQLite reuses freed pages internally, which
-  is enough to bound growth; the file itself won't shrink.
+- No `VACUUM`/file compaction — SQLite-specific: SQLite reuses freed pages
+  internally, which is enough to bound growth, but the file itself won't
+  shrink. Not applicable to PostgreSQL, whose own `autovacuum` reclaims
+  space automatically and needs no action from Jarvis.
 - No admin UI or API to trigger a sweep manually or change retention at
   runtime — env-var configuration only.
 - No per-cluster or per-alertname retention rules.

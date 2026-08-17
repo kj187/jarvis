@@ -299,7 +299,7 @@ CREATE INDEX IF NOT EXISTS idx_silence_events_fingerprint        ON silence_even
 CREATE INDEX IF NOT EXISTS idx_users_username                    ON users(username);
 CREATE INDEX IF NOT EXISTS idx_users_oidc_sub                    ON users(oidc_sub);
 
--- PostgreSQL only (tmp/fable/multi-replica.md D3) — SQLite never creates or
+-- PostgreSQL only (docs/persistence.md D3) — SQLite never creates or
 -- reads this table (single replica, no followers to feed).
 CREATE TABLE IF NOT EXISTS poll_snapshots (
     cluster_name TEXT PRIMARY KEY,
@@ -308,7 +308,7 @@ CREATE TABLE IF NOT EXISTS poll_snapshots (
 );
 ```
 
-**SQLite settings** (on open): `SetMaxOpenConns(1)`, `PRAGMA journal_mode=WAL`, `PRAGMA foreign_keys=ON`, `PRAGMA busy_timeout=5000`. PostgreSQL uses the default pool (no `SetMaxOpenConns(1)`).
+**SQLite settings** (on open): `SetMaxOpenConns(1)`, `PRAGMA journal_mode=WAL`, `PRAGMA foreign_keys=ON`, `PRAGMA busy_timeout=5000`. PostgreSQL uses a capped pool: `JARVIS_DB_MAX_OPEN_CONNS` (default 10) sets MaxOpen **and** MaxIdle (so bursts reuse connections instead of churning them), plus `ConnMaxLifetime=30m` / `ConnMaxIdleTime=5m` — never unbounded, never `SetMaxOpenConns(1)` (Critical Invariant #8).
 
 ---
 
@@ -345,7 +345,7 @@ WS     /ws                                       full_protect?  (origin checked 
 #        session cookie via RequireAuth — /ws streams the full alert snapshot)
 
 # ── Status / Version ─────────────────────────────────────────────────────────
-GET    /api/v1/status                            full_protect?  → { status, clusters, alerts, ws_clients, leader }
+GET    /api/v1/status                            full_protect?  → { status, clusters, alerts, ws_clients, leader, poll_interval_seconds }
 #        leader: this pod's current leader-election state (internal/leader) — always true on SQLite
 GET    /api/v1/info                              full_protect?  → { version }
 
@@ -535,7 +535,7 @@ Optional, env-var-only background deletion of old rows — user-facing docs:
 
 ## Leader Election (`internal/leader`)
 
-Multi-replica groundwork (full design: `tmp/fable/multi-replica.md`). Exactly
+Multi-replica groundwork (full design: `docs/persistence.md`). Exactly
 one pod at a time may run the leader-only side effects listed below; every
 pod still serves reads/API/WS equally regardless of leadership.
 
@@ -1208,6 +1208,7 @@ consumed snapshot (D3).
 |---|---|
 | `JARVIS_PORT` `JARVIS_LOG_LEVEL` `JARVIS_LOG_REQUESTS` `JARVIS_POLL_INTERVAL` | server basics — defaults: `8080`, `info`, `false`, `15s`. `JARVIS_POLL_INTERVAL` also drives the grace period: `main.go` sets `Store`'s grace period to `max(60s, 2×JARVIS_POLL_INTERVAL)` and `Recorder.claimReleaseDelay` to stay comfortably above it (Critical Invariant #1, `AGENTS.md`) |
 | `JARVIS_DB_DSN` | `postgres://` or `postgresql://` → PostgreSQL, anything else → SQLite file path. Default `/data/jarvis.db`. Never logged raw (`db.RedactDSN()`) |
+| `JARVIS_DB_MAX_OPEN_CONNS` | PostgreSQL pool cap per pod (default `10`, must be ≥ 1; MaxIdle = MaxOpen). Ignored for SQLite (always 1). Size pods × cap below the server's `max_connections` |
 | `JARVIS_RUNBOOK_BASE_URL` | prefix for non-URL `runbook` values |
 | `JARVIS_ALLOWED_ORIGINS` | CORS + WS origin allow-list (no `*`), comma-separated |
 | `JARVIS_AUTH_PROVIDER` `JARVIS_AUTH_MODE` | auth; provider default `none`; mode defaults to `write_protect` when provider ≠ none |
@@ -1299,11 +1300,25 @@ with its own `*alertmanager.Client`); `Cluster.AlertmanagerURL` /
   retrying once against the next member on transport failure or a 5xx
   response — never to all members, since gossip already replicates and
   posting to every member would create duplicates. Does NOT retry a 4xx
-  (`isRetryableWriteError` in `poll.go`): Alertmanager already evaluated and
-  rejected the request on its merits, so a second member would reject it
+  (`isRetryableUpstreamError` in `poll.go`): Alertmanager already evaluated
+  and rejected the request on its merits, so a second member would reject it
   identically — retrying only adds latency and, for the non-idempotent
   create, risks a duplicate if the first response was lost after
   Alertmanager had already applied the write.
+- `Cluster.FetchAlerts` / `FetchSilences` apply the same
+  `isRetryableUpstreamError` policy on the read side: a per-member fetch
+  that fails with a transport error or 5xx gets one immediate retry (after
+  `fetchRetryDelay`, 250ms) against that same member before being counted as
+  a failure; a 4xx is definitive and never retried. This absorbs a single
+  transient upstream blip (e.g. a service-mesh sidecar resetting the
+  connection) without it ever reaching `poll()`'s error
+  logging/`PollErrorsTotal` — only a fetch that fails twice in a row is a
+  real, loggable problem. To make the 4xx distinction visible to reads,
+  `alertmanager.Client.get` returns `*AMError` for any non-2xx (it used to
+  return a plain formatted error; only the write methods built `AMError`).
+  The `onDuration` metric callback reports the total fetch duration
+  including a retry — deliberate, it reflects the member's true
+  contribution to poll latency.
 - Enrichment (`cluster/enrich.go`, `enrichMerged`) — moved here from
   `history` — builds `EnrichedAlert` (incl. `@receiver` label) from merged
   alerts; lives in `cluster` because `history` imports `cluster` (not the

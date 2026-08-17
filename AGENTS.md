@@ -45,6 +45,7 @@ details that these files own.
 | Triaging a GitHub feature-request issue against the scope, drafting a reply | `.agents/scope-triage.md` |
 | Writing or running tests, test matrix, test utilities, CI pipeline | `.agents/testing.md` |
 | E2E / screenshot stack: Playwright specs, fixtures, auth modes, `compose.e2e.yml` | `docs/testing-e2e.md` |
+| Database backends, multi-replica HA (leader election, snapshot distribution, WS fanout, failover), Kubernetes deployment, SQLite → PostgreSQL migration | `docs/persistence.md` |
 | Cutting a release — **only when the user explicitly asks** | `.agents/release.md` |
 | Security audit, new-code security checklist, security tooling | `.agents/security.md` |
 | Debugging surprising behavior — check before re-deriving a known gotcha | `.agents/lessons.md` |
@@ -90,8 +91,10 @@ Tool-specific entry points map to the same files (no duplicated content):
 7. **`cursor: pointer` on all clickable elements** — globally in CSS:
    `a, button, [role="button"] { cursor: pointer }`.
 8. **SQLite single writer**: `SetMaxOpenConns(1)` + WAL mode — only for the
-   SQLite dialect. PostgreSQL uses the default pool. Never add
-   `SetMaxOpenConns(1)` for PostgreSQL.
+   SQLite dialect. PostgreSQL uses a **capped** pool
+   (`JARVIS_DB_MAX_OPEN_CONNS`, default 10, MaxIdle = MaxOpen) — never
+   unbounded (an unbounded pool exhausted RDS connection slots in
+   production, SQLSTATE 53300) and never `SetMaxOpenConns(1)`.
 9. **`JARVIS_DB_DSN` never logged raw**: `db.RedactDSN()` must wrap the DSN
    before any log call. Password stays out of logs.
 10. **`rebind()` in `history/store.go`**: All SQL queries use `?`
@@ -127,6 +130,28 @@ Tool-specific entry points map to the same files (no duplicated content):
     transiently-failing cluster reads as every one of its alerts resolving:
     phantom `resolved` events, wrong `occurrence_count` increments, and
     premature claim releases on the next re-fire.
+15. **History side effects and Alertmanager polling are leader-only on
+    PostgreSQL** (multi-replica; see `docs/persistence.md`). Exactly one pod
+    — decided by a PostgreSQL advisory lock (`internal/leader`) — polls
+    Alertmanager and writes `RecordStatusChange`/`RecordResolvedForCluster`,
+    occurrence counts, delayed claim releases, `reconcileStartupResolves`,
+    external-silence events, and retention sweeps
+    (`history.Recorder.IsLeader()`, `retention.Sweeper.shouldSweep()`).
+    Followers still serve reads/API/WS from snapshots the leader persists to
+    `poll_snapshots` (`internal/history/recorder_snapshot.go`) — never from
+    their own poll, since there isn't one. SQLite has no followers to gate
+    against (`StaticElector` is always leader), so this invariant is a
+    no-op there, not a different code path.
+16. **`RecordStatusChange` stays transactional and, on PostgreSQL,
+    advisory-xact-locked per episode.** The read-last → grace-delete →
+    insert → count-update sequence runs inside one transaction
+    (`Store.withTx`); on PostgreSQL the transaction's first statement is
+    `pg_advisory_xact_lock(hashtext(fingerprint || ':' || cluster_name))`,
+    serializing concurrent writers for the same episode across pods (SQLite
+    needs no such lock — `SetMaxOpenConns(1)` already serializes it).
+    Without this, two pods (or two connections during a rolling update)
+    racing the same fingerprint could both read the same "last event" before
+    either commits and both insert — duplicate event rows.
 
 ## Workflow Rules — always follow
 
@@ -164,6 +189,7 @@ Tool-specific entry points map to the same files (no duplicated content):
    | Issue-triage workflow, reply guidelines | `.agents/scope-triage.md` |
    | Project description, invariants, workflow rules, commit format, repo layout | `AGENTS.md` itself |
    | E2E stack, specs, fixtures, auth modes | `docs/testing-e2e.md` |
+   | Database backend behavior, multi-replica HA (leader election, snapshot distribution, WS fanout, failover), Kubernetes HA deployment | `docs/persistence.md` |
    | Hard-won debugging insight or non-obvious gotcha | `.agents/lessons.md` |
    | Who-talks-to-whom topology: upstream calls, stores, WS events, poll flow | `docs/diagrams/*.mmd` + re-render via `make diagrams` |
 

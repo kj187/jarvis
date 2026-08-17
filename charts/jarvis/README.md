@@ -2,6 +2,8 @@
 
 Web frontend for Prometheus Alertmanager with persistent alert history, claims, comments, and silence management.
 
+> Database backends, multi-replica HA (leader election, snapshot distribution, failover), and Kubernetes deployment guidance (incl. a CloudNativePG example) are covered in the canonical guide: **[docs/persistence.md](../../docs/persistence.md)**. This README covers only the chart's values and install/upgrade mechanics.
+
 ## Install
 
 ```bash
@@ -90,6 +92,10 @@ Tests cover four suites (`deployment`, `configmap`, `secret`, `ingress`) and run
 | `metrics.serviceMonitor.interval` | string | `30s` | Scrape interval |
 | `metrics.serviceMonitor.scrapeTimeout` | string | `10s` | Scrape timeout |
 | `metrics.serviceMonitor.labels` | object | `{}` | Extra labels on the `ServiceMonitor` (e.g. to match a `kube-prometheus-stack` release selector) |
+| `metrics.serviceMonitor.annotations` | object | `{}` | Extra annotations on the `ServiceMonitor` |
+| `metrics.serviceMonitor.relabelings` | list | `[]` | Prometheus Operator `Endpoint.relabelings` (target relabeling before scrape) |
+| `metrics.serviceMonitor.metricRelabelings` | list | `[]` | Prometheus Operator `Endpoint.metricRelabelings` (metric relabeling after scrape) |
+| `metrics.serviceMonitor.honorLabels` | bool | `false` | `Endpoint.honorLabels` — keep `false` unless you specifically want Jarvis's own metric labels (e.g. `cluster`) to win over scrape-time labels on a collision |
 | `metrics.podAnnotations` | bool | `false` | Add `prometheus.io/scrape`, `prometheus.io/port`, `prometheus.io/path` pod annotations instead (annotation-based scraping) |
 | `ingress.enabled` | bool | `false` | Enable Ingress |
 | `ingress.className` | string | `""` | Ingress class name |
@@ -108,6 +114,7 @@ Tests cover four suites (`deployment`, `configmap`, `secret`, `ingress`) and run
 | `database.dsn` | string | `/data/jarvis.db` | Database DSN (SQLite path or `postgres://` URL; PostgreSQL recommended for production) |
 | `database.existingSecret` | string | `""` | Use an existing Secret for the DSN instead |
 | `database.existingSecretKey` | string | `dsn` | Key in the existing Secret |
+| `database.maxOpenConns` | int | `10` | PostgreSQL connection-pool cap per pod (`JARVIS_DB_MAX_OPEN_CONNS`); ignored for SQLite. Keep `replicaCount × maxOpenConns` well below the server's `max_connections` |
 | `auth.provider` | string | `none` | Authentication mode: `none`, `internal`, or `oidc` |
 | `auth.mode` | string | `""` | Protection level when provider ≠ `none`: `write_protect` (default) or `full_protect` |
 | `auth.secretKey` | string | `""` | JWT signing key (min 32 random bytes). Use `auth.existingSecret` in production. |

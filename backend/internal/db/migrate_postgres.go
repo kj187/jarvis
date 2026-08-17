@@ -92,7 +92,7 @@ func migratePostgres(database *sql.DB) error {
 		// Add cluster_name to alert_claims so claims are scoped per (fingerprint, cluster).
 		`ALTER TABLE alert_claims ADD COLUMN IF NOT EXISTS cluster_name TEXT NOT NULL DEFAULT ''`,
 		// poll_snapshots: leader-only poll-snapshot distribution to followers
-		// (tmp/fable/multi-replica.md D3). PostgreSQL only — SQLite never
+		// (docs/persistence.md D3). PostgreSQL only — SQLite never
 		// reads or writes this table (single replica, no followers to feed).
 		`CREATE TABLE IF NOT EXISTS poll_snapshots (
 			cluster_name TEXT PRIMARY KEY,

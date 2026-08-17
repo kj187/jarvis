@@ -12,8 +12,24 @@ import { useUIStore } from '@/store/uiStore'
 import { useAuthStore } from '@/store/authStore'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { useQuery } from '@tanstack/react-query'
-import { fetchClusters } from '@/api/client'
+import { fetchClusters, fetchStatus } from '@/api/client'
 import { FALLBACK_REFETCH_INTERVAL_MS } from '@/lib/refetch'
+import { Tooltip } from '@/components/ui/tooltip'
+
+function formatPollInterval(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`
+  const minutes = Math.floor(seconds / 60)
+  const rest = seconds % 60
+  return rest > 0 ? `${minutes}m ${rest}s` : `${minutes}m`
+}
+
+function refreshTooltip(pollIntervalSeconds: number | undefined): string {
+  const interval = pollIntervalSeconds !== undefined ? formatPollInterval(pollIntervalSeconds) : null
+  return (
+    'Reloads the current snapshot from the Jarvis backend. Does not trigger a new Alertmanager poll — new data only ' +
+    `appears once the backend's own poll${interval ? ` (every ${interval})` : ''} runs (already pushed to you live via WebSocket).`
+  )
+}
 
 // ── Header ────────────────────────────────────────────────────────────────────
 
@@ -63,6 +79,13 @@ export function Header() {
     queryFn: fetchClusters,
     refetchInterval: FALLBACK_REFETCH_INTERVAL_MS,
   })
+
+  const { data: status } = useQuery({
+    queryKey: ['status'],
+    queryFn: fetchStatus,
+    refetchInterval: FALLBACK_REFETCH_INTERVAL_MS,
+  })
+  const refreshTooltipText = refreshTooltip(status?.poll_interval_seconds)
 
   const [silenceFormOpen, setSilenceFormOpen] = useState(false)
   const [silenceActiveTab, setSilenceActiveTab] = useState<'silence' | 'templates'>('silence')
@@ -224,9 +247,11 @@ export function Header() {
             {wsConnected ? <Wifi className="h-4 w-4 text-green-500" /> : <WifiOff className="h-4 w-4 text-red-500" />}
           </div>
 
-          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={handleRefresh} title="Refresh now" disabled={refreshing}>
-            <RefreshCw className={`h-4 w-4 ${isSpinning ? 'animate-spin' : ''}`} />
-          </Button>
+          <Tooltip content={refreshTooltipText} side="bottom">
+            <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={handleRefresh} aria-label="Refresh now" disabled={refreshing}>
+              <RefreshCw className={`h-4 w-4 ${isSpinning ? 'animate-spin' : ''}`} />
+            </Button>
+          </Tooltip>
           <div className="w-px h-5 bg-border shrink-0 mx-0.5" />
           <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => updateSettings({ theme: theme === 'dark' ? 'light' : 'dark' })} title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'} aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
             {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
@@ -293,9 +318,11 @@ export function Header() {
               <div className={`h-2 w-2 rounded-full ${healthyCount === clusters.length ? 'bg-green-500' : 'bg-red-500'}`} />
               <span className="text-muted-foreground tabular-nums">{healthyCount}/{clusters.length}</span>
             </div>
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleRefresh} title="Refresh now" disabled={refreshing}>
-              <RefreshCw className={`h-4 w-4 ${isSpinning ? 'animate-spin' : ''}`} />
-            </Button>
+            <Tooltip content={refreshTooltipText} side="bottom">
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleRefresh} aria-label="Refresh now" disabled={refreshing}>
+                <RefreshCw className={`h-4 w-4 ${isSpinning ? 'animate-spin' : ''}`} />
+              </Button>
+            </Tooltip>
             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => updateSettings({ theme: theme === 'dark' ? 'light' : 'dark' })} title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
               {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </Button>

@@ -15,7 +15,7 @@ import (
 	"github.com/kj187/jarvis/backend/internal/models"
 )
 
-// Multi-replica integration tests (tmp/fable/multi-replica.md, slice 2): two
+// Multi-replica integration tests (docs/persistence.md, slice 2): two
 // full Recorders, each with its own real leader.PGElector, sharing one
 // PostgreSQL database and one fake Alertmanager. These are the two-instance
 // TDD scenarios the plan asks for — "exactly one polls", "follower store

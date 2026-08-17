@@ -16,10 +16,12 @@ type Client struct {
 	httpClient *http.Client
 }
 
-// AMError wraps a non-2xx response from Alertmanager, preserving the status
-// code so callers can distinguish AM-side rejections (4xx — e.g. an invalid
-// matcher or a duplicate/expired silence ID; safe to relay to the user) from
-// transport/server failures (5xx, network errors — kept as a generic error).
+// AMError wraps any non-2xx response from Alertmanager (reads and writes
+// alike), preserving the status code so callers can distinguish AM-side
+// rejections (4xx — e.g. an invalid matcher or a duplicate/expired silence
+// ID; safe to relay to the user, never worth retrying) from transport/server
+// failures (5xx, network errors — retryable, see
+// cluster.isRetryableUpstreamError).
 type AMError struct {
 	StatusCode int
 	Body       string
@@ -148,7 +150,7 @@ func (c *Client) get(ctx context.Context, path string, v interface{}) error {
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		b, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("alertmanager returned %d for %s: %s", resp.StatusCode, path, string(b))
+		return &AMError{StatusCode: resp.StatusCode, Body: string(b)}
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(v); err != nil {

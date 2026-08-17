@@ -2,11 +2,14 @@
 
 Jarvis's core promise is a **trustworthy, persistent alert history**: every
 alert's journey from first firing to final resolution is recorded as an
-append-only event log in SQLite or PostgreSQL, and that log survives Jarvis
-restarts, Alertmanager outages, and missed polls without inventing phantom
-transitions. This document explains the state machine, the rules that keep
-the history clean, and the guarantees (and deliberate approximations) that
-apply in failure scenarios.
+append-only event log in SQLite or PostgreSQL (see
+[docs/persistence.md](persistence.md) for the backends themselves), and
+that log survives Jarvis restarts, Alertmanager outages, and missed polls
+without inventing phantom transitions. This document explains the state
+machine, the rules that keep the history clean, and the guarantees (and
+deliberate approximations) that apply in failure scenarios — including
+across a PostgreSQL multi-replica leadership change (see
+[docs/persistence.md](persistence.md#failover)).
 
 ![Alert lifecycle state machine](assets/alert-lifecycle.svg)
 

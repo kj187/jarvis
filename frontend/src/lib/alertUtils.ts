@@ -9,7 +9,7 @@ export const tzAbbr = new Date().toLocaleTimeString('en', { timeZoneName: 'short
 // ── Label utilities ────────────────────────────────────────────────────────
 
 /** Label keys rendered by dedicated UI elements instead of generic label chips. */
-export const HIDDEN_LABEL_KEYS = new Set(['alertname', 'severity', 'receiver', '@receiver'])
+export const HIDDEN_LABEL_KEYS = new Set(['alertname', 'severity', 'receiver', '@receiver', '@claimed-by'])
 
 /** Deterministic per-key chip colors (djb2 hash → hue). */
 export function labelColorStyle(key: string, theme: 'dark' | 'light' = 'dark'): React.CSSProperties {

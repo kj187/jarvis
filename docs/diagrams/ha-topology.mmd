@@ -1,0 +1,63 @@
+---
+title: Jarvis multi-replica — leader/follower topology (PostgreSQL only)
+config:
+  theme: neutral
+  flowchart:
+    curve: basis
+---
+flowchart LR
+    subgraph clients["Browsers — N open tabs"]
+        UI["React SPA"]
+    end
+
+    LB(["Service / Ingress<br/>(any pod, no leader routing)"])
+
+    subgraph leaderPod["Pod A — leader"]
+        LREC["Recorder<br/>runPollLoop"]
+        LEL["Elector<br/>holds advisory lock"]
+        LHUB["WS Hub"]
+        LFAN["Fanout"]
+    end
+
+    subgraph followerPod["Pod B — follower"]
+        FREC["Recorder<br/>runFollowerLoop"]
+        FEL["Elector<br/>retries lock every 5s"]
+        FHUB["WS Hub"]
+        FFAN["Fanout"]
+    end
+
+    subgraph pg["PostgreSQL"]
+        LOCK["pg_try_advisory_lock<br/>(session, D2)"]
+        SNAP[("poll_snapshots<br/>alerts + silences + member up-state")]
+        HIST[("history, claims, comments,<br/>templates, users")]
+        NOTIFY["LISTEN/NOTIFY channels:<br/>jarvis_snapshot · jarvis_trigger · jarvis_ws"]
+    end
+
+    subgraph am["Alertmanager clusters"]
+        AM["Cluster 1..N"]
+    end
+
+    UI -- reads/writes --> LB
+    LB -.-> leaderPod
+    LB -.-> followerPod
+    LHUB -. push .-> UI
+    FHUB -. push .-> UI
+
+    LEL == "holds" ==> LOCK
+    FEL -. "retries every 5s" .-> LOCK
+
+    LREC == "polls, every JARVIS_POLL_INTERVAL" ==> AM
+    LREC -- "writes lifecycle events<br/>(leader-only, D3 step 4)" --> HIST
+    LREC -- "persists + NOTIFY jarvis_snapshot" --> SNAP
+    SNAP -.-> NOTIFY
+
+    FREC -- "LISTEN jarvis_snapshot<br/>+ periodic resync fallback" --> NOTIFY
+    NOTIFY -.-> FREC
+    FREC -- "merges into own<br/>AlertStore/SilenceStore" --> FHUB
+
+    FREC -. "Trigger() forwards via<br/>NOTIFY jarvis_trigger" .-> NOTIFY
+    NOTIFY -. "leader LISTENs, polls immediately" .-> LREC
+
+    LFAN -- "mutation broadcast<br/>NOTIFY jarvis_ws" --> NOTIFY
+    NOTIFY -.-> FFAN
+    FFAN -- "re-broadcast to own clients" --> FHUB

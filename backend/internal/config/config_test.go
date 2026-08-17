@@ -512,5 +512,38 @@ func TestLoad_ClusterOAuth2_AbsentWhenClientIDEmpty(t *testing.T) {
 	}
 }
 
+func TestLoad_DBMaxOpenConns_Default(t *testing.T) {
+	t.Setenv("JARVIS_DB_MAX_OPEN_CONNS", "")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	if cfg.DBMaxOpenConns != 10 {
+		t.Errorf("DBMaxOpenConns = %d, want 10", cfg.DBMaxOpenConns)
+	}
+}
+
+func TestLoad_DBMaxOpenConns_Custom(t *testing.T) {
+	t.Setenv("JARVIS_DB_MAX_OPEN_CONNS", "25")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	if cfg.DBMaxOpenConns != 25 {
+		t.Errorf("DBMaxOpenConns = %d, want 25", cfg.DBMaxOpenConns)
+	}
+}
+
+func TestLoad_DBMaxOpenConns_Invalid(t *testing.T) {
+	for _, raw := range []string{"0", "-3", "ten"} {
+		t.Setenv("JARVIS_DB_MAX_OPEN_CONNS", raw)
+		if _, err := Load(); err == nil {
+			t.Errorf("Load() with JARVIS_DB_MAX_OPEN_CONNS=%q: expected error, got nil", raw)
+		}
+	}
+}
+
 // Ensure test cleanup resets env properly via t.Setenv.
 var _ = os.Setenv
