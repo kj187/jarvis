@@ -1,3 +1,17 @@
+<a name="v1.9.3"></a>
+## [v1.9.3](https://github.com/kj187/jarvis/compare/v1.9.2...v1.9.3) (2026-08-17)
+
+### Chores
+
+* **deps:** bump github.com/prometheus/client_golang in /backend ([#135](https://github.com/kj187/jarvis/issues/135))
+* **deps:** bump modernc.org/sqlite from 1.53.0 to 1.56.0 in /backend ([#139](https://github.com/kj187/jarvis/issues/139))
+* **deps:** bump actions/setup-node from 6.4.0 to 7.0.0 ([#114](https://github.com/kj187/jarvis/issues/114))
+* **deps:** bump actions/setup-go from 6.5.0 to 7.0.0 ([#124](https://github.com/kj187/jarvis/issues/124))
+* **deps:** bump the codeql-action group across 1 directory with 4 updates ([#123](https://github.com/kj187/jarvis/issues/123))
+* **deps:** bump actions/checkout from 7.0.0 to 7.0.1 ([#129](https://github.com/kj187/jarvis/issues/129))
+* **deps:** bump the minor-patch group across 1 directory with 22 updates ([#141](https://github.com/kj187/jarvis/issues/141))
+* **deps:** bump docker/login-action from 4.4.0 to 4.5.0 ([#134](https://github.com/kj187/jarvis/issues/134))
+
 <a name="v1.9.2"></a>
 ## [v1.9.2](https://github.com/kj187/jarvis/compare/v1.9.1...v1.9.2) (2026-07-17)
 
@@ -5,6 +19,10 @@
 
 * **config:** add codecov.yml with thresholds to stop flaky coverage checks ([#127](https://github.com/kj187/jarvis/issues/127))
 * **db:** stop self-healing PostgreSQL reconnects and transient AM 503s from paging ([#126](https://github.com/kj187/jarvis/issues/126))
+
+### Chores
+
+* **release:** prepare v1.9.2
 
 <a name="v1.9.1"></a>
 ## [v1.9.1](https://github.com/kj187/jarvis/compare/v1.9.0...v1.9.1) (2026-07-16)
