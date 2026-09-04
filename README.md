@@ -7,6 +7,11 @@
 [![OpenSSF Baseline](https://www.bestpractices.dev/projects/13469/baseline)](https://www.bestpractices.dev/projects/13469)
 [![Coverage](https://codecov.io/gh/kj187/jarvis/graph/badge.svg)](https://codecov.io/gh/kj187/jarvis)
 
+<p align="center">
+  <img src="frontend/public/logo.png" alt="Jarvis logo" width="320" /><br />
+  <sub>Logo © 2026 Julian Kleinhans — see <a href="NOTICE">NOTICE</a>.</sub>
+</p>
+
 **Jarvis** is an open source web frontend for Prometheus Alertmanager — interactive, realtime, and self-hosted.
 
 It was inspired by [Karma](https://github.com/prymitive/karma), which is a great project. However, I was missing features that matter for day-to-day on-call work: full persistence across restarts, the ability to comment on individual alerts, a claiming system so the team knows who is handling what, and a solid foundation to build further operational tooling on top of. Jarvis is the result.
