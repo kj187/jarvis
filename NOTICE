@@ -12,3 +12,8 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
+
+The Jarvis logo and favicon files (frontend/public/logo.png,
+favicon.ico, favicon-16x16.png, favicon-32x32.png,
+apple-touch-icon.png) are Copyright 2026 Julian Kleinhans and are NOT
+licensed under the Apache License, Version 2.0. All rights reserved.
