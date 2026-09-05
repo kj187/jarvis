@@ -1,3 +1,10 @@
+<a name="v1.10.0"></a>
+## [v1.10.0](https://github.com/kj187/jarvis/compare/v1.9.3...v1.10.0) (2026-09-05)
+
+### Features
+
+* **frontend:** add logo and favicon assets ([#159](https://github.com/kj187/jarvis/issues/159))
+
 <a name="v1.9.3"></a>
 ## [v1.9.3](https://github.com/kj187/jarvis/compare/v1.9.2...v1.9.3) (2026-08-17)
 
@@ -11,6 +18,7 @@
 * **deps:** bump actions/checkout from 7.0.0 to 7.0.1 ([#129](https://github.com/kj187/jarvis/issues/129))
 * **deps:** bump the minor-patch group across 1 directory with 22 updates ([#141](https://github.com/kj187/jarvis/issues/141))
 * **deps:** bump docker/login-action from 4.4.0 to 4.5.0 ([#134](https://github.com/kj187/jarvis/issues/134))
+* **release:** prepare v1.9.3
 
 <a name="v1.9.2"></a>
 ## [v1.9.2](https://github.com/kj187/jarvis/compare/v1.9.1...v1.9.2) (2026-07-17)
