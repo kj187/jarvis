@@ -1,15 +1,18 @@
-# Jarvis
+<p align="center">
+  <img src="frontend/public/logo.png" alt="Jarvis logo" width="180" />
+</p>
 
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
-[![Release](https://img.shields.io/github/v/release/kj187/jarvis)](https://github.com/kj187/jarvis/releases/latest)
-[![CI](https://github.com/kj187/jarvis/actions/workflows/ci.yml/badge.svg)](https://github.com/kj187/jarvis/actions/workflows/ci.yml)
-[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/kj187/jarvis/badge)](https://scorecard.dev/viewer/?uri=github.com/kj187/jarvis)
-[![OpenSSF Baseline](https://www.bestpractices.dev/projects/13469/baseline)](https://www.bestpractices.dev/projects/13469)
-[![Coverage](https://codecov.io/gh/kj187/jarvis/graph/badge.svg)](https://codecov.io/gh/kj187/jarvis)
+<h1 align="center">Jarvis</h1>
+
+<p align="center"><i>Interactive, realtime, self-hosted Alertmanager UI</i></p>
 
 <p align="center">
-  <img src="frontend/public/logo.png" alt="Jarvis logo" width="320" /><br />
-  <sub>Logo © 2026 Julian Kleinhans — see <a href="NOTICE">NOTICE</a>.</sub>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License" /></a>
+  <a href="https://github.com/kj187/jarvis/releases/latest"><img src="https://img.shields.io/github/v/release/kj187/jarvis" alt="Release" /></a>
+  <a href="https://github.com/kj187/jarvis/actions/workflows/ci.yml"><img src="https://github.com/kj187/jarvis/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <a href="https://scorecard.dev/viewer/?uri=github.com/kj187/jarvis"><img src="https://api.scorecard.dev/projects/github.com/kj187/jarvis/badge" alt="OpenSSF Scorecard" /></a>
+  <a href="https://www.bestpractices.dev/projects/13469"><img src="https://www.bestpractices.dev/projects/13469/baseline" alt="OpenSSF Baseline" /></a>
+  <a href="https://codecov.io/gh/kj187/jarvis"><img src="https://codecov.io/gh/kj187/jarvis/graph/badge.svg" alt="Coverage" /></a>
 </p>
 
 **Jarvis** is an open source web frontend for Prometheus Alertmanager — interactive, realtime, and self-hosted.
