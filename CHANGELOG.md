@@ -1,5 +1,27 @@
+<a name="v1.10.1"></a>
+## [v1.10.1](https://github.com/kj187/jarvis/compare/v1.10.0...v1.10.1) (2026-09-05)
+
+### Chores
+
+* **deps:** bump modernc.org/sqlite from 1.56.0 to 1.58.0 in /backend ([#158](https://github.com/kj187/jarvis/issues/158))
+* **deps:** bump the minor-patch group across 1 directory with 16 updates ([#157](https://github.com/kj187/jarvis/issues/157))
+* **deps:** bump ossf/scorecard-action from 2.4.3 to 2.4.4 ([#147](https://github.com/kj187/jarvis/issues/147))
+* **deps:** bump docker/login-action from 4.5.0 to 4.6.0 ([#149](https://github.com/kj187/jarvis/issues/149))
+* **deps:** bump golang.org/x/crypto from 0.54.0 to 0.55.0 in /backend ([#144](https://github.com/kj187/jarvis/issues/144))
+* **deps:** bump actions/attest-build-provenance from 4.1.1 to 4.2.2 ([#146](https://github.com/kj187/jarvis/issues/146))
+* **deps:** bump the codeql-action group with 4 updates ([#145](https://github.com/kj187/jarvis/issues/145))
+* **deps:** bump pnpm/action-setup from 6.0.9 to 6.0.10 ([#150](https://github.com/kj187/jarvis/issues/150))
+
+### Documentation
+
+* **readme:** center header logo and drop inline copyright line ([#161](https://github.com/kj187/jarvis/issues/161))
+
 <a name="v1.10.0"></a>
 ## [v1.10.0](https://github.com/kj187/jarvis/compare/v1.9.3...v1.10.0) (2026-09-05)
+
+### Chores
+
+* **release:** prepare v1.10.0
 
 ### Features
 
