@@ -1,6 +1,7 @@
 package history
 
 import (
+	"sort"
 	"sync"
 
 	"github.com/kj187/jarvis/backend/internal/models"
@@ -42,7 +43,13 @@ func (s *AlertStore) Reset() {
 	s.resolvedBuffer = nil
 }
 
-// Get returns a copy of all alerts: currently active + resolved buffer.
+// Get returns a copy of all alerts: currently active + resolved buffer,
+// in a stable, total order (startsAt desc, then fingerprint asc, then
+// clusterName asc). The ordering is deterministic across polls even though
+// the upstream Alertmanager response order and the resolvedBuffer map
+// iteration order are not — without it every poll reshuffles the list and
+// the frontend alert grouping visibly flickers. fingerprint+clusterName is
+// unique and stable per alert, so the sort is a total order.
 func (s *AlertStore) Get() []models.EnrichedAlert {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -51,6 +58,16 @@ func (s *AlertStore) Get() []models.EnrichedAlert {
 	for _, a := range s.resolvedBuffer { // nil-map range is safe in Go
 		result = append(result, a)
 	}
+	sort.Slice(result, func(i, j int) bool {
+		a, b := result[i], result[j]
+		if !a.StartsAt.Equal(b.StartsAt) {
+			return a.StartsAt.After(b.StartsAt)
+		}
+		if a.Fingerprint != b.Fingerprint {
+			return a.Fingerprint < b.Fingerprint
+		}
+		return a.ClusterName < b.ClusterName
+	})
 	return result
 }
 
