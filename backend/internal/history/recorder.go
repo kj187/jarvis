@@ -693,9 +693,10 @@ func (r *Recorder) applyPollResults(
 // broadcast on the previous poll. The frontend loads its initial state via REST
 // and relies on WebSocket messages only for *changes*, so suppressing redundant
 // identical broadcasts saves an envelope marshal and a fan-out write to every
-// client on idle polls — with no visible effect. The comparison can only ever
-// yield a false "changed" (e.g. resolved-buffer map ordering), never a false
-// "unchanged", so updates are never missed.
+// client on idle polls — with no visible effect. AlertStore.Get() returns a
+// deterministically ordered snapshot, so an unchanged poll hashes identically
+// and is correctly suppressed; the comparison can still only ever yield a
+// false "changed" (never a false "unchanged"), so updates are never missed.
 func (r *Recorder) broadcastAlertsIfChanged() {
 	payload := map[string]interface{}{"alerts": r.alertStore.Get()}
 	data, err := json.Marshal(payload)
