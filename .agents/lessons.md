@@ -9,6 +9,27 @@ instead of duplicating.
 
 ---
 
+## Alerts inside a group reshuffled on every poll — frontend group flicker
+
+**Symptom**: In a live alert group the alert rows kept changing order on
+every poll refresh, producing a constant visual flicker in the list and
+card-grid views.
+**Cause**: `AlertStore.Get()` (`internal/history/alert_store.go`) returned
+the active slice in upstream Alertmanager response order (not guaranteed
+stable) and appended the resolved buffer via a **Go map range** (never
+stable). `GET /api/v1/alerts`, `/api/v1/alerts/groups` and the WS
+`alerts_update` broadcast all pass that snapshot straight through, and the
+frontend grouping (`buildGroupsByLabel`, `AlertCardGrid`) preserves incoming
+order — so a reshuffled snapshot = reshuffled group.
+**Rule**: `AlertStore.Get()` sorts before returning — `startsAt` desc, then
+`fingerprint` asc, then `clusterName` asc (the last two are unique + stable
+per alert, so it's a total order). Any new alert-list read path relies on
+this; don't re-introduce an unsorted snapshot. Bonus: it also removed the
+"false changed" broadcast from resolved-buffer map ordering noted in
+`broadcastAlertsIfChanged`.
+
+---
+
 ## Hourly PostgreSQL LISTEN reconnects and occasional single-poll 503s are expected noise, not bugs — but they were logged loud enough to trip infra error-count alerting
 
 **Symptom**: Production (2-replica, PostgreSQL) logs showed `fanout:
