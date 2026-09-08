@@ -352,6 +352,11 @@ GET    /api/v1/info                              full_protect?  → { version }
 # ── Alerts (in-memory AlertStore) ────────────────────────────────────────────
 GET    /api/v1/alerts/groups                     full_protect?  → []AlertGroup   ← register BEFORE :fingerprint/*!
 GET    /api/v1/alerts                            full_protect?  → []EnrichedAlert  ?cluster= ?severity= ?state=
+#        AlertStore.Get() returns a deterministic total order — startsAt desc, then
+#        fingerprint asc, then clusterName asc — so every poll delivers the same
+#        ordering (upstream AM response order and resolved-buffer map iteration are
+#        not stable); prevents frontend alert-group flicker. Groups inherit it, then
+#        re-sort the group list itself by severity, then alertname.
 
 # ── Alert details (history store / DB) ───────────────────────────────────────
 GET    /api/v1/alerts/:fingerprint/history       full_protect?  → { events: AlertEvent[], total }  ?limit= ?offset= ?cluster=
