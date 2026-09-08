@@ -9,6 +9,25 @@ instead of duplicating.
 
 ---
 
+## Bumping the pinned Go version: pick a patch govulncheck considers clean
+
+**Symptom**: Raising CI's `go-version` from `1.25.13` to `1.26.5` (forced by
+`golang.org/x/crypto` v0.56.0 requiring Go ≥ 1.26) made the `govulncheck` CI
+step fail — 6 stdlib CVEs (`GO-2026-5026`, `GO-2026-5972`, …), all "Fixed in:
+go1.26.6".
+**Cause**: `actions/setup-go` with an exact `go-version` sets
+`GOTOOLCHAIN=local`, so the `go X.Y.0` directive in `go.mod` never triggers a
+toolchain download — the CI runs on exactly the pinned patch. A `.5` patch
+that predates the latest stdlib security fixes fails `govulncheck ./...`
+(`.github/workflows/ci.yml`). `go build`/`go test`/`golangci-lint` stay green;
+only govulncheck catches it.
+**Rule**: When bumping the CI Go pin, run `govulncheck ./...` under the exact
+target patch first (`go install golang.org/dl/goX.Y.Z@latest && goX.Y.Z
+download`, then `PATH=$(goX.Y.Z env GOROOT)/bin:$PATH govulncheck ./...`) and
+pick the newest patch that reports 0 called vulnerabilities. Same reason the
+CHANGELOG shows a history of "pin Go to 1.25.11 to fix stdlib CVEs". The
+`go.mod` directive stays at `X.Y.0` (the minimum), CI pins the patch.
+
 ## Alerts inside a group reshuffled on every poll — frontend group flicker
 
 **Symptom**: In a live alert group the alert rows kept changing order on

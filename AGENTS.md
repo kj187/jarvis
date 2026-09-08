@@ -17,7 +17,7 @@ view, filter, silence, claim, and comment on alerts.
 
 | Layer | Stack |
 |---|---|
-| Backend | Go 1.25+ · Echo v4 · module `github.com/kj187/jarvis/backend` |
+| Backend | Go 1.26+ · Echo v4 · module `github.com/kj187/jarvis/backend` |
 | Frontend | React 19 · TypeScript (`strict`) · Vite 8 · Zustand v5 · TanStack Query v5 · Tailwind v4 |
 | Database | SQLite (`modernc.org/sqlite`) or PostgreSQL (`pgx/v5`) — selected by `JARVIS_DB_DSN` prefix, both pure Go (no CGO) |
 | Image | Single container: frontend embedded into the Go binary at build time (`//go:build prod` + `embed.FS`), distroless base |
