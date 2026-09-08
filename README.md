@@ -339,13 +339,13 @@ helm plugin install https://github.com/helm-unittest/helm-unittest --version v0.
 
 
 ## Tech Stack
-[![Go Version](https://img.shields.io/badge/Go-1.25-00ADD8?logo=go)](backend/go.mod)
+[![Go Version](https://img.shields.io/badge/Go-1.26-00ADD8?logo=go)](backend/go.mod)
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](frontend/package.json)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6-3178C6?logo=typescript&logoColor=white)](frontend/tsconfig.json)
 [![Helm](https://img.shields.io/badge/Helm-chart-0F1689?logo=helm&logoColor=white)](charts/jarvis/)
 
 
-- **Backend**: Go 1.25 · Echo v4 · SQLite / PostgreSQL (`pgx/v5`, CGO-free) · gorilla/websocket
+- **Backend**: Go 1.26 · Echo v4 · SQLite / PostgreSQL (`pgx/v5`, CGO-free) · gorilla/websocket
 - **Frontend**: React 19 · TypeScript 6 · Vite 8 · Tailwind CSS v4 · Zustand v5 · TanStack Query v5
 - **Infrastructure**: Podman multi-stage build · distroless/static-debian12
 

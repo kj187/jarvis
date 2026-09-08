@@ -7,7 +7,7 @@ COPY frontend/ ./
 RUN pnpm build
 
 # Stage 2: Backend Build (cross-compile Go for target platform without QEMU)
-FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS backend
+FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS backend
 ARG VERSION=dev
 ARG TARGETOS
 ARG TARGETARCH
