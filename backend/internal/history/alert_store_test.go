@@ -3,6 +3,7 @@ package history
 import (
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/kj187/jarvis/backend/internal/models"
 )
@@ -210,6 +211,63 @@ func TestAlertStore_RemoveResolvedForCluster_LeavesReFiredAlertActive(t *testing
 	if len(got) != 1 || got[0].Fingerprint != "fp1" || got[0].Status.State != "active" {
 		t.Fatalf("Get() = %+v, want [fp1 active] (re-fired alert must survive the late removal timer)", got)
 	}
+}
+
+// TestAlertStore_Get_DeterministicOrder: Get() must return a stable, total
+// ordering regardless of active-slice input order or resolved-buffer map
+// iteration order. Otherwise every poll reshuffles the alert list and the
+// frontend grouping flickers. Order: startsAt desc, then fingerprint asc,
+// then clusterName asc (the last two are unique + stable per alert).
+func TestAlertStore_Get_DeterministicOrder(t *testing.T) {
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	mk := func(fp, cluster string, offset time.Duration, state string) models.EnrichedAlert {
+		return models.EnrichedAlert{
+			Fingerprint: fp,
+			ClusterName: cluster,
+			StartsAt:    base.Add(offset),
+			Status:      models.AlertStatus{State: state},
+		}
+	}
+
+	s := &AlertStore{}
+	// Deliberately unsorted input; "c"/c2 and "a"/c1 share a startsAt.
+	s.Set([]models.EnrichedAlert{
+		mk("b", "c1", 5*time.Minute, "active"),
+		mk("c", "c2", 10*time.Minute, "active"),
+		mk("a", "c1", 10*time.Minute, "active"),
+	})
+	// Two resolved-buffer entries — map range order is non-deterministic.
+	s.Set([]models.EnrichedAlert{
+		mk("b", "c1", 5*time.Minute, "active"),
+		mk("c", "c2", 10*time.Minute, "active"),
+		mk("a", "c1", 10*time.Minute, "active"),
+		mk("d", "c1", 20*time.Minute, "active"),
+		mk("e", "c3", 1*time.Minute, "active"),
+	})
+	s.MarkResolvedForCluster("d", "c1")
+	s.MarkResolvedForCluster("e", "c3")
+
+	want := []string{"d", "a", "c", "b", "e"} // startsAt desc, fp asc tiebreak
+	for i := 0; i < 20; i++ {
+		got := s.Get()
+		if len(got) != len(want) {
+			t.Fatalf("len = %d, want %d", len(got), len(want))
+		}
+		for j, fp := range want {
+			if got[j].Fingerprint != fp {
+				t.Fatalf("iteration %d: order = %v, want %v", i,
+					fingerprints(got), want)
+			}
+		}
+	}
+}
+
+func fingerprints(alerts []models.EnrichedAlert) []string {
+	out := make([]string, len(alerts))
+	for i, a := range alerts {
+		out[i] = a.Fingerprint
+	}
+	return out
 }
 
 func TestAlertStore_ConcurrentAccess(t *testing.T) {

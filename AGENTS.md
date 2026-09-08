@@ -152,6 +152,17 @@ Tool-specific entry points map to the same files (no duplicated content):
     Without this, two pods (or two connections during a rolling update)
     racing the same fingerprint could both read the same "last event" before
     either commits and both insert — duplicate event rows.
+17. **`AlertStore.Get()` returns a deterministically ordered snapshot**:
+    `startsAt` desc, then `fingerprint` asc, then `clusterName` asc
+    (`internal/history/alert_store.go`). The active slice arrives in
+    unstable upstream-Alertmanager order and the resolved buffer is a Go map
+    (unstable range), so without this sort every poll reshuffles the list
+    that `GET /api/v1/alerts`, `/api/v1/alerts/groups` and the WS
+    `alerts_update` broadcast all pass straight through — and the frontend
+    grouping preserves incoming order, so alert rows inside a group visibly
+    flicker on each refresh. `fingerprint`+`clusterName` is unique and stable
+    per alert, making the sort a total order. Never re-introduce an unsorted
+    alert-list read path.
 
 ## Workflow Rules — always follow
 
