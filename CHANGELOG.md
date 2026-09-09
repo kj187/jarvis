@@ -1,3 +1,36 @@
+<a name="v1.11.0"></a>
+## [v1.11.0](https://github.com/kj187/jarvis/compare/v1.10.1...v1.11.0) (2026-09-09)
+
+### Bug Fixes
+
+* **alerts:** return alert snapshot in a deterministic order ([#170](https://github.com/kj187/jarvis/issues/170))
+* **claims:** re-hydrate active claims on follower snapshot rebuild ([#176](https://github.com/kj187/jarvis/issues/176))
+* **db:** isolate leader advisory lock per test, acquire it immediately ([#181](https://github.com/kj187/jarvis/issues/181))
+
+### Chores
+
+* **deps:** bump pnpm/action-setup from 6.0.10 to 6.1.0 ([#175](https://github.com/kj187/jarvis/issues/175))
+* **deps:** bump golang.org/x/time from 0.15.0 to 0.16.0 in /backend ([#172](https://github.com/kj187/jarvis/issues/172))
+* **deps:** bump golang.org/x/oauth2 from 0.36.0 to 0.37.0 in /backend ([#173](https://github.com/kj187/jarvis/issues/173))
+* **deps:** upgrade Go toolchain to 1.26, bump golang.org/x/crypto to v0.56.0 ([#171](https://github.com/kj187/jarvis/issues/171))
+* **deps:** bump the minor-patch group in /frontend with 5 updates ([#165](https://github.com/kj187/jarvis/issues/165))
+* **deps:** bump anchore/sbom-action/download-syft ([#169](https://github.com/kj187/jarvis/issues/169))
+* **deps:** bump docker/setup-qemu-action from 4.2.0 to 4.3.0 ([#168](https://github.com/kj187/jarvis/issues/168))
+* **deps:** bump docker/setup-buildx-action from 4.2.0 to 4.3.0 ([#167](https://github.com/kj187/jarvis/issues/167))
+* **deps:** bump the codeql-action group with 4 updates ([#166](https://github.com/kj187/jarvis/issues/166))
+* **deps:** bump github.com/coreos/go-oidc/v3 in /backend ([#164](https://github.com/kj187/jarvis/issues/164))
+* **deps-dev:** bump [@playwright](https://github.com/playwright)/test from 1.62.1 to 1.63.0 in /frontend in the minor-patch group ([#174](https://github.com/kj187/jarvis/issues/174))
+
+### Documentation
+
+* regenerate settings-panel screenshot for the new colophon ([#180](https://github.com/kj187/jarvis/issues/180))
+
+### Features
+
+* **frontend:** add brand colophon to settings, narrow the sheet ([#179](https://github.com/kj187/jarvis/issues/179))
+* **silences:** redesign card (lifetime bar) and list (dense rows) ([#178](https://github.com/kj187/jarvis/issues/178))
+* **silences:** show creation time, fix Created sort, add direction toggle & "by" filter ([#177](https://github.com/kj187/jarvis/issues/177))
+
 <a name="v1.10.1"></a>
 ## [v1.10.1](https://github.com/kj187/jarvis/compare/v1.10.0...v1.10.1) (2026-09-05)
 
@@ -11,6 +44,7 @@
 * **deps:** bump actions/attest-build-provenance from 4.1.1 to 4.2.2 ([#146](https://github.com/kj187/jarvis/issues/146))
 * **deps:** bump the codeql-action group with 4 updates ([#145](https://github.com/kj187/jarvis/issues/145))
 * **deps:** bump pnpm/action-setup from 6.0.9 to 6.0.10 ([#150](https://github.com/kj187/jarvis/issues/150))
+* **release:** prepare v1.10.1
 
 ### Documentation
 
