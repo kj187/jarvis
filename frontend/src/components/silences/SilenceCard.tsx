@@ -2,6 +2,7 @@ import { BellMinus, Loader2, RotateCcw } from 'lucide-react'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { SilenceExpiry } from './SilenceExpiry'
+import { SilenceCreated } from './SilenceCreated'
 import { labelColorStyle } from '@/lib/alertUtils'
 import { TruncatableChip } from '@/components/ui/truncatable-chip'
 import { useSettingsStore } from '@/store/useSettingsStore'
@@ -93,9 +94,15 @@ export function SilenceCard({ silence, alerts, onEdit, onExpire, isDeleting = fa
       </CardHeader>
 
       <CardContent className="space-y-3">
-        <div className="rounded-md border border-border/70 bg-inherit p-2.5">
-          <div className="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground/80">Expires</div>
-          <SilenceExpiry silence={silence} />
+        <div className="grid grid-cols-2 gap-2">
+          <div className="rounded-md border border-border/70 bg-inherit p-2.5">
+            <div className="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground/80">Created</div>
+            <SilenceCreated silence={silence} />
+          </div>
+          <div className="rounded-md border border-border/70 bg-inherit p-2.5">
+            <div className="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground/80">Expires</div>
+            <SilenceExpiry silence={silence} />
+          </div>
         </div>
 
         <div className="rounded-md border border-border/70 bg-inherit p-2.5">

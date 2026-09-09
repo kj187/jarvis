@@ -250,12 +250,30 @@ export function silenceWouldMatchAlert(matchers: LabelMatcher[], alert: Enriched
 
 // ── Silence filtering ─────────────────────────────────────────────────────
 
+/**
+ * Distinct, alphabetically sorted `createdBy` values across the given
+ * silences — feeds the silences-only "by" filter dropdown. Blank creators
+ * are skipped.
+ */
+export function silenceCreators(silences: Silence[]): string[] {
+  const set = new Set<string>()
+  for (const s of silences) {
+    if (s.createdBy) set.add(s.createdBy)
+  }
+  return Array.from(set).sort((a, b) => a.localeCompare(b))
+}
+
 export function filterSilences(
   silences: Silence[],
   search: string,
   labelMatchers: LabelMatcher[],
+  createdBy?: string,
 ): Silence[] {
   let result = silences
+
+  if (createdBy) {
+    result = result.filter((s) => s.createdBy === createdBy)
+  }
 
   if (search) {
     const q = search.toLowerCase()
@@ -294,6 +312,42 @@ export function filterSilences(
   }
 
   return result
+}
+
+// ── Silence sorting ───────────────────────────────────────────────────────
+
+export type SilenceSortBy = 'expires' | 'created'
+export type SilenceSortDir = 'asc' | 'desc'
+
+/** Natural default direction per sort key: soonest expiry first, newest creation first. */
+export function defaultSilenceSortDir(sortBy: SilenceSortBy): SilenceSortDir {
+  return sortBy === 'expires' ? 'asc' : 'desc'
+}
+
+/**
+ * Sorts silences by the chosen timestamp and direction. The explicit sort
+ * takes precedence over the active/pending/expired lifecycle order — that
+ * only breaks exact timestamp ties (then `id`, for a stable total order).
+ * "created" sorts by `updatedAt` (Alertmanager's create/last-edit time),
+ * never `startsAt` — a silence scheduled to start in the future was still
+ * created now.
+ */
+export function sortSilences(
+  silences: Silence[],
+  sortBy: SilenceSortBy,
+  dir: SilenceSortDir,
+): Silence[] {
+  const stateOrder: Record<Silence['status']['state'], number> = { active: 0, pending: 1, expired: 2 }
+  const factor = dir === 'asc' ? 1 : -1
+  const ts = (s: Silence) =>
+    new Date(sortBy === 'expires' ? s.endsAt : s.updatedAt).getTime()
+  return [...silences].sort((a, b) => {
+    const diff = ts(a) - ts(b)
+    if (diff !== 0) return diff * factor
+    const stateDiff = stateOrder[a.status.state] - stateOrder[b.status.state]
+    if (stateDiff !== 0) return stateDiff
+    return a.id.localeCompare(b.id)
+  })
 }
 
 // ── Effective alert state ─────────────────────────────────────────────────

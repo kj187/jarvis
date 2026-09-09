@@ -855,7 +855,13 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
 │   │                            hasUnevaluableRegexMatcher, silenceMatchesAlert,
 │   │                            getEffectiveAlertState, getSilenceState (both consider ALL active
 │   │                            silences in silencedBy, not just the first), getExpiredSilence,
-│   │                            filterSilences, pickIdentifierLabel, formatSilenceDuration,
+│   │                            filterSilences (4th arg `createdBy`: exact-match "by" filter,
+│   │                            silences page only), silenceCreators (distinct sorted `createdBy`
+│   │                            values → the "By:" dropdown), sortSilences + defaultSilenceSortDir
+│   │                            ("expires" → `endsAt`/asc default, "created" → `updatedAt`/desc
+│   │                            default; explicit sort beats the active→pending→expired order,
+│   │                            which is only a timestamp-tie breaker then `id`),
+│   │                            pickIdentifierLabel, formatSilenceDuration,
 │   │                            formatTime, severityOrder, formatAckDuration, buildAckSilenceBody,
 │   │                            computeGroupLabelValues (only labels present on EVERY alert in the
 │   │                            group — a partial label is dropped, never partially OR-matched),
@@ -1083,11 +1089,13 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │       emphasis in a legacy comment is accepted)
     ├── silences/
     │   ├── SilencesPage.tsx   → dedicated page: card|list, fullscreen, show/hide expired,
-    │   │                        sort (expires/created), matcher-chip filter
-    │   ├── SilenceCard.tsx    → status, matchers, expiry, expired info box, re-create
+    │   │                        sort (expires/created + asc/desc toggle), creator-filter
+    │   │                        dropdown (person-icon, silences only), matcher-chip filter
+    │   ├── SilenceCard.tsx    → status, matchers, created + expiry boxes, expired info box, re-create
     │   ├── SilenceGroupCard.tsx → grouped identical silences (count + summed affected)
-    │   ├── SilenceListView.tsx → table view
-    │   ├── SilenceExpiry.tsx  → "expired X ago" / "expires in X" / "starts in X"
+    │   ├── SilenceListView.tsx → table view (created timestamp on the "by" line)
+    │   ├── SilenceExpiry.tsx  → "expired X ago" / "expires in X" / "starts in X"; exports ExactDate/DATE_FMT
+    │   ├── SilenceCreated.tsx → creation timestamp (Silence.updatedAt) + "X ago", shares ExactDate
     │   ├── SilenceExpireModal.tsx → expire/extend confirmation (silence-ID link → AM)
     │   ├── SilenceForm.tsx    → 3 steps: form (matchers, clusters, duration, live match count,
     │   │                        overlap/zero-match/unevaluable-regex warnings) → preview → per-cluster results

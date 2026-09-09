@@ -9,6 +9,24 @@ instead of duplicating.
 
 ---
 
+## A silence's "created" time is `updatedAt`, never `startsAt`
+
+**Symptom**: Sorting the silences page by "Created" produced a confusing
+order — a just-created silence landed in the middle of the list, not at the
+top.
+**Cause**: The sort read `Silence.startsAt`. In Alertmanager `startsAt` is
+the *schedule start* of the mute window — it can be set well into the future
+(pending silences) or slightly in the past, and is unrelated to when the
+silence was actually submitted. Alertmanager exposes no dedicated created-at
+field; `updatedAt` is the create-and-last-edit timestamp (editing a silence
+in AM rewrites it, and also mints a new silence ID).
+**Rule**: `sortSilences` in `lib/alertUtils.ts` sorts "created" by
+`updatedAt`. Treat `updatedAt` as the creation time everywhere in the UI
+(`SilenceCreated.tsx`); only use `startsAt`/`endsAt` for the active mute
+window. The explicit sort also takes precedence over the
+active→pending→expired lifecycle order now (that order is only a
+timestamp-tie breaker) — users sorting by a date expect that date to win.
+
 ## Bumping the pinned Go version: pick a patch govulncheck considers clean
 
 **Symptom**: Raising CI's `go-version` from `1.25.13` to `1.26.5` (forced by

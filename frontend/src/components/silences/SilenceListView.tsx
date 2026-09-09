@@ -1,7 +1,9 @@
 import { BellMinus, Loader2, RotateCcw } from 'lucide-react'
+import { format } from 'date-fns'
+import { enUS } from 'date-fns/locale'
 import { Button } from '@/components/ui/button'
-import { SilenceExpiry } from './SilenceExpiry'
-import { labelColorStyle } from '@/lib/alertUtils'
+import { SilenceExpiry, DATE_FMT } from './SilenceExpiry'
+import { labelColorStyle, tzAbbr } from '@/lib/alertUtils'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { TruncatableChip } from '@/components/ui/truncatable-chip'
 import type { Silence, EnrichedAlert } from '@/types'
@@ -111,6 +113,10 @@ export function SilenceListView({ groups, alerts, onEditGroup, onExpireGroup, de
                   )}
                   <span className="text-muted-foreground/60">•</span>
                   <span className="truncate text-muted-foreground/80">by {rep.createdBy}</span>
+                  <span className="text-muted-foreground/60">•</span>
+                  <span className="whitespace-nowrap text-muted-foreground/70">
+                    created {format(new Date(rep.updatedAt), DATE_FMT, { locale: enUS })} {tzAbbr}
+                  </span>
                 </div>
 
                 <div className="mb-1 flex flex-wrap items-center gap-1">
