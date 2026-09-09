@@ -250,12 +250,30 @@ export function silenceWouldMatchAlert(matchers: LabelMatcher[], alert: Enriched
 
 // ── Silence filtering ─────────────────────────────────────────────────────
 
+/**
+ * Distinct, alphabetically sorted `createdBy` values across the given
+ * silences — feeds the silences-only "by" filter dropdown. Blank creators
+ * are skipped.
+ */
+export function silenceCreators(silences: Silence[]): string[] {
+  const set = new Set<string>()
+  for (const s of silences) {
+    if (s.createdBy) set.add(s.createdBy)
+  }
+  return Array.from(set).sort((a, b) => a.localeCompare(b))
+}
+
 export function filterSilences(
   silences: Silence[],
   search: string,
   labelMatchers: LabelMatcher[],
+  createdBy?: string,
 ): Silence[] {
   let result = silences
+
+  if (createdBy) {
+    result = result.filter((s) => s.createdBy === createdBy)
+  }
 
   if (search) {
     const q = search.toLowerCase()
@@ -294,6 +312,84 @@ export function filterSilences(
   }
 
   return result
+}
+
+// ── Silence sorting ───────────────────────────────────────────────────────
+
+export type SilenceSortBy = 'expires' | 'created'
+export type SilenceSortDir = 'asc' | 'desc'
+
+/** Natural default direction per sort key: soonest expiry first, newest creation first. */
+export function defaultSilenceSortDir(sortBy: SilenceSortBy): SilenceSortDir {
+  return sortBy === 'expires' ? 'asc' : 'desc'
+}
+
+/**
+ * Sorts silences by the chosen timestamp and direction. The explicit sort
+ * takes precedence over the active/pending/expired lifecycle order — that
+ * only breaks exact timestamp ties (then `id`, for a stable total order).
+ * "created" sorts by `updatedAt` (Alertmanager's create/last-edit time),
+ * never `startsAt` — a silence scheduled to start in the future was still
+ * created now.
+ */
+export function sortSilences(
+  silences: Silence[],
+  sortBy: SilenceSortBy,
+  dir: SilenceSortDir,
+): Silence[] {
+  const stateOrder: Record<Silence['status']['state'], number> = { active: 0, pending: 1, expired: 2 }
+  const factor = dir === 'asc' ? 1 : -1
+  const ts = (s: Silence) =>
+    new Date(sortBy === 'expires' ? s.endsAt : s.updatedAt).getTime()
+  return [...silences].sort((a, b) => {
+    const diff = ts(a) - ts(b)
+    if (diff !== 0) return diff * factor
+    const stateDiff = stateOrder[a.status.state] - stateOrder[b.status.state]
+    if (stateDiff !== 0) return stateDiff
+    return a.id.localeCompare(b.id)
+  })
+}
+
+// ── Silence timing (lifetime bar + urgency colour) ────────────────────────
+
+export type SilenceUrgency = 'pending' | 'ok' | 'soon' | 'expired'
+
+export interface SilenceTiming {
+  /** Elapsed fraction of the mute window (`startsAt`→`endsAt`), 0–100, clamped. */
+  pct: number
+  urgency: SilenceUrgency
+  /**
+   * `endsAt - now` for active/expired silences (negative once past);
+   * `startsAt - now` for pending ones (time until it begins).
+   */
+  remainingMs: number
+}
+
+const EXPIRING_SOON_MS = 15 * 60 * 1000
+
+/**
+ * Derives the progress bar fill and the urgency colour for a silence from
+ * its lifecycle state and window. `now` is injectable for tests. An `active`
+ * silence whose `endsAt` is already in the past (stale poll snapshot of an
+ * unreachable cluster — see AGENTS.md invariant #14) still reports
+ * `urgency: 'soon'` with a negative `remainingMs`, so the UI can show
+ * "overdue" rather than a frozen countdown.
+ */
+export function silenceTiming(silence: Silence, now: number = Date.now()): SilenceTiming {
+  const startsAt = new Date(silence.startsAt).getTime()
+  const endsAt = new Date(silence.endsAt).getTime()
+
+  if (silence.status.state === 'pending') {
+    return { pct: 0, urgency: 'pending', remainingMs: startsAt - now }
+  }
+  if (silence.status.state === 'expired') {
+    return { pct: 100, urgency: 'expired', remainingMs: endsAt - now }
+  }
+
+  const span = endsAt - startsAt
+  const pct = span > 0 ? Math.min(100, Math.max(0, ((now - startsAt) / span) * 100)) : 100
+  const remainingMs = endsAt - now
+  return { pct, urgency: remainingMs <= EXPIRING_SOON_MS ? 'soon' : 'ok', remainingMs }
 }
 
 // ── Effective alert state ─────────────────────────────────────────────────

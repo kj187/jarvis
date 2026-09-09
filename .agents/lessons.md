@@ -9,6 +9,40 @@ instead of duplicating.
 
 ---
 
+## A stale "active" silence can be past its `endsAt` — don't clamp the countdown
+
+**Symptom**: The silences page showed cards badged `active` with "⚠️ In 0m",
+while the freshly added "created 1d ago" line said the window was long over.
+**Cause**: `ops-wirk` was unreachable, so the page served the last good poll
+snapshot (AGENTS.md invariant #14) — silences frozen `active` with an
+`endsAt` now hours in the past. `SilenceExpiry` rendered
+`In {formatDuration(endsAt - now)}`, and `formatDuration` clamps negatives to
+`0` → a permanent, misleading "In 0m".
+**Rule**: `silenceTiming` (`lib/alertUtils.ts`) returns the real (possibly
+negative) `remainingMs` and keeps `urgency: 'soon'` for an overdue active
+silence; `silenceRemainingText` turns a negative into "⚠️ Overdue X", never a
+frozen countdown. Any "time left" display must special-case `remaining <= 0`
+before formatting — the number can legitimately be negative whenever a
+cluster's snapshot is stale.
+
+## A silence's "created" time is `updatedAt`, never `startsAt`
+
+**Symptom**: Sorting the silences page by "Created" produced a confusing
+order — a just-created silence landed in the middle of the list, not at the
+top.
+**Cause**: The sort read `Silence.startsAt`. In Alertmanager `startsAt` is
+the *schedule start* of the mute window — it can be set well into the future
+(pending silences) or slightly in the past, and is unrelated to when the
+silence was actually submitted. Alertmanager exposes no dedicated created-at
+field; `updatedAt` is the create-and-last-edit timestamp (editing a silence
+in AM rewrites it, and also mints a new silence ID).
+**Rule**: `sortSilences` in `lib/alertUtils.ts` sorts "created" by
+`updatedAt`. Treat `updatedAt` as the creation time everywhere in the UI
+(`SilenceCreated.tsx`); only use `startsAt`/`endsAt` for the active mute
+window. The explicit sort also takes precedence over the
+active→pending→expired lifecycle order now (that order is only a
+timestamp-tie breaker) — users sorting by a date expect that date to win.
+
 ## Bumping the pinned Go version: pick a patch govulncheck considers clean
 
 **Symptom**: Raising CI's `go-version` from `1.25.13` to `1.26.5` (forced by
@@ -553,3 +587,26 @@ both the active list and the resolved buffer; `testReset` uses it instead of
 `Set(nil)`. `Set(nil)` keeps its production semantics for the real poll loop.
 Any store with a deliberately-persisted buffer/cache needs an explicit
 test-only full-wipe method — `Set(nil)`-shaped "clear" calls are not it.
+
+## Followers dropped a fresh claim until the leader's next poll (multi-replica)
+
+**Symptom**: On a multi-replica PostgreSQL deployment, claiming an alert
+showed the claim banner in the UI for a moment, then it disappeared, then it
+came back on the next poll cycle — repeatably.
+**Cause**: `claims.go` patches the handling pod's in-memory `AlertStore`
+(`SetActiveClaim`) and fans the `claim_set` WS event out to every pod, so the
+claim shows immediately. But a follower rebuilds its whole `AlertStore` from
+the leader's persisted `poll_snapshots` row on every `jarvis_snapshot`
+NOTIFY / idle resync (`rebuildFollowerAlertStore` → `AlertStore.Set`). That
+snapshot only contains the claims that existed as of the leader's **last**
+poll, so the rebuild overwrote the just-patched claim with `nil` and
+broadcast an `alerts_update` without it. The leader's next poll re-attached
+the claim from the DB (`applyPollResults` → `GetActiveClaims`) and persisted
+a fresh snapshot, so it reappeared.
+**Rule**: `rebuildFollowerAlertStore` re-hydrates `ActiveClaim` from the
+shared DB (`Store.GetActiveClaims`, the same batched read the leader runs)
+before `AlertStore.Set` — claims are authoritative from the DB, not the
+snapshot (a since-released claim in a stale snapshot is cleared too). When a
+follower serves derived state that a mutation can change between leader
+polls, ask whether the snapshot alone can carry it or whether the follower
+must read the authoritative table.
