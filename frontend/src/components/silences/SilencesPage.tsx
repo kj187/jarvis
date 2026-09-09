@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
-import { Loader2, X, ArrowUpDown, Search, Maximize2 } from 'lucide-react'
+import { Loader2, X, ArrowUpDown, ArrowUp, ArrowDown, Search, Maximize2, User } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Select } from '@/components/ui/select'
 import { SilenceCard } from './SilenceCard'
 import { SilenceGroupCard } from './SilenceGroupCard'
 import { SilenceListView } from './SilenceListView'
@@ -16,14 +17,20 @@ import { useQuery } from '@tanstack/react-query'
 import { fetchClusters } from '@/api/client'
 import { useUIStore } from '@/store/uiStore'
 import { MatcherChipsBar } from '@/components/layout/MatcherChipsBar'
-import { filterSilences } from '@/lib/alertUtils'
+import {
+  filterSilences,
+  sortSilences,
+  silenceCreators,
+  defaultSilenceSortDir,
+  type SilenceSortBy,
+  type SilenceSortDir,
+} from '@/lib/alertUtils'
 import { useLoginGuard } from '@/hooks/useLoginGuard'
 import { LoginModal } from '@/components/auth/LoginModal'
 import type { Silence } from '@/types'
 import type { SilenceGroup } from './SilenceGroupCard'
 
 type SheetTab = 'silence' | 'templates'
-type SortBy = 'expires' | 'created'
 
 function silenceGroupKey(s: Silence): string {
   const matchers = [...s.matchers]
@@ -54,8 +61,17 @@ export function SilencesPage() {
 
   const { guard, loginModalOpen, onLoginSuccess, onLoginClose } = useLoginGuard()
   const { silencesViewMode: viewMode, setSilencesViewMode, filters, setFilter, isFullscreen, setIsFullscreen } = useUIStore()
-  const [sortBy, setSortBy] = useState<SortBy>('expires')
+  const [sortBy, setSortByState] = useState<SilenceSortBy>('expires')
+  const [sortDir, setSortDir] = useState<SilenceSortDir>(() => defaultSilenceSortDir('expires'))
+  const [createdByFilter, setCreatedByFilter] = useState('')
   const [showExpired, setShowExpired] = useState(false)
+
+  // Switching the sort key resets to that key's natural direction (soonest
+  // expiry first / newest creation first); the arrow toggle overrides it.
+  function setSortBy(next: SilenceSortBy) {
+    setSortByState(next)
+    setSortDir(defaultSilenceSortDir(next))
+  }
   const [formOpen, setFormOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<SheetTab>('silence')
   const [editSilence, setEditSilence] = useState<Silence | null>(null)
@@ -101,17 +117,13 @@ export function SilencesPage() {
 
   const clusterNames = clusters.map((c) => c.name)
 
-  const base = showExpired ? silences : silences.filter((s) => s.status.state !== 'expired')
-  const filtered = filterSilences(base, filters.search, filters.labelMatchers)
+  const creators = silenceCreators(silences)
+  // Ignore a stale "by" selection whose creator no longer has any silence.
+  const effectiveCreatedBy = creators.includes(createdByFilter) ? createdByFilter : ''
 
-  const sorted = [...filtered].sort((a, b) => {
-    const stateOrder = { active: 0, pending: 1, expired: 2 }
-    const stateDiff = (stateOrder[a.status.state] ?? 3) - (stateOrder[b.status.state] ?? 3)
-    if (stateDiff !== 0) return stateDiff
-    const dateA = sortBy === 'expires' ? new Date(a.endsAt).getTime() : new Date(a.startsAt).getTime()
-    const dateB = sortBy === 'expires' ? new Date(b.endsAt).getTime() : new Date(b.startsAt).getTime()
-    return dateA - dateB
-  })
+  const base = showExpired ? silences : silences.filter((s) => s.status.state !== 'expired')
+  const filtered = filterSilences(base, filters.search, filters.labelMatchers, effectiveCreatedBy)
+  const sorted = sortSilences(filtered, sortBy, sortDir)
 
   const groups = buildGroups(sorted)
 
@@ -178,8 +190,34 @@ export function SilencesPage() {
               >
                 Created
               </button>
+              <button
+                onClick={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
+                className="cursor-pointer flex items-center justify-center h-7 w-7 border-l border-border text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                title={sortDir === 'asc' ? 'Ascending — click for descending' : 'Descending — click for ascending'}
+                aria-label="Toggle sort direction"
+              >
+                {sortDir === 'asc' ? <ArrowUp className="h-3.5 w-3.5" /> : <ArrowDown className="h-3.5 w-3.5" />}
+              </button>
             </div>
           </div>
+          {creators.length > 0 && (
+            <div className="flex items-center gap-1">
+              <User className="h-3 w-3 shrink-0 text-muted-foreground" />
+              <Select
+                value={effectiveCreatedBy}
+                onChange={(e) => setCreatedByFilter(e.target.value)}
+                className="h-7 w-28"
+                selectClassName="h-7 py-0 text-xs"
+                placeholder="Anyone"
+                title="Filter by silence creator"
+                aria-label="Filter by silence creator"
+              >
+                {creators.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </Select>
+            </div>
+          )}
           <ViewToggle value={viewMode} onChange={setSilencesViewMode} />
           <Button
             variant="outline"

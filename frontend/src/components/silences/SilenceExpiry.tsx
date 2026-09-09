@@ -9,9 +9,9 @@ interface SilenceExpiryProps {
   className?: string
 }
 
-const DATE_FMT = 'MMM d, yyyy HH:mm'
+export const DATE_FMT = 'MMM d, yyyy HH:mm'
 
-function ExactDate({ value }: { value: string }) {
+export function ExactDate({ value }: { value: string }) {
   return (
     <span className="text-xs font-medium text-foreground">
       {format(new Date(value), DATE_FMT, { locale: enUS })} {tzAbbr}

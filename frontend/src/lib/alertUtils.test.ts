@@ -23,6 +23,9 @@ import {
   computeGroupLabelValues,
   buildGroupAckSilenceBody,
   filterSilences,
+  silenceCreators,
+  sortSilences,
+  defaultSilenceSortDir,
   getExpiredSilence,
   labelColorStyle,
   unescapeRegex,
@@ -932,6 +935,20 @@ describe('filterSilences', () => {
     expect(filterSilences(silences, 'bob', []).map((s) => s.id)).toEqual(['s2'])
   })
 
+  it('filters by exact createdBy when the "by" argument is set', () => {
+    expect(filterSilences(silences, '', [], 'alice').map((s) => s.id)).toEqual(['s1'])
+    expect(filterSilences(silences, '', [], 'bob').map((s) => s.id)).toEqual(['s2'])
+  })
+
+  it('ignores an empty "by" argument', () => {
+    expect(filterSilences(silences, '', [], '')).toEqual(silences)
+  })
+
+  it('combines the "by" argument with search and label matchers', () => {
+    expect(filterSilences(silences, 'planned', [], 'alice').map((s) => s.id)).toEqual(['s1'])
+    expect(filterSilences(silences, 'planned', [], 'bob')).toEqual([])
+  })
+
   it('filters by matcher name or value substring', () => {
     expect(filterSilences(silences, 'web1', []).map((s) => s.id)).toEqual(['s2'])
   })
@@ -977,6 +994,65 @@ describe('filterSilences', () => {
   it('combines search and label matchers with AND', () => {
     const fm: LabelMatcher = { id: '1', name: '@cluster', operator: '=', value: 'cluster-a' }
     expect(filterSilences(silences, 'web1', [fm])).toEqual([])
+  })
+})
+
+describe('defaultSilenceSortDir', () => {
+  it('defaults expires ascending and created descending', () => {
+    expect(defaultSilenceSortDir('expires')).toBe('asc')
+    expect(defaultSilenceSortDir('created')).toBe('desc')
+  })
+})
+
+describe('sortSilences', () => {
+  const a = makeSilence({ id: 'a', status: { state: 'active' }, updatedAt: '2026-01-01T10:00:00Z', endsAt: '2026-02-01T00:00:00Z' })
+  const b = makeSilence({ id: 'b', status: { state: 'expired' }, updatedAt: '2026-01-03T10:00:00Z', endsAt: '2026-01-04T00:00:00Z' })
+  const c = makeSilence({ id: 'c', status: { state: 'pending' }, updatedAt: '2026-01-02T10:00:00Z', endsAt: '2026-03-01T00:00:00Z' })
+
+  it('sorts by creation time, newest first (created/desc) regardless of lifecycle state', () => {
+    expect(sortSilences([a, b, c], 'created', 'desc').map((s) => s.id)).toEqual(['b', 'c', 'a'])
+  })
+
+  it('sorts by creation time, oldest first (created/asc)', () => {
+    expect(sortSilences([a, b, c], 'created', 'asc').map((s) => s.id)).toEqual(['a', 'c', 'b'])
+  })
+
+  it('sorts by expiry time (expires/asc = soonest first)', () => {
+    expect(sortSilences([a, b, c], 'expires', 'asc').map((s) => s.id)).toEqual(['b', 'a', 'c'])
+  })
+
+  it('sorts by expiry time (expires/desc = latest first)', () => {
+    expect(sortSilences([a, b, c], 'expires', 'desc').map((s) => s.id)).toEqual(['c', 'a', 'b'])
+  })
+
+  it('breaks exact timestamp ties by lifecycle state then id', () => {
+    const x = makeSilence({ id: 'x', status: { state: 'expired' }, updatedAt: '2026-01-01T00:00:00Z' })
+    const y = makeSilence({ id: 'y', status: { state: 'active' }, updatedAt: '2026-01-01T00:00:00Z' })
+    const z = makeSilence({ id: 'z', status: { state: 'active' }, updatedAt: '2026-01-01T00:00:00Z' })
+    expect(sortSilences([x, y, z], 'created', 'desc').map((s) => s.id)).toEqual(['y', 'z', 'x'])
+  })
+
+  it('does not mutate the input array', () => {
+    const input = [a, b, c]
+    sortSilences(input, 'created', 'desc')
+    expect(input.map((s) => s.id)).toEqual(['a', 'b', 'c'])
+  })
+})
+
+describe('silenceCreators', () => {
+  it('returns distinct creators sorted alphabetically', () => {
+    const silences = [
+      makeSilence({ id: 's1', createdBy: 'charlie' }),
+      makeSilence({ id: 's2', createdBy: 'alice' }),
+      makeSilence({ id: 's3', createdBy: 'charlie' }),
+      makeSilence({ id: 's4', createdBy: 'bob' }),
+    ]
+    expect(silenceCreators(silences)).toEqual(['alice', 'bob', 'charlie'])
+  })
+
+  it('skips blank creators and returns [] for an empty list', () => {
+    expect(silenceCreators([])).toEqual([])
+    expect(silenceCreators([makeSilence({ createdBy: '' })])).toEqual([])
   })
 })
 
