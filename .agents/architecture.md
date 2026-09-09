@@ -1122,7 +1122,8 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │   └── SilenceTemplateTab.tsx → template CRUD + apply-to-form
     ├── settings/
     │   └── SettingsSheet.tsx  → time format, default view, resolved page size, default filters,
-    │                            default silence duration, creator name, claim animation, theme
+    │                            default silence duration, creator name, claim animation, theme;
+    │                            brand footer at the bottom (centred /logo.png + version from useVersion)
     ├── auth/
     │   ├── LoginModal.tsx     → on-demand login (write_protect)
     │   ├── LoginPage.tsx      → full-page login (full_protect)

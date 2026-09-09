@@ -21,6 +21,20 @@ test('H1 settings panel opens via gear icon and shows Settings heading', async (
   await expect(dialog.getByText('Silences')).toBeVisible()
 })
 
+test('H1b settings footer shows the Jarvis logo and version', async ({ page }) => {
+  await dismissNoAuthNotice(page)
+  await page.route('**/api/v1/info', (route) =>
+    route.fulfill({ json: { version: 'v9.9.9' } }),
+  )
+  await page.goto('/')
+
+  const dialog = await openSettings(page)
+  const logo = dialog.getByRole('img', { name: 'Jarvis' })
+  await logo.scrollIntoViewIfNeeded()
+  await expect(logo).toBeVisible()
+  await expect(dialog.getByText('v9.9.9')).toBeVisible()
+})
+
 test('H2 timeFormat toggle switches between Relative and Absolute', async ({ page }) => {
   await dismissNoAuthNotice(page)
   await page.addInitScript(() => {
