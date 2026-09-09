@@ -103,6 +103,14 @@ WebSocket pushes to its own connected browsers, from a snapshot that is
 at most one poll interval old, regardless of which pod happens to be
 leader right now.
 
+When a follower rebuilds its alert store from a snapshot it also re-reads
+the active claims from the shared database and re-attaches them to the
+merged alerts (the same batched read the leader does each poll). The
+snapshot only carries the claims that existed as of the leader's last
+poll, so without this a claim made against any pod would flash in the UI
+and then disappear until the leader's next poll — and a claim released
+between leader polls would keep showing on followers just as long.
+
 A user-triggered mutation (creating a silence, for instance) still needs an
 immediate poll to reconcile against Alertmanager quickly. A follower can't
 poll itself, so it forwards the request via `pg_notify('jarvis_trigger',

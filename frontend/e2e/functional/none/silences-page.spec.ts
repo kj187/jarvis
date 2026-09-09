@@ -157,41 +157,78 @@ test('E3 show/hide expired toggles expired silences visibility', async ({ page, 
   await expect(page.getByText(expiredComment).first()).toBeVisible()
 })
 
-test('E4 sort toggle switches ordering between expires and created', async ({ page, jarvis }) => {
+test('E4 sort toggle and asc/desc direction reorder by expiry vs creation time', async ({ page, jarvis }) => {
   await dismissNoAuthNotice(page)
   await resetPersistedUIState(page)
   await clearAllAMSilences()
   await jarvis.poll()
 
   const now = Date.now()
-  const earlyExpiryComment = 'e4-early-expiry'
-  const oldCreatedComment = 'e4-old-created'
 
-  await jarvis.createSilence('e2e', [{ name: 'alertname', value: 'E4OldCreated', isRegex: false, isEqual: true }], {
-    startsAt: new Date(now - 2 * 60 * 60 * 1000),
-    endsAt: new Date(now + 2 * 60 * 60 * 1000),
-    comment: oldCreatedComment,
-    createdBy: 'e2e-tester',
-  })
+  // Created first (oldest updatedAt), expires soonest.
   await jarvis.createSilence('e2e', [{ name: 'alertname', value: 'E4EarlyExpiry', isRegex: false, isEqual: true }], {
     startsAt: new Date(now - 30 * 60 * 1000),
     endsAt: new Date(now + 30 * 60 * 1000),
-    comment: earlyExpiryComment,
+    comment: 'e4-early-expiry',
+    createdBy: 'e2e-tester',
+  })
+  // Created last (newest updatedAt), expires latest.
+  await jarvis.createSilence('e2e', [{ name: 'alertname', value: 'E4LateExpiry', isRegex: false, isEqual: true }], {
+    startsAt: new Date(now - 30 * 60 * 1000),
+    endsAt: new Date(now + 4 * 60 * 60 * 1000),
+    comment: 'e4-late-expiry',
     createdBy: 'e2e-tester',
   })
   await waitForSilences(JARVIS_BASE_URL, 2)
 
   await page.goto('/')
   await ensureSilencesPage(page)
-  const e4Matchers = page.locator('span.font-mono.text-xs').filter({ hasText: 'alertname=E4' })
+  const e4Matchers = page.locator('.silence-matcher').filter({ hasText: 'alertname=E4' })
   await expect(e4Matchers).toHaveCount(2)
+
+  // Default: Expires ascending → soonest first.
   await expect(e4Matchers.first()).toContainText('E4EarlyExpiry')
 
+  // Direction toggle flips it → latest expiry first.
+  await page.getByRole('button', { name: 'Toggle sort direction' }).click()
+  await expect(e4Matchers.first()).toContainText('E4LateExpiry')
+
+  // Created → defaults back to descending (newest first).
   await page.getByRole('button', { name: 'Created' }).click()
-  await expect(e4Matchers.first()).toContainText('E4OldCreated')
+  await expect(e4Matchers.first()).toContainText('E4LateExpiry')
 
-  await page.getByRole('button', { name: 'Expires' }).click()
+  // Created ascending → oldest creation first.
+  await page.getByRole('button', { name: 'Toggle sort direction' }).click()
   await expect(e4Matchers.first()).toContainText('E4EarlyExpiry')
+})
+
+test('E4b "By:" dropdown filters silences to a single creator', async ({ page, jarvis }) => {
+  await dismissNoAuthNotice(page)
+  await resetPersistedUIState(page)
+  await clearAllAMSilences()
+  await jarvis.poll()
+
+  await jarvis.createSilence('e2e', [{ name: 'alertname', value: 'E4bAlice', isRegex: false, isEqual: true }], {
+    comment: 'e4b-alice',
+    createdBy: 'alice',
+  })
+  await jarvis.createSilence('e2e', [{ name: 'alertname', value: 'E4bBob', isRegex: false, isEqual: true }], {
+    comment: 'e4b-bob',
+    createdBy: 'bob',
+  })
+  await waitForSilences(JARVIS_BASE_URL, 2)
+
+  await page.goto('/')
+  await ensureSilencesPage(page)
+  const e4bMatchers = page.locator('.silence-matcher').filter({ hasText: 'alertname=E4b' })
+  await expect(e4bMatchers).toHaveCount(2)
+
+  await page.getByRole('combobox', { name: 'Filter by silence creator' }).selectOption('alice')
+  await expect(e4bMatchers).toHaveCount(1)
+  await expect(e4bMatchers.first()).toContainText('E4bAlice')
+
+  await page.getByRole('combobox', { name: 'Filter by silence creator' }).selectOption('')
+  await expect(e4bMatchers).toHaveCount(2)
 })
 
 test('E5 matcher filter narrows visible silences', async ({ page, jarvis }) => {
@@ -281,7 +318,7 @@ test('E6 expiry status shows pending, active, expiring and expired labels', asyn
   const expiredRow = page.locator('div.grid').filter({ has: page.getByText(expiredComment, { exact: true }) }).first()
 
   await expect(pendingRow).toContainText('Starts in')
-  await expect(activeRow).toContainText('In ')
+  await expect(activeRow).toContainText('left')
   await expect(expiringRow).toContainText('⚠️')
   await expect(expiredRow).toContainText('Expired')
   await expect(expiredRow).toContainText('ago')
@@ -305,7 +342,7 @@ test('E7 expired silence can be re-created from silences page', async ({ page, j
   await page.goto('/')
   await ensureSilencesPage(page)
   await page.getByRole('button', { name: 'Show expired' }).click()
-  const sourceRow = page.locator('div.grid').filter({ has: page.getByText(sourceComment, { exact: true }) }).first()
+  const sourceRow = page.locator('[data-testid="silence-card"]').filter({ has: page.getByText(sourceComment, { exact: true }) }).first()
   await expect(sourceRow).toBeVisible()
 
   await sourceRow.getByTitle('Re-create silence').first().click()
