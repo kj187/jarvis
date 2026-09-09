@@ -26,6 +26,7 @@ import {
   silenceCreators,
   sortSilences,
   defaultSilenceSortDir,
+  silenceTiming,
   getExpiredSilence,
   labelColorStyle,
   unescapeRegex,
@@ -1036,6 +1037,59 @@ describe('sortSilences', () => {
     const input = [a, b, c]
     sortSilences(input, 'created', 'desc')
     expect(input.map((s) => s.id)).toEqual(['a', 'b', 'c'])
+  })
+})
+
+describe('silenceTiming', () => {
+  const NOW = Date.parse('2026-01-01T12:00:00Z')
+  const win = (fromH: number, toH: number, state: Silence['status']['state'] = 'active') =>
+    makeSilence({
+      status: { state },
+      startsAt: new Date(NOW + fromH * 3_600_000).toISOString(),
+      endsAt: new Date(NOW + toH * 3_600_000).toISOString(),
+    })
+
+  it('reports pending silences at 0% with time until start', () => {
+    const t = silenceTiming(win(2, 10, 'pending'), NOW)
+    expect(t).toMatchObject({ pct: 0, urgency: 'pending' })
+    expect(t.remainingMs).toBe(2 * 3_600_000)
+  })
+
+  it('reports expired silences at 100%', () => {
+    const t = silenceTiming(win(-10, -2, 'expired'), NOW)
+    expect(t).toMatchObject({ pct: 100, urgency: 'expired' })
+    expect(t.remainingMs).toBe(-2 * 3_600_000)
+  })
+
+  it('reports elapsed fraction for an active silence', () => {
+    // window -3h..+1h → 3 of 4 hours elapsed
+    expect(silenceTiming(win(-3, 1), NOW).pct).toBe(75)
+  })
+
+  it('flags an active silence as "soon" within 15 minutes of expiry', () => {
+    const s = makeSilence({
+      status: { state: 'active' },
+      startsAt: new Date(NOW - 3_600_000).toISOString(),
+      endsAt: new Date(NOW + 5 * 60_000).toISOString(),
+    })
+    expect(silenceTiming(s, NOW).urgency).toBe('soon')
+  })
+
+  it('clamps pct to 0–100 for an active silence outside its window', () => {
+    expect(silenceTiming(win(1, 5), NOW).pct).toBe(0) // not started yet but marked active
+    const stale = silenceTiming(win(-10, -1), NOW) // ended but still marked active (stale snapshot)
+    expect(stale.pct).toBe(100)
+    expect(stale.urgency).toBe('soon')
+    expect(stale.remainingMs).toBeLessThan(0)
+  })
+
+  it('handles a zero-length window without dividing by zero', () => {
+    const s = makeSilence({
+      status: { state: 'active' },
+      startsAt: new Date(NOW).toISOString(),
+      endsAt: new Date(NOW).toISOString(),
+    })
+    expect(silenceTiming(s, NOW).pct).toBe(100)
   })
 })
 

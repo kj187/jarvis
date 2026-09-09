@@ -350,6 +350,48 @@ export function sortSilences(
   })
 }
 
+// ── Silence timing (lifetime bar + urgency colour) ────────────────────────
+
+export type SilenceUrgency = 'pending' | 'ok' | 'soon' | 'expired'
+
+export interface SilenceTiming {
+  /** Elapsed fraction of the mute window (`startsAt`→`endsAt`), 0–100, clamped. */
+  pct: number
+  urgency: SilenceUrgency
+  /**
+   * `endsAt - now` for active/expired silences (negative once past);
+   * `startsAt - now` for pending ones (time until it begins).
+   */
+  remainingMs: number
+}
+
+const EXPIRING_SOON_MS = 15 * 60 * 1000
+
+/**
+ * Derives the progress bar fill and the urgency colour for a silence from
+ * its lifecycle state and window. `now` is injectable for tests. An `active`
+ * silence whose `endsAt` is already in the past (stale poll snapshot of an
+ * unreachable cluster — see AGENTS.md invariant #14) still reports
+ * `urgency: 'soon'` with a negative `remainingMs`, so the UI can show
+ * "overdue" rather than a frozen countdown.
+ */
+export function silenceTiming(silence: Silence, now: number = Date.now()): SilenceTiming {
+  const startsAt = new Date(silence.startsAt).getTime()
+  const endsAt = new Date(silence.endsAt).getTime()
+
+  if (silence.status.state === 'pending') {
+    return { pct: 0, urgency: 'pending', remainingMs: startsAt - now }
+  }
+  if (silence.status.state === 'expired') {
+    return { pct: 100, urgency: 'expired', remainingMs: endsAt - now }
+  }
+
+  const span = endsAt - startsAt
+  const pct = span > 0 ? Math.min(100, Math.max(0, ((now - startsAt) / span) * 100)) : 100
+  const remainingMs = endsAt - now
+  return { pct, urgency: remainingMs <= EXPIRING_SOON_MS ? 'soon' : 'ok', remainingMs }
+}
+
 // ── Effective alert state ─────────────────────────────────────────────────
 
 /**

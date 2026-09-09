@@ -861,6 +861,11 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
 │   │                            ("expires" → `endsAt`/asc default, "created" → `updatedAt`/desc
 │   │                            default; explicit sort beats the active→pending→expired order,
 │   │                            which is only a timestamp-tie breaker then `id`),
+│   │                            silenceTiming (→ { pct 0–100 elapsed of the `startsAt`→`endsAt`
+│   │                            window, urgency `pending|ok|soon|expired`, remainingMs } — drives
+│   │                            the card lifetime bar + list stripe colour; `soon` = active & ≤15min
+│   │                            left; an active silence past `endsAt` from a stale snapshot stays
+│   │                            `soon` with negative remainingMs, never silently 100%/frozen),
 │   │                            pickIdentifierLabel, formatSilenceDuration,
 │   │                            formatTime, severityOrder, formatAckDuration, buildAckSilenceBody,
 │   │                            computeGroupLabelValues (only labels present on EVERY alert in the
@@ -1091,11 +1096,21 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │   ├── SilencesPage.tsx   → dedicated page: card|list, fullscreen, show/hide expired,
     │   │                        sort (expires/created + asc/desc toggle), creator-filter
     │   │                        dropdown (person-icon, silences only), matcher-chip filter
-    │   ├── SilenceCard.tsx    → status, matchers, created + expiry boxes, expired info box, re-create
-    │   ├── SilenceGroupCard.tsx → grouped identical silences (count + summed affected)
-    │   ├── SilenceListView.tsx → table view (created timestamp on the "by" line)
-    │   ├── SilenceExpiry.tsx  → "expired X ago" / "expires in X" / "starts in X"; exports ExactDate/DATE_FMT
-    │   ├── SilenceCreated.tsx → creation timestamp (Silence.updatedAt) + "X ago", shares ExactDate
+    │   ├── SilenceCard.tsx    → single silence: status dot + cluster + by/affected line, quiet
+    │   │                        matcher chips, comment quote, then SilenceLifetimeBar; expire/
+    │   │                        re-create icon button (`data-testid="silence-card"`)
+    │   ├── SilenceGroupCard.tsx → grouped identical silences (count + summed affected + cluster chips),
+    │   │                        same body + lifetime bar (`data-testid="silence-group-card"`)
+    │   ├── SilenceListView.tsx → dense rows: urgency stripe · matchers inline (edge-faded) · one meta
+    │   │                        line + comment · remaining-time + expiry date pulled right
+    │   ├── SilenceLifetimeBar.tsx → card "time zone": progress bar over the `startsAt`→`endsAt`
+    │   │                        window (silenceTiming), created + expiry caps, left-aligned
+    │   │                        remaining-time label
+    │   ├── SilenceRemaining.tsx → compact colour-coded remaining-time label (list rows)
+    │   ├── SilenceMatcherChip.tsx → quiet matcher chip: only the label name tinted (labelColorStyle),
+    │   │                        op + value in neutral ink — calmer than the alert views' TruncatableChip
+    │   ├── silenceDisplay.ts  → URGENCY_TEXT/FILL_CLASS maps, matcherOperator, silenceRemainingText
+    │   │                        (shared by the three above; kept out of the .tsx files for react-refresh)
     │   ├── SilenceExpireModal.tsx → expire/extend confirmation (silence-ID link → AM)
     │   ├── SilenceForm.tsx    → 3 steps: form (matchers, clusters, duration, live match count,
     │   │                        overlap/zero-match/unevaluable-regex warnings) → preview → per-cluster results
