@@ -9,6 +9,22 @@ instead of duplicating.
 
 ---
 
+## A stale "active" silence can be past its `endsAt` — don't clamp the countdown
+
+**Symptom**: The silences page showed cards badged `active` with "⚠️ In 0m",
+while the freshly added "created 1d ago" line said the window was long over.
+**Cause**: `ops-wirk` was unreachable, so the page served the last good poll
+snapshot (AGENTS.md invariant #14) — silences frozen `active` with an
+`endsAt` now hours in the past. `SilenceExpiry` rendered
+`In {formatDuration(endsAt - now)}`, and `formatDuration` clamps negatives to
+`0` → a permanent, misleading "In 0m".
+**Rule**: `silenceTiming` (`lib/alertUtils.ts`) returns the real (possibly
+negative) `remainingMs` and keeps `urgency: 'soon'` for an overdue active
+silence; `silenceRemainingText` turns a negative into "⚠️ Overdue X", never a
+frozen countdown. Any "time left" display must special-case `remaining <= 0`
+before formatting — the number can legitimately be negative whenever a
+cluster's snapshot is stale.
+
 ## A silence's "created" time is `updatedAt`, never `startsAt`
 
 **Symptom**: Sorting the silences page by "Created" produced a confusing

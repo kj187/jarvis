@@ -1,10 +1,10 @@
 import { BellMinus, Layers3, Loader2, RotateCcw } from 'lucide-react'
-import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { SilenceExpiry } from './SilenceExpiry'
-import { SilenceCreated } from './SilenceCreated'
-import { labelColorStyle } from '@/lib/alertUtils'
-import { TruncatableChip } from '@/components/ui/truncatable-chip'
+import { SilenceLifetimeBar } from './SilenceLifetimeBar'
+import { SilenceMatcherChip } from './SilenceMatcherChip'
+import { silenceTiming } from '@/lib/alertUtils'
+import { URGENCY_FILL_CLASS } from './silenceDisplay'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import type { EnrichedAlert, Silence } from '@/types'
 import { cn } from '@/lib/utils'
@@ -20,17 +20,6 @@ interface SilenceGroupCardProps {
   onEditGroup: (silences: Silence[]) => void
   onExpireGroup: (silences: Silence[]) => void
   deletingIds: Set<string>
-}
-
-function stateBadgeClass(state: string, theme: string): string {
-  if (state === 'active') return theme === 'light' ? 'bg-green-100 text-green-700' : 'bg-green-900/40 text-green-400'
-  if (state === 'pending') return theme === 'light' ? 'bg-slate-200 text-slate-700' : 'bg-slate-700 text-slate-200'
-  return theme === 'light' ? 'bg-slate-100 text-slate-500' : 'bg-slate-900 text-slate-500'
-}
-
-function matcherOperator(isRegex: boolean, isEqual: boolean): string {
-  if (isRegex) return isEqual ? '=~' : '!~'
-  return isEqual ? '=' : '!='
 }
 
 export function SilenceGroupCard({ group, alerts, onEditGroup, onExpireGroup, deletingIds }: SilenceGroupCardProps) {
@@ -52,62 +41,50 @@ export function SilenceGroupCard({ group, alerts, onEditGroup, onExpireGroup, de
     (sum, alert) => sum + (alert.status.silencedBy.some((id) => silenceIds.has(id)) ? 1 : 0),
     0,
   )
+  const { urgency } = silenceTiming(rep)
   const visibleMatchers = rep.matchers.slice(0, 4)
   const hiddenMatcherCount = Math.max(0, rep.matchers.length - visibleMatchers.length)
 
   return (
     <Card
       className={cn(
-        'group relative overflow-hidden border-border/40 bg-card/70 transition-all cursor-pointer hover:border-border hover:bg-muted/30 hover:shadow-md',
+        'group relative flex flex-col overflow-hidden border-border/40 bg-card/70 p-0 transition-all cursor-pointer hover:border-border hover:bg-muted/30 hover:shadow-md',
         allExpired && 'opacity-75 hover:opacity-100',
         isDeleting && 'opacity-50',
       )}
       onClick={() => onEditGroup(group.silences)}
       title={allExpired ? 'Expired — click to re-create' : 'Edit silences'}
+      data-testid="silence-group-card"
     >
       {isDeleting && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-background/60">
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/60">
           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
         </div>
       )}
 
-      <CardHeader className="space-y-3 pb-3">
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="inline-flex items-center gap-1 rounded-md bg-accent px-2 py-0.5 text-xs font-semibold">
-              <Layers3 className="h-3 w-3" />
-              {group.silences.length} silences
+      <div className="flex flex-1 flex-col gap-2.5 p-3.5">
+        <div className="flex items-center gap-2">
+          <span className={cn('h-2 w-2 shrink-0 rounded-full', URGENCY_FILL_CLASS[urgency])} />
+          <span className="inline-flex items-center gap-1 rounded bg-accent px-1.5 py-0.5 text-[11px] font-semibold">
+            <Layers3 className="h-3 w-3" />
+            {group.silences.length} silences
+          </span>
+          {allSameState ? (
+            <span className="text-xs font-semibold capitalize">{rep.status.state}</span>
+          ) : (
+            <span className="text-[11px] text-muted-foreground">
+              {[
+                stateCounts.active > 0 ? `${stateCounts.active} active` : null,
+                stateCounts.pending > 0 ? `${stateCounts.pending} pending` : null,
+                stateCounts.expired > 0 ? `${stateCounts.expired} expired` : null,
+              ].filter((x): x is string => x !== null).join(' · ')}
             </span>
-            {allSameState ? (
-              <span className={cn('rounded-md px-2 py-0.5 text-xs font-semibold', stateBadgeClass(rep.status.state, theme))}>
-                {rep.status.state}
-              </span>
-            ) : (
-              <>
-                {stateCounts.active > 0 && (
-                  <span className={cn('rounded-md px-2 py-0.5 text-xs font-semibold', stateBadgeClass('active', theme))}>
-                    active {stateCounts.active}
-                  </span>
-                )}
-                {stateCounts.pending > 0 && (
-                  <span className={cn('rounded-md px-2 py-0.5 text-xs font-semibold', stateBadgeClass('pending', theme))}>
-                    pending {stateCounts.pending}
-                  </span>
-                )}
-                {stateCounts.expired > 0 && (
-                  <span className={cn('rounded-md px-2 py-0.5 text-xs font-semibold', stateBadgeClass('expired', theme))}>
-                    expired {stateCounts.expired}
-                  </span>
-                )}
-              </>
-            )}
-          </div>
-
+          )}
           {allExpired ? (
             <Button
               variant="ghost"
               size="icon"
-              className="h-7 w-7 shrink-0"
+              className="ml-auto h-6 w-6 shrink-0 text-muted-foreground"
               onClick={(e) => { e.stopPropagation(); onEditGroup(group.silences) }}
               title={`Re-create ${group.silences.length} silences`}
             >
@@ -117,7 +94,7 @@ export function SilenceGroupCard({ group, alerts, onEditGroup, onExpireGroup, de
             <Button
               variant="ghost"
               size="icon"
-              className="h-7 w-7 shrink-0"
+              className="ml-auto h-6 w-6 shrink-0 text-muted-foreground"
               onClick={(e) => { e.stopPropagation(); onExpireGroup(group.silences) }}
               title={`Expire ${group.silences.length} silences`}
             >
@@ -126,62 +103,42 @@ export function SilenceGroupCard({ group, alerts, onEditGroup, onExpireGroup, de
           )}
         </div>
 
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-          <span>by {rep.createdBy}</span>
-          <span className="text-muted-foreground/60">•</span>
-          <span>{totalAffected} affected alerts</span>
-          <span className="text-muted-foreground/60">•</span>
-          <span>{uniqueClusters.length} clusters</span>
-        </div>
-      </CardHeader>
-
-      <CardContent className="space-y-3">
-        <div className="rounded-md border border-border/70 bg-inherit p-2.5">
-          <div className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground/80">Clusters</div>
-          <div className="flex flex-wrap gap-1">
-            {uniqueClusters.map((cluster) => (
-              <span key={cluster} className="rounded-md bg-accent px-2 py-0.5 text-xs">{cluster}</span>
-            ))}
-          </div>
+        <div className="truncate text-[11px] text-muted-foreground/70">
+          by {rep.createdBy}
+          <span className="mx-1 text-muted-foreground/40">·</span>
+          {totalAffected} affected alert{totalAffected === 1 ? '' : 's'}
         </div>
 
-        <div className="rounded-md border border-border/70 bg-inherit p-2.5">
-          <div className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground/80">Matchers</div>
-          <div className="flex flex-wrap gap-1">
-            {visibleMatchers.map((m, i) => (
-              <TruncatableChip key={i} className="rounded border px-1.5 py-0.5 font-mono text-xs" style={labelColorStyle(m.name, theme)}>
-                {m.name}{matcherOperator(m.isRegex, m.isEqual)}{m.value}
-              </TruncatableChip>
-            ))}
-            {hiddenMatcherCount > 0 && (
-              <span className="rounded border border-dashed border-border px-1.5 py-0.5 text-xs text-muted-foreground">
-                +{hiddenMatcherCount} more
-              </span>
-            )}
-            {rep.matchers.length === 0 && (
-              <span className="text-xs text-muted-foreground">No matchers</span>
-            )}
-          </div>
+        <div className="flex flex-wrap gap-1">
+          {uniqueClusters.map((cluster) => (
+            <span key={cluster} className="rounded bg-accent px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
+              {cluster}
+            </span>
+          ))}
         </div>
 
-        <div className="grid grid-cols-2 gap-2">
-          <div className="rounded-md border border-border/70 p-2.5">
-            <div className="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground/80">Created</div>
-            <SilenceCreated silence={rep} />
-          </div>
-          <div className="rounded-md border border-border/70 p-2.5">
-            <div className="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground/80">Expires</div>
-            <SilenceExpiry silence={rep} />
-          </div>
+        <div className="flex flex-wrap gap-x-2.5 gap-y-1">
+          {visibleMatchers.map((m, i) => (
+            <SilenceMatcherChip key={i} matcher={m} theme={theme} />
+          ))}
+          {hiddenMatcherCount > 0 && (
+            <span className="self-center font-mono text-[11px] text-muted-foreground/60">
+              +{hiddenMatcherCount} more
+            </span>
+          )}
+          {rep.matchers.length === 0 && (
+            <span className="text-xs text-muted-foreground">No matchers</span>
+          )}
         </div>
 
         {rep.comment && (
-          <div className="rounded-md border border-border/70 bg-inherit p-2.5">
-            <div className="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground/80">Comment</div>
-            <p className="text-xs text-muted-foreground line-clamp-3">{rep.comment}</p>
-          </div>
+          <p className="line-clamp-2 border-l-2 border-border pl-2 text-xs italic text-muted-foreground">
+            {rep.comment}
+          </p>
         )}
-      </CardContent>
+      </div>
+
+      <SilenceLifetimeBar silence={rep} />
     </Card>
   )
 }

@@ -183,7 +183,7 @@ test('E4 sort toggle and asc/desc direction reorder by expiry vs creation time',
 
   await page.goto('/')
   await ensureSilencesPage(page)
-  const e4Matchers = page.locator('span.font-mono.text-xs').filter({ hasText: 'alertname=E4' })
+  const e4Matchers = page.locator('.silence-matcher').filter({ hasText: 'alertname=E4' })
   await expect(e4Matchers).toHaveCount(2)
 
   // Default: Expires ascending → soonest first.
@@ -220,7 +220,7 @@ test('E4b "By:" dropdown filters silences to a single creator', async ({ page, j
 
   await page.goto('/')
   await ensureSilencesPage(page)
-  const e4bMatchers = page.locator('span.font-mono.text-xs').filter({ hasText: 'alertname=E4b' })
+  const e4bMatchers = page.locator('.silence-matcher').filter({ hasText: 'alertname=E4b' })
   await expect(e4bMatchers).toHaveCount(2)
 
   await page.getByRole('combobox', { name: 'Filter by silence creator' }).selectOption('alice')
@@ -318,7 +318,7 @@ test('E6 expiry status shows pending, active, expiring and expired labels', asyn
   const expiredRow = page.locator('div.grid').filter({ has: page.getByText(expiredComment, { exact: true }) }).first()
 
   await expect(pendingRow).toContainText('Starts in')
-  await expect(activeRow).toContainText('In ')
+  await expect(activeRow).toContainText('left')
   await expect(expiringRow).toContainText('⚠️')
   await expect(expiredRow).toContainText('Expired')
   await expect(expiredRow).toContainText('ago')
@@ -342,7 +342,7 @@ test('E7 expired silence can be re-created from silences page', async ({ page, j
   await page.goto('/')
   await ensureSilencesPage(page)
   await page.getByRole('button', { name: 'Show expired' }).click()
-  const sourceRow = page.locator('div.grid').filter({ has: page.getByText(sourceComment, { exact: true }) }).first()
+  const sourceRow = page.locator('[data-testid="silence-card"]').filter({ has: page.getByText(sourceComment, { exact: true }) }).first()
   await expect(sourceRow).toBeVisible()
 
   await sourceRow.getByTitle('Re-create silence').first().click()
