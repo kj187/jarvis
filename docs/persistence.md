@@ -73,8 +73,10 @@ no etcd, no client-go/Kubernetes Lease objects) is required.
 Exactly one pod is **leader** at any time, decided by a PostgreSQL
 session-level advisory lock (`pg_try_advisory_lock`) held on a dedicated
 connection — not the shared pool, since pool connections get recycled. A
-follower retries the lock every 5 seconds; the leader heartbeats its own
-connection on the same interval. Losing the connection (pod killed, network
+pod attempts the lock immediately once its connection is up (so a fresh
+pod with no incumbent leads within one round-trip), then a follower retries
+every 5 seconds; the leader heartbeats its own connection on the same
+interval. Losing the connection (pod killed, network
 partition, crash) releases the lock automatically — there is no TTL or
 lease-renewal bookkeeping, PostgreSQL's own session cleanup is the failure
 detector. The elector's connection uses aggressive TCP keepalives (idle 5s /

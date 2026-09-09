@@ -9,6 +9,33 @@ instead of duplicating.
 
 ---
 
+## PG elector tests in different packages serialised each other over the one advisory lock
+
+**Symptom**: The `Backend` CI job flaked, hardest during a burst of
+concurrent pipelines (a batch Dependabot merge): `internal/leader`
+(`TestPGElector_Failover`, `TestPGElector_Subscribe_…`) and
+`internal/history` (`TestMultiReplica_FollowerTrigger_ForwardsToLeader`)
+failing `waitFor` with `condition not met within 5s`; separately the fuzz
+step failing `FuzzParseSecretKey … context deadline exceeded`.
+**Cause**: every `PGElector` used the production Binding Constants
+`pg_try_advisory_lock(0x4A525653, 1)`. `go test ./...` runs `internal/leader`
+and `internal/history` as separate binaries **concurrently** against the one
+shared test database, so only one package's electors could ever hold
+leadership — the other package's tests waited out their 5s ceiling under a
+loaded runner. The fuzz failure was pure worker oversubscription (each of 5
+targets spawned GOMAXPROCS workers), not a finding — `parseSecretKey` is a
+single `hex.DecodeString`.
+**Rule**: `PGElector.SetLockID(classID, id)` (test-only, alongside
+`SetRetryInterval`) pins each test to its own advisory-lock namespace —
+class ID = test PID, lock ID = hash of `t.Name()` (helpers named `testLockID`
+in both `internal/leader` and `internal/history` tests); electors built for
+the same test share the ID and still contend. Production must never call it.
+`holdLock` now attempts the lock immediately on connect instead of after a
+full `retryInterval` (also a real cold-start win: a fresh pod with no
+incumbent is promoted in one round-trip, not after 5s). `waitFor` ceilings
+raised to 20–30s (a passing check still returns immediately). CI fuzz step
+runs `-parallel 2`.
+
 ## A stale "active" silence can be past its `endsAt` — don't clamp the countdown
 
 **Symptom**: The silences page showed cards badged `active` with "⚠️ In 0m",

@@ -554,10 +554,17 @@ pod still serves reads/API/WS equally regardless of leadership.
   design (Critical Invariant #8), so there is never a follower to coordinate
   with.
 - `PGElector` (PostgreSQL dialect): a dedicated connection (never the shared
-  pool) holds `pg_try_advisory_lock(0x4A525653, 1)`. Follower retry and
-  leader heartbeat both run on a 5s interval (`AcquireRetryInterval` /
-  `HeartbeatInterval`, overridable per-instance via `SetRetryInterval` for
-  fast tests — production leaves it at the default). The dedicated
+  pool) holds `pg_try_advisory_lock(0x4A525653, 1)`. The first acquire
+  attempt fires immediately once the connection is dialed (not after a
+  retry interval), so a fresh pod with no incumbent is promoted in one
+  round-trip. Follower retry and leader heartbeat then both run on a 5s
+  interval (`AcquireRetryInterval` / `HeartbeatInterval`, overridable
+  per-instance via `SetRetryInterval` for fast tests — production leaves it
+  at the default). The lock coordinates are likewise overridable via
+  `SetLockID` (test-only: each PG-backed elector test gets its own lock
+  namespace so `internal/leader` and `internal/history` test binaries don't
+  serialise each other on the shared test DB — see `.agents/lessons.md`);
+  production always uses the Binding Constants. The dedicated
   connection dials through a `net.Dialer` with `KeepAliveConfig` (idle 5s,
   interval 3s, count 3) so a hard node failure is detected and the session
   lock released within a bounded time instead of the OS-default keepalive
