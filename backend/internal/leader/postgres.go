@@ -50,6 +50,14 @@ type PGElector struct {
 	// Constant) — mirrors history.Store.SetGracePeriod's test-override style.
 	retryInterval time.Duration
 
+	// lockClassID/lockID identify the advisory lock. Production always uses
+	// the Binding Constants (LockClassID, LockID); tests override them via
+	// SetLockID so that PG-backed elector tests in different packages —
+	// which `go test ./...` runs as separate binaries against the one shared
+	// test database, concurrently — don't all contend for a single lock and
+	// serialise each other into timeouts.
+	lockClassID, lockID int32
+
 	mu       sync.RWMutex
 	isLeader bool
 
@@ -60,13 +68,28 @@ type PGElector struct {
 // NewPGElector creates a PGElector against dsn (a postgres:// DSN). It does
 // not connect until Run is called.
 func NewPGElector(dsn string, logger *slog.Logger) *PGElector {
-	return &PGElector{dsn: dsn, logger: logger, retryInterval: AcquireRetryInterval}
+	return &PGElector{
+		dsn:           dsn,
+		logger:        logger,
+		retryInterval: AcquireRetryInterval,
+		lockClassID:   LockClassID,
+		lockID:        LockID,
+	}
 }
 
 // SetRetryInterval overrides the acquire-retry/heartbeat interval. Test-only
 // — production code should leave it at the Binding Constant default.
 func (e *PGElector) SetRetryInterval(d time.Duration) {
 	e.retryInterval = d
+}
+
+// SetLockID overrides the advisory-lock coordinates. Test-only — production
+// code must leave these at the Binding Constants (LockClassID, LockID) so
+// that every pod contends for the same lock. Tests use it to give each test
+// (and each test binary) its own lock namespace on the shared test database.
+func (e *PGElector) SetLockID(classID, id int32) {
+	e.lockClassID = classID
+	e.lockID = id
 }
 
 func (e *PGElector) IsLeader() bool {
@@ -138,9 +161,12 @@ func (e *PGElector) dial(ctx context.Context) (*pgx.Conn, error) {
 // holdLock owns conn for its lifetime: while follower, it retries
 // pg_try_advisory_lock every retryInterval; while leader, it heartbeats the
 // connection every retryInterval instead (same interval value by Binding
-// Constant, so one ticker serves both roles). Returns (releasing the
-// connection and stepping down) when the connection is lost or ctx is
-// cancelled — the caller's Run loop then redials.
+// Constant, so one ticker serves both roles). The first acquire attempt
+// happens immediately on entry (right after the connection is dialed), not
+// after a full retryInterval — a freshly started pod with no incumbent
+// becomes leader in one round-trip instead of idling for up to 5s first.
+// Returns (releasing the connection and stepping down) when the connection
+// is lost or ctx is cancelled — the caller's Run loop then redials.
 func (e *PGElector) holdLock(ctx context.Context, conn *pgx.Conn) {
 	defer func() {
 		_ = conn.Close(context.Background())
@@ -151,10 +177,11 @@ func (e *PGElector) holdLock(ctx context.Context, conn *pgx.Conn) {
 	defer ticker.Stop()
 
 	for {
-		select {
-		case <-ctx.Done():
+		// Bail before touching the connection if we're already shutting down,
+		// so a cancelled context doesn't surface as a spurious "query failed"
+		// warning on the way out.
+		if ctx.Err() != nil {
 			return
-		case <-ticker.C:
 		}
 
 		if e.IsLeader() {
@@ -162,17 +189,22 @@ func (e *PGElector) holdLock(ctx context.Context, conn *pgx.Conn) {
 				e.logger.Warn("leader election: heartbeat failed, stepping down", "err", err)
 				return
 			}
-			continue
+		} else {
+			var acquired bool
+			if err := conn.QueryRow(ctx, `SELECT pg_try_advisory_lock($1, $2)`, e.lockClassID, e.lockID).Scan(&acquired); err != nil {
+				e.logger.Warn("leader election: try-lock query failed, reconnecting", "err", err)
+				return
+			}
+			if acquired {
+				e.logger.Info("leader election: acquired advisory lock, promoted")
+				e.setLeader(true)
+			}
 		}
 
-		var acquired bool
-		if err := conn.QueryRow(ctx, `SELECT pg_try_advisory_lock($1, $2)`, LockClassID, LockID).Scan(&acquired); err != nil {
-			e.logger.Warn("leader election: try-lock query failed, reconnecting", "err", err)
+		select {
+		case <-ctx.Done():
 			return
-		}
-		if acquired {
-			e.logger.Info("leader election: acquired advisory lock, promoted")
-			e.setLeader(true)
+		case <-ticker.C:
 		}
 	}
 }

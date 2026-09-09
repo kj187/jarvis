@@ -156,12 +156,16 @@ jobs:
           version: v2.13.2
 
       - name: Run fuzz targets (short)
+        # -parallel=2 caps the fuzzing worker processes per target: the default
+        # (GOMAXPROCS) oversubscribes a shared CI runner enough that the
+        # coordinator<->worker RPC misses its internal deadline and the run
+        # fails with "context deadline exceeded" — not a real finding.
         run: |
-          go test ./internal/db -run '^$' -fuzz '^FuzzRedactDSN$' -fuzztime 20s
-          go test ./internal/history -run '^$' -fuzz '^FuzzParseNullableTimeString$' -fuzztime 20s
-          go test ./internal/config -run '^$' -fuzz '^FuzzParseSecretKey$' -fuzztime 20s
-          go test ./internal/api -run '^$' -fuzz '^FuzzValidateSilenceMatchers$' -fuzztime 20s
-          go test ./internal/api -run '^$' -fuzz '^FuzzSanitizeAMMessage$' -fuzztime 20s
+          go test ./internal/db -run '^$' -fuzz '^FuzzRedactDSN$' -fuzztime 20s -parallel 2
+          go test ./internal/history -run '^$' -fuzz '^FuzzParseNullableTimeString$' -fuzztime 20s -parallel 2
+          go test ./internal/config -run '^$' -fuzz '^FuzzParseSecretKey$' -fuzztime 20s -parallel 2
+          go test ./internal/api -run '^$' -fuzz '^FuzzValidateSilenceMatchers$' -fuzztime 20s -parallel 2
+          go test ./internal/api -run '^$' -fuzz '^FuzzSanitizeAMMessage$' -fuzztime 20s -parallel 2
 
   frontend:
     name: Frontend

@@ -2,8 +2,10 @@ package history
 
 import (
 	"context"
+	"hash/fnv"
 	"io"
 	"log/slog"
+	"os"
 	"testing"
 	"time"
 
@@ -30,7 +32,9 @@ func multiReplicaTestLogger() *slog.Logger {
 
 // waitFor polls cond every 20ms until it returns true or timeout elapses,
 // failing the test in the latter case. Mirrors internal/leader's test helper
-// of the same name.
+// of the same name. The timeout is a generous ceiling for a loaded CI
+// runner, not an expected duration — a passing check returns as soon as
+// cond() is true.
 func waitFor(t *testing.T, timeout time.Duration, cond func() bool) {
 	t.Helper()
 	deadline := time.Now().Add(timeout)
@@ -43,6 +47,21 @@ func waitFor(t *testing.T, timeout time.Duration, cond func() bool) {
 	t.Fatalf("condition not met within %v", timeout)
 }
 
+// testLockID derives an advisory-lock namespace for a test so that these
+// PG-backed elector tests don't contend with internal/leader's (which
+// `go test ./...` runs concurrently against the same test database) over the
+// one production advisory lock and time each other out. Class ID = test
+// process PID (distinct per package binary), lock ID = hash of the test name
+// (stable within a test, distinct between tests). Mirrors internal/leader's
+// helper of the same name; both electors a test builds share the ID and so
+// still contend with each other, as intended.
+func testLockID(t *testing.T) (int32, int32) {
+	t.Helper()
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(t.Name()))
+	return int32(os.Getpid()), int32(h.Sum32() & 0x7fffffff)
+}
+
 // newMultiReplicaTestRecorder builds one "pod": its own Store (already
 // opened against the shared test database), its own real PGElector (fast
 // retry interval so tests don't wait multiple real seconds), its own
@@ -52,6 +71,7 @@ func newMultiReplicaTestRecorder(t *testing.T, store *Store, dsn, amURL string, 
 	t.Helper()
 	el := leader.NewPGElector(dsn, multiReplicaTestLogger())
 	el.SetRetryInterval(300 * time.Millisecond)
+	el.SetLockID(testLockID(t))
 
 	hub := &mockHub{}
 	registry := cluster.NewRegistry([]config.ClusterConfig{
@@ -90,7 +110,7 @@ func TestMultiReplica_OnlyLeaderPolls_FollowerConverges(t *testing.T) {
 	go recA.Start(ctx)
 	go recB.Start(ctx)
 
-	waitFor(t, 8*time.Second, func() bool { return elA.IsLeader() || elB.IsLeader() })
+	waitFor(t, 30*time.Second, func() bool { return elA.IsLeader() || elB.IsLeader() })
 
 	leaderRec, followerRec := recA, recB
 	if elB.IsLeader() {
@@ -99,7 +119,7 @@ func TestMultiReplica_OnlyLeaderPolls_FollowerConverges(t *testing.T) {
 
 	// The leader must actually poll: its own AlertStore gets populated from
 	// AM within a couple of poll intervals.
-	waitFor(t, 5*time.Second, func() bool { return len(leaderRec.alertStore.Get()) > 0 })
+	waitFor(t, 20*time.Second, func() bool { return len(leaderRec.alertStore.Get()) > 0 })
 
 	// The follower must converge via the snapshot path — its AlertStore ends
 	// up non-empty too — without ever polling AM itself: its own
@@ -107,7 +127,7 @@ func TestMultiReplica_OnlyLeaderPolls_FollowerConverges(t *testing.T) {
 	// FetchAlerts called on it, so MemberUpStates on the follower's own
 	// registry stays empty, while ClusterUpStates() (the metrics-facing view,
 	// sourced from the consumed snapshot on a follower) is populated.
-	waitFor(t, 8*time.Second, func() bool { return len(followerRec.alertStore.Get()) > 0 })
+	waitFor(t, 30*time.Second, func() bool { return len(followerRec.alertStore.Get()) > 0 })
 
 	if got := followerRec.registry.All()[0].MemberUpStates(); len(got) != 0 {
 		t.Errorf("follower's own cluster.Cluster MemberUpStates = %v, want empty (it must never poll AM itself)", got)
@@ -151,7 +171,7 @@ func TestMultiReplica_Failover_PromotesAndReconciles(t *testing.T) {
 	go recA.Start(ctxA)
 	go recB.Start(ctxB)
 
-	waitFor(t, 8*time.Second, func() bool { return elA.IsLeader() || elB.IsLeader() })
+	waitFor(t, 30*time.Second, func() bool { return elA.IsLeader() || elB.IsLeader() })
 
 	leaderRec, leaderCancel := recA, cancelA
 	followerRec, followerElector := recB, elB
@@ -161,7 +181,7 @@ func TestMultiReplica_Failover_PromotesAndReconciles(t *testing.T) {
 	}
 
 	// Leader records the initial firing episode.
-	waitFor(t, 5*time.Second, func() bool {
+	waitFor(t, 20*time.Second, func() bool {
 		events, _, err := leaderRec.store.GetHistoryForCluster("fp-failover", "a", 10, 0)
 		return err == nil && len(events) > 0
 	})
@@ -170,9 +190,9 @@ func TestMultiReplica_Failover_PromotesAndReconciles(t *testing.T) {
 	leaderCancel()
 
 	// The follower must be promoted...
-	waitFor(t, 8*time.Second, func() bool { return followerElector.IsLeader() })
+	waitFor(t, 30*time.Second, func() bool { return followerElector.IsLeader() })
 	// ...and start polling + writing history itself (D3: leader-only writes).
-	waitFor(t, 8*time.Second, func() bool {
+	waitFor(t, 30*time.Second, func() bool {
 		events, _, err := followerRec.store.GetHistoryForCluster("fp-failover", "a", 10, 0)
 		return err == nil && len(events) > 0
 	})
@@ -189,7 +209,7 @@ func TestMultiReplica_Failover_PromotesAndReconciles(t *testing.T) {
 	// Invariant #1 must still reopen the same episode even though the
 	// episode started under the OLD leader and continues under the NEW one.
 	amA.setAlerts(nil)
-	waitFor(t, 5*time.Second, func() bool {
+	waitFor(t, 20*time.Second, func() bool {
 		events, _, err := followerRec.store.GetHistoryForCluster("fp-failover", "a", 10, 0)
 		return err == nil && len(events) > 0 && events[0].Status == models.EventStatusResolved
 	})
@@ -203,7 +223,7 @@ func TestMultiReplica_Failover_PromotesAndReconciles(t *testing.T) {
 			StartsAt:    time.Now().UTC(),
 		},
 	})
-	waitFor(t, 5*time.Second, func() bool {
+	waitFor(t, 20*time.Second, func() bool {
 		events, _, err := followerRec.store.GetHistoryForCluster("fp-failover", "a", 10, 0)
 		return err == nil && len(events) > 0 && events[0].Status == models.EventStatusFiring
 	})
@@ -245,7 +265,7 @@ func TestMultiReplica_FollowerTrigger_ForwardsToLeader(t *testing.T) {
 	go recA.Start(ctx)
 	go recB.Start(ctx)
 
-	waitFor(t, 8*time.Second, func() bool { return elA.IsLeader() || elB.IsLeader() })
+	waitFor(t, 30*time.Second, func() bool { return elA.IsLeader() || elB.IsLeader() })
 	followerRec := recB
 	if elB.IsLeader() {
 		followerRec = recA
@@ -266,7 +286,7 @@ func TestMultiReplica_FollowerTrigger_ForwardsToLeader(t *testing.T) {
 	})
 	followerRec.Trigger()
 
-	waitFor(t, 5*time.Second, func() bool {
+	waitFor(t, 20*time.Second, func() bool {
 		for _, a := range followerRec.alertStore.Get() {
 			if a.Fingerprint == "fp-trigger" {
 				return true
