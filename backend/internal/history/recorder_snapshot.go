@@ -141,6 +141,23 @@ func (r *Recorder) rebuildFollowerAlertStore() {
 	}
 	r.followerMu.Unlock()
 
+	// Re-hydrate active claims from the shared DB. The leader's snapshot only
+	// carries claims as of its last poll, so a claim created against any pod
+	// after that poll (patched into the local AlertStore by claims.go and
+	// broadcast via fanout) would be wiped here and only reappear after the
+	// leader's next poll. This is the same batched read the leader runs in
+	// applyPollResults — claims are authoritative from the DB, not the
+	// snapshot: a since-released claim still present in a stale snapshot is
+	// cleared too.
+	if claims, err := r.store.GetActiveClaims(); err != nil {
+		r.logger.Error("follower: get active claims", "err", err)
+	} else {
+		for i := range merged {
+			key := ClaimKey{Fingerprint: merged[i].Fingerprint, ClusterName: merged[i].ClusterName}
+			merged[i].ActiveClaim = claims[key] // nil when the map has no entry
+		}
+	}
+
 	if r.metrics != nil {
 		if stale {
 			r.metrics.SnapshotStale.Set(1)

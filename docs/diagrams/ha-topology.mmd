@@ -53,6 +53,7 @@ flowchart LR
 
     FREC -- "LISTEN jarvis_snapshot<br/>+ periodic resync fallback" --> NOTIFY
     NOTIFY -.-> FREC
+    FREC -- "re-reads active claims<br/>on every rebuild" --> HIST
     FREC -- "merges into own<br/>AlertStore/SilenceStore" --> FHUB
 
     FREC -. "Trigger() forwards via<br/>NOTIFY jarvis_trigger" .-> NOTIFY

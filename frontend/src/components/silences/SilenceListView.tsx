@@ -1,9 +1,12 @@
 import { BellMinus, Loader2, RotateCcw } from 'lucide-react'
+import { format } from 'date-fns'
+import { enUS } from 'date-fns/locale'
 import { Button } from '@/components/ui/button'
-import { SilenceExpiry } from './SilenceExpiry'
-import { labelColorStyle } from '@/lib/alertUtils'
+import { SilenceMatcherChip } from './SilenceMatcherChip'
+import { SilenceRemaining } from './SilenceRemaining'
+import { URGENCY_FILL_CLASS } from './silenceDisplay'
+import { silenceTiming, tzAbbr } from '@/lib/alertUtils'
 import { useSettingsStore } from '@/store/useSettingsStore'
-import { TruncatableChip } from '@/components/ui/truncatable-chip'
 import type { Silence, EnrichedAlert } from '@/types'
 import { cn } from '@/lib/utils'
 import type { SilenceGroup } from './SilenceGroupCard'
@@ -16,16 +19,7 @@ interface SilenceListViewProps {
   deletingIds: Set<string>
 }
 
-function stateBadgeClass(state: string, theme: string): string {
-  if (state === 'active') return theme === 'light' ? 'bg-green-100 text-green-700' : 'bg-green-900/40 text-green-400'
-  if (state === 'pending') return theme === 'light' ? 'bg-slate-200 text-slate-600' : 'bg-slate-800 text-slate-300'
-  return theme === 'light' ? 'bg-slate-100 text-slate-500' : 'bg-slate-900 text-slate-500'
-}
-
-function matcherOperator(isRegex: boolean, isEqual: boolean): string {
-  if (isRegex) return isEqual ? '=~' : '!~'
-  return isEqual ? '=' : '!='
-}
+const ROW_DATE_FMT = 'MMM d, HH:mm'
 
 export function SilenceListView({ groups, alerts, onEditGroup, onExpireGroup, deletingIds }: SilenceListViewProps) {
   const theme = useSettingsStore((s) => s.theme)
@@ -45,10 +39,9 @@ export function SilenceListView({ groups, alerts, onEditGroup, onExpireGroup, de
           (sum, alert) => sum + (alert.status.silencedBy.some((id) => silenceIds.has(id)) ? 1 : 0),
           0,
         )
-        const visibleMatchers = rep.matchers.slice(0, 3)
+        const { urgency } = silenceTiming(rep)
+        const visibleMatchers = rep.matchers.slice(0, 6)
         const hiddenMatcherCount = Math.max(0, rep.matchers.length - visibleMatchers.length)
-        const visibleClusters = uniqueClusters.slice(0, 2)
-        const hiddenClusterCount = Math.max(0, uniqueClusters.length - visibleClusters.length)
         const stateCounts = group.silences.reduce(
           (acc, silence) => {
             acc[silence.status.state] += 1
@@ -56,13 +49,31 @@ export function SilenceListView({ groups, alerts, onEditGroup, onExpireGroup, de
           },
           { active: 0, pending: 0, expired: 0 },
         )
+        const stateLabel = allSameState
+          ? rep.status.state
+          : [
+              stateCounts.active > 0 ? `${stateCounts.active} active` : null,
+              stateCounts.pending > 0 ? `${stateCounts.pending} pending` : null,
+              stateCounts.expired > 0 ? `${stateCounts.expired} expired` : null,
+            ].filter((x): x is string => x !== null).join(' · ')
+
+        const groupCount = group.silences.length
+
+        const meta = [
+          stateLabel,
+          uniqueClusters.join(', '),
+          `by ${rep.createdBy}`,
+          `${totalAffected} alert${totalAffected === 1 ? '' : 's'}`,
+          `created ${format(new Date(rep.updatedAt), ROW_DATE_FMT, { locale: enUS })} ${tzAbbr}`,
+          groupCount > 1 ? `${groupCount} silences` : null,
+        ].filter(Boolean).join('  ·  ')
 
         return (
           <div
             key={group.key}
             className={cn(
-              'relative cursor-pointer border-b border-border/70 bg-card/70 px-3 py-2 text-xs transition-colors last:border-b-0 hover:bg-muted/30',
-              allExpired && 'opacity-75',
+              'group relative grid cursor-pointer grid-cols-[3px_minmax(0,1fr)_auto] items-stretch gap-x-3 border-b border-border/60 bg-card/70 pr-2 text-xs transition-colors last:border-b-0 hover:bg-muted/30',
+              allExpired && 'opacity-70',
               isDeleting && 'opacity-50',
             )}
             onClick={() => onEditGroup(group.silences)}
@@ -73,93 +84,54 @@ export function SilenceListView({ groups, alerts, onEditGroup, onExpireGroup, de
               </div>
             )}
 
-            <div className="grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,1fr)_170px_70px_34px] md:items-center md:gap-3">
-              <div className="min-w-0">
-                <div className="mb-1 flex flex-wrap items-center gap-1.5">
-                  {allSameState ? (
-                    <span className={cn('rounded px-1.5 py-0.5 text-xs font-semibold', stateBadgeClass(rep.status.state, theme))}>
-                      {rep.status.state}
-                    </span>
-                  ) : (
-                    <>
-                      {stateCounts.active > 0 && (
-                        <span className={cn('rounded px-1.5 py-0.5 text-xs font-semibold', stateBadgeClass('active', theme))}>
-                          a {stateCounts.active}
-                        </span>
-                      )}
-                      {stateCounts.pending > 0 && (
-                        <span className={cn('rounded px-1.5 py-0.5 text-xs font-semibold', stateBadgeClass('pending', theme))}>
-                          p {stateCounts.pending}
-                        </span>
-                      )}
-                      {stateCounts.expired > 0 && (
-                        <span className={cn('rounded px-1.5 py-0.5 text-xs font-semibold', stateBadgeClass('expired', theme))}>
-                          e {stateCounts.expired}
-                        </span>
-                      )}
-                    </>
-                  )}
-                  {visibleClusters.map((cluster) => (
-                    <span key={cluster} className="rounded bg-accent px-1.5 py-0.5 text-xs">
-                      {cluster}
-                    </span>
-                  ))}
-                  {hiddenClusterCount > 0 && (
-                    <span className="rounded border border-dashed border-border px-1.5 py-0.5 text-xs text-muted-foreground">
-                      +{hiddenClusterCount}
-                    </span>
-                  )}
-                  <span className="text-muted-foreground/60">•</span>
-                  <span className="truncate text-muted-foreground/80">by {rep.createdBy}</span>
-                </div>
+            <div className={cn('w-[3px]', URGENCY_FILL_CLASS[urgency])} />
 
-                <div className="mb-1 flex flex-wrap items-center gap-1">
-                  {visibleMatchers.map((m, i) => (
-                    <TruncatableChip key={i} className="rounded border px-1.5 py-0.5 font-mono text-xs" style={labelColorStyle(m.name, theme)}>
-                      {m.name}{matcherOperator(m.isRegex, m.isEqual)}{m.value}
-                    </TruncatableChip>
-                  ))}
-                  {hiddenMatcherCount > 0 && (
-                    <span className="rounded border border-dashed border-border px-1.5 py-0.5 text-xs text-muted-foreground">
-                      +{hiddenMatcherCount}
-                    </span>
-                  )}
-                </div>
-
-                {rep.comment && <div className="truncate text-xs text-muted-foreground">{rep.comment}</div>}
-              </div>
-
-              <div className="text-xs text-muted-foreground md:text-right">
-                <SilenceExpiry silence={rep} />
-              </div>
-
-              <div className="text-xs text-muted-foreground md:text-right">
-                {totalAffected}
-              </div>
-
-              <div className="flex md:justify-end">
-                {allExpired ? (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6 shrink-0"
-                    onClick={(e) => { e.stopPropagation(); onEditGroup(group.silences) }}
-                    title={group.silences.length > 1 ? `Re-create ${group.silences.length} silences` : 'Re-create silence'}
-                  >
-                    <RotateCcw className="h-3 w-3" />
-                  </Button>
-                ) : (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6 shrink-0"
-                    onClick={(e) => { e.stopPropagation(); onExpireGroup(group.silences) }}
-                    title={group.silences.length > 1 ? `Expire ${group.silences.length} silences` : 'Expire silence'}
-                  >
-                    <BellMinus className="h-3 w-3" />
-                  </Button>
+            <div className="min-w-0 py-2">
+              <div className="flex gap-x-3 overflow-hidden whitespace-nowrap [mask-image:linear-gradient(90deg,#000_82%,transparent)]">
+                {visibleMatchers.map((m, i) => (
+                  <SilenceMatcherChip key={i} matcher={m} theme={theme} />
+                ))}
+                {hiddenMatcherCount > 0 && (
+                  <span className="shrink-0 font-mono text-[11px] text-muted-foreground/60">+{hiddenMatcherCount}</span>
+                )}
+                {rep.matchers.length === 0 && (
+                  <span className="font-mono text-[11px] text-muted-foreground/60">no matchers</span>
                 )}
               </div>
+              <div className="mt-0.5 truncate text-[11px] text-muted-foreground/70">{meta}</div>
+              {rep.comment && (
+                <div className="truncate text-[11px] italic text-muted-foreground/60">{rep.comment}</div>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2 py-2">
+              <div className="text-right leading-tight">
+                <SilenceRemaining silence={rep} className="block text-[13px]" />
+                <span className="text-[10.5px] tabular-nums text-muted-foreground/60">
+                  {format(new Date(rep.endsAt), ROW_DATE_FMT, { locale: enUS })}
+                </span>
+              </div>
+              {allExpired ? (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 shrink-0 text-muted-foreground"
+                  onClick={(e) => { e.stopPropagation(); onEditGroup(group.silences) }}
+                  title={groupCount > 1 ? `Re-create ${groupCount} silences` : 'Re-create silence'}
+                >
+                  <RotateCcw className="h-3 w-3" />
+                </Button>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 shrink-0 text-muted-foreground"
+                  onClick={(e) => { e.stopPropagation(); onExpireGroup(group.silences) }}
+                  title={groupCount > 1 ? `Expire ${groupCount} silences` : 'Expire silence'}
+                >
+                  <BellMinus className="h-3 w-3" />
+                </Button>
+              )}
             </div>
           </div>
         )

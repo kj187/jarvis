@@ -637,6 +637,14 @@ polls; followers reconstruct their stores from PostgreSQL instead.
   update (`rebuildFollowerAlertStore` — `AlertStore.Set` always replaces the
   full store, so a per-cluster update must re-merge everything), then
   broadcasts via the existing `broadcastAlertsIfChanged`.
+  `rebuildFollowerAlertStore` also re-hydrates `ActiveClaim` on the merged
+  alerts from the shared DB (`Store.GetActiveClaims`, the same batched read
+  the leader runs in `applyPollResults`) — the leader's snapshot only carries
+  claims as of its last poll, so without this a claim created against any pod
+  (patched locally by `claims.go`, broadcast via fanout) would be wiped on the
+  follower's next resync and only reappear after the leader's next poll.
+  Claims are authoritative from the DB, not the snapshot: a since-released
+  claim still present in a stale snapshot is cleared too.
 - `Recorder.ClusterUpStates()` (the metrics-collector-facing view) sources
   member up-states from `followerSnapshots` while follower instead of the
   local (never-polled) `cluster.Cluster.MemberUpStates()` — a follower still
@@ -847,7 +855,18 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
 │   │                            hasUnevaluableRegexMatcher, silenceMatchesAlert,
 │   │                            getEffectiveAlertState, getSilenceState (both consider ALL active
 │   │                            silences in silencedBy, not just the first), getExpiredSilence,
-│   │                            filterSilences, pickIdentifierLabel, formatSilenceDuration,
+│   │                            filterSilences (4th arg `createdBy`: exact-match "by" filter,
+│   │                            silences page only), silenceCreators (distinct sorted `createdBy`
+│   │                            values → the "By:" dropdown), sortSilences + defaultSilenceSortDir
+│   │                            ("expires" → `endsAt`/asc default, "created" → `updatedAt`/desc
+│   │                            default; explicit sort beats the active→pending→expired order,
+│   │                            which is only a timestamp-tie breaker then `id`),
+│   │                            silenceTiming (→ { pct 0–100 elapsed of the `startsAt`→`endsAt`
+│   │                            window, urgency `pending|ok|soon|expired`, remainingMs } — drives
+│   │                            the card lifetime bar + list stripe colour; `soon` = active & ≤15min
+│   │                            left; an active silence past `endsAt` from a stale snapshot stays
+│   │                            `soon` with negative remainingMs, never silently 100%/frozen),
+│   │                            pickIdentifierLabel, formatSilenceDuration,
 │   │                            formatTime, severityOrder, formatAckDuration, buildAckSilenceBody,
 │   │                            computeGroupLabelValues (only labels present on EVERY alert in the
 │   │                            group — a partial label is dropped, never partially OR-matched),
@@ -1075,11 +1094,23 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │       emphasis in a legacy comment is accepted)
     ├── silences/
     │   ├── SilencesPage.tsx   → dedicated page: card|list, fullscreen, show/hide expired,
-    │   │                        sort (expires/created), matcher-chip filter
-    │   ├── SilenceCard.tsx    → status, matchers, expiry, expired info box, re-create
-    │   ├── SilenceGroupCard.tsx → grouped identical silences (count + summed affected)
-    │   ├── SilenceListView.tsx → table view
-    │   ├── SilenceExpiry.tsx  → "expired X ago" / "expires in X" / "starts in X"
+    │   │                        sort (expires/created + asc/desc toggle), creator-filter
+    │   │                        dropdown (person-icon, silences only), matcher-chip filter
+    │   ├── SilenceCard.tsx    → single silence: status dot + cluster + by/affected line, quiet
+    │   │                        matcher chips, comment quote, then SilenceLifetimeBar; expire/
+    │   │                        re-create icon button (`data-testid="silence-card"`)
+    │   ├── SilenceGroupCard.tsx → grouped identical silences (count + summed affected + cluster chips),
+    │   │                        same body + lifetime bar (`data-testid="silence-group-card"`)
+    │   ├── SilenceListView.tsx → dense rows: urgency stripe · matchers inline (edge-faded) · one meta
+    │   │                        line + comment · remaining-time + expiry date pulled right
+    │   ├── SilenceLifetimeBar.tsx → card "time zone": progress bar over the `startsAt`→`endsAt`
+    │   │                        window (silenceTiming), created + expiry caps, left-aligned
+    │   │                        remaining-time label
+    │   ├── SilenceRemaining.tsx → compact colour-coded remaining-time label (list rows)
+    │   ├── SilenceMatcherChip.tsx → quiet matcher chip: only the label name tinted (labelColorStyle),
+    │   │                        op + value in neutral ink — calmer than the alert views' TruncatableChip
+    │   ├── silenceDisplay.ts  → URGENCY_TEXT/FILL_CLASS maps, matcherOperator, silenceRemainingText
+    │   │                        (shared by the three above; kept out of the .tsx files for react-refresh)
     │   ├── SilenceExpireModal.tsx → expire/extend confirmation (silence-ID link → AM)
     │   ├── SilenceForm.tsx    → 3 steps: form (matchers, clusters, duration, live match count,
     │   │                        overlap/zero-match/unevaluable-regex warnings) → preview → per-cluster results
@@ -1091,7 +1122,8 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │   └── SilenceTemplateTab.tsx → template CRUD + apply-to-form
     ├── settings/
     │   └── SettingsSheet.tsx  → time format, default view, resolved page size, default filters,
-    │                            default silence duration, creator name, claim animation, theme
+    │                            default silence duration, creator name, claim animation, theme;
+    │                            brand footer at the bottom (centred /logo.png + version from useVersion)
     ├── auth/
     │   ├── LoginModal.tsx     → on-demand login (write_protect)
     │   ├── LoginPage.tsx      → full-page login (full_protect)
