@@ -637,6 +637,14 @@ polls; followers reconstruct their stores from PostgreSQL instead.
   update (`rebuildFollowerAlertStore` — `AlertStore.Set` always replaces the
   full store, so a per-cluster update must re-merge everything), then
   broadcasts via the existing `broadcastAlertsIfChanged`.
+  `rebuildFollowerAlertStore` also re-hydrates `ActiveClaim` on the merged
+  alerts from the shared DB (`Store.GetActiveClaims`, the same batched read
+  the leader runs in `applyPollResults`) — the leader's snapshot only carries
+  claims as of its last poll, so without this a claim created against any pod
+  (patched locally by `claims.go`, broadcast via fanout) would be wiped on the
+  follower's next resync and only reappear after the leader's next poll.
+  Claims are authoritative from the DB, not the snapshot: a since-released
+  claim still present in a stale snapshot is cleared too.
 - `Recorder.ClusterUpStates()` (the metrics-collector-facing view) sources
   member up-states from `followerSnapshots` while follower instead of the
   local (never-polled) `cluster.Cluster.MemberUpStates()` — a follower still

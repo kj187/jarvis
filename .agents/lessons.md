@@ -553,3 +553,26 @@ both the active list and the resolved buffer; `testReset` uses it instead of
 `Set(nil)`. `Set(nil)` keeps its production semantics for the real poll loop.
 Any store with a deliberately-persisted buffer/cache needs an explicit
 test-only full-wipe method — `Set(nil)`-shaped "clear" calls are not it.
+
+## Followers dropped a fresh claim until the leader's next poll (multi-replica)
+
+**Symptom**: On a multi-replica PostgreSQL deployment, claiming an alert
+showed the claim banner in the UI for a moment, then it disappeared, then it
+came back on the next poll cycle — repeatably.
+**Cause**: `claims.go` patches the handling pod's in-memory `AlertStore`
+(`SetActiveClaim`) and fans the `claim_set` WS event out to every pod, so the
+claim shows immediately. But a follower rebuilds its whole `AlertStore` from
+the leader's persisted `poll_snapshots` row on every `jarvis_snapshot`
+NOTIFY / idle resync (`rebuildFollowerAlertStore` → `AlertStore.Set`). That
+snapshot only contains the claims that existed as of the leader's **last**
+poll, so the rebuild overwrote the just-patched claim with `nil` and
+broadcast an `alerts_update` without it. The leader's next poll re-attached
+the claim from the DB (`applyPollResults` → `GetActiveClaims`) and persisted
+a fresh snapshot, so it reappeared.
+**Rule**: `rebuildFollowerAlertStore` re-hydrates `ActiveClaim` from the
+shared DB (`Store.GetActiveClaims`, the same batched read the leader runs)
+before `AlertStore.Set` — claims are authoritative from the DB, not the
+snapshot (a since-released claim in a stale snapshot is cleared too). When a
+follower serves derived state that a mutation can change between leader
+polls, ask whether the snapshot alone can carry it or whether the follower
+must read the authoritative table.
