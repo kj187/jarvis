@@ -163,6 +163,22 @@ Tool-specific entry points map to the same files (no duplicated content):
     flicker on each refresh. `fingerprint`+`clusterName` is unique and stable
     per alert, making the sort a total order. Never re-introduce an unsorted
     alert-list read path.
+18. **Every pod's in-memory `AlertStore` must reflect a claim the instant it
+    is broadcast — not just the originating pod's.** `claims.go` patches the
+    handling pod's `AlertStore` (`SetActiveClaim`/`ClearActiveClaim`) and
+    fans the `claim_set`/`claim_released` WS event out to every other pod;
+    those pods' fanout receivers (`HandleFanoutMessage` /
+    `HandleFanoutRef` → `applyClaimSideEffect`, `internal/api/fanout_dispatch.go`)
+    must apply the **same** `AlertStore` patch, not only re-broadcast the WS
+    event. Client-facing reads are served from `AlertStore` (Invariant #13),
+    and a claim mutation's success handler immediately refetches
+    `GET /api/v1/alerts` — that refetch is not sticky and load-balances onto
+    any pod. A pod that only re-broadcast the event would serve a claim-less
+    snapshot until its next poll/snapshot-rebuild re-hydrates claims from the
+    DB (`GetActiveClaims`), and the just-shown claim visibly flickers out and
+    back. SQLite has a single pod and no fanout, so this is a PostgreSQL
+    multi-replica concern only — but the patch is unconditional (NoopFanout
+    never delivers, so the receiver code just never runs there).
 
 ## Workflow Rules — always follow
 

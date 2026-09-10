@@ -176,7 +176,7 @@ func main() {
 	go el.Run(ctx)
 	go recorder.Start(ctx)
 	go sweeper.Start(ctx)
-	go wsFanout.Run(ctx, api.HandleFanoutMessage(hub), api.HandleFanoutRef(store, hub, logger))
+	go wsFanout.Run(ctx, api.HandleFanoutMessage(hub, alertStore), api.HandleFanoutRef(store, alertStore, hub, logger))
 
 	go func() {
 		logger.Info("jarvis started", "port", cfg.Port)

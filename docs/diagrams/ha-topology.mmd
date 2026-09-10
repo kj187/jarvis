@@ -62,3 +62,4 @@ flowchart LR
     LFAN -- "mutation broadcast<br/>NOTIFY jarvis_ws" --> NOTIFY
     NOTIFY -.-> FFAN
     FFAN -- "re-broadcast to own clients" --> FHUB
+    FFAN -- "claim_set/released:<br/>patch own AlertStore" --> FREC

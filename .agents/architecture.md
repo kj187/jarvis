@@ -733,14 +733,25 @@ handled the HTTP request and must still reach every other pod's WS clients.
   and `applySilenceWriteThrough` (`silences.go`, shared by silence
   create/delete). Silence templates currently have no WS broadcast at all
   (checked during D4 implementation) — nothing to fan out there yet.
-- Receiving side: `api.HandleFanoutMessage(hub)` (re-broadcasts bytes
-  unchanged) and `api.HandleFanoutRef(store, hub, logger)` (switches on
-  `ref.Type`: `comment_added` → `store.GetComment`, `claim_set`/
+- Receiving side: `api.HandleFanoutMessage(hub, alertStore)` (re-broadcasts
+  bytes unchanged) and `api.HandleFanoutRef(store, alertStore, hub, logger)`
+  (switches on `ref.Type`: `comment_added` → `store.GetComment`, `claim_set`/
   `claim_released` → `store.GetActiveClaim`, `silences_update` → re-broadcast
   the empty struct directly, no lookup needed) are wired in
-  `cmd/jarvis/main.go` as `go wsFanout.Run(ctx, api.HandleFanoutMessage(hub),
-  api.HandleFanoutRef(store, hub, logger))`, alongside the elector/recorder/
-  sweeper goroutines. `wsFanout` itself is chosen the same way as `el` —
+  `cmd/jarvis/main.go` as `go wsFanout.Run(ctx,
+  api.HandleFanoutMessage(hub, alertStore),
+  api.HandleFanoutRef(store, alertStore, hub, logger))`, alongside the
+  elector/recorder/sweeper goroutines. Both additionally patch this pod's
+  in-memory `AlertStore` for `claim_set` (`SetActiveClaim`) / `claim_released`
+  (`ClearActiveClaim`), mirroring what `claims.go` does on the originating pod
+  (`applyClaimSideEffect` in `fanout_dispatch.go`, embedded-payload path; the
+  `onRef` path patches from its `GetActiveClaim` lookup). Without this a
+  non-originating pod's `AlertStore` never learns of the claim until its next
+  snapshot rebuild, so a client REST read (`GET /api/v1/alerts` — notably the
+  refetch a claim mutation triggers) that load-balances onto it in that
+  window serves a claim-less snapshot and the just-shown claim flickers out
+  until the next poll (Critical Invariant #18). `wsFanout` itself is chosen
+  the same way as `el` —
   `fanout.NewPGFanout(database, cfg.DBDSN, logger)` on PostgreSQL,
   `fanout.NoopFanout{}` on SQLite — and passed into `api.NewRouter`/
   `api.NewServer`.

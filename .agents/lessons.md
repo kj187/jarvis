@@ -637,3 +637,19 @@ snapshot (a since-released claim in a stale snapshot is cleared too). When a
 follower serves derived state that a mutation can change between leader
 polls, ask whether the snapshot alone can carry it or whether the follower
 must read the authoritative table.
+
+**Follow-up (still flickered after the fix above)**: the rebuild fix closed
+the *broadcast* path but not the *REST read* path. A claim mutation's
+success handler immediately refetches `GET /api/v1/alerts`, and that XHR is
+not sticky — it load-balances onto any pod, often a **non-originating**
+follower whose `AlertStore` the cross-pod fanout never patched (the fanout
+receiver only re-broadcast the `claim_set` WS event to that pod's clients).
+That pod served a claim-less `alertStore.Get()` and React Query wrote it
+over the just-shown claim; it reappeared on that pod's next snapshot
+rebuild. **Fix**: `HandleFanoutMessage` / `HandleFanoutRef` now apply the
+same `SetActiveClaim`/`ClearActiveClaim` patch every receiving pod, mirroring
+`claims.go` on the origin pod (`applyClaimSideEffect`, Critical Invariant
+#18). General rule: when a mutation patches local in-memory state **and**
+fans a WS event out, the fan-out receivers must apply the identical local
+patch — re-broadcasting the event alone leaves every other pod's read path
+stale until its next poll.
