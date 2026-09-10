@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { cn } from '@/lib/utils'
 import { useUIStore } from '@/store/uiStore'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { labelColorStyle } from '@/lib/alertUtils'
@@ -6,7 +7,19 @@ import type { LabelMatcherOperator } from '@/types'
 
 const OPERATORS: LabelMatcherOperator[] = ['=', '!=', '=~', '!~']
 
-export function LabelChip({ labelKey, value }: { labelKey: string; value: string }) {
+export function LabelChip({
+  labelKey,
+  value,
+  emphasized = false,
+  muted = false,
+}: {
+  labelKey: string
+  value: string
+  emphasized?: boolean
+  /** Neutral styling — no per-key hue. For strips of context labels that are
+      identical across a group and shouldn't compete with the real signal. */
+  muted?: boolean
+}) {
   const [open, setOpen] = useState(false)
   const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number } | null>(null)
   const chipRef = useRef<HTMLSpanElement | null>(null)
@@ -32,6 +45,10 @@ export function LabelChip({ labelKey, value }: { labelKey: string; value: string
     setOpen(false)
   }
 
+  // `emphasized` keeps its per-key hue (a distinguishing label is easier to
+  // tell apart with colour); only `muted` context strips drop it.
+  const neutral = muted
+
   return (
     <div
       className="relative inline-flex"
@@ -41,11 +58,15 @@ export function LabelChip({ labelKey, value }: { labelKey: string; value: string
     >
       <span
         ref={chipRef}
-        className="max-w-[200px] truncate rounded border px-1.5 py-0.5 text-[10px] font-medium"
-        style={labelColorStyle(labelKey, theme)}
+        className={cn(
+          'truncate rounded border font-medium',
+          emphasized ? 'max-w-[340px] px-2 py-0.5 text-xs font-semibold' : 'max-w-[220px] px-1.5 py-0.5 text-[10px]',
+          neutral && 'border-border bg-muted text-foreground',
+        )}
+        style={neutral ? undefined : labelColorStyle(labelKey, theme)}
         title={`${labelKey}: ${value}`}
       >
-        {labelKey}: {value}
+        <span className={neutral ? 'text-muted-foreground' : undefined}>{labelKey}:</span> {value}
       </span>
 
       {open && dropdownPos && (

@@ -1,15 +1,10 @@
-import { Bell, BellMinus, BellOff, RefreshCw, User, X } from 'lucide-react'
-import { useState, useRef, useEffect } from 'react'
+import { BellMinus, BellOff, RefreshCw, User } from 'lucide-react'
 import { AlertBadge, StatusBadge } from './AlertBadge'
 import { AckButton } from './AckButton'
 import { LabelChip } from './LabelChip'
 import { HIDDEN_LABEL_KEYS } from '@/lib/alertUtils'
 import { useAlertStats } from '@/hooks/useAlerts'
-import { useClaimController } from '@/hooks/useAlertClaim'
-import { useLoginGuard } from '@/hooks/useLoginGuard'
-import { LoginModal } from '@/components/auth/LoginModal'
-import { useAuthStore } from '@/store/authStore'
-import { getSilenceState, formatSilenceDuration } from '@/lib/alertUtils'
+import { getSilenceState, formatSilenceDuration, shortClaimant } from '@/lib/alertUtils'
 import { renderTextWithLinks } from '@/lib/linkUtils'
 import { useFormatTime } from '@/hooks/useFormatTime'
 import { makeAlertSelectionKeyForAlert } from '@/lib/alertSelection'
@@ -30,7 +25,6 @@ interface AlertListRowProps {
   showStateColumn?: boolean
   showSeverityColumn?: boolean
   showActionsColumn?: boolean
-  showClaimColumn?: boolean
   noOpacity?: boolean
   includeSeverityLabelChip?: boolean
 }
@@ -48,53 +42,12 @@ export function AlertListRow({
   showStateColumn = true,
   showSeverityColumn = false,
   showActionsColumn = true,
-  showClaimColumn = true,
   noOpacity = false,
   includeSeverityLabelChip = false,
 }: AlertListRowProps) {
   const alertname = alert.labels['alertname'] ?? '—'
   const isResolved = alert.status.state === 'resolved'
   const theme = useSettingsStore((s) => s.theme)
-
-  const [showNameInput, setShowNameInput] = useState(false)
-  const [nameInput, setNameInput] = useState('')
-  const nameInputRef = useRef<HTMLInputElement>(null)
-  const { setClaimMutation, releaseMutation, authMode, storedName, claim, release } =
-    useClaimController(alert.fingerprint, alert.clusterName)
-  const { guard, loginModalOpen, onLoginSuccess, onLoginClose } = useLoginGuard()
-
-  useEffect(() => {
-    if (showNameInput) nameInputRef.current?.focus()
-  }, [showNameInput])
-
-  function handleClaimClick(e: React.MouseEvent) {
-    e.stopPropagation()
-    guard(() => {
-      if (authMode === 'none') {
-        const stored = storedName()
-        if (stored) {
-          claim({ claimedBy: stored })
-        } else {
-          setNameInput('')
-          setShowNameInput(true)
-        }
-      } else {
-        const currentUser = useAuthStore.getState().user
-        if (currentUser) claim({ claimedBy: currentUser.username })
-      }
-    })
-  }
-
-  function handleNameSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    e.stopPropagation()
-    claim({ claimedBy: nameInput }, { onSuccess: () => setShowNameInput(false) })
-  }
-
-  function handleRelease(e: React.MouseEvent) {
-    e.stopPropagation()
-    guard(() => release())
-  }
 
   const { data: stats } = useAlertStats(alert.fingerprint, alert.clusterName)
   const formatTime = useFormatTime()
@@ -110,6 +63,85 @@ export function AlertListRow({
       excludeLabels?.[key] !== value,
   )
 
+  // Claim is read-only in the list (claim/release lives in the detail panel) —
+  // just the "who's on it" line, styled and placed like the card.
+  const claim = alert.activeClaim
+  const claimLine = claim ? (
+    <span className="flex items-center gap-1 text-xs text-blue-400" title={claim.claimedBy}>
+      <User className="h-3 w-3 shrink-0" />
+      <span className="truncate">
+        <span className="opacity-70">Claimed by: </span>
+        <span className="font-medium">{shortClaimant(claim.claimedBy)}</span>
+        <span className="opacity-70"> · {formatTime(claim.claimedAt)}</span>
+      </span>
+    </span>
+  ) : null
+
+  const metaLine = (
+    <span className="font-medium">
+      {!indented && (
+        <>
+          {alertname}
+          <span className="font-normal text-muted-foreground">, </span>
+        </>
+      )}
+      <span
+        className="text-xs font-normal text-muted-foreground tabular-nums"
+        title={new Date(isResolved ? alert.endsAt : alert.startsAt).toLocaleString('en-US')}
+      >
+        {isResolved ? formatTime(alert.endsAt) : formatTime(alert.startsAt)}
+      </span>
+      {stats && stats.occurrenceCount > 1 && (
+        <>
+          <span className="font-normal text-muted-foreground">, </span>
+          <span className="text-xs font-normal text-muted-foreground" title={`${stats.occurrenceCount}× occurred`}>
+            ↻{stats.occurrenceCount}×
+          </span>
+        </>
+      )}
+      {silenceType === 'active' && silence && remaining !== undefined && (
+        <>
+          <span className="font-normal text-muted-foreground">, </span>
+          <span className="text-xs font-normal text-muted-foreground" title={`Silenced, ends in ${formatSilenceDuration(remaining)}`}>
+            <BellOff className="inline h-3 w-3 align-text-bottom" />
+            {' '}{formatSilenceDuration(remaining)}
+          </span>
+        </>
+      )}
+      {silenceType === 'expiring' && silence && remaining !== undefined && (
+        <>
+          <span className="font-normal text-muted-foreground">, </span>
+          <span className={cn('text-xs font-normal', theme === 'light' ? 'text-amber-600' : 'text-yellow-400')} title={`Silence expires in ${formatSilenceDuration(remaining)}`}>
+            <BellOff className="inline h-3 w-3 align-text-bottom" />
+            {' '}{formatSilenceDuration(remaining)}
+          </span>
+        </>
+      )}
+      {silenceType === 'pending' && (
+        <>
+          <span className="font-normal text-muted-foreground">, </span>
+          <span className="text-xs font-normal text-muted-foreground">
+            <BellOff className="inline h-3 w-3 align-text-bottom" />
+            {' '}pending
+          </span>
+        </>
+      )}
+    </span>
+  )
+  const descLine = alert.annotations['description'] ? (
+    <span className="text-xs text-muted-foreground">{renderTextWithLinks(alert.annotations['description'])}</span>
+  ) : null
+  // Inside a group the alertname is the group heading — lead each row with its
+  // own distinguishing labels instead (first one emphasized), context muted.
+  const chipRow = (
+    <div className="flex flex-wrap items-center gap-1 pt-0.5">
+      <LabelChip labelKey="@cluster" value={alert.clusterName} muted={indented} />
+      {uniqueLabels.map(([key, value], i) => (
+        <LabelChip key={key} labelKey={key} value={value} emphasized={indented && i === 0} />
+      ))}
+    </div>
+  )
+
   return (
     <tr
       role="row"
@@ -119,69 +151,20 @@ export function AlertListRow({
       onKeyDown={(e) => e.key === 'Enter' && onClick(makeAlertSelectionKeyForAlert(alert))}
       className={cn(
         'cursor-pointer transition-colors hover:bg-accent/50 focus:outline-none focus-visible:outline-none',
-        indented && !selected && !alert.activeClaim && (theme === 'light' ? 'bg-background' : 'bg-background/60'),
-        alert.activeClaim && !selected && (theme === 'light' ? 'bg-blue-50 hover:bg-blue-100/80' : 'bg-blue-950/30 hover:bg-blue-950/50'),
+        indented && !selected && !claim && (theme === 'light' ? 'bg-background' : 'bg-background/60'),
+        claim && !selected && (theme === 'light' ? 'bg-blue-50 hover:bg-blue-100/80' : 'bg-blue-950/30 hover:bg-blue-950/50'),
         isLastInGroup && 'border-b border-border/60',
         isResolved && !noOpacity && 'opacity-50',
         selected && 'bg-accent',
       )}
     >
-      <td className={cn('px-4 py-2 border-l-2', indented && 'pl-10', alert.activeClaim ? 'border-blue-600/70' : 'border-transparent')}>
+      <td className={cn('px-4 py-2 border-l-2', indented && 'pl-10', claim ? 'border-blue-600/70' : 'border-transparent')}>
         <div className="flex flex-col gap-0.5">
-          <span className="font-medium">
-            {alertname}
-            <span className="font-normal text-muted-foreground">, </span>
-            <span
-              className="text-xs font-normal text-muted-foreground tabular-nums"
-              title={new Date(isResolved ? alert.endsAt : alert.startsAt).toLocaleString('en-US')}
-            >
-              {isResolved ? formatTime(alert.endsAt) : formatTime(alert.startsAt)}
-            </span>
-            {stats && stats.occurrenceCount > 1 && (
-              <>
-                <span className="font-normal text-muted-foreground">, </span>
-                <span className="text-xs font-normal text-muted-foreground" title={`${stats.occurrenceCount}× occurred`}>
-                  ↻{stats.occurrenceCount}×
-                </span>
-              </>
-            )}
-            {silenceType === 'active' && silence && remaining !== undefined && (
-              <>
-                <span className="font-normal text-muted-foreground">, </span>
-                <span className="text-xs font-normal text-muted-foreground" title={`Silenced, ends in ${formatSilenceDuration(remaining)}`}>
-                  <BellOff className="inline h-3 w-3 align-text-bottom" />
-                  {' '}{formatSilenceDuration(remaining)}
-                </span>
-              </>
-            )}
-            {silenceType === 'expiring' && silence && remaining !== undefined && (
-              <>
-                <span className="font-normal text-muted-foreground">, </span>
-                <span className={cn('text-xs font-normal', theme === 'light' ? 'text-amber-600' : 'text-yellow-400')} title={`Silence expires in ${formatSilenceDuration(remaining)}`}>
-                  <BellOff className="inline h-3 w-3 align-text-bottom" />
-                  {' '}{formatSilenceDuration(remaining)}
-                </span>
-              </>
-            )}
-            {silenceType === 'pending' && (
-              <>
-                <span className="font-normal text-muted-foreground">, </span>
-                <span className="text-xs font-normal text-muted-foreground">
-                  <BellOff className="inline h-3 w-3 align-text-bottom" />
-                  {' '}pending
-                </span>
-              </>
-            )}
-          </span>
-          {alert.annotations['description'] && (
-            <span className="text-xs text-muted-foreground">{renderTextWithLinks(alert.annotations['description'])}</span>
+          {indented ? (
+            <>{claimLine}{chipRow}{metaLine}{descLine}</>
+          ) : (
+            <>{metaLine}{claimLine}{descLine}{chipRow}</>
           )}
-          <div className="flex flex-wrap gap-1 pt-0.5">
-            <LabelChip labelKey="@cluster" value={alert.clusterName} />
-            {uniqueLabels.map(([key, value]) => (
-              <LabelChip key={key} labelKey={key} value={value} />
-            ))}
-          </div>
         </div>
       </td>
       {showStateColumn && (
@@ -196,7 +179,16 @@ export function AlertListRow({
       )}
       {showActionsColumn && <td className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center gap-1">
-          {silences && <AckButton alerts={[alert]} silences={silences} variant="card" />}
+          {silences && (
+            <AckButton
+              alerts={[alert]}
+              silences={silences}
+              variant="icon"
+              subtle={false}
+              requireActive={false}
+              onCreateSilence={onCreateSilence ? (a) => onCreateSilence(a) : undefined}
+            />
+          )}
           {silenceType === 'active' && silence && (
             <button
               type="button"
@@ -217,72 +209,7 @@ export function AlertListRow({
               <RefreshCw className="h-3.5 w-3.5" />
             </button>
           )}
-          {(silenceType === null || silenceType === undefined) && (
-            <button
-              type="button"
-              onClick={() => onCreateSilence?.([alert])}
-              title="Create silence"
-              className="cursor-pointer text-muted-foreground/40 transition-colors hover:text-foreground"
-            >
-              <Bell className="h-3.5 w-3.5" />
-            </button>
-          )}
         </div>
-      </td>}
-      <LoginModal open={loginModalOpen} onSuccess={onLoginSuccess} onClose={onLoginClose} />
-      {showClaimColumn && <td className="px-4 py-2 text-sm" onClick={(e) => e.stopPropagation()}>
-        {alert.activeClaim ? (
-          <div className="flex items-center gap-1.5">
-            <span className="flex items-center gap-1 text-blue-400">
-              <User className="h-3 w-3" />
-              {alert.activeClaim.claimedBy}
-            </span>
-            <button
-              type="button"
-              onClick={handleRelease}
-              title="Release claim"
-              className="cursor-pointer rounded p-0.5 text-muted-foreground/50 hover:text-foreground"
-              disabled={releaseMutation.isPending}
-            >
-              <X className="h-3 w-3" />
-            </button>
-          </div>
-        ) : showNameInput ? (
-          <form onSubmit={handleNameSubmit} className="flex items-center gap-1">
-            <input
-              ref={nameInputRef}
-              value={nameInput}
-              onChange={(e) => setNameInput(e.target.value)}
-              placeholder="Your name"
-              className="h-6 w-24 rounded border border-border bg-background px-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
-              onKeyDown={(e) => e.key === 'Escape' && setShowNameInput(false)}
-            />
-            <button
-              type="submit"
-              disabled={!nameInput.trim() || setClaimMutation.isPending}
-              className="cursor-pointer rounded p-0.5 text-muted-foreground hover:text-foreground disabled:opacity-40"
-            >
-              <User className="h-3 w-3" />
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowNameInput(false)}
-              className="cursor-pointer rounded p-0.5 text-muted-foreground/50 hover:text-foreground"
-            >
-              <X className="h-3 w-3" />
-            </button>
-          </form>
-        ) : (
-          <button
-            type="button"
-            onClick={handleClaimClick}
-            title="I'll take this"
-            className="cursor-pointer text-muted-foreground/40 transition-colors hover:text-blue-400"
-            disabled={setClaimMutation.isPending}
-          >
-            <User className="h-3.5 w-3.5" />
-          </button>
-        )}
       </td>}
     </tr>
   )

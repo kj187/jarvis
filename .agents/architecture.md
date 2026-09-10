@@ -893,7 +893,7 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
 │   │                            whether an AM regex matcher is a Jarvis-style escaped-literal-OR-list
 │   │                            SilenceForm can safely edit as tags, vs. a real regex needing raw-text
 │   │                            editing — see SilenceForm's `raw` matcher mode),
-│   │                            FAST_SILENCE_DURATIONS, HIDDEN_LABEL_KEYS, labelColorStyle,
+│   │                            FAST_SILENCE_DURATIONS, HIDDEN_LABEL_KEYS, labelColorStyle, shortClaimant,
 │   │                            computeLabelBreakdown (alerts-overview modal: per-label-name
 │   │                            value counts, alertname/severity pinned to the top regardless
 │   │                            of coverage, `receiver` alias + rest of HIDDEN_LABEL_KEYS
@@ -944,15 +944,33 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │   ├── AlertCardGrid.tsx  → grouped by settings `groupByLabel` (default severity), responsive
     │   │                        column binning, per-group pagination, drag-and-drop section
     │   │                        reordering (persisted: 'jarvis-card-section-order:<label>')
-    │   ├── AlertCard.tsx      → card + claim banner + count badge + silence/detail actions + Fast-Silence (hover);
+    │   ├── AlertCard.tsx      → card + claim info + count badge + silence/detail actions + Fast-Silence (hover);
+    │   │                        common labels (shared by the whole group) render as a `muted`
+    │   │                        LabelChip strip above the entries; multi-alert groups: each entry
+    │   │                        leads with an identity line (position pill `n/total` + its
+    │   │                        distinguishing labels, first one `emphasized`); summary clamped to
+    │   │                        1 line / description to 2 (full text via title + detail panel);
+    │   │                        expired-silence shown as an inline muted line, not a banner;
+    │   │                        claim = one blue line above the identity line ("Claimed by:
+    │   │                        <shortClaimant> · <relative time>"), padded box only with a note,
+    │   │                        + a blue left accent on the claimed entry;
     │   │                        FiringSparkline: dezent HeatmapCellsRow under the timestamp row —
     │   │                        fetches 30d, keeps only the most recent 14 buckets (fewer/bigger
     │   │                        cells read better at card width); always rendered, even with zero
     │   │                        fires in the window (a missing sparkline reads as a rendering bug,
     │   │                        not "no data") — no tooltips (would fight the card's own click target)
-    │   ├── AlertListView.tsx  → sortable table (name/time), expandable groups, section
-    │   │                        reordering (persisted: 'jarvis-list-section-order:<label>')
-    │   ├── AlertListRow.tsx   → single/indented row
+    │   ├── AlertListView.tsx  → sortable table, cols = Name [· State] · Actions (no Claim column —
+    │   │                        claim/release lives only in the detail panel); expandable groups,
+    │   │                        section reordering (persisted: 'jarvis-list-section-order:<label>');
+    │   │                        group-header common labels = `muted` LabelChip strip; group silence
+    │   │                        action is a labelled button ("Silence group" / "Extend/Recreate/Expire
+    │   │                        group silence"). colSpans: `showStateColumn ? 3 : 2`
+    │   ├── AlertListRow.tsx   → single row; when `indented` (inside a group) it drops the repeated
+    │   │                        alertname and leads with its own labels (first `emphasized`, context
+    │   │                        `muted`); claim shown read-only as a blue "Claimed by: <shortClaimant>
+    │   │                        · <time>" line above the chips; row actions = one AckButton (icon
+    │   │                        variant, menu = Silence form + Fast-Silence durations) + contextual
+    │   │                        expire/extend icon
     │   ├── AlertDetailPanel.tsx → slide-over: labels/annotations + link buttons, stats & timeline,
     │   │                          claim (useClaimController), comments (CommentsPanel), silence
     │   │                          controls + Fast-Silence, AI-prompt section;
@@ -1072,7 +1090,9 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │   │                        what to filter *by*); clicking a value adds an unlocked `=`
     │   │                        matcher via uiStore.addLabelMatcher (no-op if an identical one
     │   │                        already exists) and closes the modal
-    │   ├── LabelChip.tsx      → label chip with hover operator dropdown
+    │   ├── LabelChip.tsx      → label chip with hover operator dropdown; `emphasized` = larger/bolder
+    │   │                        (keeps its per-key hue), `muted` = neutral fill, no hue (shared context
+    │   │                        strips). `labelColorStyle` hue is confined to 40–329° — never a pure red
     │   ├── ViewToggle.tsx     → ⊞ / ☰ toggle
     │   └── EmptyState.tsx     → large empty-state icon (no alerts)
     ├── comments/

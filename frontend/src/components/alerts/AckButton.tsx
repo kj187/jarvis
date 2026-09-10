@@ -375,6 +375,7 @@ export function AckButton({
               <>
                 <div className={cn('flex items-center gap-2 px-0.5', onCreateSilence && 'mb-1.5 mt-2')}>
                   <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    {onCreateSilence && <span className="text-muted-foreground/50">or </span>}
                     {alerts.length > 1 ? `Fast-Silence ${activeAlerts.length} alerts` : 'Fast-Silence'}
                   </span>
                   <div className="h-px flex-1 bg-border" />
