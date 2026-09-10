@@ -60,8 +60,8 @@ func TestFanout_CommentMutation_ReachesBothPodsExactlyOnce(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go podA.fanout.Run(ctx, HandleFanoutMessage(podA.hub), HandleFanoutRef(podA.store, podA.hub, logger))
-	go podB.fanout.Run(ctx, HandleFanoutMessage(podB.hub), HandleFanoutRef(podB.store, podB.hub, logger))
+	go podA.fanout.Run(ctx, HandleFanoutMessage(podA.hub, podA.server.alertStore), HandleFanoutRef(podA.store, podA.server.alertStore, podA.hub, logger))
+	go podB.fanout.Run(ctx, HandleFanoutMessage(podB.hub, podB.server.alertStore), HandleFanoutRef(podB.store, podB.server.alertStore, podB.hub, logger))
 	time.Sleep(300 * time.Millisecond) // let both LISTEN connections establish
 
 	clientA := connectWSClient(t, podA.hub)
@@ -132,8 +132,8 @@ func TestFanout_OversizedComment_UsesRefFallback(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go podA.fanout.Run(ctx, HandleFanoutMessage(podA.hub), HandleFanoutRef(podA.store, podA.hub, logger))
-	go podB.fanout.Run(ctx, HandleFanoutMessage(podB.hub), HandleFanoutRef(podB.store, podB.hub, logger))
+	go podA.fanout.Run(ctx, HandleFanoutMessage(podA.hub, podA.server.alertStore), HandleFanoutRef(podA.store, podA.server.alertStore, podA.hub, logger))
+	go podB.fanout.Run(ctx, HandleFanoutMessage(podB.hub, podB.server.alertStore), HandleFanoutRef(podB.store, podB.server.alertStore, podB.hub, logger))
 	time.Sleep(300 * time.Millisecond)
 
 	clientB := connectWSClient(t, podB.hub)

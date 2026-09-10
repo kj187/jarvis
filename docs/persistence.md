@@ -130,9 +130,13 @@ NOTIFY payload limit (~8000 bytes) is handled gracefully: an oversized
 message (a long comment body, for instance) is replaced by a small
 reference; the receiving pod refetches the authoritative row from the
 shared database and reconstructs the exact broadcast — transparent to the
-browser either way. Alert-state broadcasts (`alerts_update`, the poll-time
-`silences_update`) are **not** fanned out this way — every pod already
-derives those from its own poll or consumed snapshot.
+browser either way. For a claim set or released, the receiving pod also
+patches its own in-memory alert store (not just the WebSocket broadcast) —
+otherwise a browser's REST refetch that load-balances onto that pod before
+its next snapshot rebuild would briefly show the claim disappearing again.
+Alert-state broadcasts (`alerts_update`, the poll-time `silences_update`)
+are **not** fanned out this way — every pod already derives those from its
+own poll or consumed snapshot.
 
 ### Failover
 
