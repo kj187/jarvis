@@ -113,6 +113,39 @@ func TestHandleFanoutMessage_NonClaimEvent_LeavesAlertStoreUntouched(t *testing.
 	}
 }
 
+// applyClaimSideEffect must be a safe no-op for every malformed / irrelevant
+// input rather than panic or mis-patch the store.
+func TestApplyClaimSideEffect_NoOpCases(t *testing.T) {
+	seeded := func() *history.AlertStore {
+		s := &history.AlertStore{}
+		seedAlert(s, "fp1", "c1")
+		s.SetActiveClaim("fp1", "c1", &models.Claim{Fingerprint: "fp1", ClusterName: "c1", ClaimedBy: "alice"})
+		return s
+	}
+	claimSetNoClaim, _ := ws.BuildEventJSON(models.WSTypeClaimSet, map[string]any{"fingerprint": "fp1", "clusterName": "c1"})
+	claimSetNoFP, _ := ws.BuildEventJSON(models.WSTypeClaimSet, map[string]any{"clusterName": "c1", "claim": models.Claim{ClaimedBy: "bob"}})
+	claimReleasedNoFP, _ := ws.BuildEventJSON(models.WSTypeClaimReleased, map[string]any{"clusterName": "c1"})
+
+	cases := map[string][]byte{
+		"not json":                  []byte("{not json"),
+		"claim_set without claim":   claimSetNoClaim,
+		"claim_set without fp":      claimSetNoFP,
+		"claim_released without fp": claimReleasedNoFP,
+	}
+	for name, msg := range cases {
+		t.Run(name, func(t *testing.T) {
+			s := seeded()
+			applyClaimSideEffect(msg, s, nil)
+			if got := s.Get(); got[0].ActiveClaim == nil || got[0].ActiveClaim.ClaimedBy != "alice" {
+				t.Fatalf("ActiveClaim = %+v, want unchanged (alice)", got[0].ActiveClaim)
+			}
+		})
+	}
+
+	// nil alertStore must not panic.
+	applyClaimSideEffect(claimSetNoClaim, nil, nil)
+}
+
 // The Ref fallback path (oversized fanout payload) must also patch the local
 // AlertStore after refetching the claim from the shared DB.
 func TestHandleFanoutRef_ClaimSet_PatchesLocalAlertStore(t *testing.T) {
