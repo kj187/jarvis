@@ -128,6 +128,12 @@ Write the notes file in English, derived from the CHANGELOG section and the
 actual commits (read them — don't just reformat commit subjects). No
 artifact/verify sections — the workflow appends those.
 
+**Do not hard-wrap prose.** One paragraph or bullet = one physical line, no
+matter how long. GitHub reflows release bodies to the reader's viewport;
+manual line breaks (or a fixed ~72/80-column fill) render as a cramped,
+ragged narrow column on the release page. This applies to the blurb,
+`### Added`/`### Fixed`/… bullets, and every other line of prose in the file.
+
 **Template A — Initial / major release (v1.0.0, v2.0.0, …)**
 
 ```markdown
