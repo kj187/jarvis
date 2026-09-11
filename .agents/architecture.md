@@ -916,7 +916,12 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
 │   ├── alertSelection.ts      → makeAlertSelectionKey / parseAlertSelectionKey — selection key
 │   │                            format `<cluster>::<fingerprint>` (URL `alert=` param, cluster-safe)
 │   ├── linkUtils.tsx          → isUrl, extractLinkButtons (URL-valued labels/annotations + runbook
-│   │                            logic), renderTextWithLinks
+│   │                            logic), renderTextWithLinks. AlertDetailPanel.tsx prepends one more
+│   │                            `LinkButton` of its own — label "Alertmanager", built from
+│   │                            `alert.alertmanagerUrl` + an alertname filter, not derived from any
+│   │                            label/annotation — so it renders as the first chip in the Links
+│   │                            section instead of its own "Go to Alertmanager" button in the header
+│   │                            action row
 │   ├── heatmapUtils.ts        → bucketFiringStarts(startsIso, range, now?) — pure hourly/daily
 │   │                            bucketing of raw firing timestamps into HeatmapCell[]
 │   │                            (browser-local day/hour boundaries; 24h/7d hourly cells via ms
@@ -1097,15 +1102,17 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │   │                        useAlertHeatmap query + range state); 7d renders as 7 day-rows of
     │   │                        24 hourly cells (with day labels), 24h/30d as one row; same
     │   │                        HeatmapCellsRow as the card, so card + detail share one visual
-    │   │                        language now (box grid, soft muted-fill empty cells). Caption row is
-    │   │                        `justify-between` — label + Info icon anchored left (icon's hover
-    │   │                        tooltip anchors `left-0`, same convention as the Links-section Info
-    │   │                        icon), range-toggle buttons anchored right — not `justify-end` with
-    │   │                        everything bunched on the right and no left anchor. When every cell
-    │   │                        in the selected range is empty (`cells.every(c => c.count === 0)`),
-    │   │                        the grid is replaced by a plain "No activity in this window" caption
-    │   │                        instead of rendering a wall of identical empty boxes, which reads as
-    │   │                        broken rather than "nothing happened here".
+    │   │                        language now (box grid, soft muted-fill empty cells); Info icon next
+    │   │                        to the label opens a hover tooltip explaining cell shading + what
+    │   │                        each range shows (anchored `right-0` — the range-toggle buttons sit
+    │   │                        to the icon's right, unlike the Links-section Info icon which anchors
+    │   │                        `left-0`). Caption row is `justify-end` — label, info icon and
+    │   │                        range-toggle sit together right-aligned as one unit, deliberately, not
+    │   │                        `justify-between` with the label pinned to the left edge. When every
+    │   │                        cell in the selected range is empty (`cells.every(c => c.count === 0)`),
+    │   │                        the grid is replaced by a right-aligned "No activity in this window"
+    │   │                        caption instead of rendering a wall of identical empty boxes, which
+    │   │                        reads as broken rather than "nothing happened here".
     │   ├── HeatmapCells.tsx   → HeatmapCellsRow (no chart lib; renders HEATMAP_INTENSITY_CLASSES
     │   │                        cells via heatmapIntensityLevel/heatmapCellTooltip, all three in
     │   │                        lib/heatmapUtils.ts — plain exports, not this .tsx file, so

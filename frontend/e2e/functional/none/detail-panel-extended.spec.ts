@@ -56,7 +56,7 @@ test('D4 annotation with absolute URL creates a link button', async ({ page, am,
   await expect(dashboardLink).toBeVisible()
 })
 
-test('D4 alert without URL annotations shows no Links section', async ({ page, am, jarvis }) => {
+test('D4 alert without URL annotations still shows Links with only the Alertmanager button', async ({ page, am, jarvis }) => {
   await dismissNoAuthNotice(page)
   await am.fire([
     {
@@ -77,9 +77,14 @@ test('D4 alert without URL annotations shows no Links section', async ({ page, a
   // Wait for the correct alert's summary to appear (ensures fresh data)
   await expect(panel.getByText('Plain summary without any URL here')).toBeVisible({ timeout: 8_000 })
 
-  // No "Links" section when no URL annotations.
-  // getByRole ignores aria-hidden tooltip spans that getByText would find.
-  await expect(panel.getByRole('button', { name: /Links/ })).toHaveCount(0)
+  // The Links section always carries the Alertmanager deep link when the
+  // cluster has a browser-visible URL configured — it's no longer a separate
+  // "Go to Alertmanager" button in the header. With no URL annotations on
+  // this alert, that's the only chip in there.
+  await expect(panel.getByRole('button', { name: /Links/ })).toBeVisible({ timeout: 5_000 })
+  await expect(panel.getByRole('link', { name: 'Alertmanager' })).toBeVisible()
+  await expect(panel.locator('a[href*="runbooks"]')).toHaveCount(0)
+  await expect(panel.locator('a[href*="grafana"]')).toHaveCount(0)
 })
 
 test('D12 AI prompt tab shows the prompt and copy works', async ({ page, am, jarvis }) => {

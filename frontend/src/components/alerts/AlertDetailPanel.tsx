@@ -32,7 +32,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { makeAlertSelectionKeyForAlert } from '@/lib/alertSelection'
 import type { EnrichedAlert, LabelMatcher, Silence, SilenceMatcher } from '@/types'
-import { renderTextWithLinks, extractLinkButtons } from '@/lib/linkUtils'
+import { renderTextWithLinks, extractLinkButtons, type LinkButton } from '@/lib/linkUtils'
 import { pickIdentifierLabel, tzAbbr, silenceMatchesAlert } from '@/lib/alertUtils'
 
 const ALERT_EVENT_LABEL: Record<string, string> = {
@@ -335,7 +335,27 @@ export function AlertDetailPanel({
 
   const alertname = alert.labels['alertname'] ?? 'Unknown'
   const severity = alert.labels['severity'] ?? 'none'
-  const linkButtons = extractLinkButtons(alert.labels, alert.annotations, runbookBaseUrl)
+  const alertmanagerLinkButton: LinkButton | null = alert.alertmanagerUrl
+    ? {
+        label: 'Alertmanager',
+        url: (() => {
+          const filter = `{alertname="${alert.labels.alertname}"}`
+          const params = new URLSearchParams({
+            silenced: 'false',
+            inhibited: 'false',
+            muted: 'false',
+            active: 'true',
+            filter,
+          })
+          return `${alert.alertmanagerUrl}/#/alerts?${params.toString()}`
+        })(),
+        isRunbook: false,
+      }
+    : null
+  const linkButtons = [
+    ...(alertmanagerLinkButton ? [alertmanagerLinkButton] : []),
+    ...extractLinkButtons(alert.labels, alert.annotations, runbookBaseUrl),
+  ]
 
   const FIFTEEN_MIN = 15 * 60 * 1000
 
@@ -527,29 +547,8 @@ export function AlertDetailPanel({
           </div>
 
           {/* Action buttons */}
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            {alert.alertmanagerUrl && (
-              <a
-                href={(() => {
-                  const filter = `{alertname="${alert.labels.alertname}"}`
-                  const params = new URLSearchParams({
-                    silenced: 'false',
-                    inhibited: 'false',
-                    muted: 'false',
-                    active: 'true',
-                    filter,
-                  })
-                  return `${alert.alertmanagerUrl}/#/alerts?${params.toString()}`
-                })()}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1 rounded border border-border px-2 py-1 text-xs hover:bg-accent cursor-pointer"
-              >
-                <ExternalLink className="h-3 w-3" />
-                Go to Alertmanager
-              </a>
-            )}
-            <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
+          <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {activeClaim ? (
                 <div data-testid="detail-claim-badge" className={cn('flex h-8 min-w-0 max-w-[16rem] items-center gap-1.5 rounded-md border px-2', theme === 'light' ? 'border-blue-300 bg-blue-50' : 'border-blue-800 bg-blue-950/40')}>
                   <User className={cn('h-3 w-3 shrink-0', theme === 'light' ? 'text-blue-600' : 'text-blue-400')} />
