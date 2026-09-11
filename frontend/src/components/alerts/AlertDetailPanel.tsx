@@ -29,6 +29,7 @@ import { useUIStore } from '@/store/uiStore'
 import { Button } from '@/components/ui/button'
 import { Tooltip } from '@/components/ui/tooltip'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { makeAlertSelectionKeyForAlert } from '@/lib/alertSelection'
 import type { EnrichedAlert, LabelMatcher, Silence, SilenceMatcher } from '@/types'
 import { renderTextWithLinks, extractLinkButtons } from '@/lib/linkUtils'
@@ -616,12 +617,12 @@ export function AlertDetailPanel({
                 guard(() => updateNote(editNote, { onSuccess: () => setShowEditNoteForm(false) }))
               }}
             >
-              <textarea
+              <Textarea
                 value={editNote}
                 onChange={(e) => setEditNote(e.target.value)}
                 placeholder="Note"
                 rows={5}
-                className="w-full resize-none rounded-md border border-input bg-transparent px-3 py-2 text-xs shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                className="resize-none text-xs"
               />
               <div className="flex gap-2">
                 <Button type="submit" size="sm" className="h-7 text-xs" disabled={updateNoteMutation.isPending}>
@@ -663,12 +664,12 @@ export function AlertDetailPanel({
                   required
                 />
               )}
-              <textarea
+              <Textarea
                 value={claimNote}
                 onChange={(e) => setClaimNote(e.target.value)}
                 placeholder="Note (optional)"
                 rows={5}
-                className="w-full resize-none rounded-md border border-input bg-transparent px-3 py-2 text-xs shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                className="resize-none text-xs"
               />
               <div className="flex gap-2">
                 <Button type="submit" size="sm" className="h-7 text-xs" disabled={!claimName.trim() || setClaimMutation.isPending}>
