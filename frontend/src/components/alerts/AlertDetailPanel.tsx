@@ -560,17 +560,30 @@ export function AlertDetailPanel({
                     </Tooltip>
                   )}
                   {isOwner(activeClaim.claimedBy) && (
-                    <button
-                      data-testid="claim-edit-note-button"
-                      title="Edit note"
-                      className={cn('ml-1 shrink-0 cursor-pointer', theme === 'light' ? 'text-blue-500 hover:text-blue-700' : 'text-blue-400/70 hover:text-blue-300')}
-                      onClick={() => {
-                        setEditNote(activeClaim.note ?? '')
-                        setShowEditNoteForm((v) => !v)
-                      }}
-                    >
-                      <Pencil className="h-3 w-3" />
-                    </button>
+                    activeClaim.note ? (
+                      <button
+                        data-testid="claim-edit-note-button"
+                        title="Edit note"
+                        className={cn('ml-1 shrink-0 cursor-pointer', theme === 'light' ? 'text-blue-500 hover:text-blue-700' : 'text-blue-400/70 hover:text-blue-300')}
+                        onClick={() => {
+                          setEditNote(activeClaim.note ?? '')
+                          setShowEditNoteForm((v) => !v)
+                        }}
+                      >
+                        <Pencil className="h-3 w-3" />
+                      </button>
+                    ) : (
+                      <button
+                        data-testid="claim-edit-note-button"
+                        className={cn('ml-1 shrink-0 cursor-pointer whitespace-nowrap text-[10px] font-medium underline decoration-dotted underline-offset-2', theme === 'light' ? 'text-blue-500 hover:text-blue-700' : 'text-blue-400/70 hover:text-blue-300')}
+                        onClick={() => {
+                          setEditNote('')
+                          setShowEditNoteForm((v) => !v)
+                        }}
+                      >
+                        + Note
+                      </button>
+                    )
                   )}
                   <button
                     data-testid="claim-release-button"
