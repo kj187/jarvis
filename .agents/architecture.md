@@ -934,10 +934,27 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     ├── ui/                    → shadcn/ui: button, card, badge, dialog, sheet, select, input,
     │                            textarea, date-time-picker, tooltip, truncatable-chip, avatar
     ├── layout/
-    │   ├── Header.tsx         → nav tabs, cluster status, WS indicator, polling/refresh, theme,
-    │   │                        settings, create-silence, login/user-menu (initials avatar,
-    │   │                        lib/avatarUtils.ts — no Gravatar/third-party lookup), mobile
-    │   │                        hamburger
+    │   ├── Header.tsx         → nav tabs, cluster status, WS indicator, polling/refresh,
+    │   │                        create-silence, mobile hamburger. Settings + theme toggle +
+    │   │                        login/logout/admin all live in one always-present user-menu
+    │   │                        button (Grafana-style) — initials avatar when authenticated
+    │   │                        (lib/avatarUtils.ts — no Gravatar/third-party lookup),
+    │   │                        generic CircleUserRound icon otherwise. The Login entry only
+    │   │                        appears when an auth provider is configured
+    │   │                        (providerInfo.mode !== 'none') and no session exists; Settings
+    │   │                        and the theme toggle are always present regardless of auth state.
+    │   │                        Separate always-present Info button (data-testid="info-menu") next
+    │   │                        to the user-menu opens its own popover (`InfoColophon`) with the
+    │   │                        brand footer — /logo.png, version (useVersion), copyright — moved
+    │   │                        here from SettingsSheet.tsx. Desktop-only: cluster status, refresh,
+    │   │                        info and user-menu popovers all open on hover (small close-delay
+    │   │                        timers per popover, same pattern as the pre-existing cluster status
+    │   │                        popover) and dock flush under the header — no gap, no top border
+    │   │                        (`border-t-0`), `bg-header` instead of `bg-card` so the popover reads
+    │   │                        as an extension of the header bar, not a separate floating card.
+    │   │                        Native `title` tooltips were dropped wherever the popover/visible
+    │   │                        label already shows the same text, to avoid a duplicate browser
+    │   │                        tooltip stacking on top of the custom popover.
     │   └── MatcherChipsBar.tsx → chip-based label filter (=, !=, =~, !~, and @age-only >, <),
     │                            tag multi-value, suggestions (always includes `@age`/`@claimed-by`
     │                            via PSEUDO_FIELD_SUGGESTIONS — @age never appears from the live
@@ -1167,8 +1184,10 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │   └── SilenceTemplateTab.tsx → template CRUD + apply-to-form
     ├── settings/
     │   └── SettingsSheet.tsx  → time format, default view, resolved page size, default filters,
-    │                            default silence duration, creator name, claim animation, theme;
-    │                            brand footer at the bottom (centred /logo.png + version from useVersion)
+    │                            default silence duration, creator name, claim animation. No brand
+    │                            footer — logo/version/copyright live in the header's info popover
+    │                            (layout/Header.tsx) instead. Theme lives in useSettingsStore but is
+    │                            only toggled from the header's user menu, not from this sheet.
     ├── auth/
     │   ├── LoginModal.tsx     → on-demand login (write_protect)
     │   ├── LoginPage.tsx      → full-page login (full_protect)

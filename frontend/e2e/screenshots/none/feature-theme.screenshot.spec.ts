@@ -24,7 +24,9 @@ test('feature-theme-light', async ({ page, am, jarvis }) => {
   await fireWithHeatmapHistory(page, am, jarvis, JARVIS_BASE_URL, manyAlerts)
   await page.goto('/?state=active')
   await expect(page.getByTestId('alert-card').first()).toBeVisible()
-  await page.getByLabel('Switch to light mode').click()
+  await page.getByTestId('user-menu').hover()
+  await page.getByRole('button', { name: 'Light mode' }).click()
+  await page.mouse.move(0, 0) // move away so the hover-close timer closes the dropdown before the shot
   await page.waitForTimeout(300)
   await page.screenshot({ path: `${DIR}/feature-theme-light.png` })
 })

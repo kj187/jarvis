@@ -63,8 +63,9 @@ test('A2 theme toggle switches data-theme and persists', async ({ page }) => {
   await dismissNoAuthNotice(page)
   await resetPersistedUIState(page)
 
-  // Wait for the React app to mount and apply theme (useEffect sets data-theme)
-  const themeBtn = page.getByTitle('Switch to light mode')
+  // Theme lives inside the always-present user menu now.
+  await page.getByTestId('user-menu').click()
+  const themeBtn = page.getByRole('button', { name: 'Light mode' })
   await expect(themeBtn).toBeVisible({ timeout: 10_000 })
 
   // Default is dark
@@ -87,7 +88,9 @@ test('A2 theme toggle switches data-theme and persists', async ({ page }) => {
   // Check only the localStorage value (addInitScript sets 'dark' but the UI changes it to 'light')
   await page.reload()
   // Wait for React to mount and re-apply theme
-  await expect(page.getByTitle(/Switch to (light|dark) mode/)).toBeVisible({ timeout: 10_000 })
+  await expect(page.getByTestId('user-menu')).toBeVisible({ timeout: 10_000 })
+  await page.getByTestId('user-menu').click()
+  await expect(page.getByRole('button', { name: /(Light|Dark) mode/ })).toBeVisible({ timeout: 10_000 })
   // The stored theme after reload — initScript re-runs and sets 'dark', but that's the reset
   // so we just verify the toggle works (not persistence across reload with initScript)
   const afterReloadTheme = await page.evaluate(() => document.documentElement.getAttribute('data-theme'))
@@ -153,4 +156,19 @@ test('A6 cluster status indicator shows healthy/total count in header', async ({
   const countText = page.locator('[aria-label^="Instances"] .tabular-nums').first()
   await expect(countText).toBeVisible()
   await expect(countText).toHaveText(/\d+\/\d+/)
+})
+
+test('A7 info popover shows the Jarvis logo, version and copyright', async ({ page }) => {
+  await dismissNoAuthNotice(page)
+  await page.route('**/api/v1/info', (route) =>
+    route.fulfill({ json: { version: 'v9.9.9' } }),
+  )
+  await page.goto('/')
+
+  await page.getByTestId('info-menu').click()
+
+  const logo = page.getByRole('img', { name: 'Jarvis' })
+  await expect(logo).toBeVisible({ timeout: 10_000 })
+  await expect(page.getByText('v9.9.9')).toBeVisible()
+  await expect(page.getByText('© 2026 Julian Kleinhans')).toBeVisible()
 })

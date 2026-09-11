@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { Wifi, WifiOff, RefreshCw, Plus, Settings, LogIn, LogOut, Shield, Sun, Moon, Menu, X } from 'lucide-react'
+import { Wifi, WifiOff, RefreshCw, Plus, Settings, LogIn, LogOut, Shield, Sun, Moon, Menu, X, CircleUserRound, Info } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Avatar } from '@/components/ui/avatar'
 import { Sheet } from '@/components/ui/sheet'
@@ -16,6 +16,7 @@ import { useQuery } from '@tanstack/react-query'
 import { fetchClusters, fetchStatus } from '@/api/client'
 import { FALLBACK_REFETCH_INTERVAL_MS } from '@/lib/refetch'
 import { Tooltip } from '@/components/ui/tooltip'
+import { useVersion } from '@/hooks/useVersion'
 
 function formatPollInterval(seconds: number): string {
   if (seconds < 60) return `${seconds}s`
@@ -29,6 +30,33 @@ function refreshTooltip(pollIntervalSeconds: number | undefined): string {
   return (
     'Reloads the current snapshot from the Jarvis backend. Does not trigger a new Alertmanager poll — new data only ' +
     `appears once the backend's own poll${interval ? ` (every ${interval})` : ''} runs (already pushed to you live via WebSocket).`
+  )
+}
+
+function InfoColophon({ version }: { version: string | null }) {
+  return (
+    <div className="p-4">
+      <a
+        href="https://github.com/kj187/jarvis"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="group flex flex-col items-center gap-2 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <img
+          src="/logo.png"
+          alt="Jarvis"
+          width={80}
+          height={80}
+          className="h-20 w-20 select-none opacity-80 transition-opacity group-hover:opacity-100"
+          draggable={false}
+        />
+        <span className="text-sm font-semibold tracking-tight text-foreground/90">Jarvis</span>
+      </a>
+      <div className="mt-3 space-y-0.5 text-center text-[11px] leading-relaxed text-muted-foreground/70">
+        <p className="font-mono">{version ?? 'dev'} · Apache-2.0</p>
+        <p>© 2026 Julian Kleinhans</p>
+      </div>
+    </div>
   )
 }
 
@@ -93,10 +121,44 @@ export function Header() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [loginModalOpen, setLoginModalOpen] = useState(false)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
+  const [infoOpen, setInfoOpen] = useState(false)
   const [adminOpen, setAdminOpen] = useState(false)
   const { user, isAuthenticated, logout, providerInfo } = useAuthStore()
   const theme = useSettingsStore((s) => s.theme)
   const updateSettings = useSettingsStore((s) => s.update)
+  const version = useVersion()
+
+  // Desktop-only: user-menu and info popovers open on hover (like the cluster
+  // status popover above), with a short close delay so crossing the gap to the
+  // panel doesn't flicker-close it. Mobile has no hover, so its own panels
+  // below stay purely click-toggled.
+  const userMenuCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  function openUserMenu() {
+    if (userMenuCloseTimer.current) clearTimeout(userMenuCloseTimer.current)
+    setUserMenuOpen(true)
+  }
+  function closeUserMenu() {
+    userMenuCloseTimer.current = setTimeout(() => setUserMenuOpen(false), 120)
+  }
+
+  const infoCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  function openInfoPopover() {
+    if (infoCloseTimer.current) clearTimeout(infoCloseTimer.current)
+    setInfoOpen(true)
+  }
+  function closeInfoPopover() {
+    infoCloseTimer.current = setTimeout(() => setInfoOpen(false), 120)
+  }
+
+  const [refreshTooltipOpen, setRefreshTooltipOpen] = useState(false)
+  const refreshTooltipCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  function openRefreshTooltip() {
+    if (refreshTooltipCloseTimer.current) clearTimeout(refreshTooltipCloseTimer.current)
+    setRefreshTooltipOpen(true)
+  }
+  function closeRefreshTooltip() {
+    refreshTooltipCloseTimer.current = setTimeout(() => setRefreshTooltipOpen(false), 120)
+  }
 
   const healthyCount = clusters.filter((c) => c.healthy).length
 
@@ -153,20 +215,19 @@ export function Header() {
         <div className="hidden md:flex items-center gap-1.5 self-stretch">
           {/* Cluster status */}
           <div
-            className="relative shrink-0"
+            className="relative shrink-0 self-stretch flex items-center"
             onMouseEnter={openClusterPopover}
             onMouseLeave={closeClusterPopover}
           >
             <div
-              className="flex items-center gap-1.5 px-2 py-1 text-xs cursor-default select-none"
+              className="flex items-center gap-1.5 px-2 py-1 text-xs cursor-pointer select-none"
               aria-label={`Instances ${healthyCount}/${clusters.length}`}
-              title={`Instances ${healthyCount}/${clusters.length}`}
             >
               <div className={`h-2 w-2 rounded-full ${healthyCount === clusters.length ? 'bg-green-500' : 'bg-red-500'}`} />
               <span className="text-muted-foreground tabular-nums">{healthyCount}/{clusters.length}</span>
             </div>
             {clusterHoverOpen && clusters.length > 0 && (
-              <div className="absolute right-0 top-full mt-1 z-50 min-w-[26rem] rounded-md border border-border bg-card shadow-lg" role="tooltip" onMouseEnter={openClusterPopover} onMouseLeave={closeClusterPopover}>
+              <div className="absolute right-0 top-full z-50 min-w-[26rem] rounded-b-md border border-t-0 border-border bg-header shadow-lg" role="tooltip" onMouseEnter={openClusterPopover} onMouseLeave={closeClusterPopover}>
                 <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-border">Connected Instances</div>
                 {clusters.map((c) => (
                   <div
@@ -248,50 +309,81 @@ export function Header() {
             {wsConnected ? <Wifi className="h-4 w-4 text-green-500" /> : <WifiOff className="h-4 w-4 text-red-500" />}
           </div>
 
-          <Tooltip content={refreshTooltipText} side="bottom">
+          {/* Refresh — custom docked popover (not the generic Tooltip) so it matches
+              the flush, header-colored look of the other header popovers. */}
+          <div className="relative shrink-0 self-stretch flex items-center" onMouseEnter={openRefreshTooltip} onMouseLeave={closeRefreshTooltip}>
             <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={handleRefresh} aria-label="Refresh now" disabled={refreshing}>
               <RefreshCw className={`h-4 w-4 ${isSpinning ? 'animate-spin' : ''}`} />
             </Button>
-          </Tooltip>
+            {refreshTooltipOpen && (
+              <div className="absolute right-0 top-full z-50 w-72 rounded-b-md border border-t-0 border-border bg-header px-3 py-2 text-xs leading-snug text-muted-foreground shadow-lg" onMouseEnter={openRefreshTooltip} onMouseLeave={closeRefreshTooltip}>
+                {refreshTooltipText}
+              </div>
+            )}
+          </div>
           <div className="w-px h-5 bg-border shrink-0 mx-0.5" />
-          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => updateSettings({ theme: theme === 'dark' ? 'light' : 'dark' })} title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'} aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
-            {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-          </Button>
-          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => setSettingsOpen(true)} title="Settings" aria-label="Open settings">
-            <Settings className="h-4 w-4" />
-          </Button>
 
-          {/* Auth — desktop */}
-          {isAuthenticated && user ? (
-            <div className="relative shrink-0">
-              <button
-                className="flex items-center justify-center h-8 w-8 rounded cursor-pointer text-foreground hover:bg-accent/60"
-                onClick={() => setUserMenuOpen((v) => !v)}
-                aria-label="User menu"
-                data-testid="user-menu"
-                title={user.username}
-              >
-                <Avatar name={user.username} className="h-6 w-6" />
-              </button>
-              {userMenuOpen && (
-                <div className="absolute right-0 top-full mt-1 z-50 min-w-40 rounded-md border border-border bg-card shadow-lg" onMouseLeave={() => setUserMenuOpen(false)}>
+          {/* Info — Jarvis logo, version, copyright. Opens on hover, like cluster status above. */}
+          <div className="relative shrink-0 self-stretch flex items-center" onMouseEnter={openInfoPopover} onMouseLeave={closeInfoPopover}>
+            <button
+              className="flex items-center justify-center h-8 w-8 rounded cursor-pointer text-foreground hover:bg-accent/60"
+              onClick={openInfoPopover}
+              aria-label="About Jarvis"
+              data-testid="info-menu"
+            >
+              <Info className="h-4 w-4" />
+            </button>
+            {infoOpen && (
+              <div className="absolute right-0 top-full z-50 w-56 rounded-b-md border border-t-0 border-border bg-header shadow-lg" onMouseEnter={openInfoPopover} onMouseLeave={closeInfoPopover}>
+                <InfoColophon version={version} />
+              </div>
+            )}
+          </div>
+
+          {/* User menu — always present (Grafana-style): avatar when authenticated,
+              generic icon otherwise. Settings + theme live here regardless of auth
+              state; Login/Logout are added on top depending on it. Opens on hover. */}
+          <div className="relative shrink-0 self-stretch flex items-center" onMouseEnter={openUserMenu} onMouseLeave={closeUserMenu}>
+            <button
+              className="flex items-center justify-center h-8 w-8 rounded cursor-pointer text-foreground hover:bg-accent/60"
+              onClick={openUserMenu}
+              aria-label="User menu"
+              data-testid="user-menu"
+            >
+              {isAuthenticated && user ? <Avatar name={user.username} className="h-6 w-6" /> : <CircleUserRound className="h-5 w-5" />}
+            </button>
+            {userMenuOpen && (
+              <div className="absolute right-0 top-full z-50 min-w-40 rounded-b-md border border-t-0 border-border bg-header shadow-lg" onMouseEnter={openUserMenu} onMouseLeave={closeUserMenu}>
+                {isAuthenticated && user && (
                   <div className="px-3 py-2 text-xs font-medium text-foreground border-b border-border">{user.username}</div>
-                  {user.role === 'admin' && (
-                    <button className="w-full flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-accent/60 cursor-pointer border-b border-border" onClick={() => { setUserMenuOpen(false); setAdminOpen(true) }}>
-                      <Shield className="h-3.5 w-3.5" />Admin
-                    </button>
-                  )}
-                  <button className="w-full flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-accent/60 cursor-pointer" onClick={() => { setUserMenuOpen(false); logout() }}>
+                )}
+                {isAuthenticated && user && user.role === 'admin' && (
+                  <button className="w-full flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-accent/60 cursor-pointer border-b border-border" onClick={() => { setUserMenuOpen(false); setAdminOpen(true) }}>
+                    <Shield className="h-3.5 w-3.5" />Admin
+                  </button>
+                )}
+                <button className="w-full flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-accent/60 cursor-pointer" onClick={() => { setUserMenuOpen(false); setSettingsOpen(true) }}>
+                  <Settings className="h-3.5 w-3.5" />Settings
+                </button>
+                <button
+                  className="w-full flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-accent/60 cursor-pointer"
+                  onClick={() => updateSettings({ theme: theme === 'dark' ? 'light' : 'dark' })}
+                >
+                  {theme === 'dark' ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+                  {theme === 'dark' ? 'Light mode' : 'Dark mode'}
+                </button>
+                {isAuthenticated && user ? (
+                  <button className="w-full flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-accent/60 cursor-pointer border-t border-border" onClick={() => { setUserMenuOpen(false); logout() }}>
                     <LogOut className="h-3.5 w-3.5" />Logout
                   </button>
-                </div>
-              )}
-            </div>
-          ) : providerInfo !== null && providerInfo.mode !== 'none' ? (
-            <Button variant="ghost" size="icon" data-testid="login-button" className="h-8 w-8 shrink-0" onClick={() => setLoginModalOpen(true)} title="Login" aria-label="Login">
-              <LogIn className="h-4 w-4" />
-            </Button>
-          ) : null}
+                ) : providerInfo !== null && providerInfo.mode !== 'none' ? (
+                  <button data-testid="login-button" className="w-full flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-accent/60 cursor-pointer border-t border-border" onClick={() => { setUserMenuOpen(false); setLoginModalOpen(true) }}>
+                    <LogIn className="h-3.5 w-3.5" />Login
+                  </button>
+                ) : null}
+              </div>
+            )}
+          </div>
 
           <Button size="sm" onClick={() => setSilenceFormOpen(true)} className="h-7 text-xs shrink-0">
             <Plus className="mr-1 h-3.5 w-3.5" />
@@ -315,7 +407,7 @@ export function Header() {
         <div className="md:hidden border-t border-border px-3 py-3 space-y-3">
           <div className="flex items-center gap-1 flex-wrap">
             <div className="flex-1" />
-            <div className="flex items-center gap-1.5 px-2 text-xs cursor-default select-none" title={`Instances ${healthyCount}/${clusters.length}`}>
+            <div className="flex items-center gap-1.5 px-2 text-xs cursor-pointer select-none" aria-label={`Instances ${healthyCount}/${clusters.length}`}>
               <div className={`h-2 w-2 rounded-full ${healthyCount === clusters.length ? 'bg-green-500' : 'bg-red-500'}`} />
               <span className="text-muted-foreground tabular-nums">{healthyCount}/{clusters.length}</span>
             </div>
@@ -324,38 +416,64 @@ export function Header() {
                 <RefreshCw className={`h-4 w-4 ${isSpinning ? 'animate-spin' : ''}`} />
               </Button>
             </Tooltip>
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => updateSettings({ theme: theme === 'dark' ? 'light' : 'dark' })} title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
-              {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-            </Button>
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setSettingsOpen(true); setMenuOpen(false) }} title="Settings">
-              <Settings className="h-4 w-4" />
-            </Button>
             <Button size="sm" onClick={() => { setSilenceFormOpen(true); setMenuOpen(false) }} className="h-7 text-xs">
               <Plus className="mr-1 h-3.5 w-3.5" />Create silence
             </Button>
-            {isAuthenticated && user ? (
-              <button className="flex items-center justify-center h-8 w-8 rounded cursor-pointer text-foreground hover:bg-accent/60" onClick={() => setUserMenuOpen((v) => !v)} aria-label="User menu" title={user.username}>
-                <Avatar name={user.username} className="h-6 w-6" />
-              </button>
-            ) : providerInfo !== null && providerInfo.mode !== 'none' ? (
-              <button className="flex items-center justify-center h-8 w-8 rounded cursor-pointer text-muted-foreground hover:text-foreground hover:bg-accent/60" onClick={() => { setLoginModalOpen(true); setMenuOpen(false) }} title="Login" aria-label="Login">
-                <LogIn className="h-4 w-4" />
-              </button>
-            ) : null}
+            <button
+              className="flex items-center justify-center h-8 w-8 rounded cursor-pointer text-foreground hover:bg-accent/60"
+              onClick={() => setInfoOpen((v) => !v)}
+              aria-label="About Jarvis"
+              data-testid="info-menu"
+            >
+              <Info className="h-4 w-4" />
+            </button>
+            <button
+              className="flex items-center justify-center h-8 w-8 rounded cursor-pointer text-foreground hover:bg-accent/60"
+              onClick={() => setUserMenuOpen((v) => !v)}
+              aria-label="User menu"
+              data-testid="user-menu"
+            >
+              {isAuthenticated && user ? <Avatar name={user.username} className="h-6 w-6" /> : <CircleUserRound className="h-5 w-5" />}
+            </button>
           </div>
 
-          {/* User menu expanded (mobile) */}
-          {isAuthenticated && user && userMenuOpen && (
+          {/* Info expanded (mobile) */}
+          {infoOpen && (
             <div className="border border-border rounded-md bg-card">
-              <div className="px-3 py-2 text-xs font-medium text-foreground border-b border-border">{user.username}</div>
-              {user.role === 'admin' && (
+              <InfoColophon version={version} />
+            </div>
+          )}
+
+          {/* User menu expanded (mobile) */}
+          {userMenuOpen && (
+            <div className="border border-border rounded-md bg-card">
+              {isAuthenticated && user && (
+                <div className="px-3 py-2 text-xs font-medium text-foreground border-b border-border">{user.username}</div>
+              )}
+              {isAuthenticated && user && user.role === 'admin' && (
                 <button className="w-full flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-accent/60 cursor-pointer border-b border-border" onClick={() => { setUserMenuOpen(false); setAdminOpen(true); setMenuOpen(false) }}>
                   <Shield className="h-3.5 w-3.5" />Admin
                 </button>
               )}
-              <button className="w-full flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-accent/60 cursor-pointer" onClick={() => { setUserMenuOpen(false); logout(); setMenuOpen(false) }}>
-                <LogOut className="h-3.5 w-3.5" />Logout
+              <button className="w-full flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-accent/60 cursor-pointer" onClick={() => { setUserMenuOpen(false); setSettingsOpen(true); setMenuOpen(false) }}>
+                <Settings className="h-3.5 w-3.5" />Settings
               </button>
+              <button
+                className="w-full flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-accent/60 cursor-pointer"
+                onClick={() => updateSettings({ theme: theme === 'dark' ? 'light' : 'dark' })}
+              >
+                {theme === 'dark' ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+                {theme === 'dark' ? 'Light mode' : 'Dark mode'}
+              </button>
+              {isAuthenticated && user ? (
+                <button className="w-full flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-accent/60 cursor-pointer border-t border-border" onClick={() => { setUserMenuOpen(false); logout(); setMenuOpen(false) }}>
+                  <LogOut className="h-3.5 w-3.5" />Logout
+                </button>
+              ) : providerInfo !== null && providerInfo.mode !== 'none' ? (
+                <button data-testid="login-button" className="w-full flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-accent/60 cursor-pointer border-t border-border" onClick={() => { setUserMenuOpen(false); setLoginModalOpen(true); setMenuOpen(false) }}>
+                  <LogIn className="h-3.5 w-3.5" />Login
+                </button>
+              ) : null}
             </div>
           )}
         </div>
