@@ -13,7 +13,6 @@ import {
 } from '@/store/useSettingsStore'
 import type { DefaultFilter } from '@/store/useSettingsStore'
 import type { LabelMatcherOperator } from '@/types'
-import { useVersion } from '@/hooks/useVersion'
 import { useAlerts } from '@/hooks/useAlerts'
 import { getFilterableLabels } from '@/lib/alertUtils'
 
@@ -199,7 +198,6 @@ export function SettingsSheet({ open, onClose }: SettingsSheetProps) {
   const settings = useSettingsStore()
   const update = useSettingsStore((s) => s.update)
   const reset = useSettingsStore((s) => s.reset)
-  const version = useVersion()
 
   const { data: allAlerts = [] } = useAlerts()
   const labelValueMap = useMemo(() => {
@@ -265,8 +263,7 @@ export function SettingsSheet({ open, onClose }: SettingsSheetProps) {
 
   return (
     <Sheet open={open} onClose={onClose} className="sm:max-w-lg lg:max-w-lg" ariaLabel="Settings">
-      <div className="flex min-h-full flex-col p-5 pt-10">
-        <div className="space-y-6">
+      <div className="p-5 pt-10 space-y-6">
         <h2 className="text-base font-semibold">Settings</h2>
 
         {/* ── Display ── */}
@@ -462,31 +459,6 @@ export function SettingsSheet({ open, onClose }: SettingsSheetProps) {
           <RotateCcw className="h-3 w-3" />
           {confirmReset ? 'Click again to confirm reset' : 'Reset to defaults'}
         </Button>
-        </div>
-
-        {/* ── Colophon ── */}
-        <footer className="mt-auto flex flex-col items-center gap-3 border-t border-border/60 pt-8 text-center">
-          <a
-            href="https://github.com/kj187/jarvis"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="group flex flex-col items-center gap-2 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <img
-              src="/logo.png"
-              alt="Jarvis"
-              width={120}
-              height={120}
-              className="h-28 w-28 select-none opacity-80 transition-opacity group-hover:opacity-100"
-              draggable={false}
-            />
-            <span className="text-sm font-semibold tracking-tight text-foreground/90">Jarvis</span>
-          </a>
-          <div className="space-y-0.5 text-[11px] leading-relaxed text-muted-foreground/70">
-            <p className="font-mono">{version ?? 'dev'} · Apache-2.0</p>
-            <p>© 2026 Julian Kleinhans</p>
-          </div>
-        </footer>
       </div>
     </Sheet>
   )

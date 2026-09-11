@@ -29,9 +29,10 @@ import { useUIStore } from '@/store/uiStore'
 import { Button } from '@/components/ui/button'
 import { Tooltip } from '@/components/ui/tooltip'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { makeAlertSelectionKeyForAlert } from '@/lib/alertSelection'
 import type { EnrichedAlert, LabelMatcher, Silence, SilenceMatcher } from '@/types'
-import { renderTextWithLinks, extractLinkButtons } from '@/lib/linkUtils'
+import { renderTextWithLinks, extractLinkButtons, type LinkButton } from '@/lib/linkUtils'
 import { pickIdentifierLabel, tzAbbr, silenceMatchesAlert } from '@/lib/alertUtils'
 
 const ALERT_EVENT_LABEL: Record<string, string> = {
@@ -227,11 +228,9 @@ export function AlertDetailPanel({
   const [showEditNoteForm, setShowEditNoteForm] = useState(false)
   const [editNote, setEditNote] = useState('')
   const [manualClaimName, setManualClaimName] = useState(() => localStorage.getItem(USERNAME_KEY) ?? '')
-  const [claimNote, setClaimNote] = useState('')
-  const { user, providerInfo } = useAuthStore()
+  const { user } = useAuthStore()
   const { guard, loginModalOpen, onLoginSuccess, onLoginClose } = useLoginGuard()
   const theme = useSettingsStore((s) => s.theme)
-  const authMode = providerInfo?.mode ?? 'none'
   const claimName = user?.username ?? manualClaimName
   const [promptCopied, setPromptCopied] = useState(false)
   const [expiredSilenceCollapsed, setExpiredSilenceCollapsed] = useState(true)
@@ -336,7 +335,27 @@ export function AlertDetailPanel({
 
   const alertname = alert.labels['alertname'] ?? 'Unknown'
   const severity = alert.labels['severity'] ?? 'none'
-  const linkButtons = extractLinkButtons(alert.labels, alert.annotations, runbookBaseUrl)
+  const alertmanagerLinkButton: LinkButton | null = alert.alertmanagerUrl
+    ? {
+        label: 'Alertmanager',
+        url: (() => {
+          const filter = `{alertname="${alert.labels.alertname}"}`
+          const params = new URLSearchParams({
+            silenced: 'false',
+            inhibited: 'false',
+            muted: 'false',
+            active: 'true',
+            filter,
+          })
+          return `${alert.alertmanagerUrl}/#/alerts?${params.toString()}`
+        })(),
+        isRunbook: false,
+      }
+    : null
+  const linkButtons = [
+    ...extractLinkButtons(alert.labels, alert.annotations, runbookBaseUrl),
+    ...(alertmanagerLinkButton ? [alertmanagerLinkButton] : []),
+  ]
 
   const FIFTEEN_MIN = 15 * 60 * 1000
 
@@ -528,29 +547,8 @@ export function AlertDetailPanel({
           </div>
 
           {/* Action buttons */}
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            {alert.alertmanagerUrl && (
-              <a
-                href={(() => {
-                  const filter = `{alertname="${alert.labels.alertname}"}`
-                  const params = new URLSearchParams({
-                    silenced: 'false',
-                    inhibited: 'false',
-                    muted: 'false',
-                    active: 'true',
-                    filter,
-                  })
-                  return `${alert.alertmanagerUrl}/#/alerts?${params.toString()}`
-                })()}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1 rounded border border-border px-2 py-1 text-xs hover:bg-accent cursor-pointer"
-              >
-                <ExternalLink className="h-3 w-3" />
-                Go to Alertmanager
-              </a>
-            )}
-            <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
+          <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {activeClaim ? (
                 <div data-testid="detail-claim-badge" className={cn('flex h-8 min-w-0 max-w-[16rem] items-center gap-1.5 rounded-md border px-2', theme === 'light' ? 'border-blue-300 bg-blue-50' : 'border-blue-800 bg-blue-950/40')}>
                   <User className={cn('h-3 w-3 shrink-0', theme === 'light' ? 'text-blue-600' : 'text-blue-400')} />
@@ -561,17 +559,30 @@ export function AlertDetailPanel({
                     </Tooltip>
                   )}
                   {isOwner(activeClaim.claimedBy) && (
-                    <button
-                      data-testid="claim-edit-note-button"
-                      title="Edit note"
-                      className={cn('ml-1 shrink-0 cursor-pointer', theme === 'light' ? 'text-blue-500 hover:text-blue-700' : 'text-blue-400/70 hover:text-blue-300')}
-                      onClick={() => {
-                        setEditNote(activeClaim.note ?? '')
-                        setShowEditNoteForm((v) => !v)
-                      }}
-                    >
-                      <Pencil className="h-3 w-3" />
-                    </button>
+                    activeClaim.note ? (
+                      <button
+                        data-testid="claim-edit-note-button"
+                        title="Edit note"
+                        className={cn('ml-1 shrink-0 cursor-pointer', theme === 'light' ? 'text-blue-500 hover:text-blue-700' : 'text-blue-400/70 hover:text-blue-300')}
+                        onClick={() => {
+                          setEditNote(activeClaim.note ?? '')
+                          setShowEditNoteForm((v) => !v)
+                        }}
+                      >
+                        <Pencil className="h-3 w-3" />
+                      </button>
+                    ) : (
+                      <button
+                        data-testid="claim-edit-note-button"
+                        className={cn('ml-1 shrink-0 cursor-pointer whitespace-nowrap text-[10px] font-medium underline decoration-dotted underline-offset-2', theme === 'light' ? 'text-blue-500 hover:text-blue-700' : 'text-blue-400/70 hover:text-blue-300')}
+                        onClick={() => {
+                          setEditNote('')
+                          setShowEditNoteForm((v) => !v)
+                        }}
+                      >
+                        + Note
+                      </button>
+                    )
                   )}
                   <button
                     data-testid="claim-release-button"
@@ -586,9 +597,23 @@ export function AlertDetailPanel({
                 <div className="relative p-[2px] overflow-hidden rounded-md">
                   <div className="claim-snake-spinner absolute inset-[-150%]" />
                   <Button
+                    data-testid="claim-button"
                     variant="outline"
                     size="sm"
-                    onClick={() => guard(() => setShowClaimForm((v) => !v))}
+                    onClick={() => guard(() => {
+                      // One click for the common case: claim immediately with
+                      // whatever name we already have (logged-in user, or a
+                      // name remembered from a previous claim in auth mode
+                      // "none"). Only fall back to the name prompt when we
+                      // truly don't know who's claiming yet. A note can still
+                      // be added right after via the pencil icon on the badge.
+                      if (claimName.trim()) {
+                        submitClaim({ claimedBy: claimName })
+                      } else {
+                        setShowClaimForm(true)
+                      }
+                    })}
+                    disabled={setClaimMutation.isPending}
                     className="relative z-10 bg-card border-transparent hover:bg-accent hover:border-transparent"
                   >
                     <User className="h-3.5 w-3.5" />
@@ -597,6 +622,7 @@ export function AlertDetailPanel({
                 </div>
               )}
               <Button
+                variant="outline"
                 size="sm"
                 onClick={() => setShowNewSilenceForm(true)}
               >
@@ -616,12 +642,12 @@ export function AlertDetailPanel({
                 guard(() => updateNote(editNote, { onSuccess: () => setShowEditNoteForm(false) }))
               }}
             >
-              <textarea
+              <Textarea
                 value={editNote}
                 onChange={(e) => setEditNote(e.target.value)}
                 placeholder="Note"
                 rows={5}
-                className="w-full resize-none rounded-md border border-input bg-transparent px-3 py-2 text-xs shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                className="resize-none text-xs"
               />
               <div className="flex gap-2">
                 <Button type="submit" size="sm" className="h-7 text-xs" disabled={updateNoteMutation.isPending}>
@@ -634,50 +660,38 @@ export function AlertDetailPanel({
             </form>
           )}
 
+          {/* Only reached when we don't know who's claiming yet (auth mode
+              "none", no name remembered from a previous claim). Once
+              submitted, the name is remembered — every claim after this one
+              is a single click. */}
           {showClaimForm && !activeClaim && alert.status.state !== 'resolved' && (
             <form
-              className="mt-3 space-y-2"
+              data-testid="claim-name-form"
+              className="mt-3 flex items-center gap-2"
               onSubmit={(e) => {
                 e.preventDefault()
                 guard(() => {
-                  const currentUser = useAuthStore.getState().user
-                  const nameToUse = currentUser?.username ?? manualClaimName
                   submitClaim(
-                    { claimedBy: nameToUse, note: claimNote },
-                    { onSuccess: () => { setShowClaimForm(false); setClaimNote('') } },
+                    { claimedBy: manualClaimName },
+                    { onSuccess: () => setShowClaimForm(false) },
                   )
                 })
               }}
             >
-              {authMode !== 'none' ? (
-                <div className="flex items-center gap-1.5 h-7 px-2 rounded border border-border bg-muted text-xs text-muted-foreground w-48">
-                  <User className="h-3 w-3 shrink-0" />
-                  <span>{user?.username ?? '…'}</span>
-                </div>
-              ) : (
-                <Input
-                  value={manualClaimName}
-                  onChange={(e) => setManualClaimName(e.target.value)}
-                  placeholder="Your name"
-                  className="h-7 w-48 text-xs"
-                  required
-                />
-              )}
-              <textarea
-                value={claimNote}
-                onChange={(e) => setClaimNote(e.target.value)}
-                placeholder="Note (optional)"
-                rows={5}
-                className="w-full resize-none rounded-md border border-input bg-transparent px-3 py-2 text-xs shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              <Input
+                value={manualClaimName}
+                onChange={(e) => setManualClaimName(e.target.value)}
+                placeholder="Your name"
+                className="h-7 w-48 text-xs"
+                required
+                autoFocus
               />
-              <div className="flex gap-2">
-                <Button type="submit" size="sm" className="h-7 text-xs" disabled={!claimName.trim() || setClaimMutation.isPending}>
-                  Confirm
-                </Button>
-                <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setShowClaimForm(false)}>
-                  Cancel
-                </Button>
-              </div>
+              <Button type="submit" size="sm" className="h-7 text-xs" disabled={!manualClaimName.trim() || setClaimMutation.isPending}>
+                Claim
+              </Button>
+              <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setShowClaimForm(false)}>
+                Cancel
+              </Button>
             </form>
           )}
         </div>

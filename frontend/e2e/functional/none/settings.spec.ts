@@ -4,13 +4,14 @@ import { manyAlerts } from '../../fixtures/alerts'
 import type { Page } from '@playwright/test'
 
 async function openSettings(page: Page) {
-  await page.getByRole('button', { name: 'Open settings' }).click()
+  await page.getByTestId('user-menu').click()
+  await page.getByRole('button', { name: 'Settings' }).click()
   const dialog = page.getByRole('dialog', { name: 'Settings' })
   await expect(dialog).toBeVisible()
   return dialog
 }
 
-test('H1 settings panel opens via gear icon and shows Settings heading', async ({ page }) => {
+test('H1 settings panel opens via user menu and shows Settings heading', async ({ page }) => {
   await dismissNoAuthNotice(page)
   await page.goto('/')
 
@@ -19,20 +20,6 @@ test('H1 settings panel opens via gear icon and shows Settings heading', async (
   await expect(dialog.getByRole('heading', { name: 'Settings' })).toBeVisible()
   await expect(dialog.getByText('Display')).toBeVisible()
   await expect(dialog.getByText('Silences')).toBeVisible()
-})
-
-test('H1b settings footer shows the Jarvis logo and version', async ({ page }) => {
-  await dismissNoAuthNotice(page)
-  await page.route('**/api/v1/info', (route) =>
-    route.fulfill({ json: { version: 'v9.9.9' } }),
-  )
-  await page.goto('/')
-
-  const dialog = await openSettings(page)
-  const logo = dialog.getByRole('img', { name: 'Jarvis' })
-  await logo.scrollIntoViewIfNeeded()
-  await expect(logo).toBeVisible()
-  await expect(dialog.getByText('v9.9.9')).toBeVisible()
 })
 
 test('H2 timeFormat toggle switches between Relative and Absolute', async ({ page }) => {
@@ -264,7 +251,7 @@ test('H11 settings persist over reload (without addInitScript override)', async 
   // Then navigate and change setting
   await page.goto('/')
   // Wait for app to load
-  await expect(page.getByRole('button', { name: 'Open settings' })).toBeVisible({ timeout: 10_000 })
+  await expect(page.getByTestId('user-menu')).toBeVisible({ timeout: 10_000 })
 
   const dialog = await openSettings(page)
 
@@ -282,7 +269,7 @@ test('H11 settings persist over reload (without addInitScript override)', async 
 
   // Navigate to a different URL and back (not reload, to avoid addInitScript re-run)
   await page.goto('/?state=active')
-  await expect(page.getByRole('button', { name: 'Open settings' })).toBeVisible({ timeout: 10_000 })
+  await expect(page.getByTestId('user-menu')).toBeVisible({ timeout: 10_000 })
 
   // Setting should still be absolute (persisted in localStorage by Zustand)
   const storedAfter = await page.evaluate(() => {

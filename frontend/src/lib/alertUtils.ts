@@ -11,11 +11,15 @@ export const tzAbbr = new Date().toLocaleTimeString('en', { timeZoneName: 'short
 /** Label keys rendered by dedicated UI elements instead of generic label chips. */
 export const HIDDEN_LABEL_KEYS = new Set(['alertname', 'severity', 'receiver', '@receiver', '@claimed-by'])
 
-/** Deterministic per-key chip colors (djb2 hash → hue). */
+/**
+ * Deterministic per-key chip colors (djb2 hash → hue).
+ * The hue is confined to 40–329° so it can never land on a pure red — a red
+ * chip on an alert reads as an error/critical state rather than as a label.
+ */
 export function labelColorStyle(key: string, theme: 'dark' | 'light' = 'dark'): React.CSSProperties {
   let h = 5381
   for (let i = 0; i < key.length; i++) h = ((h << 5) + h + key.charCodeAt(i)) >>> 0
-  const hue = h % 360
+  const hue = (h % 290) + 40
   if (theme === 'light') {
     return {
       backgroundColor: `hsl(${hue} 50% 90%)`,
@@ -28,6 +32,16 @@ export function labelColorStyle(key: string, theme: 'dark' | 'light' = 'dark'): 
     color: `hsl(${hue} 70% 72%)`,
     borderColor: `hsl(${hue} 35% 30%)`,
   }
+}
+
+/**
+ * Display form of a claim's `claimedBy`: the local part when it's an email
+ * (OIDC identities are usually addresses), the string as-is otherwise
+ * (name/anonymous auth modes). Keep the full value in a `title`.
+ */
+export function shortClaimant(claimedBy: string): string {
+  const at = claimedBy.indexOf('@')
+  return at > 0 ? claimedBy.slice(0, at) : claimedBy
 }
 
 /**

@@ -49,6 +49,9 @@ export function AlertHeatmap({ fingerprint, cluster, enabled }: AlertHeatmapProp
   const { data, isLoading, isError } = useAlertHeatmap(fingerprint, cluster, range, enabled)
 
   const cells = data ? bucketFiringStarts(data.firingStarts, range) : []
+  // A wall of identical empty cells reads as "something's broken", not "no
+  // activity" — swap it for a plain caption instead of rendering the grid.
+  const hasActivity = cells.some((c) => c.count > 0)
 
   return (
     <div className="space-y-2">
@@ -82,7 +85,13 @@ export function AlertHeatmap({ fingerprint, cluster, enabled }: AlertHeatmapProp
 
       {isLoading && <p className="text-xs text-muted-foreground">Loading…</p>}
       {isError && <p className="text-xs text-destructive">Failed to load firing pattern.</p>}
-      {!isLoading && !isError && <HeatmapGrid cells={cells} range={range} />}
+      {!isLoading && !isError && (
+        hasActivity ? (
+          <HeatmapGrid cells={cells} range={range} />
+        ) : (
+          <p className="py-1 text-right text-[10px] text-muted-foreground/60">No activity in this window</p>
+        )
+      )}
     </div>
   )
 }

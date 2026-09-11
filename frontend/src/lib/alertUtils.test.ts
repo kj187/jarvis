@@ -29,6 +29,7 @@ import {
   silenceTiming,
   getExpiredSilence,
   labelColorStyle,
+  shortClaimant,
   unescapeRegex,
   isRoundTrippableTagList,
   findRelatedAlerts,
@@ -915,6 +916,35 @@ describe('labelColorStyle', () => {
 
   it('defaults to dark theme', () => {
     expect(labelColorStyle('instance')).toEqual(labelColorStyle('instance', 'dark'))
+  })
+
+  it('never produces a pure-red hue (red would read as an error state)', () => {
+    for (let i = 0; i < 2000; i++) {
+      const key = `label_${i}_${(i * 2654435761) >>> 0}`
+      const hueMatch = /hsl\((\d+) /.exec(String(labelColorStyle(key, 'dark').color))
+      expect(hueMatch).not.toBeNull()
+      const hue = Number(hueMatch![1])
+      expect(hue).toBeGreaterThanOrEqual(40)
+      expect(hue).toBeLessThanOrEqual(329)
+    }
+  })
+})
+
+describe('shortClaimant', () => {
+  it('strips the domain from an email identity', () => {
+    expect(shortClaimant('julian.kleinhans@aoe.com')).toBe('julian.kleinhans')
+  })
+
+  it('leaves a plain name untouched', () => {
+    expect(shortClaimant('Julian K')).toBe('Julian K')
+  })
+
+  it('leaves a leading-@ string untouched', () => {
+    expect(shortClaimant('@oncall')).toBe('@oncall')
+  })
+
+  it('is idempotent', () => {
+    expect(shortClaimant(shortClaimant('a@b.com'))).toBe('a')
   })
 })
 
