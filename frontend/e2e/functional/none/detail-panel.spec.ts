@@ -354,6 +354,62 @@ test.describe('D6: Set claim', () => {
   })
 })
 
+test.describe('D6b: Claim via UI — one-click flow', () => {
+  test('first claim (no remembered name) shows a name-only prompt, no note field', async ({ page, am, jarvis }) => {
+    await dismissNoAuthNotice(page)
+    await page.addInitScript(() => localStorage.removeItem('jarvis-username'))
+    await am.fire(kubernetesAlerts)
+    await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, kubernetesAlerts.length)
+
+    const res = await fetch(`${JARVIS_BASE_URL}/api/v1/alerts`)
+    const alerts: any[] = await res.json()
+    const fingerprint = alerts[0].fingerprint
+
+    await page.goto(`/?state=active&alert=${fingerprint}`)
+    await page.waitForTimeout(500)
+
+    const claimButton = page.getByTestId('claim-button')
+    await expect(claimButton).toBeVisible()
+    await claimButton.click()
+
+    const nameForm = page.getByTestId('claim-name-form')
+    await expect(nameForm).toBeVisible()
+    await expect(page.getByPlaceholder('Note (optional)')).toHaveCount(0)
+
+    await nameForm.getByPlaceholder('Your name').fill('ui-claimer')
+    await nameForm.getByRole('button', { name: 'Claim' }).click()
+
+    const claimBadge = page.getByTestId('detail-claim-badge')
+    await expect(claimBadge).toBeVisible({ timeout: 8_000 })
+    await expect(claimBadge).toContainText('ui-claimer')
+  })
+
+  test('second claim reuses the remembered name — single click, no form', async ({ page, am, jarvis }) => {
+    await dismissNoAuthNotice(page)
+    await page.addInitScript(() => localStorage.setItem('jarvis-username', 'remembered-claimer'))
+    await am.fire(kubernetesAlerts)
+    await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, kubernetesAlerts.length)
+
+    const res = await fetch(`${JARVIS_BASE_URL}/api/v1/alerts`)
+    const alerts: any[] = await res.json()
+    const fingerprint = alerts[0].fingerprint
+
+    await page.goto(`/?state=active&alert=${fingerprint}`)
+    await page.waitForTimeout(500)
+
+    const claimButton = page.getByTestId('claim-button')
+    await expect(claimButton).toBeVisible()
+    await claimButton.click()
+
+    // One click: no name-prompt form appears at all.
+    await expect(page.getByTestId('claim-name-form')).toHaveCount(0)
+
+    const claimBadge = page.getByTestId('detail-claim-badge')
+    await expect(claimBadge).toBeVisible({ timeout: 8_000 })
+    await expect(claimBadge).toContainText('remembered-claimer')
+  })
+})
+
 test.describe('D7: Release claim', () => {
   test('release claim removes badge', async ({ page, am, jarvis }) => {
     await dismissNoAuthNotice(page)

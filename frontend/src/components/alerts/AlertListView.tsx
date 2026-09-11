@@ -46,7 +46,6 @@ interface AlertGroupData {
   earliestStart: Date
   clusterNames: string[]
   states: string[]
-  claimCount: number
   commonSummary?: string
 }
 
@@ -170,7 +169,6 @@ function buildGroupsByLabel(alerts: EnrichedAlert[], groupByLabel: string): Map<
           earliestStart: new Date(Math.min(...groupAlerts.map((a) => new Date(a.startsAt).getTime()))),
           clusterNames: [...new Set(groupAlerts.map((a) => a.clusterName))],
           states: [...new Set(groupAlerts.map((a) => a.status.state))],
-          claimCount: groupAlerts.filter((a) => a.activeClaim).length,
           commonSummary,
         }
       }),
@@ -528,7 +526,6 @@ export function AlertListView({
                   showStateColumn={false}
                   showSeverityColumn={false}
                   showActionsColumn={false}
-                  showClaimColumn={false}
                   noOpacity={true}
                   includeSeverityLabelChip={true}
                 />
@@ -590,9 +587,6 @@ export function AlertListView({
               )}
               <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Actions
-              </th>
-              <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Claim
               </th>
             </tr>
           </thead>
@@ -674,9 +668,6 @@ export function AlertListView({
             <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Actions
             </th>
-            <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Claim
-            </th>
           </tr>
         </thead>
         <tbody>
@@ -694,7 +685,7 @@ export function AlertListView({
               <Fragment key={groupValue}>
                 {draggedSection && (
                   <tr aria-hidden="true">
-                    <td colSpan={showStateColumn ? 4 : 3} className="h-2 p-0">
+                    <td colSpan={showStateColumn ? 3 : 2} className="h-2 p-0">
                       {dragOverIndex === sectionIdx && (
                         <div className="h-0 border-t-2 border-dashed border-primary/80" />
                       )}
@@ -702,7 +693,7 @@ export function AlertListView({
                   </tr>
                 )}
                 <tr aria-hidden="true">
-                  <td colSpan={showStateColumn ? 4 : 3} className={cn('h-8 p-0', theme === 'light' ? 'bg-muted' : 'bg-background')} />
+                  <td colSpan={showStateColumn ? 3 : 2} className={cn('h-8 p-0', theme === 'light' ? 'bg-muted' : 'bg-background')} />
                 </tr>
                 <tr
                   ref={(el) => {
@@ -711,7 +702,7 @@ export function AlertListView({
                   className={draggedSection === groupValue ? 'opacity-50' : undefined}
                 >
                   <td
-                    colSpan={showStateColumn ? 4 : 3}
+                    colSpan={showStateColumn ? 3 : 2}
                     className={cn(
                       'border-l-4 px-4 py-2',
                       theme === 'light' ? cfg.lightRowClass : cn(cfg.darkRowClass, 'bg-muted/30'),
@@ -804,13 +795,14 @@ export function AlertListView({
                             {group.commonSummary && (
                               <span className="pl-6 text-xs text-muted-foreground">{renderTextWithLinks(group.commonSummary)}</span>
                             )}
+                            {/* Common labels shared by the whole group — a quiet
+                                muted strip (the alertname is already the heading) */}
                             <div className="flex flex-wrap gap-1 pl-6">
-                              <LabelChip labelKey="alertname" value={group.alertname} />
                               {group.clusterNames.map((c) => (
-                                <LabelChip key={c} labelKey="@cluster" value={c} />
+                                <LabelChip key={c} labelKey="@cluster" value={c} muted />
                               ))}
                               {Object.entries(group.commonLabels).map(([key, value]) => (
-                                <LabelChip key={key} labelKey={key} value={value} />
+                                <LabelChip key={key} labelKey={key} value={value} muted />
                               ))}
                             </div>
                           </div>
@@ -821,16 +813,16 @@ export function AlertListView({
                           </td>
                         )}
                         <td className="px-4 py-2.5" onClick={(e) => e.stopPropagation()}>
-                          <div className="flex flex-col gap-1">
+                          <div className="flex flex-col items-start gap-1">
                             {activeSilences.length > 0 && (
                               <button
                                 type="button"
                                 onClick={() => setExpireTargets(activeSilences.map(({ silence }) => silence))}
-                                title={activeSilences.length > 1 ? `Expire ${activeSilences.length} group silences` : 'Expire group silence'}
-                                className="cursor-pointer flex w-fit items-center gap-1 rounded border border-border px-1.5 py-0.5 text-xs text-muted-foreground transition-colors hover:border-border/80 hover:text-foreground"
+                                title={activeSilences.length > 1 ? `Expire ${activeSilences.length} group silences` : 'Expire the group silence'}
+                                className="cursor-pointer flex w-fit items-center gap-1.5 rounded border border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:border-border/80 hover:text-foreground"
                               >
-                                <BellMinus className="h-3 w-3" />
-                                <span>group</span>
+                                <BellMinus className="h-3.5 w-3.5 shrink-0" />
+                                <span>Expire group silence</span>
                                 {activeSilences.length > 1 && (
                                   <span className="rounded-full bg-muted px-1 text-[10px] leading-tight">{activeSilences.length}</span>
                                 )}
@@ -840,16 +832,16 @@ export function AlertListView({
                               <button
                                 type="button"
                                 onClick={() => openSilenceForm(group.alerts, expiringSilences[0].silence, true)}
-                                title={expiringSilences.length > 1 ? `Extend ${expiringSilences.length} group silences` : 'Extend group silence'}
+                                title={expiringSilences.length > 1 ? `Extend ${expiringSilences.length} group silences` : 'Extend the group silence'}
                                 className={cn(
-                                  'cursor-pointer flex w-fit items-center gap-1 rounded border px-1.5 py-0.5 text-xs transition-colors',
+                                  'cursor-pointer flex w-fit items-center gap-1.5 rounded border px-2 py-1 text-xs transition-colors',
                                   theme === 'light'
                                     ? 'border-amber-400/70 text-amber-700 hover:border-amber-500'
                                     : 'border-yellow-700/60 text-yellow-400 hover:border-yellow-500',
                                 )}
                               >
-                                <RefreshCw className="h-3 w-3" />
-                                <span>group</span>
+                                <RefreshCw className="h-3.5 w-3.5 shrink-0" />
+                                <span>Extend group silence</span>
                                 {expiringSilences.length > 1 && (
                                   <span className={cn(
                                     'rounded-full px-1 text-[10px] leading-tight',
@@ -862,28 +854,25 @@ export function AlertListView({
                               <button
                                 type="button"
                                 onClick={() => openSilenceForm(group.alerts, expiredSilences[0], true)}
-                                title="Recreate group silence"
-                                className="cursor-pointer flex w-fit items-center gap-1 rounded border border-border/40 px-1.5 py-0.5 text-xs text-muted-foreground/50 transition-colors hover:border-border hover:text-foreground"
+                                title="Recreate the expired group silence"
+                                className="cursor-pointer flex w-fit items-center gap-1.5 rounded border border-border/50 px-2 py-1 text-xs text-muted-foreground/70 transition-colors hover:border-border hover:text-foreground"
                               >
-                                <RefreshCw className="h-3 w-3" />
-                                <span>group</span>
+                                <RefreshCw className="h-3.5 w-3.5 shrink-0" />
+                                <span>Recreate group silence</span>
                               </button>
                             )}
                             {!hasSilence && expiredSilences.length === 0 && (
                               <button
                                 type="button"
                                 onClick={() => openSilenceForm(group.alerts)}
-                                title="Silence entire group"
-                                className="cursor-pointer flex w-fit items-center gap-1 rounded border border-border/50 px-1.5 py-0.5 text-xs text-muted-foreground/60 transition-colors hover:border-border hover:text-foreground"
+                                title="Open a silence form pre-filled for every alert in this group"
+                                className="cursor-pointer flex w-fit items-center gap-1.5 rounded border border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:border-border/80 hover:text-foreground"
                               >
-                                <Bell className="h-3 w-3" />
-                                <span>group</span>
+                                <Bell className="h-3.5 w-3.5 shrink-0" />
+                                <span>Silence group</span>
                               </button>
                             )}
                           </div>
-                        </td>
-                        <td className="px-4 py-2.5 text-sm text-muted-foreground">
-                          {group.claimCount > 0 ? `${group.claimCount}/${group.alerts.length}` : '—'}
                         </td>
                       </tr>
                       {expanded &&
@@ -915,7 +904,7 @@ export function AlertListView({
           })}
           {draggedSection && (
             <tr aria-hidden="true">
-              <td colSpan={showStateColumn ? 4 : 3} className="h-2 p-0">
+              <td colSpan={showStateColumn ? 3 : 2} className="h-2 p-0">
                 {dragOverIndex === orderedGroupValues.length && (
                   <div className="h-0 border-t-2 border-dashed border-primary/80" />
                 )}

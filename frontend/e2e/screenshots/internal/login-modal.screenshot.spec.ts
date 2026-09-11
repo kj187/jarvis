@@ -15,6 +15,7 @@ test('login-modal', async ({ page, am, jarvis }) => {
   await fireWithHeatmapHistory(page, am, jarvis, JARVIS_BASE_URL, manyAlerts)
 
   await page.goto('/?state=active')
+  await page.getByTestId('user-menu').click()
   await page.getByTestId('login-button').click()
 
   const dialog = page.getByRole('dialog', { name: 'Login' })

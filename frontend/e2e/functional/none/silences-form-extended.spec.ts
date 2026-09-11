@@ -258,7 +258,7 @@ test('F15 preview step shows Start, End, Author, Reason, Cluster, Matcher', asyn
   await page.goto('/')
   // Wait for cluster health indicator — ensures /api/v1/clusters query resolved
   // so that availableClusters is populated when SilenceForm mounts (selectedClusters init)
-  await expect(page.locator('[title*="Instances"]').first()).toBeVisible({ timeout: 8_000 })
+  await expect(page.locator('[aria-label*="Instances"]').first()).toBeVisible({ timeout: 8_000 })
   const dialog = await openSilenceForm(page)
 
   // Fill matcher
@@ -484,7 +484,7 @@ test('F16 results step shows per-cluster submission info after silence submit', 
   await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, kubernetesAlerts.length)
 
   await page.goto('/')
-  await expect(page.locator('[title*="Instances"]').first()).toBeVisible({ timeout: 8_000 })
+  await expect(page.locator('[aria-label*="Instances"]').first()).toBeVisible({ timeout: 8_000 })
   const dialog = await openSilenceForm(page)
 
   await fillSilenceLabel(dialog, 'alertname')

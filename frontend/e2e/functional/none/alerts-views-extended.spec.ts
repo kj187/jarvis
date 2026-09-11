@@ -11,10 +11,12 @@ test('B7 responsive column binning: 2 columns at sm width', async ({ page, am, j
   await page.goto('/?state=active')
   await expect(page.getByTestId('alert-card').first()).toBeVisible()
 
-  // Grid renders sections with `.flex.gap-3` column containers.
-  // Count direct `.flex-1` children of the first column container.
-  const firstColumnRow = page.locator('.flex.gap-3').first()
-  await expect(firstColumnRow.locator('> .flex-1')).toHaveCount(2)
+  // Sections lay out cards via CSS multi-column (`columnCount` inline
+  // style) instead of `.flex-1` column divs. The first section (CRITICAL)
+  // has more groups than any breakpoint's column count, so its columnCount
+  // reflects the responsive breakpoint, not the per-section group-count cap.
+  const columns = page.getByTestId('card-grid-columns').first()
+  await expect(columns).toHaveCSS('column-count', '2')
 })
 
 test('B7 responsive column binning: 1 column at xs width', async ({ page, am, jarvis }) => {
@@ -26,8 +28,8 @@ test('B7 responsive column binning: 1 column at xs width', async ({ page, am, ja
   await page.goto('/?state=active')
   await expect(page.getByTestId('alert-card').first()).toBeVisible()
 
-  const firstColumnRow = page.locator('.flex.gap-3').first()
-  await expect(firstColumnRow.locator('> .flex-1')).toHaveCount(1)
+  const columns = page.getByTestId('card-grid-columns').first()
+  await expect(columns).toHaveCSS('column-count', '1')
 })
 
 test('B8 empty state icon shown when no alerts', async ({ page }) => {

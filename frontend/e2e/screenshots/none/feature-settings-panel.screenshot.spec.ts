@@ -16,7 +16,8 @@ test('feature-settings-panel', async ({ page, am, jarvis }) => {
   await page.goto('/?state=active')
   await expect(page.getByTestId('alert-card').first()).toBeVisible()
 
-  await page.getByRole('button', { name: 'Open settings' }).click()
+  await page.getByTestId('user-menu').click()
+  await page.getByRole('button', { name: 'Settings' }).click()
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
   await page.waitForTimeout(300)
 

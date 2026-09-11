@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { ArrowUpRight, BellOff, User } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { getFilterableLabels, getSilenceState, getExpiredSilence, formatSilenceDuration, tzAbbr } from '@/lib/alertUtils'
+import { getFilterableLabels, getSilenceState, getExpiredSilence, formatSilenceDuration, tzAbbr, shortClaimant } from '@/lib/alertUtils'
 import { renderTextWithLinks } from '@/lib/linkUtils'
 import { bucketFiringStarts } from '@/lib/heatmapUtils'
 import { AlertBadge } from './AlertBadge'
@@ -45,7 +45,7 @@ function FiringSparkline({
   if (!data) return null
   const cells = bucketFiringStarts(data.firingStarts, '30d').slice(-14)
   return (
-    <div className="mb-1.5">
+    <div className="mb-1">
       <HeatmapCellsRow cells={cells} range="30d" cellClassName="h-2 w-full rounded-sm" gapClassName="gap-0.5" />
     </div>
   )
@@ -72,6 +72,8 @@ function AlertEntry({
   commonLabelKeys,
   onCreateSilence,
   groupKeys,
+  index,
+  total,
 }: {
   alert: EnrichedAlert
   silences: Silence[]
@@ -80,6 +82,8 @@ function AlertEntry({
   commonLabelKeys: Set<string>
   onCreateSilence?: (alerts: EnrichedAlert[]) => void
   groupKeys: string[] | null
+  index: number
+  total: number
 }) {
   const { type: silenceType, silence, remaining } = getSilenceState(alert, silences)
   const expiredSilence = silenceType === null ? getExpiredSilence(alert, silences) : null
@@ -99,6 +103,9 @@ function AlertEntry({
     })
   const summary = alert.annotations['summary']
   const description = alert.annotations['description']
+  // Only dress up entries that share a card with siblings — a lone alert
+  // already has the card's own frame.
+  const multi = total > 1
 
   return (
     <div
@@ -109,40 +116,68 @@ function AlertEntry({
       onClick={() => onClick(makeAlertSelectionKeyForAlert(alert), groupKeys)}
       onKeyDown={(e) => e.key === 'Enter' && onClick(makeAlertSelectionKeyForAlert(alert), groupKeys)}
       className={cn(
-        'group relative flex cursor-pointer items-start gap-1 border-l-2 border-transparent px-3 py-2.5 transition-colors focus:outline-none focus-visible:outline-none',
-        claim
-          ? 'bg-muted/30 hover:bg-muted/50'
-          : 'hover:bg-accent/20',
+        'group relative flex cursor-pointer items-start gap-1 px-3 py-3.5 transition-colors focus:outline-none focus-visible:outline-none',
+        // Claimed entries carry a blue left accent — "someone's on it", scannable
+        // in a large group — not the old grey tint that read as "deprioritised".
+        claim ? 'border-l-2 border-blue-400/70 bg-blue-500/10 hover:bg-blue-500/[0.14]' : 'hover:bg-accent/20',
         isSelected && !claim && 'bg-blue-500/10 hover:bg-blue-500/15',
-        isSelected && claim && 'bg-muted/50 hover:bg-muted/70',
+        isSelected && claim && 'bg-blue-500/20 hover:bg-blue-500/25',
       )}
     >
       <div className="min-w-0 flex-1">
-        {/* Claim banner */}
+        {/* Claim info — above the identity line: "who's on it" outranks "which
+            alert is it". One quiet line by default; a padded box only when
+            there's a note worth the space */}
         {claim && (
-          <div className={cn(
-            'mb-2 flex items-start gap-2 rounded px-2 py-1.5 text-xs',
-            theme === 'light' ? 'bg-blue-50 border border-blue-200' : 'bg-blue-900/50',
-          )}>
-            <User className={cn('mt-0.5 h-3 w-3 shrink-0', theme === 'light' ? 'text-blue-600' : 'text-blue-300')} />
-            <div className="min-w-0 flex-1">
-              <div className={cn('font-semibold', theme === 'light' ? 'text-blue-800' : 'text-blue-200')}>
-                In progress: {claim.claimedBy}
-              </div>
-              <div className={theme === 'light' ? 'text-blue-600' : 'text-blue-400'}>
-                {formatTime(claim.claimedAt)}
-              </div>
-              {claim.note && (
+          claim.note ? (
+            <div className={cn(
+              'mb-2 flex items-start gap-2 rounded border-l-2 border-blue-400 px-2 py-1.5 text-xs',
+              theme === 'light' ? 'bg-blue-50 text-blue-800' : 'bg-blue-500/10 text-blue-200',
+            )}>
+              <User className="mt-0.5 h-3 w-3 shrink-0 text-blue-400" />
+              <div className="min-w-0 flex-1">
+                <div title={claim.claimedBy}>
+                  <span className="opacity-70">Claimed by: </span>
+                  <span className="font-medium">{shortClaimant(claim.claimedBy)}</span>
+                  <span className="opacity-70"> · {formatTime(claim.claimedAt)}</span>
+                </div>
                 <div className={cn('mt-0.5', theme === 'light' ? 'text-blue-700' : 'text-blue-300/80')}>
                   {claim.note}
                 </div>
-              )}
+              </div>
+            </div>
+          ) : (
+            <div
+              className={cn('mb-1.5 flex items-center gap-1.5 text-xs', theme === 'light' ? 'text-blue-700' : 'text-blue-300')}
+              title={claim.claimedBy}
+            >
+              <User className="h-3 w-3 shrink-0" />
+              <span className="min-w-0 truncate">
+                <span className="opacity-70">Claimed by: </span>
+                <span className="font-medium">{shortClaimant(claim.claimedBy)}</span>
+                <span className="opacity-70"> · {formatTime(claim.claimedAt)}</span>
+              </span>
+            </div>
+          )
+        )}
+
+        {/* Identity line — position within the group + distinguishing labels,
+            so each sibling alert reads as its own unit */}
+        {multi && (
+          <div className="mb-1 flex items-start gap-2">
+            <span className="mt-px shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-muted-foreground">
+              {index + 1}/{total}
+            </span>
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
+              {labels.map(([key, value], i) => (
+                <LabelChip key={key} labelKey={key} value={value} emphasized={i === 0} />
+              ))}
             </div>
           </div>
         )}
 
         {/* Timestamp + maintainer */}
-        <div className="mb-1 flex flex-col gap-0.5 text-xs text-muted-foreground">
+        <div className="mb-0.5 flex flex-col gap-0.5 text-xs text-muted-foreground">
           <div className="flex items-center gap-2">
             <span title={new Date(alert.startsAt).toLocaleString('en-US')}>
               {new Date(alert.startsAt) > new Date()
@@ -196,7 +231,7 @@ function AlertEntry({
           </div>
         )}
         {expiredSilence && (
-          <div className="mb-2 flex items-center gap-1.5 rounded border border-border bg-muted/50 px-2 py-1.5 text-xs text-muted-foreground">
+          <div className="mb-1 flex items-center gap-1 text-[11px] text-muted-foreground/60">
             <BellOff className="h-3 w-3 shrink-0" />
             <span title={new Date(expiredSilence.endsAt).toLocaleString('en-US')}>
               Silence expired {formatTime(expiredSilence.endsAt)}
@@ -204,24 +239,16 @@ function AlertEntry({
           </div>
         )}
 
-        {/* Labels */}
-        {labels.length > 0 && (
-          <div className="mb-1.5 flex flex-wrap gap-1">
-            {labels.map(([key, value]) => (
-              <LabelChip key={key} labelKey={key} value={value} />
-            ))}
-          </div>
-        )}
-
-        {/* Summary / Description */}
+        {/* Summary / Description — both kept (they can carry different text),
+            but clamped in the card; full text on hover and in the detail panel */}
         {summary && (
-          <p className="text-xs text-muted-foreground">
-            <span className="text-muted-foreground/50">summary:</span> {renderTextWithLinks(summary)}
+          <p className="line-clamp-1 text-xs text-muted-foreground" title={summary}>
+            {renderTextWithLinks(summary)}
           </p>
         )}
         {description && (
-          <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground/60">
-            <span className="text-muted-foreground/40">description:</span> {renderTextWithLinks(description)}
+          <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground/60" title={description}>
+            {renderTextWithLinks(description)}
           </p>
         )}
       </div>
@@ -328,11 +355,13 @@ export function AlertCard({
         </div>
       </div>
 
-      {/* Body — hidden when collapsed */}
+      {/* Common labels — shared by every alert in the group, so rendered as a
+          quiet context strip (neutral, no per-key hue) that doesn't compete
+          with each entry's own distinguishing labels */}
       {!collapsed && sortedCommonLabels.length > 0 && (
-        <div className="flex flex-wrap gap-1 px-3 py-1.5">
+        <div className="flex flex-wrap gap-1 border-b border-border/60 px-3 py-2">
           {sortedCommonLabels.map(([key, value]) => (
-            <LabelChip key={key} labelKey={key} value={value} />
+            <LabelChip key={key} labelKey={key} value={value} muted />
           ))}
         </div>
       )}
@@ -340,7 +369,7 @@ export function AlertCard({
       {/* Alert entries */}
       {!collapsed && (
         <div className="divide-y divide-border bg-muted/10">
-          {visible.map((alert) => (
+          {visible.map((alert, idx) => (
             <AlertEntry
               key={`${alert.clusterName}:${alert.fingerprint}:${alert.startsAt}`}
               alert={alert}
@@ -350,6 +379,8 @@ export function AlertCard({
               commonLabelKeys={commonLabelKeys}
               onCreateSilence={onCreateSilence}
               groupKeys={groupKeys}
+              index={idx}
+              total={count}
             />
           ))}
         </div>

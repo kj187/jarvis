@@ -42,66 +42,32 @@ const SEVERITY_DOT: Record<string, string> = {
   none: 'bg-slate-500',
 }
 
-const PAGE_SIZE = 3
+function computeAutoColumns(): number {
+  const w = window.innerWidth
+  if (w >= 1536) return 4
+  if (w >= 1280) return 3
+  if (w >= 640) return 2
+  return 1
+}
 
+// Settings' `cardColumns` overrides the responsive breakpoint on every
+// screen size when set to a fixed number; 'auto' (the default) keeps the
+// existing 1/2/3/4 behavior.
 function useColumns(): number {
-  const [cols, setCols] = useState(() => {
-    const w = window.innerWidth
-    if (w >= 1536) return 4
-    if (w >= 1280) return 3
-    if (w >= 640) return 2
-    return 1
-  })
+  const cardColumns = useSettingsStore((s) => s.cardColumns)
+  const [autoCols, setAutoCols] = useState(computeAutoColumns)
   useEffect(() => {
-    const update = () => {
-      const w = window.innerWidth
-      if (w >= 1536) setCols(4)
-      else if (w >= 1280) setCols(3)
-      else if (w >= 640) setCols(2)
-      else setCols(1)
-    }
+    const update = () => setAutoCols(computeAutoColumns())
     window.addEventListener('resize', update)
     return () => window.removeEventListener('resize', update)
   }, [])
-  return cols
+  return cardColumns === 'auto' ? autoCols : cardColumns
 }
 
-// Rough height estimate in pixels for bin-packing.
-// Avoids DOM measurement; good enough for balanced distribution.
-function estimateHeight(group: CardGroup, silences: Silence[]): number {
-  const visibleEntries = Math.min(group.alerts.length, PAGE_SIZE)
-  let h = 40 // card header
-  for (let i = 0; i < visibleEntries; i++) {
-    const alert = group.alerts[i]
-    h += 20 // timestamp row
-    // silence banner
-    const silenced = alert.status.silencedBy.some((id) =>
-      silences.find((s) => s.id === id && s.status.state !== 'expired'),
-    )
-    if (silenced) h += 48
-    const labelCount = Object.keys(alert.labels).length
-    h += Math.ceil(labelCount / 4) * 22 // label chips (wrap estimate)
-    if (alert.annotations['summary']) h += 18
-    if (alert.annotations['description']) h += 18
-    h += 8 // entry padding + gap
-  }
-  if (group.alerts.length > PAGE_SIZE) h += 44 // pagination bar
-  return h
-}
-
-// Greedy bin-packing that preserves incoming order.
-function distributeColumns(groups: CardGroup[], silences: Silence[], numCols: number): CardGroup[][] {
-  const cols: CardGroup[][] = Array.from({ length: numCols }, () => [])
-  const heights = Array(numCols).fill(0)
-  for (const group of groups) {
-    let minIdx = 0
-    for (let i = 1; i < numCols; i++) {
-      if (heights[i] < heights[minIdx]) minIdx = i
-    }
-    cols[minIdx].push(group)
-    heights[minIdx] += estimateHeight(group, silences)
-  }
-  return cols
+// Most recent `startsAt` across a group's alerts — used to sort groups within
+// a section by freshness instead of alphabetically (see the group sort below).
+function latestStartsAt(group: CardGroup): number {
+  return Math.max(...group.alerts.map((a) => new Date(a.startsAt).getTime()))
 }
 
 function loadStoredArray(key: string): string[] {
@@ -213,8 +179,10 @@ export function AlertCardGrid({
     if (flatAlerts.length === 0) {
       return <EmptyState />
     }
-    const cols: EnrichedAlert[][] = Array.from({ length: numCols }, () => [])
-    flatAlerts.forEach((alert, i) => cols[i % numCols].push(alert))
+    // Never more columns than alerts — same reasoning as the grouped view.
+    const flatCols = Math.max(1, Math.min(numCols, flatAlerts.length))
+    const cols: EnrichedAlert[][] = Array.from({ length: flatCols }, () => [])
+    flatAlerts.forEach((alert, i) => cols[i % flatCols].push(alert))
     return (
       <>
         <div className="flex gap-3">
@@ -265,7 +233,11 @@ export function AlertCardGrid({
     }
   }
 
-  // Sort groups by configured label, then alertname
+  // Sort groups by configured label, then by freshness (most recently fired
+  // group first) — alphabetical order put the oldest and newest problems
+  // next to each other for no reason; recency is what actually matters when
+  // scanning for what to triage first. Same convention the backend already
+  // uses for the flat alert list (AlertStore.Get(), startsAt desc).
   const groups = Array.from(groupMap.values()).sort((a, b) => {
     if (groupByLabel === 'severity') {
       const severityDiff = severityOrder(a.groupValue) - severityOrder(b.groupValue)
@@ -274,6 +246,8 @@ export function AlertCardGrid({
       const labelDiff = a.groupValue.localeCompare(b.groupValue)
       if (labelDiff !== 0) return labelDiff
     }
+    const recencyDiff = latestStartsAt(b) - latestStartsAt(a)
+    if (recencyDiff !== 0) return recencyDiff
     return a.alertname.localeCompare(b.alertname)
   })
 
@@ -396,7 +370,9 @@ export function AlertCardGrid({
       )}
       {orderedGroupValues.map((groupValue, sectionIdx) => {
         const sectionGroups = byGroupValue.get(groupValue) ?? []
-        const distributed = distributeColumns(sectionGroups, silences, numCols)
+        // Never more columns than groups — a lone CRITICAL card shouldn't be
+        // squeezed into 1/4 width with 3/4 of the row empty next to it.
+        const sectionCols = Math.max(1, Math.min(numCols, sectionGroups.length))
         const isCollapsed = collapsedSections.has(groupValue)
         const sectionAlertCount = sectionGroups.reduce((sum, g) => sum + g.alerts.length, 0)
         return (
@@ -441,20 +417,21 @@ export function AlertCardGrid({
               )}
             </div>
             {!isCollapsed && (
-              <div className="flex gap-3">
-                {distributed.map((colGroups, colIdx) => (
-                  <div key={colIdx} className="flex min-w-0 flex-1 flex-col gap-3">
-                    {colGroups.map((group) => (
-                      <AlertCard
-                        key={`${group.groupValue}:${group.alertname}`}
-                        alerts={group.alerts}
-                        silences={silences}
-                        onClick={onSelectAlert}
-                        selectedFingerprint={selectedFingerprint}
-                        onCreateSilence={setSilenceAlerts}
-                        showSeverityBadge={groupByLabel !== 'severity'}
-                      />
-                    ))}
+              // CSS multi-column instead of hand-rolled bin-packing: the
+              // browser balances by real rendered height (collapsed cards,
+              // "show more" state, claim notes and all), not a height
+              // estimate that has to be kept in sync with every card change.
+              <div data-testid="card-grid-columns" className="gap-3" style={{ columnCount: sectionCols }}>
+                {sectionGroups.map((group) => (
+                  <div key={`${group.groupValue}:${group.alertname}`} className="mb-3 break-inside-avoid">
+                    <AlertCard
+                      alerts={group.alerts}
+                      silences={silences}
+                      onClick={onSelectAlert}
+                      selectedFingerprint={selectedFingerprint}
+                      onCreateSilence={setSilenceAlerts}
+                      showSeverityBadge={groupByLabel !== 'severity'}
+                    />
                   </div>
                 ))}
               </div>

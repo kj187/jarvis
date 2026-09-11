@@ -893,7 +893,7 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
 │   │                            whether an AM regex matcher is a Jarvis-style escaped-literal-OR-list
 │   │                            SilenceForm can safely edit as tags, vs. a real regex needing raw-text
 │   │                            editing — see SilenceForm's `raw` matcher mode),
-│   │                            FAST_SILENCE_DURATIONS, HIDDEN_LABEL_KEYS, labelColorStyle,
+│   │                            FAST_SILENCE_DURATIONS, HIDDEN_LABEL_KEYS, labelColorStyle, shortClaimant,
 │   │                            computeLabelBreakdown (alerts-overview modal: per-label-name
 │   │                            value counts, alertname/severity pinned to the top regardless
 │   │                            of coverage, `receiver` alias + rest of HIDDEN_LABEL_KEYS
@@ -916,7 +916,12 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
 │   ├── alertSelection.ts      → makeAlertSelectionKey / parseAlertSelectionKey — selection key
 │   │                            format `<cluster>::<fingerprint>` (URL `alert=` param, cluster-safe)
 │   ├── linkUtils.tsx          → isUrl, extractLinkButtons (URL-valued labels/annotations + runbook
-│   │                            logic), renderTextWithLinks
+│   │                            logic), renderTextWithLinks. AlertDetailPanel.tsx appends one more
+│   │                            `LinkButton` of its own — label "Alertmanager", built from
+│   │                            `alert.alertmanagerUrl` + an alertname filter, not derived from any
+│   │                            label/annotation — so it renders as the last chip in the Links section
+│   │                            (after every labels/annotations-derived link), instead of its own
+│   │                            "Go to Alertmanager" button in the header action row
 │   ├── heatmapUtils.ts        → bucketFiringStarts(startsIso, range, now?) — pure hourly/daily
 │   │                            bucketing of raw firing timestamps into HeatmapCell[]
 │   │                            (browser-local day/hour boundaries; 24h/7d hourly cells via ms
@@ -924,13 +929,37 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
 │   │                            also HEATMAP_INTENSITY_CLASSES/heatmapIntensityLevel/
 │   │                            heatmapCellTooltip (plain exports, not the .tsx renderer, so
 │   │                            react-refresh/only-export-components stays clean)
+│   ├── avatarUtils.ts         → avatarInitials(name)/avatarColorClass(name) — deterministic
+│   │                            initials + palette color for the header avatar, pure
+│   │                            functions kept out of the .tsx renderer so the same username
+│   │                            always renders the same avatar; no external lookup (no
+│   │                            Gravatar/third-party call) — see components/ui/avatar.tsx
 │   └── utils.ts               → cn(), formatDuration() + misc helpers
 └── components/
     ├── ui/                    → shadcn/ui: button, card, badge, dialog, sheet, select, input,
-    │                            textarea, date-time-picker, tooltip, truncatable-chip
+    │                            textarea, date-time-picker, tooltip, truncatable-chip, avatar
     ├── layout/
-    │   ├── Header.tsx         → nav tabs, cluster status, WS indicator, polling/refresh, theme,
-    │   │                        settings, create-silence, login/user-menu, mobile hamburger
+    │   ├── Header.tsx         → nav tabs, cluster status, WS indicator, polling/refresh,
+    │   │                        create-silence, mobile hamburger. Settings + theme toggle +
+    │   │                        login/logout/admin all live in one always-present user-menu
+    │   │                        button (Grafana-style) — initials avatar when authenticated
+    │   │                        (lib/avatarUtils.ts — no Gravatar/third-party lookup),
+    │   │                        generic CircleUserRound icon otherwise. The Login entry only
+    │   │                        appears when an auth provider is configured
+    │   │                        (providerInfo.mode !== 'none') and no session exists; Settings
+    │   │                        and the theme toggle are always present regardless of auth state.
+    │   │                        Separate always-present Info button (data-testid="info-menu") next
+    │   │                        to the user-menu opens its own popover (`InfoColophon`) with the
+    │   │                        brand footer — /logo.png, version (useVersion), copyright — moved
+    │   │                        here from SettingsSheet.tsx. Desktop-only: cluster status, refresh,
+    │   │                        info and user-menu popovers all open on hover (small close-delay
+    │   │                        timers per popover, same pattern as the pre-existing cluster status
+    │   │                        popover) and dock flush under the header — no gap, no top border
+    │   │                        (`border-t-0`), `bg-header` instead of `bg-card` so the popover reads
+    │   │                        as an extension of the header bar, not a separate floating card.
+    │   │                        Native `title` tooltips were dropped wherever the popover/visible
+    │   │                        label already shows the same text, to avoid a duplicate browser
+    │   │                        tooltip stacking on top of the custom popover.
     │   └── MatcherChipsBar.tsx → chip-based label filter (=, !=, =~, !~, and @age-only >, <),
     │                            tag multi-value, suggestions (always includes `@age`/`@claimed-by`
     │                            via PSEUDO_FIELD_SUGGESTIONS — @age never appears from the live
@@ -941,20 +970,61 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │                            promoted from draft to a committed filter chip
     ├── alerts/
     │   ├── AlertsPage.tsx     → useWebSocket, filter/search, card|list + detail panel, fullscreen, pagination
-    │   ├── AlertCardGrid.tsx  → grouped by settings `groupByLabel` (default severity), responsive
-    │   │                        column binning, per-group pagination, drag-and-drop section
-    │   │                        reordering (persisted: 'jarvis-card-section-order:<label>')
-    │   ├── AlertCard.tsx      → card + claim banner + count badge + silence/detail actions + Fast-Silence (hover);
+    │   ├── AlertCardGrid.tsx  → grouped by settings `groupByLabel` (default severity), per-group
+    │   │                        pagination, drag-and-drop section reordering (persisted:
+    │   │                        'jarvis-card-section-order:<label>'). Within a section, groups sort
+    │   │                        by freshness (most recently fired first, `latestStartsAt`) — not
+    │   │                        alphabetically — same convention as the backend's flat alert list
+    │   │                        (AlertStore.Get(), startsAt desc). Cards lay out via CSS multi-column
+    │   │                        (`columnCount` inline style, `useColumns()` for the responsive
+    │   │                        1/2/3/4 breakpoint, `break-inside-avoid` per card) instead of a
+    │   │                        hand-rolled height-estimate bin-packer — the browser balances by real
+    │   │                        rendered height (collapsed state, claim notes, pagination, all of it)
+    │   │                        with no estimate to keep in sync. `useColumns()` returns
+    │   │                        `settings.cardColumns` directly when it's a fixed number (1-6),
+    │   │                        overriding the responsive breakpoint on every screen size — only
+    │   │                        'auto' (the default) uses the breakpoint. Either way `columnCount` is
+    │   │                        then capped to `min(that value, group count)` — same for the ungrouped
+    │   │                        flat grid's own column count — so a section with fewer groups than
+    │   │                        columns doesn't squeeze its cards into a fraction width with empty space next
+    │   │                        to them; a lone group gets the full row.
+    │   ├── AlertCard.tsx      → card + claim info + count badge + silence/detail actions + Fast-Silence (hover);
+    │   │                        common labels (shared by the whole group) render as a `muted`
+    │   │                        LabelChip strip above the entries; multi-alert groups: each entry
+    │   │                        leads with an identity line (position pill `n/total` + its
+    │   │                        distinguishing labels, first one `emphasized`); summary clamped to
+    │   │                        1 line / description to 2 (full text via title + detail panel);
+    │   │                        expired-silence shown as an inline muted line, not a banner;
+    │   │                        claim = one blue line above the identity line ("Claimed by:
+    │   │                        <shortClaimant> · <relative time>"), padded box only with a note,
+    │   │                        + a blue left accent on the claimed entry;
     │   │                        FiringSparkline: dezent HeatmapCellsRow under the timestamp row —
     │   │                        fetches 30d, keeps only the most recent 14 buckets (fewer/bigger
     │   │                        cells read better at card width); always rendered, even with zero
     │   │                        fires in the window (a missing sparkline reads as a rendering bug,
     │   │                        not "no data") — no tooltips (would fight the card's own click target)
-    │   ├── AlertListView.tsx  → sortable table (name/time), expandable groups, section
-    │   │                        reordering (persisted: 'jarvis-list-section-order:<label>')
-    │   ├── AlertListRow.tsx   → single/indented row
+    │   ├── AlertListView.tsx  → sortable table, cols = Name [· State] · Actions (no Claim column —
+    │   │                        claim/release lives only in the detail panel); expandable groups,
+    │   │                        section reordering (persisted: 'jarvis-list-section-order:<label>');
+    │   │                        group-header common labels = `muted` LabelChip strip; group silence
+    │   │                        action is a labelled button ("Silence group" / "Extend/Recreate/Expire
+    │   │                        group silence"). colSpans: `showStateColumn ? 3 : 2`
+    │   ├── AlertListRow.tsx   → single row; when `indented` (inside a group) it drops the repeated
+    │   │                        alertname and leads with its own labels (first `emphasized`, context
+    │   │                        `muted`); claim shown read-only as a blue "Claimed by: <shortClaimant>
+    │   │                        · <time>" line above the chips; row actions = one AckButton (icon
+    │   │                        variant, menu = Silence form + Fast-Silence durations) + contextual
+    │   │                        expire/extend icon
     │   ├── AlertDetailPanel.tsx → slide-over: labels/annotations + link buttons, stats & timeline,
-    │   │                          claim (useClaimController), comments (CommentsPanel), silence
+    │   │                          claim (useClaimController) is one click for the common case —
+    │   │                          claims immediately with whatever name is already known (logged-in
+    │   │                          user, or a name remembered in localStorage from a prior claim in
+    │   │                          auth mode "none"); the name-only prompt (`claim-name-form`, no note
+    │   │                          field) only appears the very first time in auth mode "none" before
+    │   │                          any name is remembered. Adding a note is a separate, post-claim step
+    │   │                          via the pencil icon on the claim badge (`claim-edit-note-button` →
+    │   │                          `claim-edit-note-form`), not part of the claim action itself.
+    │   │                          comments (CommentsPanel), silence
     │   │                          controls + Fast-Silence, AI-prompt section;
     │   │                          when the alert was opened from a multi-alert list/card group,
     │   │                          `uiStore.selectedGroupKeys` holds the sibling selection keys and a
@@ -1051,7 +1121,13 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │   │                        to the label opens a hover tooltip explaining cell shading + what
     │   │                        each range shows (anchored `right-0` — the range-toggle buttons sit
     │   │                        to the icon's right, unlike the Links-section Info icon which anchors
-    │   │                        `left-0`)
+    │   │                        `left-0`). Caption row is `justify-end` — label, info icon and
+    │   │                        range-toggle sit together right-aligned as one unit, deliberately, not
+    │   │                        `justify-between` with the label pinned to the left edge. When every
+    │   │                        cell in the selected range is empty (`cells.every(c => c.count === 0)`),
+    │   │                        the grid is replaced by a right-aligned "No activity in this window"
+    │   │                        caption instead of rendering a wall of identical empty boxes, which
+    │   │                        reads as broken rather than "nothing happened here".
     │   ├── HeatmapCells.tsx   → HeatmapCellsRow (no chart lib; renders HEATMAP_INTENSITY_CLASSES
     │   │                        cells via heatmapIntensityLevel/heatmapCellTooltip, all three in
     │   │                        lib/heatmapUtils.ts — plain exports, not this .tsx file, so
@@ -1072,7 +1148,11 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │   │                        what to filter *by*); clicking a value adds an unlocked `=`
     │   │                        matcher via uiStore.addLabelMatcher (no-op if an identical one
     │   │                        already exists) and closes the modal
-    │   ├── LabelChip.tsx      → label chip with hover operator dropdown
+    │   ├── LabelChip.tsx      → one fixed size for every chip (`max-w-[200px]`, `text-[10px]`) so a row
+    │   │                        of chips reads as one unit; `emphasized` only adds weight (keeps its
+    │   │                        per-key hue), `muted` = neutral fill, no hue (shared context strips).
+    │   │                        Hover dropdown shows the full, untruncated value above the label-matcher
+    │   │                        operator buttons. `labelColorStyle` hue is confined to 40–329° — never red
     │   ├── ViewToggle.tsx     → ⊞ / ☰ toggle
     │   └── EmptyState.tsx     → large empty-state icon (no alerts)
     ├── comments/
@@ -1139,9 +1219,19 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │   ├── MatcherEditor.tsx  → matcher rows: operators + tag multi-value + suggestions
     │   └── SilenceTemplateTab.tsx → template CRUD + apply-to-form
     ├── settings/
-    │   └── SettingsSheet.tsx  → time format, default view, resolved page size, default filters,
-    │                            default silence duration, creator name, claim animation, theme;
-    │                            brand footer at the bottom (centred /logo.png + version from useVersion)
+    │   └── SettingsSheet.tsx  → Display: time format, default view, card columns, group-by label,
+    │                            claim animation. Default Filter: add/remove locked header chips.
+    │                            Silences: default duration only. `resolvedPageSize` and
+    │                            `defaultCreatorName` live in the same useSettingsStore but are NOT
+    │                            editable here — resolvedPageSize is set via the "Per page" buttons in
+    │                            AlertListView.tsx's resolved view; defaultCreatorName has no writer
+    │                            anywhere in the frontend (only ever read as a fallback in
+    │                            SilenceForm.tsx / useSilences.ts, always resolves to its default ''
+    │                            unless set directly in localStorage) — dead settings-store field, not
+    │                            wired to any UI. No brand footer — logo/version/copyright live in the
+    │                            header's info popover (layout/Header.tsx) instead. Theme lives in
+    │                            useSettingsStore but is only toggled from the header's user menu, not
+    │                            from this sheet.
     ├── auth/
     │   ├── LoginModal.tsx     → on-demand login (write_protect)
     │   ├── LoginPage.tsx      → full-page login (full_protect)
@@ -1193,6 +1283,8 @@ interface UserSettings {
   timeFormat: 'relative' | 'absolute'           // default 'relative'
   defaultViewMode: 'card' | 'list'              // default 'card'
   groupByLabel: string                          // card/list grouping label; default 'severity'
+  cardColumns: 'auto' | 1 | 2 | 3 | 4 | 5 | 6    // Card view column count override; default 'auto'
+                                                 // (responsive 1/2/3/4 breakpoint, AlertCardGrid.tsx useColumns())
   defaultFilters: DefaultFilter[]               // locked header chips; default []
   resolvedPageSize: 10 | 25 | 50 | 100          // default 25
   defaultSilenceDurationMinutes: number         // default 60; ALLOWED_SILENCE_DURATIONS = [15,30,60,240,480,1440,4320]
