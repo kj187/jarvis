@@ -10,7 +10,9 @@ import { formatTime } from '@/lib/alertUtils'
 import {
   useSettingsStore,
   ALLOWED_SILENCE_DURATIONS,
+  CARD_COLUMN_OPTIONS,
 } from '@/store/useSettingsStore'
+import type { CardColumns } from '@/store/useSettingsStore'
 import type { DefaultFilter } from '@/store/useSettingsStore'
 import type { LabelMatcherOperator } from '@/types'
 import { useAlerts } from '@/hooks/useAlerts'
@@ -301,6 +303,30 @@ export function SettingsSheet({ open, onClose }: SettingsSheetProps) {
                 { value: 'list', label: 'List' },
               ]}
             />
+          </SettingRow>
+
+          <SettingRow
+            label="Card columns"
+            info="Number of columns in the Card view grid. Auto adapts to your window width (up to 4); a fixed number overrides that on every screen size."
+          >
+            <div className="flex items-center gap-2">
+              <input
+                type="range"
+                min={0}
+                max={CARD_COLUMN_OPTIONS.length}
+                step={1}
+                value={settings.cardColumns === 'auto' ? 0 : settings.cardColumns}
+                onChange={(e) => {
+                  const v = Number(e.target.value)
+                  update({ cardColumns: (v === 0 ? 'auto' : v) as CardColumns })
+                }}
+                className="h-1.5 w-28 cursor-pointer accent-primary"
+                aria-label="Card columns"
+              />
+              <span className="w-10 text-right text-xs font-medium tabular-nums">
+                {settings.cardColumns === 'auto' ? 'Auto' : settings.cardColumns}
+              </span>
+            </div>
           </SettingRow>
 
           <SettingRow

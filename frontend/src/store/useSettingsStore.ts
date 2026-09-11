@@ -8,12 +8,18 @@ export interface DefaultFilter {
   value: string
 }
 
+export const CARD_COLUMN_OPTIONS = [1, 2, 3, 4, 5, 6] as const
+export type CardColumns = 'auto' | (typeof CARD_COLUMN_OPTIONS)[number]
+
 export interface UserSettings {
   // Display
   theme: 'dark' | 'light'
   timeFormat: 'relative' | 'absolute'
   defaultViewMode: 'card' | 'list'
   groupByLabel: string
+  // Card view column count. 'auto' keeps the responsive 1/2/3/4 breakpoint
+  // behavior; a fixed number overrides it regardless of window width.
+  cardColumns: CardColumns
 
   // Default filter (locked, always present in header)
   defaultFilters: DefaultFilter[]
@@ -39,6 +45,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   timeFormat: 'relative',
   defaultViewMode: 'card',
   groupByLabel: 'severity',
+  cardColumns: 'auto',
   defaultFilters: [],
   resolvedPageSize: 25,
   defaultSilenceDurationMinutes: 60,
