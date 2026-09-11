@@ -1,7 +1,8 @@
 import { useRef, useState, useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { Wifi, WifiOff, RefreshCw, Plus, Settings, LogIn, LogOut, UserCheck, Shield, Sun, Moon, Menu, X } from 'lucide-react'
+import { Wifi, WifiOff, RefreshCw, Plus, Settings, LogIn, LogOut, Shield, Sun, Moon, Menu, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Avatar } from '@/components/ui/avatar'
 import { Sheet } from '@/components/ui/sheet'
 import { SilenceForm } from '@/components/silences/SilenceForm'
 import { SilenceTemplateTab } from '@/components/silences/SilenceTemplateTab'
@@ -270,7 +271,7 @@ export function Header() {
                 data-testid="user-menu"
                 title={user.username}
               >
-                <UserCheck className="h-4 w-4" />
+                <Avatar name={user.username} className="h-6 w-6" />
               </button>
               {userMenuOpen && (
                 <div className="absolute right-0 top-full mt-1 z-50 min-w-40 rounded-md border border-border bg-card shadow-lg" onMouseLeave={() => setUserMenuOpen(false)}>
@@ -334,7 +335,7 @@ export function Header() {
             </Button>
             {isAuthenticated && user ? (
               <button className="flex items-center justify-center h-8 w-8 rounded cursor-pointer text-foreground hover:bg-accent/60" onClick={() => setUserMenuOpen((v) => !v)} aria-label="User menu" title={user.username}>
-                <UserCheck className="h-4 w-4" />
+                <Avatar name={user.username} className="h-6 w-6" />
               </button>
             ) : providerInfo !== null && providerInfo.mode !== 'none' ? (
               <button className="flex items-center justify-center h-8 w-8 rounded cursor-pointer text-muted-foreground hover:text-foreground hover:bg-accent/60" onClick={() => { setLoginModalOpen(true); setMenuOpen(false) }} title="Login" aria-label="Login">

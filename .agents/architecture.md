@@ -924,13 +924,20 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
 │   │                            also HEATMAP_INTENSITY_CLASSES/heatmapIntensityLevel/
 │   │                            heatmapCellTooltip (plain exports, not the .tsx renderer, so
 │   │                            react-refresh/only-export-components stays clean)
+│   ├── avatarUtils.ts         → avatarInitials(name)/avatarColorClass(name) — deterministic
+│   │                            initials + palette color for the header avatar, pure
+│   │                            functions kept out of the .tsx renderer so the same username
+│   │                            always renders the same avatar; no external lookup (no
+│   │                            Gravatar/third-party call) — see components/ui/avatar.tsx
 │   └── utils.ts               → cn(), formatDuration() + misc helpers
 └── components/
     ├── ui/                    → shadcn/ui: button, card, badge, dialog, sheet, select, input,
-    │                            textarea, date-time-picker, tooltip, truncatable-chip
+    │                            textarea, date-time-picker, tooltip, truncatable-chip, avatar
     ├── layout/
     │   ├── Header.tsx         → nav tabs, cluster status, WS indicator, polling/refresh, theme,
-    │   │                        settings, create-silence, login/user-menu, mobile hamburger
+    │   │                        settings, create-silence, login/user-menu (initials avatar,
+    │   │                        lib/avatarUtils.ts — no Gravatar/third-party lookup), mobile
+    │   │                        hamburger
     │   └── MatcherChipsBar.tsx → chip-based label filter (=, !=, =~, !~, and @age-only >, <),
     │                            tag multi-value, suggestions (always includes `@age`/`@claimed-by`
     │                            via PSEUDO_FIELD_SUGGESTIONS — @age never appears from the live
