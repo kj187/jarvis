@@ -1114,9 +1114,11 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │   │                        what to filter *by*); clicking a value adds an unlocked `=`
     │   │                        matcher via uiStore.addLabelMatcher (no-op if an identical one
     │   │                        already exists) and closes the modal
-    │   ├── LabelChip.tsx      → label chip with hover operator dropdown; `emphasized` = larger/bolder
-    │   │                        (keeps its per-key hue), `muted` = neutral fill, no hue (shared context
-    │   │                        strips). `labelColorStyle` hue is confined to 40–329° — never a pure red
+    │   ├── LabelChip.tsx      → one fixed size for every chip (`max-w-[200px]`, `text-[10px]`) so a row
+    │   │                        of chips reads as one unit; `emphasized` only adds weight (keeps its
+    │   │                        per-key hue), `muted` = neutral fill, no hue (shared context strips).
+    │   │                        Hover dropdown shows the full, untruncated value above the label-matcher
+    │   │                        operator buttons. `labelColorStyle` hue is confined to 40–329° — never red
     │   ├── ViewToggle.tsx     → ⊞ / ☰ toggle
     │   └── EmptyState.tsx     → large empty-state icon (no alerts)
     ├── comments/
