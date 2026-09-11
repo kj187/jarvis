@@ -32,7 +32,7 @@ export function NoAuthNotice() {
       aria-label="Authentication notice"
     >
       <div className="absolute inset-0 bg-black/60" onClick={close} />
-      <div className="relative z-10 w-full max-w-md rounded-lg border border-amber-500/30 bg-card p-6 shadow-xl space-y-4">
+      <div data-testid="noauth-notice-panel" className="relative z-10 w-full max-w-md rounded-lg border border-amber-500/30 bg-card p-6 shadow-xl space-y-4">
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-2 text-amber-500">
             <ShieldOff className="h-5 w-5 shrink-0" />

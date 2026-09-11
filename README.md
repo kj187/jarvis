@@ -31,7 +31,7 @@ Most Alertmanager UIs are read-only dashboards. Jarvis is built for teams that n
 - **Comments** — fingerprint-bound notes that survive restarts and re-fires
 - **Alert Detail Panel** — labels, annotations, link buttons, firing history, stats, claim, comments, AI-prompt
 - **Alerts & Silences pages** — dedicated nav tabs, each with card / list view and a distraction-free fullscreen mode
-- **Card and List View** — custom grouping by label (configured in Settings), per-group expand/collapse, drag-and-drop section reordering, sortable list columns
+- **Card and List View** — custom grouping by label (toolbar **Grouped** control, searchable label picker), per-group expand/collapse, drag-and-drop section reordering, sortable list columns
 - **Label-based filtering** — `=` / `!=` / `=~` / `!~` matcher chips, URL-serialized
 - **Silences** — dedicated management page: grouping, show/hide expired, sort, create, edit, extend, delete, re-create; full Alertmanager proxy
 - **Fast-Silence** — one-click, form-free silence on any active alert; hover the button, pick a duration (5m to 1w)

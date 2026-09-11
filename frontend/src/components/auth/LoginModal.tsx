@@ -48,7 +48,7 @@ export function LoginModal({ open, onSuccess, onClose }: LoginModalProps) {
       aria-label="Login"
     >
       <div className="absolute inset-0 bg-black/60" onClick={onClose} />
-      <div className="relative z-10 w-full max-w-sm rounded-lg border border-border bg-card p-6 shadow-xl space-y-4">
+      <div data-testid="login-modal-panel" className="relative z-10 w-full max-w-sm rounded-lg border border-border bg-card p-6 shadow-xl space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-base font-semibold">Login required</h2>
           <button onClick={onClose} className="cursor-pointer text-muted-foreground hover:text-foreground">
