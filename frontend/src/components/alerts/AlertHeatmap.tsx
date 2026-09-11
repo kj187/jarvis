@@ -49,19 +49,24 @@ export function AlertHeatmap({ fingerprint, cluster, enabled }: AlertHeatmapProp
   const { data, isLoading, isError } = useAlertHeatmap(fingerprint, cluster, range, enabled)
 
   const cells = data ? bucketFiringStarts(data.firingStarts, range) : []
+  // A wall of identical empty cells reads as "something's broken", not "no
+  // activity" — swap it for a plain caption instead of rendering the grid.
+  const hasActivity = cells.some((c) => c.count > 0)
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-end gap-2">
-        <p className="text-[10px] text-muted-foreground">Heatmap, when and how often this alert fired</p>
-        <span className="group relative inline-flex items-center">
-          <Info className="h-3 w-3 cursor-help text-muted-foreground/60 hover:text-muted-foreground" />
-          <span className="pointer-events-none absolute right-0 top-4 z-50 w-72 rounded-md border border-border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-lg opacity-0 group-hover:opacity-100 transition-opacity normal-case tracking-normal font-normal leading-relaxed">
-            Each cell is one time bucket. Darker/filled cells mean the alert fired more often in that bucket, empty cells mean it didn't fire.
-            <br /><br />
-            <span className="font-mono">24h</span> shows hourly buckets, <span className="font-mono">7d</span> shows one row per day with hourly buckets, <span className="font-mono">30d</span> shows daily buckets.
+      <div className="flex items-center justify-between gap-2">
+        <p className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+          Heatmap, when and how often this alert fired
+          <span className="group relative inline-flex items-center">
+            <Info className="h-3 w-3 cursor-help text-muted-foreground/60 hover:text-muted-foreground" />
+            <span className="pointer-events-none absolute left-0 top-4 z-50 w-72 rounded-md border border-border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-lg opacity-0 group-hover:opacity-100 transition-opacity normal-case tracking-normal font-normal leading-relaxed">
+              Each cell is one time bucket. Darker/filled cells mean the alert fired more often in that bucket, empty cells mean it didn't fire.
+              <br /><br />
+              <span className="font-mono">24h</span> shows hourly buckets, <span className="font-mono">7d</span> shows one row per day with hourly buckets, <span className="font-mono">30d</span> shows daily buckets.
+            </span>
           </span>
-        </span>
+        </p>
         <div className="flex items-center gap-1 rounded border border-border p-0.5">
           {RANGES.map((r) => (
             <button
@@ -82,7 +87,13 @@ export function AlertHeatmap({ fingerprint, cluster, enabled }: AlertHeatmapProp
 
       {isLoading && <p className="text-xs text-muted-foreground">Loading…</p>}
       {isError && <p className="text-xs text-destructive">Failed to load firing pattern.</p>}
-      {!isLoading && !isError && <HeatmapGrid cells={cells} range={range} />}
+      {!isLoading && !isError && (
+        hasActivity ? (
+          <HeatmapGrid cells={cells} range={range} />
+        ) : (
+          <p className="py-1 text-center text-[10px] text-muted-foreground/60">No activity in this window</p>
+        )
+      )}
     </div>
   )
 }

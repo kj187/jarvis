@@ -623,6 +623,7 @@ export function AlertDetailPanel({
                 </div>
               )}
               <Button
+                variant="outline"
                 size="sm"
                 onClick={() => setShowNewSilenceForm(true)}
               >
