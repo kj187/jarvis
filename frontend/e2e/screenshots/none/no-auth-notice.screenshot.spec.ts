@@ -7,6 +7,10 @@ const DIR = process.env.SCREENSHOTS_DIR ?? '../docs/assets'
 /**
  * Screenshot: the "No authentication configured" notice over a populated
  * dashboard (none mode). This is the one screenshot that keeps the notice.
+ * Cropped to the dialog panel plus a generous margin (not the full page,
+ * not a tight crop either) — the margin keeps the dimmed alert-card
+ * background visible around the edges, so the image still reads as "a
+ * notice over your dashboard" rather than an isolated card.
  *   make e2e-screenshot NAME=no-auth-notice
  */
 test('no-auth-notice', async ({ page, am, jarvis }) => {
@@ -14,7 +18,20 @@ test('no-auth-notice', async ({ page, am, jarvis }) => {
 
   await page.goto('/?state=active')
   await expect(page.getByRole('dialog', { name: 'Authentication notice' })).toBeVisible()
+  const panel = page.getByTestId('noauth-notice-panel')
+  await expect(panel).toBeVisible()
   await page.waitForTimeout(300)
 
-  await page.screenshot({ path: `${DIR}/auth-noauth-notice.png` })
+  const box = (await panel.boundingBox())!
+  const viewport = page.viewportSize()!
+  const margin = 80
+  const x = Math.max(0, box.x - margin)
+  const y = Math.max(0, box.y - margin)
+  const right = Math.min(viewport.width, box.x + box.width + margin)
+  const bottom = Math.min(viewport.height, box.y + box.height + margin)
+
+  await page.screenshot({
+    path: `${DIR}/auth-noauth-notice.png`,
+    clip: { x, y, width: right - x, height: bottom - y },
+  })
 })

@@ -39,7 +39,7 @@ export function SetupPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
-      <div className="w-full max-w-sm rounded-lg border border-border bg-card p-8 space-y-6">
+      <div data-testid="setup-page-card" className="w-full max-w-sm rounded-lg border border-border bg-card p-8 space-y-6">
         <div className="text-center space-y-1">
           <h1 className="text-2xl font-bold tracking-tight">Jarvis</h1>
           <p className="text-sm text-muted-foreground">Initial setup</p>

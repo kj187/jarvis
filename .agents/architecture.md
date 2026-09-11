@@ -988,6 +988,15 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │   │                        flat grid's own column count — so a section with fewer groups than
     │   │                        columns doesn't squeeze its cards into a fraction width with empty space next
     │   │                        to them; a lone group gets the full row.
+    │   ├── GroupingControl.tsx → toolbar "Grouped" control (AlertsPage.tsx, hidden in resolved mode):
+    │   │                        a popover combining the on/off toggle (local `cardGroupingEnabled`,
+    │   │                        passed through as `groupingEnabled` to AlertCardGrid/AlertListView)
+    │   │                        with a radio picker for `settings.groupByLabel` itself — the label
+    │   │                        section grouping ("CRITICAL (15)") is driven from here now instead
+    │   │                        of only via Settings (the "Group alerts by label" Settings row was
+    │   │                        removed as redundant once this shipped). Options = 'severity' pinned
+    │   │                        first + every label present on the currently visible (non-resolved)
+    │   │                        alerts, each annotated with its distinct-value count.
     │   ├── AlertCard.tsx      → card + claim info + count badge + silence/detail actions + Fast-Silence (hover);
     │   │                        common labels (shared by the whole group) render as a `muted`
     │   │                        LabelChip strip above the entries; multi-alert groups: each entry
