@@ -421,7 +421,7 @@ export function AlertCardGrid({
               // browser balances by real rendered height (collapsed cards,
               // "show more" state, claim notes and all), not a height
               // estimate that has to be kept in sync with every card change.
-              <div className="gap-3" style={{ columnCount: sectionCols }}>
+              <div data-testid="card-grid-columns" className="gap-3" style={{ columnCount: sectionCols }}>
                 {sectionGroups.map((group) => (
                   <div key={`${group.groupValue}:${group.alertname}`} className="mb-3 break-inside-avoid">
                     <AlertCard
