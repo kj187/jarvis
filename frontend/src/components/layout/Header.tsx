@@ -17,6 +17,7 @@ import { fetchClusters, fetchStatus } from '@/api/client'
 import { FALLBACK_REFETCH_INTERVAL_MS } from '@/lib/refetch'
 import { Tooltip } from '@/components/ui/tooltip'
 import { useVersion } from '@/hooks/useVersion'
+import { useHoverPopover } from '@/hooks/useHoverPopover'
 
 function formatPollInterval(seconds: number): string {
   if (seconds < 60) return `${seconds}s`
@@ -77,15 +78,7 @@ export function Header() {
   const [refreshing, setRefreshing] = useState(false)
   const [clusterHoverOpen, setClusterHoverOpen] = useState(false)
   const [clusterFilterOpen, setClusterFilterOpen] = useState<string | null>(null)
-  const clusterCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  function openClusterPopover() {
-    if (clusterCloseTimer.current) clearTimeout(clusterCloseTimer.current)
-    setClusterHoverOpen(true)
-  }
-  function closeClusterPopover() {
-    clusterCloseTimer.current = setTimeout(() => setClusterHoverOpen(false), 120)
-  }
+  const clusterPopover = useHoverPopover(setClusterHoverOpen)
 
   const [menuOpen, setMenuOpen] = useState(false)
   const [pollSpinning, setPollSpinning] = useState(false)
@@ -128,37 +121,14 @@ export function Header() {
   const updateSettings = useSettingsStore((s) => s.update)
   const version = useVersion()
 
-  // Desktop-only: user-menu and info popovers open on hover (like the cluster
-  // status popover above), with a short close delay so crossing the gap to the
-  // panel doesn't flicker-close it. Mobile has no hover, so its own panels
-  // below stay purely click-toggled.
-  const userMenuCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  function openUserMenu() {
-    if (userMenuCloseTimer.current) clearTimeout(userMenuCloseTimer.current)
-    setUserMenuOpen(true)
-  }
-  function closeUserMenu() {
-    userMenuCloseTimer.current = setTimeout(() => setUserMenuOpen(false), 120)
-  }
-
-  const infoCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  function openInfoPopover() {
-    if (infoCloseTimer.current) clearTimeout(infoCloseTimer.current)
-    setInfoOpen(true)
-  }
-  function closeInfoPopover() {
-    infoCloseTimer.current = setTimeout(() => setInfoOpen(false), 120)
-  }
-
+  // Desktop-only: these popovers open on hover, with a short close delay so
+  // crossing the gap to the panel doesn't flicker-close it. Mobile has no
+  // hover, so its own panels below share the same open state but stay purely
+  // click-toggled.
+  const userMenu = useHoverPopover(setUserMenuOpen)
+  const infoPopover = useHoverPopover(setInfoOpen)
   const [refreshTooltipOpen, setRefreshTooltipOpen] = useState(false)
-  const refreshTooltipCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  function openRefreshTooltip() {
-    if (refreshTooltipCloseTimer.current) clearTimeout(refreshTooltipCloseTimer.current)
-    setRefreshTooltipOpen(true)
-  }
-  function closeRefreshTooltip() {
-    refreshTooltipCloseTimer.current = setTimeout(() => setRefreshTooltipOpen(false), 120)
-  }
+  const refreshPopover = useHoverPopover(setRefreshTooltipOpen)
 
   const healthyCount = clusters.filter((c) => c.healthy).length
 
@@ -216,8 +186,8 @@ export function Header() {
           {/* Cluster status */}
           <div
             className="relative shrink-0 self-stretch flex items-center"
-            onMouseEnter={openClusterPopover}
-            onMouseLeave={closeClusterPopover}
+            onMouseEnter={clusterPopover.show}
+            onMouseLeave={clusterPopover.hide}
           >
             <div
               className="flex items-center gap-1.5 px-2 py-1 text-xs cursor-pointer select-none"
@@ -227,7 +197,7 @@ export function Header() {
               <span className="text-muted-foreground tabular-nums">{healthyCount}/{clusters.length}</span>
             </div>
             {clusterHoverOpen && clusters.length > 0 && (
-              <div className="absolute right-0 top-full z-50 min-w-[26rem] rounded-b-md border border-t-0 border-border bg-header shadow-lg" role="tooltip" onMouseEnter={openClusterPopover} onMouseLeave={closeClusterPopover}>
+              <div className="absolute right-0 top-full z-50 min-w-[26rem] rounded-b-md border border-t-0 border-border bg-header shadow-lg" role="tooltip" onMouseEnter={clusterPopover.show} onMouseLeave={clusterPopover.hide}>
                 <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-border">Connected Instances</div>
                 {clusters.map((c) => (
                   <div
@@ -311,12 +281,12 @@ export function Header() {
 
           {/* Refresh — custom docked popover (not the generic Tooltip) so it matches
               the flush, header-colored look of the other header popovers. */}
-          <div className="relative shrink-0 self-stretch flex items-center" onMouseEnter={openRefreshTooltip} onMouseLeave={closeRefreshTooltip}>
+          <div className="relative shrink-0 self-stretch flex items-center" onMouseEnter={refreshPopover.show} onMouseLeave={refreshPopover.hide}>
             <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={handleRefresh} aria-label="Refresh now" disabled={refreshing}>
               <RefreshCw className={`h-4 w-4 ${isSpinning ? 'animate-spin' : ''}`} />
             </Button>
             {refreshTooltipOpen && (
-              <div className="absolute right-0 top-full z-50 w-72 rounded-b-md border border-t-0 border-border bg-header px-3 py-2 text-xs leading-snug text-muted-foreground shadow-lg" onMouseEnter={openRefreshTooltip} onMouseLeave={closeRefreshTooltip}>
+              <div className="absolute right-0 top-full z-50 w-72 rounded-b-md border border-t-0 border-border bg-header px-3 py-2 text-xs leading-snug text-muted-foreground shadow-lg" onMouseEnter={refreshPopover.show} onMouseLeave={refreshPopover.hide}>
                 {refreshTooltipText}
               </div>
             )}
@@ -324,17 +294,17 @@ export function Header() {
           <div className="w-px h-5 bg-border shrink-0 mx-0.5" />
 
           {/* Info — Jarvis logo, version, copyright. Opens on hover, like cluster status above. */}
-          <div className="relative shrink-0 self-stretch flex items-center" onMouseEnter={openInfoPopover} onMouseLeave={closeInfoPopover}>
+          <div className="relative shrink-0 self-stretch flex items-center" onMouseEnter={infoPopover.show} onMouseLeave={infoPopover.hide}>
             <button
               className="flex items-center justify-center h-8 w-8 rounded cursor-pointer text-foreground hover:bg-accent/60"
-              onClick={openInfoPopover}
+              onClick={infoPopover.show}
               aria-label="About Jarvis"
               data-testid="info-menu"
             >
               <Info className="h-4 w-4" />
             </button>
             {infoOpen && (
-              <div className="absolute right-0 top-full z-50 w-56 rounded-b-md border border-t-0 border-border bg-header shadow-lg" onMouseEnter={openInfoPopover} onMouseLeave={closeInfoPopover}>
+              <div className="absolute right-0 top-full z-50 w-56 rounded-b-md border border-t-0 border-border bg-header shadow-lg" onMouseEnter={infoPopover.show} onMouseLeave={infoPopover.hide}>
                 <InfoColophon version={version} />
               </div>
             )}
@@ -343,17 +313,17 @@ export function Header() {
           {/* User menu — always present (Grafana-style): avatar when authenticated,
               generic icon otherwise. Settings + theme live here regardless of auth
               state; Login/Logout are added on top depending on it. Opens on hover. */}
-          <div className="relative shrink-0 self-stretch flex items-center" onMouseEnter={openUserMenu} onMouseLeave={closeUserMenu}>
+          <div className="relative shrink-0 self-stretch flex items-center" onMouseEnter={userMenu.show} onMouseLeave={userMenu.hide}>
             <button
               className="flex items-center justify-center h-8 w-8 rounded cursor-pointer text-foreground hover:bg-accent/60"
-              onClick={openUserMenu}
+              onClick={userMenu.show}
               aria-label="User menu"
               data-testid="user-menu"
             >
               {isAuthenticated && user ? <Avatar name={user.username} className="h-6 w-6" /> : <CircleUserRound className="h-5 w-5" />}
             </button>
             {userMenuOpen && (
-              <div className="absolute right-0 top-full z-50 min-w-40 rounded-b-md border border-t-0 border-border bg-header shadow-lg" onMouseEnter={openUserMenu} onMouseLeave={closeUserMenu}>
+              <div className="absolute right-0 top-full z-50 min-w-40 rounded-b-md border border-t-0 border-border bg-header shadow-lg" onMouseEnter={userMenu.show} onMouseLeave={userMenu.hide}>
                 {isAuthenticated && user && (
                   <div className="px-3 py-2 text-xs font-medium text-foreground border-b border-border">{user.username}</div>
                 )}
