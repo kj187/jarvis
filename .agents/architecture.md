@@ -970,9 +970,24 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │                            promoted from draft to a committed filter chip
     ├── alerts/
     │   ├── AlertsPage.tsx     → useWebSocket, filter/search, card|list + detail panel, fullscreen, pagination
-    │   ├── AlertCardGrid.tsx  → grouped by settings `groupByLabel` (default severity), responsive
-    │   │                        column binning, per-group pagination, drag-and-drop section
-    │   │                        reordering (persisted: 'jarvis-card-section-order:<label>')
+    │   ├── AlertCardGrid.tsx  → grouped by settings `groupByLabel` (default severity), per-group
+    │   │                        pagination, drag-and-drop section reordering (persisted:
+    │   │                        'jarvis-card-section-order:<label>'). Within a section, groups sort
+    │   │                        by freshness (most recently fired first, `latestStartsAt`) — not
+    │   │                        alphabetically — same convention as the backend's flat alert list
+    │   │                        (AlertStore.Get(), startsAt desc). Cards lay out via CSS multi-column
+    │   │                        (`columnCount` inline style, `useColumns()` for the responsive
+    │   │                        1/2/3/4 breakpoint, `break-inside-avoid` per card) instead of a
+    │   │                        hand-rolled height-estimate bin-packer — the browser balances by real
+    │   │                        rendered height (collapsed state, claim notes, pagination, all of it)
+    │   │                        with no estimate to keep in sync. `useColumns()` returns
+    │   │                        `settings.cardColumns` directly when it's a fixed number (1-6),
+    │   │                        overriding the responsive breakpoint on every screen size — only
+    │   │                        'auto' (the default) uses the breakpoint. Either way `columnCount` is
+    │   │                        then capped to `min(that value, group count)` — same for the ungrouped
+    │   │                        flat grid's own column count — so a section with fewer groups than
+    │   │                        columns doesn't squeeze its cards into a fraction width with empty space next
+    │   │                        to them; a lone group gets the full row.
     │   ├── AlertCard.tsx      → card + claim info + count badge + silence/detail actions + Fast-Silence (hover);
     │   │                        common labels (shared by the whole group) render as a `muted`
     │   │                        LabelChip strip above the entries; multi-alert groups: each entry
@@ -1204,11 +1219,19 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │   ├── MatcherEditor.tsx  → matcher rows: operators + tag multi-value + suggestions
     │   └── SilenceTemplateTab.tsx → template CRUD + apply-to-form
     ├── settings/
-    │   └── SettingsSheet.tsx  → time format, default view, resolved page size, default filters,
-    │                            default silence duration, creator name, claim animation. No brand
-    │                            footer — logo/version/copyright live in the header's info popover
-    │                            (layout/Header.tsx) instead. Theme lives in useSettingsStore but is
-    │                            only toggled from the header's user menu, not from this sheet.
+    │   └── SettingsSheet.tsx  → Display: time format, default view, card columns, group-by label,
+    │                            claim animation. Default Filter: add/remove locked header chips.
+    │                            Silences: default duration only. `resolvedPageSize` and
+    │                            `defaultCreatorName` live in the same useSettingsStore but are NOT
+    │                            editable here — resolvedPageSize is set via the "Per page" buttons in
+    │                            AlertListView.tsx's resolved view; defaultCreatorName has no writer
+    │                            anywhere in the frontend (only ever read as a fallback in
+    │                            SilenceForm.tsx / useSilences.ts, always resolves to its default ''
+    │                            unless set directly in localStorage) — dead settings-store field, not
+    │                            wired to any UI. No brand footer — logo/version/copyright live in the
+    │                            header's info popover (layout/Header.tsx) instead. Theme lives in
+    │                            useSettingsStore but is only toggled from the header's user menu, not
+    │                            from this sheet.
     ├── auth/
     │   ├── LoginModal.tsx     → on-demand login (write_protect)
     │   ├── LoginPage.tsx      → full-page login (full_protect)
@@ -1260,6 +1283,8 @@ interface UserSettings {
   timeFormat: 'relative' | 'absolute'           // default 'relative'
   defaultViewMode: 'card' | 'list'              // default 'card'
   groupByLabel: string                          // card/list grouping label; default 'severity'
+  cardColumns: 'auto' | 1 | 2 | 3 | 4 | 5 | 6    // Card view column count override; default 'auto'
+                                                 // (responsive 1/2/3/4 breakpoint, AlertCardGrid.tsx useColumns())
   defaultFilters: DefaultFilter[]               // locked header chips; default []
   resolvedPageSize: 10 | 25 | 50 | 100          // default 25
   defaultSilenceDurationMinutes: number         // default 60; ALLOWED_SILENCE_DURATIONS = [15,30,60,240,480,1440,4320]
