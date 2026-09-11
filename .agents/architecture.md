@@ -996,7 +996,15 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │   │                        variant, menu = Silence form + Fast-Silence durations) + contextual
     │   │                        expire/extend icon
     │   ├── AlertDetailPanel.tsx → slide-over: labels/annotations + link buttons, stats & timeline,
-    │   │                          claim (useClaimController), comments (CommentsPanel), silence
+    │   │                          claim (useClaimController) is one click for the common case —
+    │   │                          claims immediately with whatever name is already known (logged-in
+    │   │                          user, or a name remembered in localStorage from a prior claim in
+    │   │                          auth mode "none"); the name-only prompt (`claim-name-form`, no note
+    │   │                          field) only appears the very first time in auth mode "none" before
+    │   │                          any name is remembered. Adding a note is a separate, post-claim step
+    │   │                          via the pencil icon on the claim badge (`claim-edit-note-button` →
+    │   │                          `claim-edit-note-form`), not part of the claim action itself.
+    │   │                          comments (CommentsPanel), silence
     │   │                          controls + Fast-Silence, AI-prompt section;
     │   │                          when the alert was opened from a multi-alert list/card group,
     │   │                          `uiStore.selectedGroupKeys` holds the sibling selection keys and a

@@ -228,11 +228,9 @@ export function AlertDetailPanel({
   const [showEditNoteForm, setShowEditNoteForm] = useState(false)
   const [editNote, setEditNote] = useState('')
   const [manualClaimName, setManualClaimName] = useState(() => localStorage.getItem(USERNAME_KEY) ?? '')
-  const [claimNote, setClaimNote] = useState('')
-  const { user, providerInfo } = useAuthStore()
+  const { user } = useAuthStore()
   const { guard, loginModalOpen, onLoginSuccess, onLoginClose } = useLoginGuard()
   const theme = useSettingsStore((s) => s.theme)
-  const authMode = providerInfo?.mode ?? 'none'
   const claimName = user?.username ?? manualClaimName
   const [promptCopied, setPromptCopied] = useState(false)
   const [expiredSilenceCollapsed, setExpiredSilenceCollapsed] = useState(true)
@@ -587,9 +585,23 @@ export function AlertDetailPanel({
                 <div className="relative p-[2px] overflow-hidden rounded-md">
                   <div className="claim-snake-spinner absolute inset-[-150%]" />
                   <Button
+                    data-testid="claim-button"
                     variant="outline"
                     size="sm"
-                    onClick={() => guard(() => setShowClaimForm((v) => !v))}
+                    onClick={() => guard(() => {
+                      // One click for the common case: claim immediately with
+                      // whatever name we already have (logged-in user, or a
+                      // name remembered from a previous claim in auth mode
+                      // "none"). Only fall back to the name prompt when we
+                      // truly don't know who's claiming yet. A note can still
+                      // be added right after via the pencil icon on the badge.
+                      if (claimName.trim()) {
+                        submitClaim({ claimedBy: claimName })
+                      } else {
+                        setShowClaimForm(true)
+                      }
+                    })}
+                    disabled={setClaimMutation.isPending}
                     className="relative z-10 bg-card border-transparent hover:bg-accent hover:border-transparent"
                   >
                     <User className="h-3.5 w-3.5" />
@@ -635,50 +647,38 @@ export function AlertDetailPanel({
             </form>
           )}
 
+          {/* Only reached when we don't know who's claiming yet (auth mode
+              "none", no name remembered from a previous claim). Once
+              submitted, the name is remembered — every claim after this one
+              is a single click. */}
           {showClaimForm && !activeClaim && alert.status.state !== 'resolved' && (
             <form
-              className="mt-3 space-y-2"
+              data-testid="claim-name-form"
+              className="mt-3 flex items-center gap-2"
               onSubmit={(e) => {
                 e.preventDefault()
                 guard(() => {
-                  const currentUser = useAuthStore.getState().user
-                  const nameToUse = currentUser?.username ?? manualClaimName
                   submitClaim(
-                    { claimedBy: nameToUse, note: claimNote },
-                    { onSuccess: () => { setShowClaimForm(false); setClaimNote('') } },
+                    { claimedBy: manualClaimName },
+                    { onSuccess: () => setShowClaimForm(false) },
                   )
                 })
               }}
             >
-              {authMode !== 'none' ? (
-                <div className="flex items-center gap-1.5 h-7 px-2 rounded border border-border bg-muted text-xs text-muted-foreground w-48">
-                  <User className="h-3 w-3 shrink-0" />
-                  <span>{user?.username ?? '…'}</span>
-                </div>
-              ) : (
-                <Input
-                  value={manualClaimName}
-                  onChange={(e) => setManualClaimName(e.target.value)}
-                  placeholder="Your name"
-                  className="h-7 w-48 text-xs"
-                  required
-                />
-              )}
-              <Textarea
-                value={claimNote}
-                onChange={(e) => setClaimNote(e.target.value)}
-                placeholder="Note (optional)"
-                rows={5}
-                className="resize-none text-xs"
+              <Input
+                value={manualClaimName}
+                onChange={(e) => setManualClaimName(e.target.value)}
+                placeholder="Your name"
+                className="h-7 w-48 text-xs"
+                required
+                autoFocus
               />
-              <div className="flex gap-2">
-                <Button type="submit" size="sm" className="h-7 text-xs" disabled={!claimName.trim() || setClaimMutation.isPending}>
-                  Confirm
-                </Button>
-                <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setShowClaimForm(false)}>
-                  Cancel
-                </Button>
-              </div>
+              <Button type="submit" size="sm" className="h-7 text-xs" disabled={!manualClaimName.trim() || setClaimMutation.isPending}>
+                Claim
+              </Button>
+              <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setShowClaimForm(false)}>
+                Cancel
+              </Button>
             </form>
           )}
         </div>
