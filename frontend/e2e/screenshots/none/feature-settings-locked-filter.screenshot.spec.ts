@@ -7,6 +7,8 @@ const DIR = process.env.SCREENSHOTS_DIR ?? '../docs/assets'
 
 /**
  * Screenshot: header with a locked default filter chip (severity=critical) set via Settings.
+ * Cropped to the toolbar row itself (`alerts-toolbar`) — the doc image is
+ * about the chip, not the alert list beneath it.
  * Regenerate: make e2e-screenshot NAME=feature-settings-locked-filter
  */
 test('feature-settings-locked-filter', async ({ page, am, jarvis }) => {
@@ -33,5 +35,5 @@ test('feature-settings-locked-filter', async ({ page, am, jarvis }) => {
   ).toBeVisible()
   await page.waitForTimeout(300)
 
-  await page.screenshot({ path: `${DIR}/feature-settings-locked-filter.png`, fullPage: true })
+  await page.getByTestId('alerts-toolbar').screenshot({ path: `${DIR}/feature-settings-locked-filter.png` })
 })

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ChartPie, Maximize2, Search, X } from 'lucide-react'
+import { ChartPie, Maximize2, Search, X, Siren, BellOff, CheckCircle2 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { ViewToggle } from './ViewToggle'
 import { AlertsOverviewModal } from './AlertsOverviewModal'
@@ -9,6 +9,7 @@ import { useSilences } from '@/hooks/useSilences'
 import { useUIStore, isDetailTab } from '@/store/uiStore'
 import { useAuthStore } from '@/store/authStore'
 import { AlertCardGrid } from './AlertCardGrid'
+import { GroupingControl } from './GroupingControl'
 import { AlertListView } from './AlertListView'
 import { AlertDetailPanel } from './AlertDetailPanel'
 import { matchesLabelMatchers, getEffectiveAlertState } from '@/lib/alertUtils'
@@ -208,7 +209,7 @@ export function AlertsPage() {
     <div className={`flex flex-col gap-4${isFullscreen ? ' pt-4' : ''}`}>
       {/* Sub-header: filter inputs + active chips + view controls */}
       {!isFullscreen && (
-          <div className="flex items-center gap-2 px-4 flex-wrap">
+          <div data-testid="alerts-toolbar" className="flex items-center gap-2 px-4 flex-wrap">
             {/* Active matcher chips + inline add */}
             <MatcherChipsBar allowAdd />
 
@@ -226,43 +227,42 @@ export function AlertsPage() {
                 <ViewToggle value={viewMode} onChange={(mode) => { setViewMode(mode); setActiveViewMode(mode) }} />
               )}
               {canToggleGrouping && (
-                <button
-                  onClick={() => toggleCardGrouping(!cardGroupingEnabled)}
-                  className={`cursor-pointer h-7 rounded-md border border-border px-2 text-xs font-medium transition-colors ${
-                    cardGroupingEnabled
-                      ? 'bg-accent text-foreground'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-accent/40'
-                  }`}
-                  aria-pressed={cardGroupingEnabled}
-                  title={cardGroupingEnabled ? 'Disable grouping' : 'Enable grouping'}
-                >
-                  Grouped
-                </button>
+                <GroupingControl
+                  alerts={liveAlerts}
+                  enabled={cardGroupingEnabled}
+                  onToggleEnabled={toggleCardGrouping}
+                />
               )}
               <div className="flex items-center rounded-md border border-border overflow-hidden">
                 <button
                   onClick={() => { setFilter('state', 'active'); setViewMode(activeViewMode) }}
-                  className={`cursor-pointer px-2.5 h-7 text-xs font-medium transition-colors ${
-                    isActiveMode ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground'
+                  className={`cursor-pointer flex items-center gap-1.5 h-7 text-xs font-medium transition-colors ${
+                    isActiveMode ? 'px-2.5 bg-accent text-foreground' : 'px-2 text-muted-foreground hover:text-foreground'
                   }`}
+                  title="Active"
                 >
-                  Active
+                  <Siren className="h-3 w-3 shrink-0" />
+                  {isActiveMode && 'Active'}
                 </button>
                 <button
                   onClick={() => { setFilter('state', 'suppressed'); setViewMode(activeViewMode) }}
-                  className={`cursor-pointer px-2.5 h-7 text-xs font-medium transition-colors ${
-                    isSuppressedMode ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground'
+                  className={`cursor-pointer flex items-center gap-1.5 h-7 text-xs font-medium transition-colors ${
+                    isSuppressedMode ? 'px-2.5 bg-accent text-foreground' : 'px-2 text-muted-foreground hover:text-foreground'
                   }`}
+                  title="Suppressed"
                 >
-                  Suppressed
+                  <BellOff className="h-3 w-3 shrink-0" />
+                  {isSuppressedMode && 'Suppressed'}
                 </button>
                 <button
                   onClick={() => { if (!isResolvedMode) setActiveViewMode(viewMode); setFilter('state', 'resolved'); setViewMode('list') }}
-                  className={`cursor-pointer px-2.5 h-7 text-xs font-medium transition-colors ${
-                    isResolvedMode ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground'
+                  className={`cursor-pointer flex items-center gap-1.5 h-7 text-xs font-medium transition-colors ${
+                    isResolvedMode ? 'px-2.5 bg-accent text-foreground' : 'px-2 text-muted-foreground hover:text-foreground'
                   }`}
+                  title="Resolved"
                 >
-                  Resolved
+                  <CheckCircle2 className="h-3 w-3 shrink-0" />
+                  {isResolvedMode && 'Resolved'}
                 </button>
               </div>
               {searchOpen ? (

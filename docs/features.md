@@ -11,22 +11,36 @@ The card view is the default landing page and the primary interface for active a
 **What each card shows:**
 - Severity badge (critical / warning / info) with color coding
 - Alert name and the cluster it originates from
-- All active labels as chips — clickable to instantly add a label filter
+- Labels shared by every alert in a group render once, as a quiet strip above the entries; each entry then leads with its own distinguishing labels (the first one emphasized) instead of repeating the common ones — clickable to instantly add a label filter
 - How long the alert has been firing (e.g. "firing for 2h 14m")
 - A 14-day firing sparkline under the timestamp — see [Firing Heatmap](#firing-heatmap)
-- Claim banner — shows who has claimed the alert and since when, if anyone has
+- Claim line — "Claimed by: \<name\> · \<time\>" above the entry, with a blue left accent, if anyone has claimed it
 
 **Actions available directly on the card:**
 - **Silence / Fast-Silence** — a persistent bell icon in a narrow column on the right of each alert entry (and one for the whole group, in the card header) opens a menu with the full silence form and one-click Fast-Silence durations — see [Fast-Silence](#fast-silence)
 - **Detail** — click anywhere on the alert entry to slide open the full detail panel; claim and all other actions are available there
 
-Sections are grouped by the label selected in **Settings → Group alerts by label** (default: `severity`). You can collapse/expand each section and reorder sections via drag-and-drop (drag handle on the right). The section order and collapsed state are persisted in localStorage per grouping label.
+Sections are grouped by a label you choose from the **Grouped** control in the toolbar (default: `severity`) — see [Grouping](#grouping) below. You can collapse/expand each section and reorder sections via drag-and-drop (drag handle on the right). The section order and collapsed state are persisted in localStorage per grouping label.
 
-Within each section, groups are sorted alphabetically by alert name. The view updates in real time via WebSocket: new alerts appear, resolved alerts disappear, and claim/silence state refreshes without any page reload.
+Within each section, groups are sorted by recency — the group with the most recently fired alert first, not alphabetically by name — so the freshest problems surface at the top of every section instead of being scattered wherever their alert name happens to sort. The view updates in real time via WebSocket: new alerts appear, resolved alerts disappear, and claim/silence state refreshes without any page reload.
 
-In the top-right toolbar of the alerts page, the compact **Grouped** toggle lets you switch grouping on/off in Card View.  
-- **On**: section grouping by the configured label  
-- **Off**: all alerts shown together without section grouping
+**Columns:** the grid lays out 1–4 columns depending on window width by default. Pin it to a fixed count (1–6) via **Card columns** in Settings if you'd rather it not reflow as you resize.
+
+---
+
+## Grouping
+
+One toolbar control combines "group or not" with "group by which label" — no detour through Settings to change how alerts are sectioned.
+
+![Grouping control](assets/feature-grouping.png)
+
+Click the **Grouped** button in the top-right toolbar (hidden in the Resolved view, which is always a flat list) to open the picker:
+- **On/off switch** at the top — turns section grouping off entirely (Card View falls back to a flat multi-column grid, List View to a flat table) without losing your chosen label for next time
+- **Label list** below it — `severity` is always pinned first, every other label seen on the currently visible alerts follows alphabetically, each annotated with how many distinct sections it would create
+- **Filter field** — with many labels in play (large fleets easily have 50+), type to narrow the list in real time; the **×** button resets it
+- The list scrolls independently once it grows past a handful of entries, so the popover itself never overflows the screen
+
+The chosen label applies to both Card and List view immediately — no separate setting for each.
 
 ---
 
@@ -38,7 +52,7 @@ Compact table layout with sortable columns — useful when dealing with many ale
 
 The list view is optimized for situations where you have a lot of alerts and need to scan and sort quickly rather than focus on individual cards. It trades visual weight for density.
 
-Alerts are grouped into sections based on the label selected in **Settings → Group alerts by label** (severity by default). Section headers can be collapsed/expanded, and section order can be changed via drag-and-drop.
+Alerts are grouped into sections based on the label chosen in the **Grouped** toolbar control (severity by default) — see [Grouping](#grouping). Section headers can be collapsed/expanded, and section order can be changed via drag-and-drop.
 
 Within each section, groups are collapsed by alert name. Expand a group to see individual alert instances.
 
@@ -46,8 +60,9 @@ Within each section, groups are collapsed by alert name. Expand a group to see i
 - **Alert Name** — sortable; shows alert count per group, common labels, and cluster names
 - **State** — firing / suppressed / resolved (hidden when a single state tab is active)
 - **Time** — sortable; earliest start time within the group
-- **Actions** — silence or expire/extend an existing silence without opening the detail panel
-- **Claim** — shows how many alerts in the group have been claimed
+- **Actions** — one silence icon (menu: full form + Fast-Silence durations) plus a contextual expire/extend icon when the alert is already suppressed
+
+There is no separate Claim column — a claimed alert shows a read-only "Claimed by: \<name\> · \<time\>" line above its labels instead; claiming and releasing happen in the detail panel.
 
 **Sorting** is available on the **Alert Name** and **Time** columns — click a header to sort ascending, click again for descending.
 
@@ -126,7 +141,13 @@ Per-user preferences stored in the browser — no server config required.
 
 ![Settings Panel](assets/feature-settings-panel.png)
 
-Open the Settings panel by clicking the **⚙ gear icon** in the top-right area of the header (next to "Create silence"). Settings are persisted in `localStorage` and apply immediately without a page reload.
+Open the Settings panel from the **user-menu** button in the top-right of the header (initials avatar when logged in, a generic account icon otherwise) → **Settings**. The same menu also holds the theme toggle and, when authenticated, login/logout and the admin panel — hover the button to open it. Settings are persisted in `localStorage` and apply immediately without a page reload.
+
+| Signed out | Signed in |
+|:---:|:---:|
+| ![User menu — signed out](assets/feature-user-menu.png) | ![User menu — signed in](assets/auth-user-menu.png) |
+
+Settings and the theme toggle are always there either way; Login only appears signed out, Logout (and Admin, for admins) only signed in. In auth mode `none` there is no Login entry at all — see [User Authentication](authentication-user.md).
 
 ### Available settings
 
@@ -134,11 +155,12 @@ Open the Settings panel by clicking the **⚙ gear icon** in the top-right area 
 |---|---|
 | **Time format** | Switch between *Relative* ("6 days ago") and *Absolute* ("Jun 4, 2025, 12:30 PM") timestamps. A live preview updates as you toggle. |
 | **Default view** | Choose whether the app starts in *Card* or *List* view on every page load. |
-| **Group alerts by label** | Select which label defines top-level sections in Card and List views (`severity` by default, or any label seen in current alerts). |
-| **Resolved page size** | Number of resolved alerts shown per page (10 / 25 / 50 / 100). Set via the per-page selector in the resolved view; persisted in localStorage. |
+| **Card columns** | Fixed column count (1–6) for the Card View grid, or *Auto* to let it reflow with window width (up to 4). |
+| **Claim animation** | Toggle the animated snake border on the Claim button for unclaimed alerts. |
 | **Default filter** | Label matchers that are always active — see below. |
 | **Default silence duration** | Pre-selected duration when the silence creation form opens (15 min to 3 days). |
-| **Creator name** | Pre-fills the "Created by" field in new silences. |
+
+Which label sections Card and List view group by is no longer a Settings entry — it moved to the **Grouped** toolbar control, see [Grouping](#grouping). The resolved-view page size is set from its own per-page selector, not from this panel — see [Resolved View](#resolved-view).
 
 ### Default filters — permanent header chips
 
@@ -146,7 +168,7 @@ Open the Settings panel by clicking the **⚙ gear icon** in the top-right area 
 
 Default filters appear as **locked chips** in the filter row of the header. They behave like regular label matchers but cannot be removed from the header — they stay active at all times, across page reloads and view changes.
 
-A **lock icon** and dimmed appearance distinguish them from manually added filters. Hovering over a locked chip shows the tooltip: *"Default filter set in Settings — open Settings (⚙) to change or remove."*
+A **lock icon** and dimmed appearance distinguish them from manually added filters. Hovering over a locked chip shows the tooltip: *"Default filter set in Settings — open Settings from the user menu to change or remove."*
 
 To remove or modify a default filter, open Settings → Default Filter → click **×** on the chip, or clear the list and save.
 
@@ -254,7 +276,7 @@ The detail panel is the central hub for working with a single alert. It slides i
 - Other team members can see who has claimed an alert on both the card and list view
 - Unclaim at any time
 
-When an alert is claimed, the owner's name appears as a chip in the detail panel header and as an "In progress" banner on the alert card. The claim history is recorded in the History tab.
+When an alert is claimed, the owner's name appears as a chip in the detail panel header, and as a "Claimed by: \<name\> · \<time\>" line with a blue left accent on the alert card and list row. The claim history is recorded in the History tab.
 
 ![Alert Detail Panel — Claimed](assets/feature-detail-claimed.png)
 

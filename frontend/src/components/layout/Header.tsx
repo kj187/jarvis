@@ -323,7 +323,7 @@ export function Header() {
               {isAuthenticated && user ? <Avatar name={user.username} className="h-6 w-6" /> : <CircleUserRound className="h-5 w-5" />}
             </button>
             {userMenuOpen && (
-              <div className="absolute right-0 top-full z-50 min-w-40 rounded-b-md border border-t-0 border-border bg-header shadow-lg" onMouseEnter={userMenu.show} onMouseLeave={userMenu.hide}>
+              <div data-testid="user-menu-panel" className="absolute right-0 top-full z-50 min-w-40 rounded-b-md border border-t-0 border-border bg-header shadow-lg" onMouseEnter={userMenu.show} onMouseLeave={userMenu.hide}>
                 {isAuthenticated && user && (
                   <div className="px-3 py-2 text-xs font-medium text-foreground border-b border-border">{user.username}</div>
                 )}

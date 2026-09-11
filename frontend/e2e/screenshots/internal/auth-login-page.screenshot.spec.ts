@@ -9,6 +9,9 @@ const DIR = process.env.SCREENSHOTS_DIR ?? '../docs/assets'
  * doesn't send GET / → 302 /setup (which would set window.location.pathname=/setup
  * and force SetupPage regardless of what page.route() mocks for /auth/info).
  * page.route() then overrides /auth/info to full_protect so App renders LoginPage.
+ * Cropped to the card plus a modest margin (not the full viewport) — there's
+ * no dashboard behind this page (it replaces the whole app), just flat
+ * background, so a full-viewport shot is almost entirely empty space.
  * Regenerate: make e2e-screenshot NAME=auth-login-page MODE=internal
  */
 test('auth-login-page', async ({ page }) => {
@@ -33,7 +36,19 @@ test('auth-login-page', async ({ page }) => {
   await page.goto('/')
   await expect(page.getByRole('heading', { name: 'Jarvis', level: 1 })).toBeVisible()
   await expect(page.getByPlaceholder('Username')).toBeVisible()
+  const card = page.getByTestId('login-page-card')
   await page.waitForTimeout(300)
 
-  await page.screenshot({ path: `${DIR}/auth-login-page.png` })
+  const box = (await card.boundingBox())!
+  const viewport = page.viewportSize()!
+  const margin = 48
+  const x = Math.max(0, box.x - margin)
+  const y = Math.max(0, box.y - margin)
+  const right = Math.min(viewport.width, box.x + box.width + margin)
+  const bottom = Math.min(viewport.height, box.y + box.height + margin)
+
+  await page.screenshot({
+    path: `${DIR}/auth-login-page.png`,
+    clip: { x, y, width: right - x, height: bottom - y },
+  })
 })
