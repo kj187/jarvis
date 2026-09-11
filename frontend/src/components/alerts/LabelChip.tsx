@@ -78,12 +78,15 @@ export function LabelChip({
         className={cn(
           // One size for every chip — `emphasized` only adds weight, never a
           // bigger box, so a group of chips reads as one consistent row.
-          'max-w-[200px] truncate rounded border px-1.5 py-0.5 text-[10px] font-medium',
+          // `cursor-pointer` is set here explicitly (not left to inherit from
+          // a clickable ancestor) — the common-labels strip above a group has
+          // no clickable ancestor, so without this the chip fell back to the
+          // browser's default text cursor.
+          'max-w-[200px] cursor-pointer truncate rounded border px-1.5 py-0.5 text-[10px] font-medium',
           emphasized && 'font-semibold',
           neutral && 'border-border bg-muted text-foreground',
         )}
         style={neutral ? undefined : labelColorStyle(labelKey, theme)}
-        title={`${labelKey}: ${value}`}
       >
         <span className={neutral ? 'text-muted-foreground' : undefined}>{labelKey}:</span> {value}
       </span>

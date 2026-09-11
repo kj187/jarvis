@@ -217,7 +217,7 @@ function LockedMatcherChip({ name, operator, value }: { name: string; operator: 
   return (
     <div
       className="flex items-center rounded border border-border/60 h-7 opacity-75 bg-input"
-      title="Default filter set in Settings — open Settings (⚙) to change or remove"
+      title="Default filter set in Settings — open Settings from the user menu to change or remove"
     >
       <span className="px-2 text-xs text-muted-foreground shrink-0 select-none whitespace-nowrap overflow-hidden text-ellipsis" style={{ maxWidth: '120px' }}>
         {name}
