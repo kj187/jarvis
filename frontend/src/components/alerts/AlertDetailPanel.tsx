@@ -353,8 +353,8 @@ export function AlertDetailPanel({
       }
     : null
   const linkButtons = [
-    ...(alertmanagerLinkButton ? [alertmanagerLinkButton] : []),
     ...extractLinkButtons(alert.labels, alert.annotations, runbookBaseUrl),
+    ...(alertmanagerLinkButton ? [alertmanagerLinkButton] : []),
   ]
 
   const FIFTEEN_MIN = 15 * 60 * 1000

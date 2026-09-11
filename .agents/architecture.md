@@ -916,12 +916,12 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
 │   ├── alertSelection.ts      → makeAlertSelectionKey / parseAlertSelectionKey — selection key
 │   │                            format `<cluster>::<fingerprint>` (URL `alert=` param, cluster-safe)
 │   ├── linkUtils.tsx          → isUrl, extractLinkButtons (URL-valued labels/annotations + runbook
-│   │                            logic), renderTextWithLinks. AlertDetailPanel.tsx prepends one more
+│   │                            logic), renderTextWithLinks. AlertDetailPanel.tsx appends one more
 │   │                            `LinkButton` of its own — label "Alertmanager", built from
 │   │                            `alert.alertmanagerUrl` + an alertname filter, not derived from any
-│   │                            label/annotation — so it renders as the first chip in the Links
-│   │                            section instead of its own "Go to Alertmanager" button in the header
-│   │                            action row
+│   │                            label/annotation — so it renders as the last chip in the Links section
+│   │                            (after every labels/annotations-derived link), instead of its own
+│   │                            "Go to Alertmanager" button in the header action row
 │   ├── heatmapUtils.ts        → bucketFiringStarts(startsIso, range, now?) — pure hourly/daily
 │   │                            bucketing of raw firing timestamps into HeatmapCell[]
 │   │                            (browser-local day/hour boundaries; 24h/7d hourly cells via ms
