@@ -111,6 +111,63 @@ tests:
       - failedTemplate:
           errorMessage: "Invalid configuration: persistence.enabled=true with SQLite is incompatible with autoscaling. HPA may schedule multiple pods which cannot share a RWO volume or SQLite. Use PostgreSQL (database.dsn=postgres://...) for scalable deployments."
 
+  - it: fails when auth.provider is internal without secretKey or existingSecret
+    set:
+      auth.provider: internal
+    asserts:
+      - failedTemplate:
+          errorMessage: "Invalid configuration: auth.provider is not 'none' — set auth.secretKey (openssl rand -hex 32) or auth.existingSecret."
+
+  - it: fails when auth.provider is oidc without secretKey or existingSecret
+    set:
+      auth.provider: oidc
+      auth.oidc.issuer: https://idp.example.com/realms/jarvis
+      auth.oidc.clientId: jarvis
+      auth.oidc.redirectUrl: https://jarvis.example.com/auth/oidc/callback
+    asserts:
+      - failedTemplate:
+          errorMessage: "Invalid configuration: auth.provider is not 'none' — set auth.secretKey (openssl rand -hex 32) or auth.existingSecret."
+
+  - it: fails when auth.provider is oidc without issuer, clientId or redirectUrl
+    set:
+      auth.provider: oidc
+      auth.secretKey: "deadbeefdeadbeefdeadbeefdeadbeef"
+    asserts:
+      - failedTemplate:
+          errorMessage: "Invalid configuration: auth.provider=oidc requires auth.oidc.issuer, auth.oidc.clientId and auth.oidc.redirectUrl."
+
+  - it: allows auth.provider internal with secretKey set
+    set:
+      auth.provider: internal
+      auth.secretKey: "deadbeefdeadbeefdeadbeefdeadbeef"
+    asserts:
+      - isKind:
+          of: Deployment
+
+  - it: allows auth.provider internal with existingSecret set
+    set:
+      auth.provider: internal
+      auth.existingSecret: jarvis-auth
+    asserts:
+      - isKind:
+          of: Deployment
+
+  - it: allows auth.provider oidc with existingSecret and full oidc config
+    set:
+      auth.provider: oidc
+      auth.existingSecret: jarvis-auth
+      auth.oidc.issuer: https://idp.example.com/realms/jarvis
+      auth.oidc.clientId: jarvis
+      auth.oidc.redirectUrl: https://jarvis.example.com/auth/oidc/callback
+    asserts:
+      - isKind:
+          of: Deployment
+
+  - it: allows auth.provider none without any secret configured
+    asserts:
+      - isKind:
+          of: Deployment
+
   - it: allows replicaCount > 1 when persistence disabled
     set:
       replicaCount: 3
@@ -234,6 +291,9 @@ tests:
     set:
       auth.provider: oidc
       auth.existingSecret: jarvis-auth
+      auth.oidc.issuer: https://idp.example.com/realms/jarvis
+      auth.oidc.clientId: jarvis
+      auth.oidc.redirectUrl: https://jarvis.example.com/auth/oidc/callback
     asserts:
       - contains:
           path: spec.template.spec.containers[0].env

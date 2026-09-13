@@ -84,3 +84,23 @@ SQLite requires a single writer; RWO volumes (e.g. EBS) cannot be mounted by mor
 {{-   end }}
 {{- end }}
 {{- end }}
+
+{{/*
+Validate that auth.provider has the secret material it needs to actually
+start. Without this, an unset auth.secretKey renders a Secret without the
+key the Deployment references via secretKeyRef, and the pod only fails at
+container-start time with CreateContainerConfigError — a class of error
+neither `helm lint` nor `helm template` surfaces.
+*/}}
+{{- define "jarvis.validateAuth" -}}
+{{- if ne .Values.auth.provider "none" }}
+{{-   if not (or .Values.auth.existingSecret .Values.auth.secretKey) }}
+{{-     fail "Invalid configuration: auth.provider is not 'none' — set auth.secretKey (openssl rand -hex 32) or auth.existingSecret." }}
+{{-   end }}
+{{-   if eq .Values.auth.provider "oidc" }}
+{{-     if or (not .Values.auth.oidc.issuer) (not .Values.auth.oidc.clientId) (not .Values.auth.oidc.redirectUrl) }}
+{{-       fail "Invalid configuration: auth.provider=oidc requires auth.oidc.issuer, auth.oidc.clientId and auth.oidc.redirectUrl." }}
+{{-     end }}
+{{-   end }}
+{{- end }}
+{{- end }}
