@@ -294,10 +294,16 @@ func (s *Store) RecordStatusChange(
 		}
 
 		// Increment occurrence_count only on genuine re-fire after full resolution.
+		// alert_fingerprints is keyed on fingerprint alone (no cluster_name in
+		// its PK — UpsertFingerprint never updates cluster_name past the first
+		// INSERT), so this must not filter on cluster_name too: the same
+		// fingerprint firing in a second cluster would match zero rows and
+		// silently never increment, leaving occurrence_count stuck at 1 for
+		// every cluster but the one that saw the fingerprint first.
 		if status == models.EventStatusFiring && lastStatus == models.EventStatusResolved {
 			if _, err := s.execOn(tx, ctx,
-				`UPDATE alert_fingerprints SET occurrence_count = occurrence_count + 1 WHERE fingerprint = ? AND cluster_name = ?`,
-				fingerprint, clusterName,
+				`UPDATE alert_fingerprints SET occurrence_count = occurrence_count + 1 WHERE fingerprint = ?`,
+				fingerprint,
 			); err != nil {
 				return fmt.Errorf("increment occurrence_count: %w", err)
 			}
