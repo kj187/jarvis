@@ -1231,6 +1231,7 @@ func (s *Store) getLastEventForClusterOn(q queryer, ctx context.Context, fingerp
 	var e models.AlertEvent
 	var startsAt, recordedAt time.Time
 	var endsAt sql.NullTime
+	var annotationsNull sql.NullString
 	clusterFilter := ""
 	args := []interface{}{fingerprint}
 	if clusterName != "" {
@@ -1238,17 +1239,18 @@ func (s *Store) getLastEventForClusterOn(q queryer, ctx context.Context, fingerp
 		args = append(args, clusterName)
 	}
 	err := s.queryRowOn(q, ctx, `
-		SELECT id, fingerprint, cluster_name, alertmanager_url, status, starts_at, ends_at, recorded_at
+		SELECT id, fingerprint, cluster_name, alertmanager_url, status, starts_at, ends_at, annotations, recorded_at
 		FROM alert_events WHERE fingerprint = ?`+clusterFilter+`
 		ORDER BY recorded_at DESC, id DESC LIMIT 1
 	`, args...).Scan(&e.ID, &e.Fingerprint, &e.ClusterName, &e.AlertmanagerURL,
-		&e.Status, &startsAt, &endsAt, &recordedAt)
+		&e.Status, &startsAt, &endsAt, &annotationsNull, &recordedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
+	e.Annotations = annotationsNull.String
 	e.StartsAt = startsAt.UTC()
 	e.RecordedAt = recordedAt.UTC()
 	if endsAt.Valid {

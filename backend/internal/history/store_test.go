@@ -2,6 +2,7 @@ package history
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"testing"
@@ -353,6 +354,37 @@ func TestGetLastEventForCluster_TiebreaksOnID(t *testing.T) {
 	if last.Status != models.EventStatusResolved {
 		t.Errorf("Status = %q, want %q (the later-inserted row, by id) — ORDER BY recorded_at DESC is missing an id tiebreak",
 			last.Status, models.EventStatusResolved)
+	}
+}
+
+func TestRecordResolvedForCluster_PreservesAnnotations(t *testing.T) {
+	s := newTestStore(t)
+
+	s.UpsertFingerprint("fp1", "TestAlert", "homelab", nil) //nolint:errcheck
+
+	annotations := map[string]string{"summary": "CPU high", "description": "over 90%"}
+	if _, _, err := s.RecordStatusChange("fp1", "homelab", "http://am:9093", models.EventStatusFiring, time.Now(), annotations); err != nil {
+		t.Fatalf("RecordStatusChange: %v", err)
+	}
+
+	if err := s.RecordResolvedForCluster("fp1", "homelab", time.Now()); err != nil {
+		t.Fatalf("RecordResolvedForCluster: %v", err)
+	}
+
+	last, err := s.getLastEventForCluster("fp1", "homelab")
+	if err != nil {
+		t.Fatalf("getLastEventForCluster: %v", err)
+	}
+	if last == nil || last.Status != models.EventStatusResolved {
+		t.Fatalf("expected a resolved event, got %+v", last)
+	}
+
+	var got map[string]string
+	if err := json.Unmarshal([]byte(last.Annotations), &got); err != nil {
+		t.Fatalf("unmarshal annotations %q: %v", last.Annotations, err)
+	}
+	if got["summary"] != "CPU high" || got["description"] != "over 90%" {
+		t.Errorf("annotations = %+v, want the firing event's annotations carried over to the resolved row", got)
 	}
 }
 
