@@ -6,6 +6,20 @@ import (
 	"fmt"
 )
 
+// migrationLockClassID/migrationLockID identify a session-level advisory
+// lock distinct from the leader-election lock (docs/persistence.md,
+// "Leader election": leader.LockClassID/LockID = 0x4A525653/1): every pod
+// runs Migrate() on startup, before leader election even begins, so
+// without a lock two pods racing `CREATE TABLE IF NOT EXISTS` concurrently
+// can both lose the race to PostgreSQL's own catalog uniqueness check and
+// crash with "duplicate key value violates unique constraint
+// \"pg_type_typname_nsp_index\"" — a CrashLoopBackOff on every rolling
+// deploy.
+const (
+	migrationLockClassID int32 = 0x4A525653 // "JRVS" — same class as leader election
+	migrationLockID      int32 = 2          // distinct from leader.LockID (1)
+)
+
 func migratePostgres(database *sql.DB) error {
 	stmts := []string{
 		`CREATE TABLE IF NOT EXISTS alert_fingerprints (
@@ -101,8 +115,28 @@ func migratePostgres(database *sql.DB) error {
 		)`,
 	}
 
+	// Session-level locks require a single dedicated connection: they are
+	// held by the backend session, not a transaction, and must be released
+	// on that same connection.
+	ctx := context.Background()
+	conn, err := database.Conn(ctx)
+	if err != nil {
+		return fmt.Errorf("migrate postgres: acquire connection: %w", err)
+	}
+	defer func() { _ = conn.Close() }()
+
+	if _, err := conn.ExecContext(ctx, `SELECT pg_advisory_lock($1, $2)`, migrationLockClassID, migrationLockID); err != nil {
+		return fmt.Errorf("migrate postgres: acquire migration lock: %w", err)
+	}
+	defer func() {
+		// Best-effort: the connection close above also releases session
+		// locks, but explicit unlock keeps the lock's lifetime observable
+		// in pg_locks for the duration of this function only.
+		_, _ = conn.ExecContext(context.Background(), `SELECT pg_advisory_unlock($1, $2)`, migrationLockClassID, migrationLockID)
+	}()
+
 	for _, stmt := range stmts {
-		if _, err := database.ExecContext(context.Background(), stmt); err != nil {
+		if _, err := conn.ExecContext(ctx, stmt); err != nil {
 			return fmt.Errorf("migrate postgres: %w", err)
 		}
 	}
