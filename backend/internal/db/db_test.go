@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"testing"
+	"time"
 )
 
 func TestOpen_InMemory(t *testing.T) {
@@ -183,6 +184,62 @@ func TestMigrate_Postgres_PollSnapshotsTableExists(t *testing.T) {
 	}
 	if count != 1 {
 		t.Error("poll_snapshots table not found after Migrate() on PostgreSQL")
+	}
+}
+
+// TestMigrate_Postgres_SerializesConcurrentMigrations is env-gated
+// (JARVIS_TEST_POSTGRES_DSN): every pod runs Migrate() independently on
+// startup, before leader election begins, so two pods racing
+// `CREATE TABLE IF NOT EXISTS` during a rolling deploy must not run
+// concurrently — see migrationLockClassID/migrationLockID in
+// migrate_postgres.go. This test holds that same advisory lock on a
+// separate connection (simulating a pod already migrating) and asserts a
+// concurrent Migrate() call blocks until the lock is released, then
+// completes successfully.
+func TestMigrate_Postgres_SerializesConcurrentMigrations(t *testing.T) {
+	dsn := os.Getenv("JARVIS_TEST_POSTGRES_DSN")
+	if dsn == "" {
+		t.Skip("JARVIS_TEST_POSTGRES_DSN not set — skipping PostgreSQL-backed test")
+	}
+
+	database, dialect, err := openPostgres(dsn, defaultPoolConfig())
+	if err != nil {
+		t.Fatalf("openPostgres() error: %v", err)
+	}
+	defer func() { _ = database.Close() }()
+
+	ctx := context.Background()
+	holder, err := database.Conn(ctx)
+	if err != nil {
+		t.Fatalf("acquire holder connection: %v", err)
+	}
+	defer func() { _ = holder.Close() }()
+
+	if _, err := holder.ExecContext(ctx, `SELECT pg_advisory_lock($1, $2)`, migrationLockClassID, migrationLockID); err != nil {
+		t.Fatalf("holder acquire migration lock: %v", err)
+	}
+
+	done := make(chan error, 1)
+	go func() { done <- Migrate(database, dialect) }()
+
+	select {
+	case err := <-done:
+		t.Fatalf("Migrate() returned (err=%v) while the migration lock was still held by another connection — it is not serializing concurrent migrations", err)
+	case <-time.After(300 * time.Millisecond):
+		// Expected: Migrate() is blocked waiting for the lock.
+	}
+
+	if _, err := holder.ExecContext(ctx, `SELECT pg_advisory_unlock($1, $2)`, migrationLockClassID, migrationLockID); err != nil {
+		t.Fatalf("holder release migration lock: %v", err)
+	}
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("Migrate() error after lock released: %v", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("Migrate() did not complete after the migration lock was released")
 	}
 }
 

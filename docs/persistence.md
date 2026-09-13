@@ -35,7 +35,14 @@ JARVIS_DB_DSN=postgres://jarvis:secret@postgres:5432/jarvis?sslmode=require
   table, `poll_snapshots` (see
   [Leader-only polling & snapshot distribution](#leader-only-polling--snapshot-distribution)
   below) — SQLite never creates or reads it, since it never has followers
-  to feed.
+  to feed. On PostgreSQL, every pod runs migrations on startup — before
+  leader election even begins — so the whole statement list is wrapped in
+  a session-level advisory lock (`pg_advisory_lock`, class ID `0x4A525653`
+  same as leader election, lock ID `2` so it can never collide with the
+  leader-election lock's ID `1`) held on a dedicated connection. Without
+  it, two pods racing `CREATE TABLE IF NOT EXISTS` during a rolling
+  deploy can both lose the race to PostgreSQL's own catalog uniqueness
+  check and crash.
 - **TLS**: use `sslmode=require` (or `sslmode=verify-full` with a CA
   certificate) in production. `sslmode=disable` transmits the database
   password in plain text and must never be used outside a local, ephemeral
