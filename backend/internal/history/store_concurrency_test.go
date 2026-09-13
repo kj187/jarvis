@@ -82,3 +82,76 @@ func runConcurrentResolveRace(t *testing.T, stores []*Store) {
 		t.Fatalf("expected exactly 1 resolved event, got %d (total events %d)", resolvedCount, total)
 	}
 }
+
+// TestRecordResolvedForCluster_ConcurrentSQLite exercises Critical Invariant
+// #16 for RecordResolvedForCluster: goroutines racing to resolve the same
+// episode through one Store. SQLite's single-writer connection already
+// serializes transactions at the connection-pool level, so this asserts the
+// outcome is correct under -race, not that the advisory lock itself is
+// exercised — see TestRecordResolvedForCluster_ConcurrentPostgres for that.
+func TestRecordResolvedForCluster_ConcurrentSQLite(t *testing.T) {
+	s := newTestStore(t)
+	runConcurrentResolveForClusterRace(t, []*Store{s, s})
+}
+
+// TestRecordResolvedForCluster_ConcurrentPostgres is the regression test for
+// Critical Invariant #16 on RecordResolvedForCluster: without
+// pg_advisory_xact_lock, N Stores backed by separate connections — e.g. a
+// failover racing reconcileStartupResolves against the newly promoted
+// leader's own applyPollResults — can all read the same "last event" before
+// any of them commits, and all decide to insert, producing duplicate
+// resolved rows for one episode. Same 10-racer rationale as
+// TestRecordStatusChange_ConcurrentPostgres.
+func TestRecordResolvedForCluster_ConcurrentPostgres(t *testing.T) {
+	stores := newTestPostgresStores(t, 10)
+	runConcurrentResolveForClusterRace(t, stores)
+}
+
+// runConcurrentResolveForClusterRace fires an alert, then calls
+// RecordResolvedForCluster concurrently through every given Store handle
+// racing on the same (fingerprint, cluster). Exactly one resolved row must
+// exist afterward — more would mean the read-last/no-op-if-resolved check
+// ran non-atomically with the insert.
+func runConcurrentResolveForClusterRace(t *testing.T, stores []*Store) {
+	t.Helper()
+	const fp, cluster, amURL = "resolve-race-fp", "resolve-race-cluster", "http://am"
+
+	if err := stores[0].UpsertFingerprint(fp, "ResolveRaceAlert", cluster, nil); err != nil {
+		t.Fatalf("seed fingerprint: %v", err)
+	}
+	if _, _, err := stores[0].RecordStatusChange(fp, cluster, amURL, models.EventStatusFiring, time.Now(), nil); err != nil {
+		t.Fatalf("seed firing: %v", err)
+	}
+
+	var wg sync.WaitGroup
+	errs := make(chan error, len(stores))
+	wg.Add(len(stores))
+	for _, s := range stores {
+		s := s
+		go func() {
+			defer wg.Done()
+			errs <- s.RecordResolvedForCluster(fp, cluster, time.Now())
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Fatalf("concurrent RecordResolvedForCluster: %v", err)
+		}
+	}
+
+	events, total, err := stores[0].GetHistoryForCluster(fp, cluster, 50, 0)
+	if err != nil {
+		t.Fatalf("GetHistoryForCluster: %v", err)
+	}
+	resolvedCount := 0
+	for _, e := range events {
+		if e.Status == models.EventStatusResolved {
+			resolvedCount++
+		}
+	}
+	if resolvedCount != 1 {
+		t.Fatalf("expected exactly 1 resolved event, got %d (total events %d)", resolvedCount, total)
+	}
+}

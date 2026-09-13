@@ -328,19 +328,35 @@ func (s *Store) RecordResolved(fingerprint string, resolvedAt time.Time) error {
 	return s.RecordResolvedForCluster(fingerprint, "", resolvedAt)
 }
 
+// RecordResolvedForCluster is transactional and, on PostgreSQL,
+// advisory-xact-locked per episode — same as RecordStatusChange (Critical
+// Invariant #16). Without this, a failover racing reconcileStartupResolves
+// against the newly promoted leader's own applyPollResults could have both
+// read the same "last event" before either committed and both insert a
+// resolved row for the same episode.
 func (s *Store) RecordResolvedForCluster(fingerprint, clusterName string, resolvedAt time.Time) error {
-	last, err := s.getLastEventForCluster(fingerprint, clusterName)
-	if err != nil {
+	ctx := context.Background()
+	return s.withTx(ctx, func(tx *sql.Tx) error {
+		if s.dialect == idb.DialectPostgres {
+			lockKey := fingerprint + ":" + clusterName
+			if _, err := tx.ExecContext(ctx, rebind(s.dialect, `SELECT pg_advisory_xact_lock(hashtext(?))`), lockKey); err != nil {
+				return fmt.Errorf("acquire episode lock: %w", err)
+			}
+		}
+
+		last, err := s.getLastEventForClusterOn(tx, ctx, fingerprint, clusterName)
+		if err != nil {
+			return err
+		}
+		if last == nil || last.Status == models.EventStatusResolved {
+			return nil
+		}
+		_, err = s.execOn(tx, ctx, `
+			INSERT INTO alert_events (fingerprint, cluster_name, alertmanager_url, status, starts_at, annotations, recorded_at)
+			VALUES (?, ?, ?, 'resolved', ?, ?, ?)
+		`, fingerprint, last.ClusterName, last.AlertmanagerURL, last.StartsAt.UTC(), last.Annotations, resolvedAt.UTC())
 		return err
-	}
-	if last == nil || last.Status == models.EventStatusResolved {
-		return nil
-	}
-	_, err = s.exec(context.Background(), `
-		INSERT INTO alert_events (fingerprint, cluster_name, alertmanager_url, status, starts_at, annotations, recorded_at)
-		VALUES (?, ?, ?, 'resolved', ?, ?, ?)
-	`, fingerprint, last.ClusterName, last.AlertmanagerURL, last.StartsAt.UTC(), last.Annotations, resolvedAt.UTC())
-	return err
+	})
 }
 
 // GetOpenFingerprintsForCluster returns fingerprints in the given cluster
