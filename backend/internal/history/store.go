@@ -1218,6 +1218,15 @@ func (s *Store) getLastEventForCluster(fingerprint, clusterName string) (*models
 	return s.getLastEventForClusterOn(s.db, context.Background(), fingerprint, clusterName)
 }
 
+// getLastEventForClusterOn returns the most recently recorded event for a
+// fingerprint (optionally scoped to one cluster). The "id DESC" tiebreak
+// after "recorded_at DESC" is required, not cosmetic: recorded_at can tie
+// between two rows (SQLite's second-resolution `datetime('now')` default,
+// or any two inserts landing in the same instant elsewhere), and this
+// function's result directly drives the idempotency check, the grace-period
+// decision, and claim-release logic in RecordStatusChange/IsStillResolved —
+// an arbitrary pick between tied rows there is a correctness bug, not just
+// nondeterministic output.
 func (s *Store) getLastEventForClusterOn(q queryer, ctx context.Context, fingerprint, clusterName string) (*models.AlertEvent, error) {
 	var e models.AlertEvent
 	var startsAt, recordedAt time.Time
@@ -1231,7 +1240,7 @@ func (s *Store) getLastEventForClusterOn(q queryer, ctx context.Context, fingerp
 	err := s.queryRowOn(q, ctx, `
 		SELECT id, fingerprint, cluster_name, alertmanager_url, status, starts_at, ends_at, recorded_at
 		FROM alert_events WHERE fingerprint = ?`+clusterFilter+`
-		ORDER BY recorded_at DESC LIMIT 1
+		ORDER BY recorded_at DESC, id DESC LIMIT 1
 	`, args...).Scan(&e.ID, &e.Fingerprint, &e.ClusterName, &e.AlertmanagerURL,
 		&e.Status, &startsAt, &endsAt, &recordedAt)
 	if err == sql.ErrNoRows {

@@ -318,6 +318,44 @@ func TestRecordStatusChange_Transitions(t *testing.T) {
 	}
 }
 
+func TestGetLastEventForCluster_TiebreaksOnID(t *testing.T) {
+	s := newTestStore(t)
+
+	s.UpsertFingerprint("fp1", "TestAlert", "homelab", nil) //nolint:errcheck
+
+	// Insert two events sharing the exact same recorded_at — possible on
+	// SQLite's second-resolution `datetime('now')` default and, in
+	// principle, any two inserts landing in the same instant elsewhere.
+	// Without an id tiebreak, "ORDER BY recorded_at DESC LIMIT 1" leaves the
+	// choice between these two rows undefined; getLastEventForCluster must
+	// deterministically return the later-inserted (higher-id) row.
+	same := time.Now().UTC().Truncate(time.Second)
+	if _, err := s.db.ExecContext(context.Background(),
+		`INSERT INTO alert_events (fingerprint, cluster_name, alertmanager_url, status, starts_at, recorded_at) VALUES (?, ?, ?, ?, ?, ?)`,
+		"fp1", "homelab", "http://am:9093", "firing", same, same,
+	); err != nil {
+		t.Fatalf("insert first event: %v", err)
+	}
+	if _, err := s.db.ExecContext(context.Background(),
+		`INSERT INTO alert_events (fingerprint, cluster_name, alertmanager_url, status, starts_at, recorded_at) VALUES (?, ?, ?, ?, ?, ?)`,
+		"fp1", "homelab", "http://am:9093", "resolved", same, same,
+	); err != nil {
+		t.Fatalf("insert second event: %v", err)
+	}
+
+	last, err := s.getLastEventForCluster("fp1", "homelab")
+	if err != nil {
+		t.Fatalf("getLastEventForCluster: %v", err)
+	}
+	if last == nil {
+		t.Fatal("expected an event, got nil")
+	}
+	if last.Status != models.EventStatusResolved {
+		t.Errorf("Status = %q, want %q (the later-inserted row, by id) — ORDER BY recorded_at DESC is missing an id tiebreak",
+			last.Status, models.EventStatusResolved)
+	}
+}
+
 func TestOccurrenceCount_IncrementOnRefiring(t *testing.T) {
 	s := newTestStore(t)
 
