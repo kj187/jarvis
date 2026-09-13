@@ -101,7 +101,7 @@ tests:
       replicaCount: 2
     asserts:
       - failedTemplate:
-          errorMessage: "Invalid configuration: persistence.enabled=true with SQLite requires replicaCount=1. RWO volumes (e.g. EBS) support only one node mount and SQLite is single-writer. Use PostgreSQL (database.dsn=postgres://...) for multi-replica deployments."
+          errorMessage: "Invalid configuration: SQLite (database.dsn is a file path) requires replicaCount=1. Every pod would poll Alertmanager independently and keep its own divergent history. Use PostgreSQL (database.dsn=postgres://...) for multi-replica deployments."
 
   - it: fails when persistence enabled with SQLite and autoscaling enabled
     set:
@@ -109,7 +109,21 @@ tests:
       autoscaling.enabled: true
     asserts:
       - failedTemplate:
-          errorMessage: "Invalid configuration: persistence.enabled=true with SQLite is incompatible with autoscaling. HPA may schedule multiple pods which cannot share a RWO volume or SQLite. Use PostgreSQL (database.dsn=postgres://...) for scalable deployments."
+          errorMessage: "Invalid configuration: SQLite (database.dsn is a file path) is incompatible with autoscaling. HPA may schedule multiple pods, and every pod would poll Alertmanager independently and keep its own divergent history. Use PostgreSQL (database.dsn=postgres://...) for scalable deployments."
+
+  - it: fails when persistence disabled (default emptyDir) with SQLite and replicaCount > 1
+    set:
+      replicaCount: 2
+    asserts:
+      - failedTemplate:
+          errorMessage: "Invalid configuration: SQLite (database.dsn is a file path) requires replicaCount=1. Every pod would poll Alertmanager independently and keep its own divergent history. Use PostgreSQL (database.dsn=postgres://...) for multi-replica deployments."
+
+  - it: fails when persistence disabled (default emptyDir) with SQLite and autoscaling enabled
+    set:
+      autoscaling.enabled: true
+    asserts:
+      - failedTemplate:
+          errorMessage: "Invalid configuration: SQLite (database.dsn is a file path) is incompatible with autoscaling. HPA may schedule multiple pods, and every pod would poll Alertmanager independently and keep its own divergent history. Use PostgreSQL (database.dsn=postgres://...) for scalable deployments."
 
   - it: fails when auth.provider is internal without secretKey or existingSecret
     set:
@@ -168,14 +182,6 @@ tests:
       - isKind:
           of: Deployment
 
-  - it: allows replicaCount > 1 when persistence disabled
-    set:
-      replicaCount: 3
-    asserts:
-      - equal:
-          path: spec.replicas
-          value: 3
-
   - it: allows replicaCount > 1 with PostgreSQL even when persistence enabled
     set:
       persistence.enabled: true
@@ -228,6 +234,7 @@ tests:
   - it: does not manage replica count when autoscaling enabled
     set:
       autoscaling.enabled: true
+      database.dsn: postgres://user:pass@host:5432/db
     asserts:
       - notExists:
           path: spec.replicas
@@ -235,6 +242,7 @@ tests:
   - it: sets replica count when autoscaling disabled
     set:
       replicaCount: 3
+      database.dsn: postgres://user:pass@host:5432/db
     asserts:
       - equal:
           path: spec.replicas
