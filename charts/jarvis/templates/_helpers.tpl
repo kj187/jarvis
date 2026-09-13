@@ -70,17 +70,23 @@ Return true when SQLite is in use (DSN does not start with postgres://).
 {{- end }}
 
 {{/*
-Validate that SQLite + PVC is not combined with multiple replicas.
-SQLite requires a single writer; RWO volumes (e.g. EBS) cannot be mounted by more than one node.
+Validate that SQLite is never combined with multiple replicas.
+SQLite requires a single writer (SetMaxOpenConns(1)) and has no leader
+election across pods, so every replica would poll Alertmanager
+independently and keep its own divergent history — regardless of whether
+persistence.enabled uses a PVC or the default emptyDir. This must fire
+whenever SQLite is in use, not only when a PVC is configured: the default
+persistence.enabled=false (emptyDir) combination is exactly as broken, and
+is the configuration most deployments start from.
 */}}
 {{- define "jarvis.validateReplicas" -}}
-{{- if and .Values.persistence.enabled (include "jarvis.isSQLite" .) }}
+{{- if include "jarvis.isSQLite" . }}
 {{-   $replicas := int .Values.replicaCount }}
-{{-   if and (not .Values.autoscaling.enabled) (gt $replicas 1) }}
-{{-     fail "Invalid configuration: persistence.enabled=true with SQLite requires replicaCount=1. RWO volumes (e.g. EBS) support only one node mount and SQLite is single-writer. Use PostgreSQL (database.dsn=postgres://...) for multi-replica deployments." }}
-{{-   end }}
 {{-   if .Values.autoscaling.enabled }}
-{{-     fail "Invalid configuration: persistence.enabled=true with SQLite is incompatible with autoscaling. HPA may schedule multiple pods which cannot share a RWO volume or SQLite. Use PostgreSQL (database.dsn=postgres://...) for scalable deployments." }}
+{{-     fail "Invalid configuration: SQLite (database.dsn is a file path) is incompatible with autoscaling. HPA may schedule multiple pods, and every pod would poll Alertmanager independently and keep its own divergent history. Use PostgreSQL (database.dsn=postgres://...) for scalable deployments." }}
+{{-   end }}
+{{-   if gt $replicas 1 }}
+{{-     fail "Invalid configuration: SQLite (database.dsn is a file path) requires replicaCount=1. Every pod would poll Alertmanager independently and keep its own divergent history. Use PostgreSQL (database.dsn=postgres://...) for multi-replica deployments." }}
 {{-   end }}
 {{- end }}
 {{- end }}
