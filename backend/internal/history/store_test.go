@@ -419,6 +419,53 @@ func TestOccurrenceCount_IncrementOnRefiring(t *testing.T) {
 	}
 }
 
+func TestOccurrenceCount_IncrementAcrossClusters(t *testing.T) {
+	s := newTestStore(t)
+
+	// alert_fingerprints is created once, under whichever cluster this
+	// fingerprint fires in first — UpsertFingerprint never updates
+	// cluster_name afterward. Simulate that first sighting in cluster-a.
+	s.UpsertFingerprint("fp1", "TestAlert", "cluster-a", nil) //nolint:errcheck
+
+	// Independently, the SAME fingerprint has its own firing/resolved
+	// lifecycle in cluster-b (Alertmanager fingerprints are computed from
+	// label sets alone and are not cluster-scoped, so a shared fingerprint
+	// across clusters is a legitimate real-world scenario). Insert
+	// cluster-b's firing+resolved directly with controlled recorded_at, same
+	// pattern as TestOccurrenceCount_IncrementOnRefiring.
+	s.db.ExecContext(context.Background(), //nolint:errcheck
+		`INSERT INTO alert_events (fingerprint, cluster_name, alertmanager_url, status, starts_at, recorded_at) VALUES (?, ?, ?, ?, ?, ?)`,
+		"fp1", "cluster-b", "http://am-b:9093", "firing",
+		time.Now().Add(-5*time.Minute), time.Now().Add(-3*time.Minute),
+	)
+	s.db.ExecContext(context.Background(), //nolint:errcheck
+		`INSERT INTO alert_events (fingerprint, cluster_name, alertmanager_url, status, starts_at, recorded_at) VALUES (?, ?, ?, ?, ?, ?)`,
+		"fp1", "cluster-b", "http://am-b:9093", "resolved",
+		time.Now().Add(-5*time.Minute), time.Now().Add(-90*time.Second),
+	)
+
+	// Re-fire in cluster-b — RecordStatusChange scopes its own last-event
+	// lookup to cluster-b and correctly sees resolved→firing there, so it
+	// must increment occurrence_count. alert_fingerprints.cluster_name is
+	// still "cluster-a" from the UpsertFingerprint call above — the
+	// increment must not filter on cluster_name, or it silently matches zero
+	// rows and occurrence_count stays wrong for every cluster but the first.
+	if _, _, err := s.RecordStatusChange("fp1", "cluster-b", "http://am-b:9093", models.EventStatusFiring, time.Now(), nil); err != nil {
+		t.Fatalf("RecordStatusChange: %v", err)
+	}
+
+	st, err := s.GetStats("fp1")
+	if err != nil {
+		t.Fatalf("GetStats: %v", err)
+	}
+	if st == nil {
+		t.Fatal("stats nil")
+	}
+	if st.OccurrenceCount != 2 {
+		t.Errorf("OccurrenceCount = %d, want 2 (re-fire in a cluster other than the one recorded in alert_fingerprints must still increment)", st.OccurrenceCount)
+	}
+}
+
 func TestOccurrenceCount_NoIncrementOnSuppressedExpired(t *testing.T) {
 	s := newTestStore(t)
 

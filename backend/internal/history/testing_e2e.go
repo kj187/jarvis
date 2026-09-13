@@ -99,9 +99,11 @@ func (s *Store) SeedFiringHistoryForTesting(
 		}
 	}
 	if len(cycles) > 0 {
+		// alert_fingerprints is keyed on fingerprint alone (see the identical
+		// note in RecordStatusChange) — no cluster_name filter here either.
 		if _, err := s.exec(context.Background(),
-			`UPDATE alert_fingerprints SET occurrence_count = occurrence_count + ? WHERE fingerprint = ? AND cluster_name = ?`,
-			len(cycles), fingerprint, clusterName,
+			`UPDATE alert_fingerprints SET occurrence_count = occurrence_count + ? WHERE fingerprint = ?`,
+			len(cycles), fingerprint,
 		); err != nil {
 			return fmt.Errorf("bump occurrence_count: %w", err)
 		}
