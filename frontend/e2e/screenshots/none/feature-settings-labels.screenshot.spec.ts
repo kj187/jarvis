@@ -7,11 +7,22 @@ const DIR = process.env.SCREENSHOTS_DIR ?? '../docs/assets'
 /**
  * Screenshot: the Labels section of the Settings panel (issue #189) — cropped
  * to just that section rather than the whole panel (same crop-to-content
- * technique as feature-settings-panel.screenshot.spec.ts).
+ * technique as feature-settings-panel.screenshot.spec.ts). Seeded with a
+ * small configuration so the screenshot shows every row state: pinned
+ * (with drag grip), hidden (dimmed) and a palette color.
  * Regenerate: make e2e-screenshot NAME=feature-settings-labels
  */
 test('feature-settings-labels', async ({ page, am }) => {
   await dismissNoAuthNotice(page)
+  await page.addInitScript(() => {
+    localStorage.setItem('jarvis-user-settings', JSON.stringify({
+      state: {
+        labelDisplay: { order: ['@cluster', 'namespace'], hidden: ['runbook'] },
+        labelColors: { team: 'purple', namespace: 'teal' },
+      },
+      version: 0,
+    }))
+  })
   await am.fire(manyAlerts)
   await page.goto('/?state=active')
   await expect(page.getByTestId('alert-card').first()).toBeVisible()

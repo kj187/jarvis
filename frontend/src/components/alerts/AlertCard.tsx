@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { ArrowUpRight, BellOff, User } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { getFilterableLabels, getSilenceState, getExpiredSilence, formatSilenceDuration, tzAbbr, shortClaimant, orderLabelsForDisplay, hiddenLabelsForDisplay } from '@/lib/alertUtils'
+import { getFilterableLabels, getSilenceState, getExpiredSilence, formatSilenceDuration, tzAbbr, shortClaimant, partitionLabelsForDisplay } from '@/lib/alertUtils'
 import { renderTextWithLinks } from '@/lib/linkUtils'
 import { bucketFiringStarts } from '@/lib/heatmapUtils'
 import { AlertBadge } from './AlertBadge'
@@ -94,8 +94,7 @@ function AlertEntry({
   const labelDisplay = useSettingsStore((s) => s.labelDisplay)
   const maintainer = claim ? null : (alert.labels['maintainer'] ?? null)
   const formatTime = useFormatTime()
-  const labels = orderLabelsForDisplay(getFilterableLabels(alert), labelDisplay, commonLabelKeys)
-  const hiddenLabels = hiddenLabelsForDisplay(getFilterableLabels(alert), labelDisplay, commonLabelKeys)
+  const { visible: labels, hidden: hiddenLabels } = partitionLabelsForDisplay(getFilterableLabels(alert), labelDisplay, commonLabelKeys)
   const summary = alert.annotations['summary']
   const description = alert.annotations['description']
   // Only dress up entries that share a card with siblings — a lone alert
@@ -297,8 +296,7 @@ export function AlertCard({
   const labelDisplay = useSettingsStore((s) => s.labelDisplay)
   const commonLabels = getCommonLabels(alerts)
   const commonLabelKeys = new Set(Object.keys(commonLabels))
-  const sortedCommonLabels = orderLabelsForDisplay(commonLabels, labelDisplay)
-  const hiddenCommonLabels = hiddenLabelsForDisplay(commonLabels, labelDisplay)
+  const { visible: sortedCommonLabels, hidden: hiddenCommonLabels } = partitionLabelsForDisplay(commonLabels, labelDisplay)
 
   const severityBorderColor: Record<string, string> = {
     critical: 'border-l-red-500',
@@ -350,14 +348,16 @@ export function AlertCard({
       </div>
 
       {/* Common labels — shared by every alert in the group, so rendered as a
-          quiet context strip (neutral, no per-key hue) that doesn't compete
-          with each entry's own distinguishing labels */}
+          quiet context strip above each entry's own distinguishing labels.
+          Labels have no automatic color (see LabelChip), so this is neutral
+          by default anyway; only an explicit custom color from Settings →
+          Labels shows here. */}
       {!collapsed && (sortedCommonLabels.length > 0 || hiddenCommonLabels.length > 0) && (
         <div data-testid="alert-card-common-labels" className="flex flex-wrap gap-1 border-b border-border/60 px-3 py-2">
           {sortedCommonLabels.map(([key, value]) => (
-            <LabelChip key={key} labelKey={key} value={value} muted />
+            <LabelChip key={key} labelKey={key} value={value} />
           ))}
-          <HiddenLabelsToggle hidden={hiddenCommonLabels} muted />
+          <HiddenLabelsToggle hidden={hiddenCommonLabels} />
         </div>
       )}
 

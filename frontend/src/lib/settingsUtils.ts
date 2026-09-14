@@ -17,11 +17,33 @@ export const ALLOWED_SILENCE_DURATIONS = [15, 30, 60, 240, 480, 1440, 4320] as c
 const DEFAULT_FILTER_OPERATORS: LabelMatcherOperator[] = ['=', '!=', '=~', '!~']
 
 export interface LabelDisplayConfig {
-  /** Label keys rendered first, in exactly this order. */
+  /** Pinned label keys — rendered first, in exactly this order. */
   order: string[]
-  /** Label keys never rendered as a chip in the card/list views. */
+  /** Label keys collapsed behind the "+N" chip in the card/list views.
+      Never also in `order` (see normalizeSettings). */
   hidden: string[]
 }
+
+/** Fixed chip color palette (name → HSL hue). Every entry has a tuned light-
+    and dark-theme variant (lib/alertUtils.ts labelColorStyle), so a chosen
+    color is always legible in both themes. No red — a red chip reads as a
+    critical state, not a label. */
+export const LABEL_COLOR_HUES = {
+  blue: 217,
+  cyan: 190,
+  teal: 168,
+  green: 142,
+  amber: 43,
+  orange: 25,
+  pink: 330,
+  purple: 270,
+} as const
+export type LabelColor = keyof typeof LABEL_COLOR_HUES
+export const LABEL_COLORS = Object.keys(LABEL_COLOR_HUES) as LabelColor[]
+
+/** Label key → palette color. Keys absent here have no color at all —
+    labels are neutral by default, coloring is opt-in only. */
+export type LabelColorMap = Record<string, LabelColor>
 
 export interface UserSettings {
   // Display
@@ -46,8 +68,11 @@ export interface UserSettings {
   // Animations
   claimAnimationEnabled: boolean
 
-  // Label chip display (card/list views only — see lib/alertUtils.ts orderLabelsForDisplay)
+  // Label chip display (card/list views only — see lib/alertUtils.ts partitionLabelsForDisplay)
   labelDisplay: LabelDisplayConfig
+
+  // Per-label chip color, keyed by label key (see lib/alertUtils.ts labelColorStyle)
+  labelColors: LabelColorMap
 }
 
 export const DEFAULT_SETTINGS: UserSettings = {
@@ -62,9 +87,10 @@ export const DEFAULT_SETTINGS: UserSettings = {
   defaultCreatorName: '',
   claimAnimationEnabled: true,
   labelDisplay: { order: ['@cluster'], hidden: [] },
+  labelColors: {},
 }
 
-/** Layers global (Phase 3) and per-user overrides on top of the app defaults. */
+/** Layers instance-wide defaults (reserved, {} for now) and per-user overrides on top of the app defaults. */
 export function resolveSettings(
   global: Partial<UserSettings>,
   overrides: Partial<UserSettings>,
@@ -140,12 +166,29 @@ export function normalizeSettings(raw: unknown): Partial<UserSettings> {
       const hidden = dedupeStrings(ld.hidden)
       const hiddenSet = new Set(hidden)
       // Hidden wins over order — a key configured as both never renders, so
-      // keeping it in `order` too would be a dead entry (§3.2).
+      // keeping it in `order` too would be a dead entry.
       const order = dedupeStrings(ld.order).filter((key) => !hiddenSet.has(key))
       out.labelDisplay = { order, hidden }
     }
   }
+  if (
+    typeof obj.labelColors === 'object' &&
+    obj.labelColors !== null &&
+    !Array.isArray(obj.labelColors)
+  ) {
+    out.labelColors = normalizeLabelColors(obj.labelColors as Record<string, unknown>)
+  }
 
+  return out
+}
+
+/** Keeps only entries with a non-empty key and a known palette color name. */
+function normalizeLabelColors(raw: Record<string, unknown>): LabelColorMap {
+  const out: LabelColorMap = {}
+  for (const [key, value] of Object.entries(raw)) {
+    if (key === '' || typeof value !== 'string' || !Object.hasOwn(LABEL_COLOR_HUES, value)) continue
+    out[key] = value as LabelColor
+  }
   return out
 }
 

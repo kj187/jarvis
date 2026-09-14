@@ -1,6 +1,6 @@
-// Package settings stores each user's settings as an opaque JSON blob (see
-// tmp/settings_storage.md §4.4) — this package never inspects individual
-// setting keys, so a new frontend setting never requires a backend change.
+// Package settings stores each user's settings as an opaque JSON blob — this
+// package never inspects individual setting keys, so a new frontend setting
+// never requires a backend change.
 package settings
 
 import (
@@ -62,7 +62,7 @@ func (s *Store) Get(ctx context.Context, userID string) (string, error) {
 }
 
 // Put replaces a user's settings row (insert or update). Last write wins —
-// no merge, no versioning (tmp/settings_storage.md §4.5).
+// no merge, no versioning.
 func (s *Store) Put(ctx context.Context, userID, settingsJSON string) error {
 	q := s.rebind(`
 		INSERT INTO user_settings (user_id, settings, updated_at)

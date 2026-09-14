@@ -5,7 +5,6 @@ import { SilenceLifetimeBar } from './SilenceLifetimeBar'
 import { SilenceMatcherChip } from './SilenceMatcherChip'
 import { silenceTiming } from '@/lib/alertUtils'
 import { URGENCY_FILL_CLASS } from './silenceDisplay'
-import { useSettingsStore } from '@/store/useSettingsStore'
 import type { EnrichedAlert, Silence } from '@/types'
 import { cn } from '@/lib/utils'
 
@@ -18,7 +17,6 @@ interface SilenceCardProps {
 }
 
 export function SilenceCard({ silence, alerts, onEdit, onExpire, isDeleting = false }: SilenceCardProps) {
-  const theme = useSettingsStore((s) => s.theme)
   const affectedCount = alerts.reduce(
     (sum, alert) => sum + (alert.status.silencedBy.includes(silence.id) ? 1 : 0),
     0,
@@ -84,7 +82,7 @@ export function SilenceCard({ silence, alerts, onEdit, onExpire, isDeleting = fa
 
         <div className="flex flex-wrap gap-x-2.5 gap-y-1">
           {visibleMatchers.map((m, i) => (
-            <SilenceMatcherChip key={i} matcher={m} theme={theme} />
+            <SilenceMatcherChip key={i} matcher={m} />
           ))}
           {hiddenMatcherCount > 0 && (
             <span className="self-center font-mono text-[11px] text-muted-foreground/60">

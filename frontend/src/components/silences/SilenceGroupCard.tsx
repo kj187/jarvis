@@ -5,7 +5,6 @@ import { SilenceLifetimeBar } from './SilenceLifetimeBar'
 import { SilenceMatcherChip } from './SilenceMatcherChip'
 import { silenceTiming } from '@/lib/alertUtils'
 import { URGENCY_FILL_CLASS } from './silenceDisplay'
-import { useSettingsStore } from '@/store/useSettingsStore'
 import type { EnrichedAlert, Silence } from '@/types'
 import { cn } from '@/lib/utils'
 
@@ -23,7 +22,6 @@ interface SilenceGroupCardProps {
 }
 
 export function SilenceGroupCard({ group, alerts, onEditGroup, onExpireGroup, deletingIds }: SilenceGroupCardProps) {
-  const theme = useSettingsStore((s) => s.theme)
   const rep = group.silences[0]
   const isDeleting = group.silences.some((s) => deletingIds.has(s.id))
   const allExpired = group.silences.every((s) => s.status.state === 'expired')
@@ -119,7 +117,7 @@ export function SilenceGroupCard({ group, alerts, onEditGroup, onExpireGroup, de
 
         <div className="flex flex-wrap gap-x-2.5 gap-y-1">
           {visibleMatchers.map((m, i) => (
-            <SilenceMatcherChip key={i} matcher={m} theme={theme} />
+            <SilenceMatcherChip key={i} matcher={m} />
           ))}
           {hiddenMatcherCount > 0 && (
             <span className="self-center font-mono text-[11px] text-muted-foreground/60">

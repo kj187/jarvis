@@ -11,13 +11,12 @@ import (
 
 // validateSilenceMatchers checks the matcher list against Alertmanager's own
 // silence-validation rules (verified empirically against a running
-// Alertmanager 0.32.2 — see tmp/fable/review_silence.md T-06): at least one
-// matcher, no empty names, every regex must compile, and at least one
-// *positive* matcher (`=`/`=~`) must not match the empty string. Go's regexp
-// package is RE2 — the same engine Alertmanager uses — so a pattern that
-// compiles here is guaranteed to compile in Alertmanager too, including
-// syntax the frontend's JS RegExp can't evaluate (e.g. inline flags like
-// `(?i)`).
+// Alertmanager 0.32.2): at least one matcher, no empty names, every regex
+// must compile, and at least one *positive* matcher (`=`/`=~`) must not match
+// the empty string. Go's regexp package is RE2 — the same engine Alertmanager
+// uses — so a pattern that compiles here is guaranteed to compile in
+// Alertmanager too, including syntax the frontend's JS RegExp can't evaluate
+// (e.g. inline flags like `(?i)`).
 func validateSilenceMatchers(matchers []models.SilenceMatcher) error {
 	if len(matchers) == 0 {
 		return fmt.Errorf("at least one matcher is required")

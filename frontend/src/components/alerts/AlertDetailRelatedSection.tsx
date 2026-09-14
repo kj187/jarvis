@@ -5,6 +5,7 @@ import { labelColorStyle, type RelatedAlert } from '@/lib/alertUtils'
 import { makeAlertSelectionKeyForAlert } from '@/lib/alertSelection'
 import { useFormatTime } from '@/hooks/useFormatTime'
 import { useSettingsStore } from '@/store/useSettingsStore'
+import { cn } from '@/lib/utils'
 import type { EnrichedAlert } from '@/types'
 
 const PAGE_SIZE = 10
@@ -25,6 +26,7 @@ function RelatedAlertRow({
   showCluster: boolean
   onSelect?: () => void
 }) {
+  const labelColors = useSettingsStore((s) => s.labelColors)
   const theme = useSettingsStore((s) => s.theme)
   const fmtTime = useFormatTime()
   const { alert, sharedKeys } = related
@@ -57,8 +59,11 @@ function RelatedAlertRow({
         {visibleKeys.map((key) => (
           <TruncatableChip
             key={key}
-            className="max-w-[180px] rounded border px-1.5 py-0.5 text-[10px] font-medium"
-            style={labelColorStyle(key, theme)}
+            className={cn(
+              'max-w-[180px] rounded border px-1.5 py-0.5 text-[10px] font-medium',
+              !labelColorStyle(key, labelColors, theme) && 'border-border bg-muted text-foreground',
+            )}
+            style={labelColorStyle(key, labelColors, theme)}
           >
             {key}={alert.labels[key]}
           </TruncatableChip>

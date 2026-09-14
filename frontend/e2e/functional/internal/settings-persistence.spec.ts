@@ -4,7 +4,7 @@ import type { Page } from '@playwright/test'
 
 /**
  * Catalog (internal mode): with an auth provider active and a logged-in user,
- * settings live in the account row (tmp/settings_storage.md), not the browser.
+ * settings live in the account row, not the browser.
  *
  * Each test is self-contained (creates and logs in as its own admin) rather
  * than relying on state surviving *between* tests — the shared `page` fixture

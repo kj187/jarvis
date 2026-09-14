@@ -10,9 +10,10 @@ import { Sheet } from '@/components/ui/sheet'
 import { SilenceForm } from '@/components/silences/SilenceForm'
 import { SilenceExpireModal } from '@/components/silences/SilenceExpireModal'
 import { fetchClusters, deleteSilence } from '@/api/client'
-import { formatSilenceDuration, getFilterableLabels, severityOrder, orderLabelsForDisplay, hiddenLabelsForDisplay } from '@/lib/alertUtils'
+import { formatSilenceDuration, getFilterableLabels, severityOrder, partitionLabelsForDisplay } from '@/lib/alertUtils'
 import { renderTextWithLinks } from '@/lib/linkUtils'
 import { useSettingsStore, RESOLVED_PAGE_SIZE_OPTIONS } from '@/store/useSettingsStore'
+import type { LabelDisplayConfig } from '@/lib/settingsUtils'
 import { useUIStore } from '@/store/uiStore'
 import { useLoginGuard } from '@/hooks/useLoginGuard'
 import { LoginModal } from '@/components/auth/LoginModal'
@@ -186,6 +187,19 @@ function loadStoredArray(key: string): string[] {
   } catch {
     return []
   }
+}
+
+/** Pinned-first chips plus the "+N" chip for hidden labels, partitioned once. */
+function PartitionedLabelChips({ labels, labelDisplay }: { labels: Record<string, string>; labelDisplay: LabelDisplayConfig }) {
+  const { visible, hidden } = partitionLabelsForDisplay(labels, labelDisplay)
+  return (
+    <>
+      {visible.map(([key, value]) => (
+        <LabelChip key={key} labelKey={key} value={value} />
+      ))}
+      <HiddenLabelsToggle hidden={hidden} />
+    </>
+  )
 }
 
 export function AlertListView({
@@ -797,15 +811,12 @@ export function AlertListView({
                               <span className="pl-6 text-xs text-muted-foreground">{renderTextWithLinks(group.commonSummary)}</span>
                             )}
                             {/* Common labels shared by the whole group — a quiet
-                                muted strip (the alertname is already the heading) */}
+                                strip (the alertname is already the heading) */}
                             <div className="flex flex-wrap gap-1 pl-6">
                               {group.clusterNames.map((c) => (
-                                <LabelChip key={c} labelKey="@cluster" value={c} muted />
+                                <LabelChip key={c} labelKey="@cluster" value={c} />
                               ))}
-                              {orderLabelsForDisplay(group.commonLabels, labelDisplay).map(([key, value]) => (
-                                <LabelChip key={key} labelKey={key} value={value} muted />
-                              ))}
-                              <HiddenLabelsToggle hidden={hiddenLabelsForDisplay(group.commonLabels, labelDisplay)} muted />
+                              <PartitionedLabelChips labels={group.commonLabels} labelDisplay={labelDisplay} />
                             </div>
                           </div>
                         </td>

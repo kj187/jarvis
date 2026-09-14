@@ -1,12 +1,12 @@
-import { useState, useRef, useMemo, useEffect, type MouseEvent as ReactMouseEvent } from 'react'
+import { useState, useRef, useMemo, useEffect, useLayoutEffect, type MouseEvent as ReactMouseEvent } from 'react'
 import { createPortal } from 'react-dom'
-import { X, RotateCcw, Info, Grip, ArrowUp, Eye, EyeOff, Search } from 'lucide-react'
+import { X, RotateCcw, Info, Grip, Pin, Eye, EyeOff, Search } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Sheet } from '@/components/ui/sheet'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
-import { formatTime, HIDDEN_LABEL_KEYS } from '@/lib/alertUtils'
+import { formatTime, HIDDEN_LABEL_KEYS, labelColorStyle } from '@/lib/alertUtils'
 import {
   useSettingsStore,
   ALLOWED_SILENCE_DURATIONS,
@@ -15,6 +15,7 @@ import {
 } from '@/store/useSettingsStore'
 import type { CardColumns } from '@/store/useSettingsStore'
 import type { DefaultFilter } from '@/store/useSettingsStore'
+import { LABEL_COLORS, type LabelColor } from '@/lib/settingsUtils'
 import type { LabelMatcherOperator } from '@/types'
 import { useAlerts } from '@/hooks/useAlerts'
 import { getFilterableLabels } from '@/lib/alertUtils'
@@ -146,7 +147,7 @@ function useScrollEdges<T extends HTMLElement>() {
   }
 
   // Re-checks on every render (cheap DOM reads) so content changes that
-  // don't fire a scroll event — e.g. the "Other labels" search filtering
+  // don't fire a scroll event — e.g. the Labels search filtering
   // rows in or out — still update the fade.
   useEffect(() => {
     check()
@@ -206,19 +207,230 @@ function LabelStatsHint({ stats }: { stats: LabelStats }) {
   )
 }
 
-// Mouse-driven drag reorder — same technique as AlertCardGrid's section drag
-// (no dnd-kit dependency): drag the Grip handle, track which row the pointer
-// is currently over via each row's own bounding rect, drop to reorder.
-function PriorityOrderList({
-  order,
-  getStats,
-  onReorder,
-  onRemove,
+/**
+ * Round color swatch — hollow when the label has no color, filled with its
+ * palette color otherwise. Click opens a small palette popover: a fixed-
+ * position portal positioned from the trigger's own bounding rect (same
+ * technique as LabelChip's operator popover) so it isn't clipped by the
+ * scrollable label list it lives inside.
+ */
+function LabelColorSwatch({
+  labelKey,
+  color,
+  onChange,
 }: {
-  order: string[]
-  getStats: (key: string) => LabelStats
+  labelKey: string
+  color: LabelColor | undefined
+  onChange: (color: LabelColor | null) => void
+}) {
+  const theme = useSettingsStore((s) => s.theme)
+  const [open, setOpen] = useState(false)
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
+  const triggerRef = useRef<HTMLButtonElement | null>(null)
+  const popoverRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (!open) return
+    function onDown(e: MouseEvent) {
+      const target = e.target as Node
+      if (triggerRef.current?.contains(target) || popoverRef.current?.contains(target)) return
+      setOpen(false)
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+
+  // The popover's size isn't known until it's rendered — nudge it back onto
+  // the viewport right after paint (rows can sit hard against the sheet's
+  // right/bottom edge).
+  useLayoutEffect(() => {
+    if (!open) return
+    const el = popoverRef.current
+    if (!el) return
+    const rect = el.getBoundingClientRect()
+    const overflowRight = rect.right - (window.innerWidth - 8)
+    const overflowBottom = rect.bottom - (window.innerHeight - 8)
+    if (overflowRight > 0 || overflowBottom > 0) {
+      setPos((p) => (p ? {
+        top: overflowBottom > 0 ? Math.max(8, p.top - overflowBottom) : p.top,
+        left: overflowRight > 0 ? Math.max(8, p.left - overflowRight) : p.left,
+      } : p))
+    }
+  }, [open])
+
+  function togglePopover() {
+    if (!open && triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect()
+      setPos({ top: rect.bottom + 4, left: rect.left })
+    }
+    setOpen(!open)
+  }
+
+  function choose(next: LabelColor | null) {
+    onChange(next)
+    setOpen(false)
+  }
+
+  // The chip's text color is the saturated variant of a palette entry in
+  // both themes — the chip background is too close to the sheet ground to
+  // read as a 16px dot.
+  const dotColor = (name: LabelColor) => labelColorStyle('k', { k: name }, theme)?.color
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={togglePopover}
+        aria-label={`Choose a chip color for ${labelKey}`}
+        aria-expanded={open}
+        title={color ? `Chip color: ${color}` : 'No chip color — click to choose one'}
+        className="h-3.5 w-3.5 shrink-0 cursor-pointer rounded-full border-2 border-muted-foreground/50"
+        style={{ backgroundColor: color ? dotColor(color) : 'transparent' }}
+      />
+      {open && pos && createPortal(
+        <div
+          ref={popoverRef}
+          data-testid="label-color-picker"
+          className="fixed z-50 flex items-center gap-1.5 rounded-lg border border-border bg-popover p-2 shadow-lg"
+          style={{ top: pos.top, left: pos.left }}
+        >
+          {LABEL_COLORS.map((name) => (
+            <button
+              key={name}
+              type="button"
+              onClick={() => choose(name)}
+              aria-label={`Color ${labelKey} ${name}`}
+              aria-pressed={color === name}
+              title={name}
+              className={cn(
+                'h-5 w-5 cursor-pointer rounded-full ring-offset-2 ring-offset-popover transition-transform hover:scale-110',
+                color === name && 'ring-2 ring-foreground',
+              )}
+              style={{ backgroundColor: dotColor(name) }}
+            />
+          ))}
+          <button
+            type="button"
+            onClick={() => choose(null)}
+            aria-label={`Remove color for ${labelKey}`}
+            aria-pressed={!color}
+            title="No color"
+            className={cn(
+              'flex h-5 w-5 cursor-pointer items-center justify-center rounded-full border border-dashed border-muted-foreground/60 text-muted-foreground ring-offset-2 ring-offset-popover hover:text-foreground',
+              !color && 'ring-2 ring-foreground',
+            )}
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </div>,
+        document.body,
+      )}
+    </>
+  )
+}
+
+interface LabelRowProps {
+  labelKey: string
+  stats: LabelStats
+  pinned: boolean
+  hidden: boolean
+  color: LabelColor | undefined
+  onTogglePinned: () => void
+  onToggleHidden: () => void
+  onColorChange: (color: LabelColor | null) => void
+}
+
+/**
+ * One row of Settings → Labels — identical for pinned and unpinned labels.
+ * Pin and hide are mutually exclusive; the caller's toggles enforce that.
+ * Pinned rows additionally get a drag grip (see PinnedLabelRows).
+ */
+function LabelRow({
+  labelKey,
+  stats,
+  pinned,
+  hidden,
+  color,
+  onTogglePinned,
+  onToggleHidden,
+  onColorChange,
+  onGripMouseDown,
+  dragging = false,
+}: LabelRowProps & {
+  onGripMouseDown?: (e: ReactMouseEvent<HTMLButtonElement>) => void
+  dragging?: boolean
+}) {
+  return (
+    <div
+      className={cn(
+        'flex items-center gap-2 rounded border border-border bg-input px-2 py-1',
+        dragging && 'opacity-50',
+      )}
+    >
+      {onGripMouseDown ? (
+        <button
+          type="button"
+          onMouseDown={onGripMouseDown}
+          aria-label={`Drag ${labelKey} to reorder`}
+          title="Drag to reorder"
+          className="shrink-0 cursor-grab text-muted-foreground/60 hover:text-foreground active:cursor-grabbing"
+        >
+          <Grip className="h-3.5 w-3.5" />
+        </button>
+      ) : (
+        <span className="w-3.5 shrink-0" />
+      )}
+      <span className={cn('flex min-w-0 flex-1 items-center gap-2', hidden && 'opacity-50')}>
+        <span className={cn('flex-1 truncate text-xs', pinned && 'font-medium')}>{labelKey}</span>
+        <LabelStatsHint stats={stats} />
+      </span>
+      <LabelColorSwatch labelKey={labelKey} color={color} onChange={onColorChange} />
+      <button
+        type="button"
+        onClick={onTogglePinned}
+        aria-label={pinned ? `Unpin ${labelKey}` : `Pin ${labelKey}`}
+        aria-pressed={pinned}
+        title={pinned ? 'Unpin' : 'Pin — show first'}
+        className={cn('shrink-0', pinned ? 'text-primary' : 'text-muted-foreground/60 hover:text-foreground')}
+      >
+        <Pin className={cn('h-3.5 w-3.5', pinned && 'fill-current')} />
+      </button>
+      <button
+        type="button"
+        onClick={onToggleHidden}
+        aria-label={hidden ? `Show ${labelKey}` : `Hide ${labelKey}`}
+        aria-pressed={hidden}
+        title={hidden ? 'Show' : 'Hide — collapse into “+N”'}
+        className="shrink-0 text-muted-foreground hover:text-foreground"
+      >
+        {hidden ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+      </button>
+    </div>
+  )
+}
+
+// Mouse-driven drag reorder for the pinned rows — same technique as
+// AlertCardGrid's section drag: drag the grip, track which row the pointer is
+// over via each row's own bounding rect, drop to reorder. Only offered while the list isn't search-filtered, so the rows on
+// screen are always the complete `order`.
+function PinnedLabelRows({
+  keys,
+  draggable,
+  onReorder,
+  rowProps,
+}: {
+  keys: string[]
+  draggable: boolean
   onReorder: (next: string[]) => void
-  onRemove: (key: string) => void
+  rowProps: (key: string) => LabelRowProps
 }) {
   const [draggingKey, setDraggingKey] = useState<string | null>(null)
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
@@ -228,14 +440,14 @@ function PriorityOrderList({
   function startDrag(e: ReactMouseEvent<HTMLButtonElement>, key: string) {
     e.preventDefault()
     setDraggingKey(key)
-    const startIdx = order.indexOf(key)
+    const startIdx = keys.indexOf(key)
     setDragOverIndex(startIdx)
     dragOverIndexRef.current = startIdx
 
     const onMouseMove = (ev: MouseEvent) => {
-      let nextIdx = order.length
-      for (let i = 0; i < order.length; i++) {
-        const el = rowRefs.current[order[i]]
+      let nextIdx = keys.length
+      for (let i = 0; i < keys.length; i++) {
+        const el = rowRefs.current[keys[i]]
         if (!el) continue
         const rect = el.getBoundingClientRect()
         if (ev.clientY < rect.top + rect.height / 2) {
@@ -249,12 +461,11 @@ function PriorityOrderList({
 
     const onMouseUp = () => {
       const dropIdx = dragOverIndexRef.current
-      const fromIdx = order.indexOf(key)
+      const fromIdx = keys.indexOf(key)
       if (dropIdx !== null) {
-        let insertAt = dropIdx
-        if (fromIdx < insertAt) insertAt -= 1
+        const insertAt = fromIdx < dropIdx ? dropIdx - 1 : dropIdx
         if (fromIdx !== insertAt) {
-          const next = [...order]
+          const next = [...keys]
           next.splice(fromIdx, 1)
           next.splice(insertAt, 0, key)
           onReorder(next)
@@ -271,83 +482,27 @@ function PriorityOrderList({
     window.addEventListener('mouseup', onMouseUp)
   }
 
+  const dropLine = (i: number) => (
+    <div className={draggingKey ? 'h-1.5' : 'h-0'}>
+      {dragOverIndex === i && <div className="h-0 border-t-2 border-dashed border-primary/80" />}
+    </div>
+  )
+
   return (
-    <ScrollFadeList className="max-h-96 space-y-1 pr-1">
-      {order.map((key, i) => (
+    <div data-testid="pinned-labels">
+      {keys.map((key, i) => (
         <div key={key}>
-          <div className={draggingKey ? 'h-1.5' : 'h-0'}>
-            {dragOverIndex === i && <div className="h-0 border-t-2 border-dashed border-primary/80" />}
-          </div>
-          <div
-            ref={(el) => { rowRefs.current[key] = el }}
-            className={cn(
-              'flex items-center gap-1.5 rounded border border-border bg-input px-2 py-1',
-              draggingKey === key && 'opacity-50',
-            )}
-          >
-            <button
-              type="button"
-              onMouseDown={(e) => startDrag(e, key)}
-              aria-label={`Drag ${key} to reorder`}
-              title="Drag to reorder"
-              className="shrink-0 cursor-grab text-muted-foreground/60 hover:text-foreground active:cursor-grabbing"
-            >
-              <Grip className="h-3.5 w-3.5" />
-            </button>
-            <span className="flex-1 truncate text-xs font-medium">{key}</span>
-            <LabelStatsHint stats={getStats(key)} />
-            <button
-              type="button"
-              onClick={() => onRemove(key)}
-              aria-label={`Remove ${key} from priority order`}
-              title="Remove from priority order"
-              className="shrink-0 text-muted-foreground hover:text-foreground"
-            >
-              <X className="h-3 w-3" />
-            </button>
+          {dropLine(i)}
+          <div ref={(el) => { rowRefs.current[key] = el }} className={draggingKey ? '' : 'mb-1'}>
+            <LabelRow
+              {...rowProps(key)}
+              onGripMouseDown={draggable ? (e) => startDrag(e, key) : undefined}
+              dragging={draggingKey === key}
+            />
           </div>
         </div>
       ))}
-      <div className={draggingKey ? 'h-1.5' : 'h-0'}>
-        {dragOverIndex === order.length && <div className="h-0 border-t-2 border-dashed border-primary/80" />}
-      </div>
-    </ScrollFadeList>
-  )
-}
-
-function OtherLabelRow({
-  labelKey,
-  stats,
-  hidden,
-  onToggleHidden,
-  onAddToPriority,
-}: {
-  labelKey: string
-  stats: LabelStats
-  hidden: boolean
-  onToggleHidden: () => void
-  onAddToPriority: () => void
-}) {
-  return (
-    <div className={cn('flex items-center gap-1.5 rounded border border-border bg-input px-2 py-1', hidden && 'opacity-50')}>
-      <span className="flex-1 truncate text-xs">{labelKey}</span>
-      <LabelStatsHint stats={stats} />
-      <button
-        type="button"
-        onClick={onToggleHidden}
-        aria-label={hidden ? `Show ${labelKey}` : `Hide ${labelKey}`}
-        className="shrink-0 text-muted-foreground hover:text-foreground"
-      >
-        {hidden ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-      </button>
-      <button
-        type="button"
-        onClick={onAddToPriority}
-        aria-label={`Add ${labelKey} to priority order`}
-        className="shrink-0 text-muted-foreground hover:text-foreground"
-      >
-        <ArrowUp className="h-3.5 w-3.5" />
-      </button>
+      {dropLine(keys.length)}
     </div>
   )
 }
@@ -373,13 +528,14 @@ function Section({
   )
 }
 
-function InfoTooltip({ text }: { text: string }) {
+function InfoTooltip({ text, ariaLabel = 'More information' }: { text: string; ariaLabel?: string }) {
   const [rect, setRect] = useState<DOMRect | null>(null)
   const ref = useRef<HTMLSpanElement>(null)
 
   return (
     <span
       ref={ref}
+      aria-label={ariaLabel}
       className="inline-flex cursor-help"
       onMouseEnter={() => setRect(ref.current?.getBoundingClientRect() ?? null)}
       onMouseLeave={() => setRect(null)}
@@ -427,6 +583,37 @@ function SettingRow({
   )
 }
 
+function SettingsSwitch({
+  checked,
+  onToggle,
+  ariaLabel,
+}: {
+  checked: boolean
+  onToggle: () => void
+  ariaLabel: string
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-label={ariaLabel}
+      aria-checked={checked}
+      onClick={onToggle}
+      className={cn(
+        'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors',
+        checked ? 'bg-primary' : 'bg-input',
+      )}
+    >
+      <span
+        className={cn(
+          'pointer-events-none inline-block h-4 w-4 rounded-full bg-background shadow-sm transition-transform',
+          checked ? 'translate-x-4' : 'translate-x-0',
+        )}
+      />
+    </button>
+  )
+}
+
 const OPERATORS: LabelMatcherOperator[] = ['=', '!=', '=~', '!~']
 
 const SILENCE_DURATION_LABELS: Record<number, string> = {
@@ -463,8 +650,9 @@ export function SettingsSheet({ open, onClose }: SettingsSheetProps) {
   }, [allAlerts])
   const availableLabelNames = useMemo(() => Array.from(labelValueMap.keys()).sort(), [labelValueMap])
 
-  // ── Label display (Settings → Labels) ──
+  // ── Labels (Settings → Labels) ──
   const labelDisplay = settings.labelDisplay
+  const labelColors = settings.labelColors
   const labelStatsMap = useMemo(() => {
     const map = new Map<string, { count: number; distinct: Set<string> }>()
     allAlerts.forEach((a) => {
@@ -485,74 +673,107 @@ export function SettingsSheet({ open, onClose }: SettingsSheetProps) {
   }
 
   // Every key seen in currently loaded alerts, plus any key already configured
-  // via order/hidden — so a configuration doesn't drop out of the UI once its
-  // alerts resolve. Keys with their own dedicated UI element are never listed.
+  // via order/hidden/labelColors — so a configuration doesn't drop out of the
+  // UI once its alerts resolve. Keys with their own dedicated UI element are
+  // never listed.
   const configurableLabelKeys = useMemo(() => {
     const keys = new Set<string>()
     labelStatsMap.forEach((_v, k) => keys.add(k))
     labelDisplay.order.forEach((k) => keys.add(k))
     labelDisplay.hidden.forEach((k) => keys.add(k))
+    Object.keys(labelColors).forEach((k) => keys.add(k))
     return Array.from(keys).filter((k) => !HIDDEN_LABEL_KEYS.has(k) && !k.startsWith('__'))
-  }, [labelStatsMap, labelDisplay.order, labelDisplay.hidden])
-
-  // Alphabetical only — a hidden label keeps its alphabetical spot (shown
-  // dimmed via `opacity-50` in OtherLabelRow) rather than jumping to the end,
-  // so toggling visibility doesn't reshuffle the list out from under you.
-  const otherLabelKeys = useMemo(() => {
-    const priority = new Set(labelDisplay.order)
-    return configurableLabelKeys
-      .filter((k) => !priority.has(k))
-      .sort((a, b) => a.localeCompare(b))
-  }, [configurableLabelKeys, labelDisplay.order])
+  }, [labelStatsMap, labelDisplay.order, labelDisplay.hidden, labelColors])
 
   const [labelSearch, setLabelSearch] = useState('')
-  const filteredOtherLabelKeys = useMemo(() => {
-    const q = labelSearch.trim().toLowerCase()
-    if (!q) return otherLabelKeys
-    return otherLabelKeys.filter((k) => k.toLowerCase().includes(q))
-  }, [otherLabelKeys, labelSearch])
+  const labelQuery = labelSearch.trim().toLowerCase()
 
-  function reorderPriority(next: string[]) {
-    update({ labelDisplay: { ...labelDisplay, order: next } })
+  const pinnedLabelKeys = useMemo(() => {
+    const configurable = new Set(configurableLabelKeys)
+    return labelDisplay.order.filter((k) => configurable.has(k) && (!labelQuery || k.toLowerCase().includes(labelQuery)))
+  }, [configurableLabelKeys, labelDisplay.order, labelQuery])
+
+  // Alphabetical only — a hidden label keeps its spot (dimmed) rather than
+  // jumping to the end, so toggling doesn't reshuffle the list under you.
+  const unpinnedLabelKeys = useMemo(() => {
+    const pinned = new Set(labelDisplay.order)
+    return configurableLabelKeys
+      .filter((k) => !pinned.has(k) && (!labelQuery || k.toLowerCase().includes(labelQuery)))
+      .sort((a, b) => a.localeCompare(b))
+  }, [configurableLabelKeys, labelDisplay.order, labelQuery])
+
+  // Pin and hide are mutually exclusive (normalizeSettings: hidden wins), so
+  // each toggle clears the other. Always built as `{ order, hidden }` in this
+  // key order — computeNextOverrides compares values via JSON.stringify.
+  function setLabelDisplay(order: string[], hidden: string[]) {
+    update({ labelDisplay: { order, hidden } })
   }
 
-  function removeLabelFromOrder(key: string) {
-    update({ labelDisplay: { ...labelDisplay, order: labelDisplay.order.filter((k) => k !== key) } })
+  function togglePinned(key: string) {
+    const { order, hidden } = labelDisplay
+    if (order.includes(key)) setLabelDisplay(order.filter((k) => k !== key), hidden)
+    else setLabelDisplay([...order, key], hidden.filter((k) => k !== key))
   }
 
-  function toggleLabelHidden(key: string) {
-    const isHidden = labelDisplay.hidden.includes(key)
-    const next = isHidden
-      ? labelDisplay.hidden.filter((k) => k !== key)
-      : [...labelDisplay.hidden, key]
-    update({ labelDisplay: { ...labelDisplay, hidden: next } })
+  function toggleHidden(key: string) {
+    const { order, hidden } = labelDisplay
+    if (hidden.includes(key)) setLabelDisplay(order, hidden.filter((k) => k !== key))
+    else setLabelDisplay(order.filter((k) => k !== key), [...hidden, key])
   }
 
-  // Acts on whatever the "Other labels" search currently shows, not the
-  // full list — searching "aws_" then hiding/showing all only touches the
-  // AWS-related labels, not everything.
-  const allFilteredHidden =
-    filteredOtherLabelKeys.length > 0 &&
-    filteredOtherLabelKeys.every((k) => labelDisplay.hidden.includes(k))
+  // Acts on the unpinned labels the search currently shows, not the full
+  // list — searching "aws_" then hiding all only touches those labels.
+  const allUnpinnedHidden =
+    unpinnedLabelKeys.length > 0 && unpinnedLabelKeys.every((k) => labelDisplay.hidden.includes(k))
 
-  function toggleHideAllFiltered() {
-    if (filteredOtherLabelKeys.length === 0) return
-    const next = allFilteredHidden
-      ? labelDisplay.hidden.filter((k) => !filteredOtherLabelKeys.includes(k))
-      : Array.from(new Set([...labelDisplay.hidden, ...filteredOtherLabelKeys]))
-    update({ labelDisplay: { ...labelDisplay, hidden: next } })
+  function toggleHideAllUnpinned() {
+    const { order, hidden } = labelDisplay
+    const targets = new Set(unpinnedLabelKeys)
+    setLabelDisplay(
+      order,
+      allUnpinnedHidden
+        ? hidden.filter((k) => !targets.has(k))
+        : [...hidden, ...unpinnedLabelKeys.filter((k) => !hidden.includes(k))],
+    )
   }
 
-  function addLabelToOrder(key: string) {
-    if (labelDisplay.order.includes(key)) return
-    update({ labelDisplay: { ...labelDisplay, order: [...labelDisplay.order, key] } })
+  function setLabelColor(key: string, color: LabelColor | null) {
+    const next = { ...labelColors }
+    if (color) next[key] = color
+    else delete next[key]
+    update({ labelColors: next })
   }
 
-  // Scoped reset — only labelDisplay, distinct from the global "Reset all
-  // settings" button below (user feedback: that one resetting *everything*
-  // wasn't obvious, and there was no way to reset just this section).
+  function labelRowProps(key: string): LabelRowProps {
+    return {
+      labelKey: key,
+      stats: getLabelStats(key),
+      pinned: labelDisplay.order.includes(key),
+      hidden: labelDisplay.hidden.includes(key),
+      color: labelColors[key],
+      onTogglePinned: () => togglePinned(key),
+      onToggleHidden: () => toggleHidden(key),
+      onColorChange: (color) => setLabelColor(key, color),
+    }
+  }
+
+  const [confirmLabelReset, setConfirmLabelReset] = useState(false)
+  const labelResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Scoped two-click reset — mirrors the global reset guard, but only resets
+  // the Labels section.
   function resetLabelDisplay() {
-    update({ labelDisplay: DEFAULT_SETTINGS.labelDisplay })
+    if (!confirmLabelReset) {
+      setConfirmLabelReset(true)
+      labelResetTimerRef.current = setTimeout(() => setConfirmLabelReset(false), 3000)
+      return
+    }
+    if (labelResetTimerRef.current) clearTimeout(labelResetTimerRef.current)
+    setConfirmLabelReset(false)
+    update({
+      labelDisplay: DEFAULT_SETTINGS.labelDisplay,
+      labelColors: DEFAULT_SETTINGS.labelColors,
+    })
   }
 
   // Default filter add-row state
@@ -601,7 +822,7 @@ export function SettingsSheet({ open, onClose }: SettingsSheetProps) {
           still lets this box grow with its children, which defeats the whole
           flex-1/min-h-0 chain below: with nothing capping the total, every
           flex item just takes its content size and the *page* ends up
-          scrolling instead of just the "Other labels" list. A fixed height
+          scrolling instead of just the Labels list. A fixed height
           gives that chain an actual budget to distribute, so the list is
           what shrinks/grows with window height — the sheet's own scroll
           only ever engages as a last resort if content can't fit even at
@@ -692,23 +913,33 @@ export function SettingsSheet({ open, onClose }: SettingsSheetProps) {
             label="Claim animation"
             info="Animated snake border on the Claim button for unclaimed alerts"
           >
-            <button
-              type="button"
-              role="switch"
-              aria-checked={settings.claimAnimationEnabled}
-              onClick={() => update({ claimAnimationEnabled: !settings.claimAnimationEnabled })}
-              className={cn(
-                'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors',
-                settings.claimAnimationEnabled ? 'bg-primary' : 'bg-input',
-              )}
+            <SettingsSwitch
+              checked={settings.claimAnimationEnabled}
+              onToggle={() => update({ claimAnimationEnabled: !settings.claimAnimationEnabled })}
+              ariaLabel="Claim animation"
+            />
+          </SettingRow>
+        </Section>
+
+        <div className="h-px bg-border" />
+
+        {/* ── Silences ── */}
+        <Section title="Silences">
+          <SettingRow label="Default duration" info="Pre-selected duration when opening the Create Silence form">
+            <Select
+              value={String(settings.defaultSilenceDurationMinutes)}
+              onChange={(e) =>
+                update({ defaultSilenceDurationMinutes: parseInt(e.target.value, 10) })
+              }
+              className="h-7 w-28"
+              selectClassName="text-xs"
             >
-              <span
-                className={cn(
-                  'pointer-events-none inline-block h-4 w-4 rounded-full bg-background shadow-sm transition-transform',
-                  settings.claimAnimationEnabled ? 'translate-x-4' : 'translate-x-0',
-                )}
-              />
-            </button>
+              {ALLOWED_SILENCE_DURATIONS.map((mins) => (
+                <option key={mins} value={String(mins)}>
+                  {SILENCE_DURATION_LABELS[mins]}
+                </option>
+              ))}
+            </Select>
           </SettingRow>
         </Section>
 
@@ -788,28 +1019,6 @@ export function SettingsSheet({ open, onClose }: SettingsSheetProps) {
           )}
         </Section>
 
-        <div className="h-px bg-border" />
-
-        {/* ── Silences ── */}
-        <Section title="Silences">
-          <SettingRow label="Default duration" info="Pre-selected duration when opening the Create Silence form">
-            <Select
-              value={String(settings.defaultSilenceDurationMinutes)}
-              onChange={(e) =>
-                update({ defaultSilenceDurationMinutes: parseInt(e.target.value, 10) })
-              }
-              className="h-7 w-28"
-              selectClassName="text-xs"
-            >
-              {ALLOWED_SILENCE_DURATIONS.map((mins) => (
-                <option key={mins} value={String(mins)}>
-                  {SILENCE_DURATION_LABELS[mins]}
-                </option>
-              ))}
-            </Select>
-          </SettingRow>
-        </Section>
-
         </div>
 
         {/* ── Right column: Labels ── */}
@@ -819,99 +1028,85 @@ export function SettingsSheet({ open, onClose }: SettingsSheetProps) {
         <Section title="Labels" className="flex min-h-0 flex-1 flex-col">
           <div className="-mt-1 flex shrink-0 items-start justify-between gap-3">
             <p className="text-[10px] text-muted-foreground">
-              Choose which label chips show on the card and list views, and in
-              what order. The alert detail panel always shows every label,
-              regardless of what's configured here.
+              Pinned labels show first, in this order. Hidden labels collapse into a “+N” chip on each alert and always stay in the detail panel.
             </p>
             <button
               type="button"
               onClick={resetLabelDisplay}
-              className="inline-flex shrink-0 cursor-pointer items-center gap-1 whitespace-nowrap text-[10px] text-muted-foreground hover:text-foreground"
-              title="Reset only this Labels section (priority order and hidden labels) back to its default — other settings are untouched"
+              className={cn(
+                'inline-flex shrink-0 cursor-pointer items-center gap-1 whitespace-nowrap rounded border border-transparent px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground',
+                confirmLabelReset && 'border-destructive text-destructive hover:bg-destructive/10 hover:text-destructive',
+              )}
+              title="Reset only this Labels section (pinned, hidden and colors) — other settings are untouched"
             >
               <RotateCcw className="h-3 w-3" />
-              Reset labels
+              {confirmLabelReset ? 'Click again to confirm — resets labels' : 'Reset labels'}
             </button>
           </div>
 
-          {allAlerts.length === 0 ? (
+          {configurableLabelKeys.length === 0 ? (
             <p className="shrink-0 text-xs text-muted-foreground">No labels seen yet.</p>
           ) : (
-            <div className="flex min-h-0 flex-1 flex-col gap-3">
-              {labelDisplay.order.length > 0 && (
-                <div className="shrink-0 space-y-1">
-                  <span className="flex items-center gap-1.5 text-[10px] font-medium text-muted-foreground">
-                    Priority order
-                    <InfoTooltip text="These labels always show first, in this order. Drag the grip handle to reorder; click × to send one back to Other labels." />
-                  </span>
-                  <PriorityOrderList
-                    order={labelDisplay.order}
-                    getStats={getLabelStats}
-                    onReorder={reorderPriority}
-                    onRemove={removeLabelFromOrder}
-                  />
-                </div>
-              )}
-
-              {/* Grows to fill whatever vertical space is left in the sheet
-                  so "Reset all settings" sits at the bottom of the viewport
-                  instead of floating above empty space — and shrinks back
-                  down (to `min-h-[8rem]` on the list itself) as the window
-                  gets shorter, as long as there are enough labels to need it. */}
-              <div className="flex min-h-0 flex-1 flex-col gap-1">
-                <div className="flex shrink-0 items-center justify-between gap-2">
-                  <span className="flex items-center gap-1.5 text-[10px] font-medium text-muted-foreground">
-                    Other labels
-                    <InfoTooltip text="Every other label found on your alerts, alphabetically. Click the eye to show or hide it as a chip; click ↑ to add it to the priority order above." />
-                  </span>
+            /* Grows to fill whatever vertical space is left in the sheet so
+               "Reset all settings" sits at the bottom of the viewport instead
+               of floating above empty space — and shrinks back down (to
+               `min-h-[8rem]` on the list itself) as the window gets shorter. */
+            <div className="flex min-h-0 flex-1 flex-col gap-1.5">
+              <div className="flex h-7 shrink-0 items-center gap-1.5 rounded-md border border-border bg-input px-1.5">
+                <Search className="h-3 w-3 shrink-0 text-muted-foreground" />
+                <input
+                  value={labelSearch}
+                  onChange={(e) => setLabelSearch(e.target.value)}
+                  placeholder="Filter labels…"
+                  className="h-full min-w-0 flex-1 bg-transparent text-xs text-foreground outline-none placeholder:text-muted-foreground"
+                />
+                {labelSearch && (
                   <button
                     type="button"
-                    onClick={toggleHideAllFiltered}
-                    disabled={filteredOtherLabelKeys.length === 0}
-                    className="shrink-0 cursor-pointer text-[10px] text-muted-foreground hover:text-foreground disabled:cursor-default disabled:opacity-40 disabled:hover:text-muted-foreground"
-                    title={labelSearch ? 'Applies to the labels matching your filter' : 'Applies to every label in this list'}
+                    onClick={() => setLabelSearch('')}
+                    className="shrink-0 cursor-pointer text-muted-foreground hover:text-foreground"
+                    aria-label="Clear filter"
                   >
-                    {allFilteredHidden ? 'Show all' : 'Hide all'}
+                    <X className="h-3 w-3" />
                   </button>
-                </div>
-                <div className="flex h-7 shrink-0 items-center gap-1.5 rounded-md border border-border bg-input px-1.5">
-                  <Search className="h-3 w-3 shrink-0 text-muted-foreground" />
-                  <input
-                    value={labelSearch}
-                    onChange={(e) => setLabelSearch(e.target.value)}
-                    placeholder="Filter labels…"
-                    className="h-full min-w-0 flex-1 bg-transparent text-xs text-foreground outline-none placeholder:text-muted-foreground"
+                )}
+              </div>
+              <ScrollFadeList testId="label-list" grow minHeightClassName="min-h-[8rem]" className="pr-1">
+                {pinnedLabelKeys.length > 0 && (
+                  <PinnedLabelRows
+                    keys={pinnedLabelKeys}
+                    draggable={!labelQuery}
+                    onReorder={(order) => setLabelDisplay(order, labelDisplay.hidden)}
+                    rowProps={labelRowProps}
                   />
-                  {labelSearch && (
+                )}
+                {pinnedLabelKeys.length > 0 && unpinnedLabelKeys.length > 0 && (
+                  <div className="mb-1 mt-1 h-px bg-border" />
+                )}
+                {unpinnedLabelKeys.length > 0 && (
+                  <div className="flex items-center justify-between px-1 pb-1">
+                    <span className="text-[10px] text-muted-foreground">
+                      {labelQuery ? `${unpinnedLabelKeys.length} matching` : 'Other labels'}
+                    </span>
                     <button
                       type="button"
-                      onClick={() => setLabelSearch('')}
-                      className="shrink-0 cursor-pointer text-muted-foreground hover:text-foreground"
-                      aria-label="Clear filter"
+                      onClick={toggleHideAllUnpinned}
+                      className="cursor-pointer text-[10px] text-muted-foreground hover:text-foreground"
+                      title={labelQuery ? 'Applies to the unpinned labels matching your filter' : 'Applies to every unpinned label'}
                     >
-                      <X className="h-3 w-3" />
+                      {allUnpinnedHidden ? 'Show all' : 'Hide all'}
                     </button>
-                  )}
+                  </div>
+                )}
+                <div data-testid="unpinned-labels" className="space-y-1">
+                  {unpinnedLabelKeys.map((key) => (
+                    <LabelRow key={key} {...labelRowProps(key)} />
+                  ))}
                 </div>
-                <ScrollFadeList testId="other-labels-list" grow minHeightClassName="min-h-[8rem]" className="space-y-1 pr-1">
-                  {filteredOtherLabelKeys.length === 0 ? (
-                    <p className="px-1 py-2 text-xs text-muted-foreground">
-                      {labelSearch ? `No labels match "${labelSearch}".` : 'No other labels.'}
-                    </p>
-                  ) : (
-                    filteredOtherLabelKeys.map((key) => (
-                      <OtherLabelRow
-                        key={key}
-                        labelKey={key}
-                        stats={getLabelStats(key)}
-                        hidden={labelDisplay.hidden.includes(key)}
-                        onToggleHidden={() => toggleLabelHidden(key)}
-                        onAddToPriority={() => addLabelToOrder(key)}
-                      />
-                    ))
-                  )}
-                </ScrollFadeList>
-              </div>
+                {labelQuery && pinnedLabelKeys.length === 0 && unpinnedLabelKeys.length === 0 && (
+                  <p className="px-1 py-2 text-xs text-muted-foreground">No labels match “{labelSearch}”.</p>
+                )}
+              </ScrollFadeList>
             </div>
           )}
         </Section>

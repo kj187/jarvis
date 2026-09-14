@@ -3,7 +3,7 @@ import { AlertBadge, StatusBadge } from './AlertBadge'
 import { AckButton } from './AckButton'
 import { LabelChip, HiddenLabelsToggle } from './LabelChip'
 import { useAlertStats } from '@/hooks/useAlerts'
-import { getSilenceState, formatSilenceDuration, shortClaimant, orderLabelsForDisplay, hiddenLabelsForDisplay } from '@/lib/alertUtils'
+import { getFilterableLabels, getSilenceState, formatSilenceDuration, shortClaimant, partitionLabelsForDisplay } from '@/lib/alertUtils'
 import { renderTextWithLinks } from '@/lib/linkUtils'
 import { useFormatTime } from '@/hooks/useFormatTime'
 import { makeAlertSelectionKeyForAlert } from '@/lib/alertSelection'
@@ -56,19 +56,20 @@ export function AlertListRow({
     ? getSilenceState(alert, silences)
     : { type: null as null, silence: null, remaining: undefined }
 
-  // excludeLabels only excludes on a matching value (unlike orderLabelsForDisplay's
-  // exclude set, which is key-only), so it's applied as a post-filter here.
-  let uniqueLabels = orderLabelsForDisplay(alert.labels, labelDisplay).filter(
-    ([key, value]) => excludeLabels?.[key] !== value,
+  // Remove shared key/value pairs before partitioning (excludeLabels matches on
+  // key *and* value). getFilterableLabels lets @cluster follow the same
+  // pin/hide rules as every other label instead of being a special chip.
+  const rowLabels = Object.fromEntries(
+    Object.entries(getFilterableLabels(alert)).filter(([key, value]) => excludeLabels?.[key] !== value),
   )
+  const partitioned = partitionLabelsForDisplay(rowLabels, labelDisplay)
+  let uniqueLabels = partitioned.visible
   // HIDDEN_LABEL_KEYS drops severity above — re-add it at the front when
   // explicitly requested, subject to the same excludeLabels value check.
   if (includeSeverityLabelChip && alert.labels['severity'] !== undefined && excludeLabels?.['severity'] !== alert.labels['severity']) {
     uniqueLabels = [['severity', alert.labels['severity']], ...uniqueLabels]
   }
-  const hiddenLabels = hiddenLabelsForDisplay(alert.labels, labelDisplay).filter(
-    ([key, value]) => excludeLabels?.[key] !== value,
-  )
+  const hiddenLabels = partitioned.hidden
 
   // Claim is read-only in the list (claim/release lives in the detail panel) —
   // just the "who's on it" line, styled and placed like the card.
@@ -139,10 +140,9 @@ export function AlertListRow({
     <span className="text-xs text-muted-foreground">{renderTextWithLinks(alert.annotations['description'])}</span>
   ) : null
   // Inside a group the alertname is the group heading — lead each row with its
-  // own distinguishing labels instead (first one emphasized), context muted.
+  // own distinguishing labels instead (first one emphasized).
   const chipRow = (
     <div className="flex flex-wrap items-center gap-1 pt-0.5">
-      <LabelChip labelKey="@cluster" value={alert.clusterName} muted={indented} />
       {uniqueLabels.map(([key, value], i) => (
         <LabelChip key={key} labelKey={key} value={value} emphasized={indented && i === 0} />
       ))}

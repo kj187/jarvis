@@ -5,6 +5,7 @@ import { useSilences } from '@/hooks/useSilences'
 import { useUIStore } from '@/store/uiStore'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { computeLabelBreakdown, getEffectiveAlertState, labelColorStyle } from '@/lib/alertUtils'
+import { cn } from '@/lib/utils'
 
 interface AlertsOverviewModalProps {
   open: boolean
@@ -20,6 +21,7 @@ interface AlertsOverviewModalProps {
 export function AlertsOverviewModal({ open, onClose }: AlertsOverviewModalProps) {
   const filters = useUIStore((s) => s.filters)
   const addLabelMatcher = useUIStore((s) => s.addLabelMatcher)
+  const labelColors = useSettingsStore((s) => s.labelColors)
   const theme = useSettingsStore((s) => s.theme)
 
   const isResolvedMode = filters.state === 'resolved'
@@ -62,8 +64,11 @@ export function AlertsOverviewModal({ open, onClose }: AlertsOverviewModalProps)
               <div key={b.name}>
                 <div className="mb-1.5 flex items-baseline justify-between gap-2">
                   <span
-                    className="rounded border px-1.5 py-0.5 text-[10px] font-medium"
-                    style={labelColorStyle(b.name, theme)}
+                    className={cn(
+                      'rounded border px-1.5 py-0.5 text-[10px] font-medium',
+                      !labelColorStyle(b.name, labelColors, theme) && 'border-border bg-muted text-foreground',
+                    )}
+                    style={labelColorStyle(b.name, labelColors, theme)}
                   >
                     {b.name}
                   </span>

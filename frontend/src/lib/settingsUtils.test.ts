@@ -83,6 +83,32 @@ describe('normalizeSettings', () => {
     const result = normalizeSettings({ labelDisplay: config })
     expect(result.labelDisplay).toEqual(config)
   })
+
+  it.each([
+    ['nope'],
+    [['not', 'an', 'object']],
+  ])('drops labelColors for malformed input %j', (value) => {
+    expect(normalizeSettings({ labelColors: value })).toEqual({})
+  })
+
+  it('keeps only entries with a non-empty key and a known palette color', () => {
+    const result = normalizeSettings({
+      labelColors: {
+        customer: 'blue',
+        '': 'blue',
+        hostname: '#3b82f6',
+        dbid: 'red',
+        job: 123,
+        team: 'toString',
+      },
+    })
+    expect(result.labelColors).toEqual({ customer: 'blue' })
+  })
+
+  it('a valid labelColors map survives normalizeSettings unchanged (round-trip)', () => {
+    const colors = { customer: 'blue', hostname: 'amber', team: 'purple' }
+    expect(normalizeSettings({ labelColors: colors })).toEqual({ labelColors: colors })
+  })
 })
 
 describe('diffFromDefaults (v1 -> v2 migration)', () => {

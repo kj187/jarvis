@@ -6,7 +6,6 @@ import { SilenceMatcherChip } from './SilenceMatcherChip'
 import { SilenceRemaining } from './SilenceRemaining'
 import { URGENCY_FILL_CLASS } from './silenceDisplay'
 import { silenceTiming, tzAbbr } from '@/lib/alertUtils'
-import { useSettingsStore } from '@/store/useSettingsStore'
 import type { Silence, EnrichedAlert } from '@/types'
 import { cn } from '@/lib/utils'
 import type { SilenceGroup } from './SilenceGroupCard'
@@ -22,8 +21,6 @@ interface SilenceListViewProps {
 const ROW_DATE_FMT = 'MMM d, HH:mm'
 
 export function SilenceListView({ groups, alerts, onEditGroup, onExpireGroup, deletingIds }: SilenceListViewProps) {
-  const theme = useSettingsStore((s) => s.theme)
-
   if (groups.length === 0) return null
 
   return (
@@ -89,7 +86,7 @@ export function SilenceListView({ groups, alerts, onEditGroup, onExpireGroup, de
             <div className="min-w-0 py-2">
               <div className="flex gap-x-3 overflow-hidden whitespace-nowrap [mask-image:linear-gradient(90deg,#000_82%,transparent)]">
                 {visibleMatchers.map((m, i) => (
-                  <SilenceMatcherChip key={i} matcher={m} theme={theme} />
+                  <SilenceMatcherChip key={i} matcher={m} />
                 ))}
                 {hiddenMatcherCount > 0 && (
                   <span className="shrink-0 font-mono text-[11px] text-muted-foreground/60">+{hiddenMatcherCount}</span>
