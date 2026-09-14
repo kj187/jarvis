@@ -74,7 +74,7 @@ JARVIS_TEST_POSTGRES_DSN='postgres://jarvis:jarvis@localhost:5432/jarvis?sslmode
   go test ./internal/history/...   # unset → these tests t.Skip; CI always sets it (postgres:17 service container)
 
 # ── Manual test fixtures against the dev stack ───────────────
-make fixtures-create               # fire 23 Kubernetes-themed test alerts (label test_suite=jarvis)
+make fixtures-create               # fire 27 Kubernetes-themed test alerts (label test_suite=jarvis)
 make fixtures-remove               # resolve those alerts
 make fixtures-refire               # resolve + wait 70s (must clear the 60s grace period,
                                     # Critical Invariant #1) + re-fire — guarantees a new

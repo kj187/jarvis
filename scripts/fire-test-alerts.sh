@@ -33,7 +33,7 @@ pause() {
 
 echo "==> Firing Kubernetes test alerts to ${AM} (randomized, ~2 min)"
 
-printf "  [1/23] KubePodCrashLooping (critical, payment-api, prod)..."
+printf "  [1/27] KubePodCrashLooping (critical, payment-api, prod)..."
 post '[{
   "labels": {
     "alertname": "KubePodCrashLooping",
@@ -56,7 +56,7 @@ post '[{
 }]'
 
 pause
-printf "  [2/23] KubePodCrashLooping (critical, payment-api, prod) — 2nd pod (groups with #1)..."
+printf "  [2/27] KubePodCrashLooping (critical, payment-api, prod) — 2nd pod (groups with #1)..."
 post '[{
   "labels": {
     "alertname": "KubePodCrashLooping",
@@ -78,7 +78,7 @@ post '[{
 }]'
 
 pause
-printf "  [3/23] KubePodCrashLooping (critical, payment-api, prod) — 3rd pod (groups with #1)..."
+printf "  [3/27] KubePodCrashLooping (critical, payment-api, prod) — 3rd pod (groups with #1)..."
 post '[{
   "labels": {
     "alertname": "KubePodCrashLooping",
@@ -100,7 +100,7 @@ post '[{
 }]'
 
 pause
-printf "  [4/23] KubeNodeNotReady (critical, worker-node-3, prod)..."
+printf "  [4/27] KubeNodeNotReady (critical, worker-node-3, prod)..."
 post '[{
   "labels": {
     "alertname": "KubeNodeNotReady",
@@ -120,7 +120,7 @@ post '[{
 }]'
 
 pause
-printf "  [5/23] KubeAPIServerErrorsHigh (critical, kube-system, prod)..."
+printf "  [5/27] KubeAPIServerErrorsHigh (critical, kube-system, prod)..."
 post '[{
   "labels": {
     "alertname": "KubeAPIServerErrorsHigh",
@@ -140,7 +140,7 @@ post '[{
 }]'
 
 pause
-printf "  [6/23] KubeJobFailed (critical, data-pipeline, prod)..."
+printf "  [6/27] KubeJobFailed (critical, data-pipeline, prod)..."
 post '[{
   "labels": {
     "alertname": "KubeJobFailed",
@@ -162,7 +162,7 @@ post '[{
 }]'
 
 pause
-printf "  [7/23] KubeDeploymentReplicasMismatch (warning, frontend, staging)..."
+printf "  [7/27] KubeDeploymentReplicasMismatch (warning, frontend, staging)..."
 post '[{
   "labels": {
     "alertname": "KubeDeploymentReplicasMismatch",
@@ -183,7 +183,7 @@ post '[{
 }]'
 
 pause
-printf "  [8/23] KubePersistentVolumeFillingUp (warning, prometheus, prod)..."
+printf "  [8/27] KubePersistentVolumeFillingUp (warning, prometheus, prod)..."
 post '[{
   "labels": {
     "alertname": "KubePersistentVolumeFillingUp",
@@ -204,7 +204,7 @@ post '[{
 }]'
 
 pause
-printf "  [9/23] KubeHpaMaxedOut (warning, auth-service, prod)..."
+printf "  [9/27] KubeHpaMaxedOut (warning, auth-service, prod)..."
 post '[{
   "labels": {
     "alertname": "KubeHpaMaxedOut",
@@ -224,7 +224,7 @@ post '[{
 }]'
 
 pause
-printf " [10/23] KubePodOOMKilled (warning, ml-inference, prod)..."
+printf " [10/27] KubePodOOMKilled (warning, ml-inference, prod)..."
 post '[{
   "labels": {
     "alertname": "KubePodOOMKilled",
@@ -247,7 +247,7 @@ post '[{
 }]'
 
 pause
-printf " [11/23] KubePodOOMKilled (warning, ml-inference, prod) — 2nd pod (groups with #10)..."
+printf " [11/27] KubePodOOMKilled (warning, ml-inference, prod) — 2nd pod (groups with #10)..."
 post '[{
   "labels": {
     "alertname": "KubePodOOMKilled",
@@ -268,7 +268,7 @@ post '[{
 }]'
 
 pause
-printf " [12/23] KubePodOOMKilled (warning, ml-inference, prod) — 3rd pod (groups with #10)..."
+printf " [12/27] KubePodOOMKilled (warning, ml-inference, prod) — 3rd pod (groups with #10)..."
 post '[{
   "labels": {
     "alertname": "KubePodOOMKilled",
@@ -289,7 +289,7 @@ post '[{
 }]'
 
 pause
-printf " [13/23] KubeContainerWaiting (info, batch-worker, prod)..."
+printf " [13/27] KubeContainerWaiting (info, batch-worker, prod)..."
 post '[{
   "labels": {
     "alertname": "KubeContainerWaiting",
@@ -310,7 +310,7 @@ post '[{
 }]'
 
 pause
-printf " [14/23] KubeContainerWaiting (info, batch-worker, prod) — 2nd pod (groups with #13)..."
+printf " [14/27] KubeContainerWaiting (info, batch-worker, prod) — 2nd pod (groups with #13)..."
 post '[{
   "labels": {
     "alertname": "KubeContainerWaiting",
@@ -331,7 +331,7 @@ post '[{
 }]'
 
 pause
-printf " [15/23] KubeContainerWaiting (info, batch-worker, prod) — 3rd pod (groups with #13)..."
+printf " [15/27] KubeContainerWaiting (info, batch-worker, prod) — 3rd pod (groups with #13)..."
 post '[{
   "labels": {
     "alertname": "KubeContainerWaiting",
@@ -352,7 +352,7 @@ post '[{
 }]'
 
 pause
-printf " [16/23] KubeStatefulSetReplicasMismatch (info, kafka, prod)..."
+printf " [16/27] KubeStatefulSetReplicasMismatch (info, kafka, prod)..."
 post '[{
   "labels": {
     "alertname": "KubeStatefulSetReplicasMismatch",
@@ -373,7 +373,7 @@ post '[{
 }]'
 
 pause
-printf " [17/23] KubeServiceEndpointError (error, checkout-api, prod)..."
+printf " [17/27] KubeServiceEndpointError (error, checkout-api, prod)..."
 post '[{
   "labels": {
     "alertname": "KubeServiceEndpointError",
@@ -394,7 +394,7 @@ post '[{
 }]'
 
 pause
-printf " [18/23] KubeDNSErrors (error, kube-dns, prod)..."
+printf " [18/27] KubeDNSErrors (error, kube-dns, prod)..."
 post '[{
   "labels": {
     "alertname": "KubeDNSErrors",
@@ -416,7 +416,7 @@ post '[{
 }]'
 
 pause
-printf " [19/23] LinkRichAlert — many link labels + annotations..."
+printf " [19/27] LinkRichAlert — many link labels + annotations..."
 post '[{
   "labels": {
     "alertname": "LinkRichAlert",
@@ -443,7 +443,7 @@ post '[{
 }]'
 
 pause
-printf " [20/23] InlineUrlsAlert — multiple URLs embedded in description prose..."
+printf " [20/27] InlineUrlsAlert — multiple URLs embedded in description prose..."
 post '[{
   "labels": {
     "alertname": "InlineUrlsAlert",
@@ -462,7 +462,7 @@ post '[{
 }]'
 
 pause
-printf " [21/23] LabelOnlyLinksAlert — all links in labels, no annotation links..."
+printf " [21/27] LabelOnlyLinksAlert — all links in labels, no annotation links..."
 post '[{
   "labels": {
     "alertname": "LabelOnlyLinksAlert",
@@ -484,7 +484,7 @@ post '[{
 }]'
 
 pause
-printf " [22/23] AnnotationOnlyLinksAlert — all links in annotations, no label links..."
+printf " [22/27] AnnotationOnlyLinksAlert — all links in annotations, no label links..."
 post '[{
   "labels": {
     "alertname": "AnnotationOnlyLinksAlert",
@@ -506,7 +506,7 @@ post '[{
 }]'
 
 pause
-printf " [23/23] SpecialCharLabelAlert — label value with dots + label value with hyphens..."
+printf " [23/27] SpecialCharLabelAlert — label value with dots + label value with hyphens..."
 post '[{
   "labels": {
     "alertname": "SpecialCharLabelAlert",
@@ -528,9 +528,175 @@ post '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=up%7Bjob%3D%22platform%22%7D"
 }]'
 
+pause
+printf " [24/27] KubePodExcessiveLabelsAlert — pod carrying the full label surface (k8s/helm/argocd/istio/cost tags)..."
+post '[{
+  "labels": {
+    "alertname": "KubePodExcessiveLabelsAlert",
+    "severity": "warning",
+    "namespace": "prod",
+    "pod": "recommendation-engine-8f6d7c9b5-4tzxq",
+    "container": "recommendation-engine",
+    "cluster": "eu-west-1-prod",
+    "team": "ml-platform",
+    "app_name": "recommendation-engine",
+    "app_instance": "recommendation-engine-prod",
+    "app_version": "4.12.3",
+    "app_component": "backend",
+    "app_part_of": "recommendation-platform",
+    "app_managed_by": "argocd",
+    "helm_chart": "recommendation-engine-2.7.1",
+    "helm_release": "recommendation-engine-prod",
+    "argocd_application": "recommendation-engine-prod",
+    "argocd_project": "ml-platform",
+    "istio_revision": "default",
+    "istio_canonical_name": "recommendation-engine",
+    "istio_canonical_revision": "v4",
+    "istio_tls_mode": "istio",
+    "pod_template_hash": "8f6d7c9b5",
+    "topology_region": "eu-west-1",
+    "topology_zone": "eu-west-1a",
+    "node_instance_type": "m6i_2xlarge",
+    "node_lifecycle": "on_demand",
+    "cost_center": "CC-4471",
+    "business_unit": "personalization",
+    "owner_team": "ml-platform",
+    "environment": "production",
+    "data_classification": "internal",
+    "runbook": "'"${RUNBOOKS}"'/KubePodExcessiveLabelsAlert",
+    "test_suite": "jarvis"
+  },
+  "annotations": {
+    "summary": "Pod recommendation-engine-8f6d7c9b5-4tzxq carries an unusually large label set",
+    "description": "Tests label-heavy rendering: filter bar cardinality, label chip wrapping/overflow, and silence-matcher UX against 30+ labels on a single alert."
+  },
+  "generatorURL": "'"${PROM}"'/graph?g0.expr=up%7Bnamespace%3D%22prod%22%2Cpod%3D%22recommendation-engine%22%7D"
+}]'
+
+pause
+printf " [25/27] CIPipelineBuildMetadataAlert — CI/CD build/git/docker metadata heavy..."
+post '[{
+  "labels": {
+    "alertname": "CIPipelineBuildMetadataAlert",
+    "severity": "info",
+    "namespace": "ci",
+    "cluster": "eu-west-1-prod",
+    "team": "platform",
+    "pipeline_name": "recommendation-engine-deploy",
+    "pipeline_id": "48213",
+    "pipeline_stage": "deploy_prod",
+    "pipeline_status": "failed",
+    "git_repo": "github_com_acme_recommendation_engine",
+    "git_branch": "release_4_12",
+    "git_commit_sha": "a1b2c3d4e5f60718293a4b5c6d7e8f9a0b1c2d3",
+    "git_commit_short": "a1b2c3d",
+    "git_author": "jkleinhans",
+    "git_pr_number": "482",
+    "build_number": "1847",
+    "build_agent": "ci_runner_07",
+    "build_duration_seconds": "312",
+    "build_triggered_by": "push",
+    "docker_image": "ghcr_io_acme_recommendation_engine",
+    "docker_tag": "v4_12_3_rc2",
+    "docker_digest_short": "sha256_9f8e7d",
+    "test_coverage_percent": "87",
+    "artifact_registry": "ghcr_io",
+    "deploy_target": "eks_prod_eu_west_1",
+    "deploy_strategy": "rolling",
+    "approval_required": "true",
+    "test_suite": "jarvis"
+  },
+  "annotations": {
+    "summary": "Deploy stage failed for recommendation-engine build #1847",
+    "description": "Tests label-heavy rendering with CI/CD-flavored keys (git, docker, pipeline metadata) rather than Kubernetes object labels."
+  },
+  "generatorURL": "'"${PROM}"'/graph?g0.expr=ci_pipeline_status%7Bpipeline%3D%22recommendation-engine-deploy%22%7D"
+}]'
+
+pause
+printf " [26/27] CloudResourceTaggingAlert — AWS/Terraform cost-allocation tags heavy..."
+post '[{
+  "labels": {
+    "alertname": "CloudResourceTaggingAlert",
+    "severity": "warning",
+    "namespace": "prod",
+    "cluster": "eu-west-1-prod",
+    "team": "infrastructure",
+    "resource_type": "rds_instance",
+    "resource_id": "prod-orders-db-primary",
+    "resource_arn": "arn_aws_rds_eu_west_1_123456789012_db_prod_orders_db_primary",
+    "aws_account_id": "123456789012",
+    "aws_region": "eu-west-1",
+    "aws_availability_zone": "eu-west-1b",
+    "cost_center": "CC-1029",
+    "budget_code": "BUD-2026-Q3-INFRA",
+    "owner": "data-platform-team",
+    "project": "orders-service",
+    "application": "orders-api",
+    "environment": "production",
+    "tier": "critical",
+    "compliance_scope": "pci_dss",
+    "data_classification": "confidential",
+    "backup_policy": "daily_30d_retention",
+    "provisioned_by": "terraform",
+    "terraform_workspace": "prod-eu-west-1",
+    "terraform_module": "rds-postgres-ha",
+    "terraform_version": "1_9_2",
+    "managed_by": "platform-engineering",
+    "lifecycle_stage": "steady_state",
+    "disaster_recovery_tier": "tier1",
+    "runbook": "'"${RUNBOOKS}"'/CloudResourceTaggingAlert",
+    "test_suite": "jarvis"
+  },
+  "annotations": {
+    "summary": "RDS instance prod-orders-db-primary approaching storage threshold",
+    "description": "Tests label-heavy rendering with cloud cost-allocation/compliance tag keys instead of Kubernetes labels."
+  },
+  "generatorURL": "'"${PROM}"'/graph?g0.expr=aws_rds_free_storage_space_average%7Bresource_id%3D%22prod-orders-db-primary%22%7D"
+}]'
+
+pause
+printf " [27/27] FeatureFlagRolloutAlert — many per-flag/experiment labels..."
+post '[{
+  "labels": {
+    "alertname": "FeatureFlagRolloutAlert",
+    "severity": "info",
+    "namespace": "prod",
+    "cluster": "eu-west-1-prod",
+    "team": "growth",
+    "service": "checkout-api",
+    "flag_new_checkout_flow": "enabled",
+    "flag_express_pay": "rollout_25pct",
+    "flag_saved_cards_v2": "enabled",
+    "flag_dynamic_pricing": "disabled",
+    "flag_loyalty_points_v3": "rollout_10pct",
+    "flag_one_click_upsell": "enabled",
+    "flag_ab_test_banner_color": "variant_b",
+    "flag_guest_checkout_v2": "enabled",
+    "flag_apple_pay_eu": "enabled",
+    "flag_klarna_integration": "rollout_50pct",
+    "flag_fraud_check_v4": "enabled",
+    "experiment_id": "exp_2026_checkout_redesign",
+    "experiment_variant": "treatment",
+    "experiment_cohort": "eu_mobile_users",
+    "rollout_percentage": "25",
+    "rollout_phase": "canary",
+    "feature_owner": "growth-team",
+    "test_suite": "jarvis"
+  },
+  "annotations": {
+    "summary": "Elevated checkout error rate during canary rollout of new-checkout-flow",
+    "description": "Tests label-heavy rendering where most labels are feature-flag/experiment state rather than infra identifiers."
+  },
+  "generatorURL": "'"${PROM}"'/graph?g0.expr=rate(checkout_errors_total%7Bexperiment_id%3D%22exp_2026_checkout_redesign%22%7D%5B5m%5D)"
+}]'
+
 echo ""
-echo "==> Done. 23 Kubernetes test alerts active (test_suite=jarvis)."
+echo "==> Done. 27 Kubernetes test alerts active (test_suite=jarvis)."
 echo "    KubePodCrashLooping, KubePodOOMKilled and KubeContainerWaiting each fired as"
 echo "    3 alerts (same alertname/cluster/namespace, different pod) — Alertmanager"
 echo "    groups them (group_by: alertname, cluster, namespace) into 3-alert groups."
+echo "    #24-27 (KubePodExcessiveLabelsAlert, CIPipelineBuildMetadataAlert,"
+echo "    CloudResourceTaggingAlert, FeatureFlagRolloutAlert) each carry 25-30 labels"
+echo "    to exercise label-heavy rendering (filter bar, chip wrapping, silence matchers)."
 echo "    Alerts persist until you run 'make alerts-resolve' (endsAt: ${ENDS_AT})."

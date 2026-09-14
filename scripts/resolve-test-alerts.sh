@@ -26,7 +26,7 @@ echo "==> Resolving Kubernetes test alerts (test_suite=jarvis) via ${AM}"
 echo "    endsAt: ${ENDS_AT}"
 echo ""
 
-printf "  [1/23] KubePodCrashLooping..."
+printf "  [1/27] KubePodCrashLooping..."
 resolve '[{
   "labels": {
     "alertname": "KubePodCrashLooping",
@@ -43,7 +43,7 @@ resolve '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=kube_pod_container_status_restarts_total"
 }]'
 
-printf "  [2/23] KubePodCrashLooping (2nd pod)..."
+printf "  [2/27] KubePodCrashLooping (2nd pod)..."
 resolve '[{
   "labels": {
     "alertname": "KubePodCrashLooping",
@@ -60,7 +60,7 @@ resolve '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=kube_pod_container_status_restarts_total"
 }]'
 
-printf "  [3/23] KubePodCrashLooping (3rd pod)..."
+printf "  [3/27] KubePodCrashLooping (3rd pod)..."
 resolve '[{
   "labels": {
     "alertname": "KubePodCrashLooping",
@@ -77,7 +77,7 @@ resolve '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=kube_pod_container_status_restarts_total"
 }]'
 
-printf "  [4/23] KubeNodeNotReady..."
+printf "  [4/27] KubeNodeNotReady..."
 resolve '[{
   "labels": {
     "alertname": "KubeNodeNotReady",
@@ -95,7 +95,7 @@ resolve '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=kube_node_status_condition"
 }]'
 
-printf "  [5/23] KubeAPIServerErrorsHigh..."
+printf "  [5/27] KubeAPIServerErrorsHigh..."
 resolve '[{
   "labels": {
     "alertname": "KubeAPIServerErrorsHigh",
@@ -113,7 +113,7 @@ resolve '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=rate(apiserver_request_total%7Bcode%3D~%225..%22%7D%5B5m%5D)"
 }]'
 
-printf "  [6/23] KubeJobFailed..."
+printf "  [6/27] KubeJobFailed..."
 resolve '[{
   "labels": {
     "alertname": "KubeJobFailed",
@@ -129,7 +129,7 @@ resolve '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=kube_job_status_failed"
 }]'
 
-printf "  [7/23] KubeDeploymentReplicasMismatch..."
+printf "  [7/27] KubeDeploymentReplicasMismatch..."
 resolve '[{
   "labels": {
     "alertname": "KubeDeploymentReplicasMismatch",
@@ -148,7 +148,7 @@ resolve '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=kube_deployment_status_replicas_available"
 }]'
 
-printf "  [8/23] KubePersistentVolumeFillingUp..."
+printf "  [8/27] KubePersistentVolumeFillingUp..."
 resolve '[{
   "labels": {
     "alertname": "KubePersistentVolumeFillingUp",
@@ -167,7 +167,7 @@ resolve '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=kubelet_volume_stats_used_bytes"
 }]'
 
-printf "  [9/23] KubeHpaMaxedOut..."
+printf "  [9/27] KubeHpaMaxedOut..."
 resolve '[{
   "labels": {
     "alertname": "KubeHpaMaxedOut",
@@ -185,7 +185,7 @@ resolve '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=kube_horizontalpodautoscaler_status_current_replicas"
 }]'
 
-printf " [10/23] KubePodOOMKilled..."
+printf " [10/27] KubePodOOMKilled..."
 resolve '[{
   "labels": {
     "alertname": "KubePodOOMKilled",
@@ -202,7 +202,7 @@ resolve '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=kube_pod_container_status_last_terminated_reason"
 }]'
 
-printf " [11/23] KubePodOOMKilled (2nd pod)..."
+printf " [11/27] KubePodOOMKilled (2nd pod)..."
 resolve '[{
   "labels": {
     "alertname": "KubePodOOMKilled",
@@ -219,7 +219,7 @@ resolve '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=kube_pod_container_status_last_terminated_reason"
 }]'
 
-printf " [12/23] KubePodOOMKilled (3rd pod)..."
+printf " [12/27] KubePodOOMKilled (3rd pod)..."
 resolve '[{
   "labels": {
     "alertname": "KubePodOOMKilled",
@@ -236,7 +236,7 @@ resolve '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=kube_pod_container_status_last_terminated_reason"
 }]'
 
-printf " [13/23] KubeContainerWaiting..."
+printf " [13/27] KubeContainerWaiting..."
 resolve '[{
   "labels": {
     "alertname": "KubeContainerWaiting",
@@ -253,7 +253,7 @@ resolve '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=kube_pod_container_status_waiting_reason"
 }]'
 
-printf " [14/23] KubeContainerWaiting (2nd pod)..."
+printf " [14/27] KubeContainerWaiting (2nd pod)..."
 resolve '[{
   "labels": {
     "alertname": "KubeContainerWaiting",
@@ -270,7 +270,7 @@ resolve '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=kube_pod_container_status_waiting_reason"
 }]'
 
-printf " [15/23] KubeContainerWaiting (3rd pod)..."
+printf " [15/27] KubeContainerWaiting (3rd pod)..."
 resolve '[{
   "labels": {
     "alertname": "KubeContainerWaiting",
@@ -287,7 +287,7 @@ resolve '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=kube_pod_container_status_waiting_reason"
 }]'
 
-printf " [16/23] KubeStatefulSetReplicasMismatch..."
+printf " [16/27] KubeStatefulSetReplicasMismatch..."
 resolve '[{
   "labels": {
     "alertname": "KubeStatefulSetReplicasMismatch",
@@ -306,7 +306,7 @@ resolve '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=kube_statefulset_status_replicas_ready"
 }]'
 
-printf " [17/23] KubeServiceEndpointError..."
+printf " [17/27] KubeServiceEndpointError..."
 resolve '[{
   "labels": {
     "alertname": "KubeServiceEndpointError",
@@ -322,7 +322,7 @@ resolve '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=kube_endpoint_address_available"
 }]'
 
-printf " [18/23] KubeDNSErrors..."
+printf " [18/27] KubeDNSErrors..."
 resolve '[{
   "labels": {
     "alertname": "KubeDNSErrors",
@@ -338,7 +338,7 @@ resolve '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=rate(coredns_dns_responses_total%7Brcode%3D%22SERVFAIL%22%7D%5B5m%5D)"
 }]'
 
-printf " [19/23] LinkRichAlert..."
+printf " [19/27] LinkRichAlert..."
 resolve '[{
   "labels": {
     "alertname": "LinkRichAlert",
@@ -357,7 +357,7 @@ resolve '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=up%7Bjob%3D%22platform%22%7D"
 }]'
 
-printf " [20/23] InlineUrlsAlert..."
+printf " [20/27] InlineUrlsAlert..."
 resolve '[{
   "labels": {
     "alertname": "InlineUrlsAlert",
@@ -371,7 +371,7 @@ resolve '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=up%7Bjob%3D%22prometheus%22%7D"
 }]'
 
-printf " [21/23] LabelOnlyLinksAlert..."
+printf " [21/27] LabelOnlyLinksAlert..."
 resolve '[{
   "labels": {
     "alertname": "LabelOnlyLinksAlert",
@@ -389,7 +389,7 @@ resolve '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=http_requests_total%7Benv%3D%22staging%22%7D"
 }]'
 
-printf " [22/23] AnnotationOnlyLinksAlert..."
+printf " [22/27] AnnotationOnlyLinksAlert..."
 resolve '[{
   "labels": {
     "alertname": "AnnotationOnlyLinksAlert",
@@ -403,7 +403,7 @@ resolve '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=job_duration_seconds%7Bjob%3D%22s3-export%22%7D"
 }]'
 
-printf " [23/23] SpecialCharLabelAlert..."
+printf " [23/27] SpecialCharLabelAlert..."
 resolve '[{
   "labels": {
     "alertname": "SpecialCharLabelAlert",
@@ -421,5 +421,152 @@ resolve '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=up%7Bjob%3D%22platform%22%7D"
 }]'
 
+printf " [24/27] KubePodExcessiveLabelsAlert..."
+resolve '[{
+  "labels": {
+    "alertname": "KubePodExcessiveLabelsAlert",
+    "severity": "warning",
+    "namespace": "prod",
+    "pod": "recommendation-engine-8f6d7c9b5-4tzxq",
+    "container": "recommendation-engine",
+    "cluster": "eu-west-1-prod",
+    "team": "ml-platform",
+    "app_name": "recommendation-engine",
+    "app_instance": "recommendation-engine-prod",
+    "app_version": "4.12.3",
+    "app_component": "backend",
+    "app_part_of": "recommendation-platform",
+    "app_managed_by": "argocd",
+    "helm_chart": "recommendation-engine-2.7.1",
+    "helm_release": "recommendation-engine-prod",
+    "argocd_application": "recommendation-engine-prod",
+    "argocd_project": "ml-platform",
+    "istio_revision": "default",
+    "istio_canonical_name": "recommendation-engine",
+    "istio_canonical_revision": "v4",
+    "istio_tls_mode": "istio",
+    "pod_template_hash": "8f6d7c9b5",
+    "topology_region": "eu-west-1",
+    "topology_zone": "eu-west-1a",
+    "node_instance_type": "m6i_2xlarge",
+    "node_lifecycle": "on_demand",
+    "cost_center": "CC-4471",
+    "business_unit": "personalization",
+    "owner_team": "ml-platform",
+    "environment": "production",
+    "data_classification": "internal",
+    "runbook": "'"${RUNBOOKS}"'/KubePodExcessiveLabelsAlert",
+    "test_suite": "jarvis"
+  },
+  "annotations": {"summary": "Pod recommendation-engine-8f6d7c9b5-4tzxq carries an unusually large label set"},
+  "generatorURL": "'"${PROM}"'/graph?g0.expr=up%7Bnamespace%3D%22prod%22%2Cpod%3D%22recommendation-engine%22%7D"
+}]'
+
+printf " [25/27] CIPipelineBuildMetadataAlert..."
+resolve '[{
+  "labels": {
+    "alertname": "CIPipelineBuildMetadataAlert",
+    "severity": "info",
+    "namespace": "ci",
+    "cluster": "eu-west-1-prod",
+    "team": "platform",
+    "pipeline_name": "recommendation-engine-deploy",
+    "pipeline_id": "48213",
+    "pipeline_stage": "deploy_prod",
+    "pipeline_status": "failed",
+    "git_repo": "github_com_acme_recommendation_engine",
+    "git_branch": "release_4_12",
+    "git_commit_sha": "a1b2c3d4e5f60718293a4b5c6d7e8f9a0b1c2d3",
+    "git_commit_short": "a1b2c3d",
+    "git_author": "jkleinhans",
+    "git_pr_number": "482",
+    "build_number": "1847",
+    "build_agent": "ci_runner_07",
+    "build_duration_seconds": "312",
+    "build_triggered_by": "push",
+    "docker_image": "ghcr_io_acme_recommendation_engine",
+    "docker_tag": "v4_12_3_rc2",
+    "docker_digest_short": "sha256_9f8e7d",
+    "test_coverage_percent": "87",
+    "artifact_registry": "ghcr_io",
+    "deploy_target": "eks_prod_eu_west_1",
+    "deploy_strategy": "rolling",
+    "approval_required": "true",
+    "test_suite": "jarvis"
+  },
+  "annotations": {"summary": "Deploy stage failed for recommendation-engine build #1847"},
+  "generatorURL": "'"${PROM}"'/graph?g0.expr=ci_pipeline_status%7Bpipeline%3D%22recommendation-engine-deploy%22%7D"
+}]'
+
+printf " [26/27] CloudResourceTaggingAlert..."
+resolve '[{
+  "labels": {
+    "alertname": "CloudResourceTaggingAlert",
+    "severity": "warning",
+    "namespace": "prod",
+    "cluster": "eu-west-1-prod",
+    "team": "infrastructure",
+    "resource_type": "rds_instance",
+    "resource_id": "prod-orders-db-primary",
+    "resource_arn": "arn_aws_rds_eu_west_1_123456789012_db_prod_orders_db_primary",
+    "aws_account_id": "123456789012",
+    "aws_region": "eu-west-1",
+    "aws_availability_zone": "eu-west-1b",
+    "cost_center": "CC-1029",
+    "budget_code": "BUD-2026-Q3-INFRA",
+    "owner": "data-platform-team",
+    "project": "orders-service",
+    "application": "orders-api",
+    "environment": "production",
+    "tier": "critical",
+    "compliance_scope": "pci_dss",
+    "data_classification": "confidential",
+    "backup_policy": "daily_30d_retention",
+    "provisioned_by": "terraform",
+    "terraform_workspace": "prod-eu-west-1",
+    "terraform_module": "rds-postgres-ha",
+    "terraform_version": "1_9_2",
+    "managed_by": "platform-engineering",
+    "lifecycle_stage": "steady_state",
+    "disaster_recovery_tier": "tier1",
+    "runbook": "'"${RUNBOOKS}"'/CloudResourceTaggingAlert",
+    "test_suite": "jarvis"
+  },
+  "annotations": {"summary": "RDS instance prod-orders-db-primary approaching storage threshold"},
+  "generatorURL": "'"${PROM}"'/graph?g0.expr=aws_rds_free_storage_space_average%7Bresource_id%3D%22prod-orders-db-primary%22%7D"
+}]'
+
+printf " [27/27] FeatureFlagRolloutAlert..."
+resolve '[{
+  "labels": {
+    "alertname": "FeatureFlagRolloutAlert",
+    "severity": "info",
+    "namespace": "prod",
+    "cluster": "eu-west-1-prod",
+    "team": "growth",
+    "service": "checkout-api",
+    "flag_new_checkout_flow": "enabled",
+    "flag_express_pay": "rollout_25pct",
+    "flag_saved_cards_v2": "enabled",
+    "flag_dynamic_pricing": "disabled",
+    "flag_loyalty_points_v3": "rollout_10pct",
+    "flag_one_click_upsell": "enabled",
+    "flag_ab_test_banner_color": "variant_b",
+    "flag_guest_checkout_v2": "enabled",
+    "flag_apple_pay_eu": "enabled",
+    "flag_klarna_integration": "rollout_50pct",
+    "flag_fraud_check_v4": "enabled",
+    "experiment_id": "exp_2026_checkout_redesign",
+    "experiment_variant": "treatment",
+    "experiment_cohort": "eu_mobile_users",
+    "rollout_percentage": "25",
+    "rollout_phase": "canary",
+    "feature_owner": "growth-team",
+    "test_suite": "jarvis"
+  },
+  "annotations": {"summary": "Elevated checkout error rate during canary rollout of new-checkout-flow"},
+  "generatorURL": "'"${PROM}"'/graph?g0.expr=rate(checkout_errors_total%7Bexperiment_id%3D%22exp_2026_checkout_redesign%22%7D%5B5m%5D)"
+}]'
+
 echo ""
-echo "==> All 23 Kubernetes test alerts resolved."
+echo "==> All 27 Kubernetes test alerts resolved."
