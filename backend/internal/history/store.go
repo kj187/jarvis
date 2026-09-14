@@ -107,12 +107,27 @@ func (s *Store) query(ctx context.Context, query string, args ...interface{}) (*
 	return s.queryOn(s.db, ctx, query, args...)
 }
 
+// txTimeout bounds every history transaction, including any PostgreSQL
+// advisory-lock wait taken inside it (Critical Invariant #16). Without a
+// deadline, a transaction built on context.Background() — as
+// RecordStatusChange and RecordResolvedForCluster are — has no timeout at
+// all: a peer stuck holding the same episode's advisory lock (a hung pod, a
+// transaction left open across a network partition) blocks
+// pg_advisory_xact_lock forever. That runs sequentially in
+// applyPollResults, so the entire poll loop stalls with it: no further
+// polls, no poll_snapshots updates (followers read stale snapshots), no WS
+// broadcasts — and since the context never cancels, not even a graceful
+// shutdown unblocks it; the process hangs until SIGKILL.
+const txTimeout = 30 * time.Second
+
 // withTx runs fn inside a transaction, committing on success and rolling
 // back on error or panic. Critical Invariant #D5: RecordStatusChange's
 // read-last → grace-delete → insert → count-update sequence must be atomic,
 // so a demoted leader mid-sequence during failover can't interleave with the
 // newly promoted leader's write of the same episode.
-func (s *Store) withTx(ctx context.Context, fn func(tx *sql.Tx) error) (err error) {
+func (s *Store) withTx(ctx context.Context, fn func(ctx context.Context, tx *sql.Tx) error) (err error) {
+	ctx, cancel := context.WithTimeout(ctx, txTimeout)
+	defer cancel()
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)
@@ -123,7 +138,7 @@ func (s *Store) withTx(ctx context.Context, fn func(tx *sql.Tx) error) (err erro
 			panic(p)
 		}
 	}()
-	if err := fn(tx); err != nil {
+	if err := fn(ctx, tx); err != nil {
 		if rbErr := tx.Rollback(); rbErr != nil && !errors.Is(rbErr, sql.ErrTxDone) {
 			return fmt.Errorf("%w (rollback: %v)", err, rbErr)
 		}
@@ -233,11 +248,17 @@ func (s *Store) RecordStatusChange(
 		event   *models.AlertEvent
 		created bool
 	)
-	err := s.withTx(ctx, func(tx *sql.Tx) error {
+	err := s.withTx(ctx, func(ctx context.Context, tx *sql.Tx) error {
 		// D5: serialize concurrent writers for this episode. PostgreSQL only —
 		// SQLite is already single-writer via SetMaxOpenConns(1), so a second
 		// transaction can't even begin until this one commits or rolls back.
 		if s.dialect == idb.DialectPostgres {
+			// A lock_timeout below txTimeout gives a stuck advisory-lock wait a
+			// deterministic, clean postgres error well before the outer
+			// context deadline would cancel the whole transaction.
+			if _, err := tx.ExecContext(ctx, `SET LOCAL lock_timeout = '10s'`); err != nil {
+				return fmt.Errorf("set lock_timeout: %w", err)
+			}
 			lockKey := fingerprint + ":" + clusterName
 			if _, err := tx.ExecContext(ctx, rebind(s.dialect, `SELECT pg_advisory_xact_lock(hashtext(?))`), lockKey); err != nil {
 				return fmt.Errorf("acquire episode lock: %w", err)
@@ -342,8 +363,14 @@ func (s *Store) RecordResolved(fingerprint string, resolvedAt time.Time) error {
 // resolved row for the same episode.
 func (s *Store) RecordResolvedForCluster(fingerprint, clusterName string, resolvedAt time.Time) error {
 	ctx := context.Background()
-	return s.withTx(ctx, func(tx *sql.Tx) error {
+	return s.withTx(ctx, func(ctx context.Context, tx *sql.Tx) error {
 		if s.dialect == idb.DialectPostgres {
+			// A lock_timeout below txTimeout gives a stuck advisory-lock wait a
+			// deterministic, clean postgres error well before the outer
+			// context deadline would cancel the whole transaction.
+			if _, err := tx.ExecContext(ctx, `SET LOCAL lock_timeout = '10s'`); err != nil {
+				return fmt.Errorf("set lock_timeout: %w", err)
+			}
 			lockKey := fingerprint + ":" + clusterName
 			if _, err := tx.ExecContext(ctx, rebind(s.dialect, `SELECT pg_advisory_xact_lock(hashtext(?))`), lockKey); err != nil {
 				return fmt.Errorf("acquire episode lock: %w", err)

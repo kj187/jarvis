@@ -145,13 +145,23 @@ Tool-specific entry points map to the same files (no duplicated content):
 16. **`RecordStatusChange` stays transactional and, on PostgreSQL,
     advisory-xact-locked per episode.** The read-last → grace-delete →
     insert → count-update sequence runs inside one transaction
-    (`Store.withTx`); on PostgreSQL the transaction's first statement is
+    (`Store.withTx`); on PostgreSQL the transaction sets `lock_timeout =
+    '10s'` as its first statement, then acquires
     `pg_advisory_xact_lock(hashtext(fingerprint || ':' || cluster_name))`,
     serializing concurrent writers for the same episode across pods (SQLite
     needs no such lock — `SetMaxOpenConns(1)` already serializes it).
     Without this, two pods (or two connections during a rolling update)
     racing the same fingerprint could both read the same "last event" before
-    either commits and both insert — duplicate event rows.
+    either commits and both insert — duplicate event rows. `Store.withTx`
+    itself additionally bounds every history transaction to `txTimeout`
+    (30s) regardless of the caller's context — `RecordStatusChange` and
+    `RecordResolvedForCluster` run on `context.Background()`, so without
+    this cap a peer stuck holding the same episode's advisory lock (a hung
+    pod, a transaction stranded by a network partition) blocked the call
+    forever, and since it runs sequentially in `applyPollResults`, the
+    entire poll loop stalled with it — no further polls, no
+    `poll_snapshots` updates, no WS broadcasts, not even unblocked by
+    shutdown.
 17. **`AlertStore.Get()` returns a deterministically ordered snapshot**:
     `startsAt` desc, then `fingerprint` asc, then `clusterName` asc
     (`internal/history/alert_store.go`). The active slice arrives in
