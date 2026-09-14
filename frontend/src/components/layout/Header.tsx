@@ -111,7 +111,9 @@ export function Header() {
 
   const [silenceFormOpen, setSilenceFormOpen] = useState(false)
   const [silenceActiveTab, setSilenceActiveTab] = useState<'silence' | 'templates'>('silence')
-  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(
+    () => new URLSearchParams(window.location.search).get('settings') === 'open',
+  )
   const [loginModalOpen, setLoginModalOpen] = useState(false)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const [infoOpen, setInfoOpen] = useState(false)
@@ -131,6 +133,27 @@ export function Header() {
   const refreshPopover = useHoverPopover(setRefreshTooltipOpen)
 
   const healthyCount = clusters.filter((c) => c.healthy).length
+
+  function setSettingsVisibility(open: boolean) {
+    setSettingsOpen(open)
+    const params = new URLSearchParams(window.location.search)
+    if (open) params.set('settings', 'open')
+    else params.delete('settings')
+    const query = params.toString()
+    window.history.replaceState(
+      null,
+      '',
+      `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`,
+    )
+  }
+
+  useEffect(() => {
+    const syncFromURL = () => {
+      setSettingsOpen(new URLSearchParams(window.location.search).get('settings') === 'open')
+    }
+    window.addEventListener('popstate', syncFromURL)
+    return () => window.removeEventListener('popstate', syncFromURL)
+  }, [])
 
   async function handleRefresh() {
     setRefreshing(true)
@@ -332,7 +355,7 @@ export function Header() {
                     <Shield className="h-3.5 w-3.5" />Admin
                   </button>
                 )}
-                <button className="w-full flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-accent/60 cursor-pointer" onClick={() => { setUserMenuOpen(false); setSettingsOpen(true) }}>
+                <button className="w-full flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-accent/60 cursor-pointer" onClick={() => { setUserMenuOpen(false); setSettingsVisibility(true) }}>
                   <Settings className="h-3.5 w-3.5" />Settings
                 </button>
                 <button
@@ -425,7 +448,7 @@ export function Header() {
                   <Shield className="h-3.5 w-3.5" />Admin
                 </button>
               )}
-              <button className="w-full flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-accent/60 cursor-pointer" onClick={() => { setUserMenuOpen(false); setSettingsOpen(true); setMenuOpen(false) }}>
+              <button className="w-full flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-accent/60 cursor-pointer" onClick={() => { setUserMenuOpen(false); setSettingsVisibility(true); setMenuOpen(false) }}>
                 <Settings className="h-3.5 w-3.5" />Settings
               </button>
               <button
@@ -491,7 +514,7 @@ export function Header() {
 
     <SettingsSheet
       open={settingsOpen}
-      onClose={() => setSettingsOpen(false)}
+      onClose={() => setSettingsVisibility(false)}
     />
 
     <LoginModal
