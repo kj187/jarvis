@@ -9,6 +9,56 @@ instead of duplicating.
 
 ---
 
+## A route with neither `RequireAuth` nor `OptionalAuth` never gets `auth.ContextKey` — even with a valid cookie
+
+**Symptom**: Building `GET /api/v1/settings` (deliberately unauthenticated —
+it must answer `user: null` for anonymous callers too), a Playwright E2E test
+showed a logged-in user's `PUT` (204, confirmed committed — the row was
+present in the DB, `INSERT`ed under the correct `user_id`) "disappear" on the
+very next `GET`, every time, 100% reproducible. All the *unit* tests for the
+same handler passed, because they built the `echo.Context` directly with
+`c.Set(auth.ContextKey, caller)` — bypassing the real middleware chain
+entirely.
+**Cause**: `auth.RequireAuth` is the *only* thing that calls
+`c.Set(auth.ContextKey, user)`. A route registered without it — which
+`GET /api/v1/settings` is, on purpose, so it can serve anonymous callers —
+never populates the context, so `auth.UserFromContext(c)` returns `nil`
+unconditionally, regardless of whether a valid session cookie was sent. The
+handler silently treated every authenticated caller as anonymous.
+**Rule**: a route that must behave differently for anonymous vs.
+authenticated callers *without gating on login* needs `auth.OptionalAuth`
+(added alongside this fix) — it resolves the cookie and sets `auth.ContextKey`
+exactly like `RequireAuth`, but never rejects the request. And more broadly:
+a handler unit test that injects `c.Set(auth.ContextKey, ...)` directly proves
+the handler's *own* logic but proves nothing about whether the real
+middleware chain actually populates that context for the route as registered
+— for at least one test per such handler, drive a real cookie through a real
+`httptest.Server` + the full router instead (see
+`TestGetSettings_RealHTTPRoundTrip`, `internal/api/settings_handler_test.go`).
+
+## `useSettingsStore`'s zustand `persist` must not get a narrow `partialize`
+
+**Symptom (near-miss, caught before merge)**: implementing server-side settings
+persistence (`tmp/settings_storage.md`), the natural design was a `partialize`
+that only wrote the new `{anonOverrides, userMirror}` bookkeeping fields to
+`localStorage['jarvis-user-settings']`, since those are conceptually "the
+persisted state." That would have silently broken every existing
+`frontend/e2e/functional/none/settings.spec.ts` test that reads
+`JSON.parse(localStorage.getItem(...)).state.timeFormat` etc. directly — the
+flat resolved fields would simply no longer be there.
+**Cause**: zustand's default (no `partialize`) already persists the *entire*
+store state as `state.<key>` — including derived/internal fields — and
+silently drops function values on `JSON.stringify`. The old store relied on
+this implicitly (flat `UserSettings` fields directly under `state`); a
+narrow `partialize` trades that away for no real benefit, since the extra
+fields ride along for free anyway.
+**Rule**: when a store already has a "raw localStorage shape" contract that
+other tests or tooling read directly, don't add `partialize`/custom `merge`
+unless something must be *excluded* from persistence (e.g. genuinely
+transient in-memory-only data) — letting the whole state persist keeps the
+top-level shape stable and one migration step (`migrate`, keyed by
+`version`) is enough to reshape an old persisted blob.
+
 ## PG elector tests in different packages serialised each other over the one advisory lock
 
 **Symptom**: The `Backend` CI job flaked, hardest during a burst of

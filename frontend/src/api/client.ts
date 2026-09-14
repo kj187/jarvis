@@ -16,6 +16,7 @@ import type {
   AuthUser,
   ProviderInfo,
   AdminUser,
+  SettingsResponse,
 } from '@/types'
 
 const BASE = '/api/v1'
@@ -337,4 +338,18 @@ export function deleteSilenceTemplate(id: string): Promise<void> {
   return request<void>(`/silence-templates/${id}`, {
     method: 'DELETE',
   })
+}
+
+// ── Settings ──────────────────────────────────────────────────────────────────
+
+export function fetchSettings(): Promise<SettingsResponse> {
+  return request<SettingsResponse>('/settings')
+}
+
+export function putSettings(settings: Record<string, unknown>): Promise<void> {
+  return request<void>('/settings', { method: 'PUT', body: JSON.stringify(settings) })
+}
+
+export function deleteSettings(): Promise<void> {
+  return request<void>('/settings', { method: 'DELETE' })
 }

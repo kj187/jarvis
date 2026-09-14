@@ -173,6 +173,17 @@ Sessions are stored as signed JWT cookies:
 | SameSite | Lax |
 | Secure | yes when served over HTTPS (detected via `X-Forwarded-Proto`) |
 
+## User Settings Storage
+
+With an auth provider active, a signed-in user's Settings (theme, default
+view, default filters, etc. — see [Features → User Settings](features.md#user-settings))
+are stored server-side against the account and follow them across devices.
+Without an auth provider (`JARVIS_AUTH_PROVIDER` unset) — or while signed out
+in `write_protect` mode — settings stay in that browser's `localStorage`
+only. Signing in for the first time on a device copies any local settings to
+the account once; after that the account always wins. Signing out falls back
+to the browser's own settings without touching the account's.
+
 ---
 
 ## Roles

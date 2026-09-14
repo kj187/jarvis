@@ -28,6 +28,26 @@ func RequireAuth(provider Provider) echo.MiddlewareFunc {
 	}
 }
 
+// OptionalAuth tries to resolve the caller from the session cookie and, if
+// valid, sets the User in context under ContextKey exactly like RequireAuth
+// — but never rejects the request when the cookie is absent or invalid; the
+// handler sees a nil UserFromContext instead. For routes that must answer
+// both anonymous and authenticated callers with a different body (e.g.
+// GET /api/v1/settings), not just gate write access.
+func OptionalAuth(provider Provider) echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			if provider.Mode() == "none" {
+				return next(c)
+			}
+			if user, err := userFromCookie(c, provider); err == nil {
+				c.Set(ContextKey, user)
+			}
+			return next(c)
+		}
+	}
+}
+
 // RequireAdmin calls RequireAuth then checks role == "admin".
 // On failure: 403 {"error": "forbidden"}.
 func RequireAdmin(provider Provider) echo.MiddlewareFunc {

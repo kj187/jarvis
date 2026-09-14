@@ -22,6 +22,7 @@ import (
 	"github.com/kj187/jarvis/backend/internal/fanout"
 	"github.com/kj187/jarvis/backend/internal/history"
 	"github.com/kj187/jarvis/backend/internal/metrics"
+	"github.com/kj187/jarvis/backend/internal/settings"
 	"github.com/kj187/jarvis/backend/internal/users"
 	"github.com/kj187/jarvis/backend/internal/ws"
 )
@@ -192,7 +193,8 @@ func newFanoutTestPod(t *testing.T, dsn string, logger *slog.Logger) *fanoutTest
 	silenceStore := history.NewSilenceStore()
 	registry := cluster.NewRegistry(nil)
 	userStore := users.NewStore(database, dialect)
-	srv := NewServer(alertStore, silenceStore, store, hub, registry, &config.Config{}, nil, auth.NoneProvider{}, userStore, f)
+	settingsStore := settings.NewStore(database, dialect)
+	srv := NewServer(alertStore, silenceStore, store, hub, registry, &config.Config{}, nil, auth.NoneProvider{}, userStore, settingsStore, f)
 
 	return &fanoutTestPod{store: store, hub: hub, fanout: f, server: srv}
 }

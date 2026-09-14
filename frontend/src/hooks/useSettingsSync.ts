@@ -1,0 +1,104 @@
+import { useEffect } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useAuthStore } from '@/store/authStore'
+import { useSettingsStore, setSettingsWriter } from '@/store/useSettingsStore'
+import type { SettingsWriteEvent } from '@/store/useSettingsStore'
+import { fetchSettings, putSettings, deleteSettings } from '@/api/client'
+import { normalizeSettings } from '@/lib/settingsUtils'
+
+const WRITE_DEBOUNCE_MS = 300
+
+/**
+ * The single place that decides where settings live (tmp/settings_storage.md
+ * §6.4). The store itself never imports an API client — it only exposes
+ * `applyRemote` (this hook's read path) and `setSettingsWriter` (this hook's
+ * write path). Mounted once in App.tsx, next to useWebSocket/useAlertCounts.
+ */
+export function useSettingsSync(): void {
+  const providerInfo = useAuthStore((s) => s.providerInfo)
+  const user = useAuthStore((s) => s.user)
+  const isLoading = useAuthStore((s) => s.isLoading)
+  const applyRemote = useSettingsStore((s) => s.applyRemote)
+  const setSyncState = useSettingsStore((s) => s.setSyncState)
+  const queryClient = useQueryClient()
+
+  const isServerMode = !isLoading && providerInfo != null && providerInfo.mode !== 'none' && user !== null
+  const userId = isServerMode && user ? user.id : null
+
+  const { data, error, isSuccess } = useQuery({
+    queryKey: ['settings', userId],
+    queryFn: fetchSettings,
+    enabled: isServerMode,
+    staleTime: Infinity,
+    retry: 1,
+  })
+
+  // Local mode (no auth provider, or not logged in): resolve from the anon
+  // mirror, no request at all.
+  useEffect(() => {
+    if (isLoading || isServerMode) return
+    const anon = useSettingsStore.getState().anonOverrides
+    applyRemote(anon, {}, 'local')
+  }, [isLoading, isServerMode, applyRemote])
+
+  // Server mode, fetch succeeded: adopt the anon slot once if the account has
+  // no row yet, otherwise resolve the fetched blob.
+  useEffect(() => {
+    if (!isServerMode || !userId || !isSuccess || !data) return
+    const global = normalizeSettings(data.global)
+    if (data.user !== null) {
+      applyRemote(normalizeSettings(data.user), global, 'server', userId)
+      return
+    }
+    const anon = useSettingsStore.getState().anonOverrides
+    if (Object.keys(anon).length > 0) {
+      applyRemote(anon, global, 'server', userId)
+      putSettings(anon)
+        .then(() => queryClient.invalidateQueries({ queryKey: ['settings', userId] }))
+        .catch(() => setSyncState('error'))
+      return
+    }
+    applyRemote({}, global, 'server', userId)
+  }, [isServerMode, userId, isSuccess, data, applyRemote, queryClient, setSyncState])
+
+  // Server mode, fetch failed: fall back to this user's last-known mirror (if
+  // any) and surface the failure via syncState.
+  useEffect(() => {
+    if (!isServerMode || !userId || !error) return
+    const mirror = useSettingsStore.getState().userMirror
+    const overrides = mirror?.id === userId ? mirror.overrides : {}
+    applyRemote(overrides, {}, 'server', userId)
+    setSyncState('error')
+  }, [isServerMode, userId, error, applyRemote, setSyncState])
+
+  // Writer: debounced PUT on every change, DELETE on reset. Optimistic — a
+  // write failure never rolls the local state back (tmp/settings_storage.md §6.4).
+  useEffect(() => {
+    if (!isServerMode) {
+      setSettingsWriter(null)
+      return
+    }
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const writer = (event: SettingsWriteEvent) => {
+      if (timer) clearTimeout(timer)
+      if (event.kind === 'reset') {
+        setSyncState('saving')
+        deleteSettings()
+          .then(() => setSyncState('idle'))
+          .catch(() => setSyncState('error'))
+        return
+      }
+      timer = setTimeout(() => {
+        setSyncState('saving')
+        putSettings(event.overrides)
+          .then(() => setSyncState('idle'))
+          .catch(() => setSyncState('error'))
+      }, WRITE_DEBOUNCE_MS)
+    }
+    setSettingsWriter(writer)
+    return () => {
+      if (timer) clearTimeout(timer)
+      setSettingsWriter(null)
+    }
+  }, [isServerMode, setSyncState])
+}

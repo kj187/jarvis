@@ -20,6 +20,7 @@ import (
 	"github.com/kj187/jarvis/backend/internal/leader"
 	"github.com/kj187/jarvis/backend/internal/metrics"
 	"github.com/kj187/jarvis/backend/internal/retention"
+	"github.com/kj187/jarvis/backend/internal/settings"
 	"github.com/kj187/jarvis/backend/internal/static"
 	"github.com/kj187/jarvis/backend/internal/users"
 	"github.com/kj187/jarvis/backend/internal/version"
@@ -98,6 +99,7 @@ func main() {
 	silenceStore := history.NewSilenceStore()
 	store := history.NewStore(database, dialect)
 	userStore := users.NewStore(database, dialect)
+	settingsStore := settings.NewStore(database, dialect)
 
 	// Grace Period (Critical Invariant #1) must absorb at least one missed
 	// poll: at 60s flat, a poll interval configured ≥ 60s could never let a
@@ -159,7 +161,7 @@ func main() {
 	sweeper := retention.NewSweeper(store, cfg.Retention, logger, m, el)
 
 	// ── HTTP Router ───────────────────────────────────────────────────────────
-	router := api.NewRouter(alertStore, silenceStore, store, hub, registry, cfg, static.StaticFiles, recorder, authProvider, userStore, m, wsFanout)
+	router := api.NewRouter(alertStore, silenceStore, store, hub, registry, cfg, static.StaticFiles, recorder, authProvider, userStore, settingsStore, m, wsFanout)
 
 	server := &http.Server{
 		Addr:         ":" + cfg.Port,

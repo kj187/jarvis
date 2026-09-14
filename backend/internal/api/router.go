@@ -18,6 +18,7 @@ import (
 	"github.com/kj187/jarvis/backend/internal/fanout"
 	"github.com/kj187/jarvis/backend/internal/history"
 	"github.com/kj187/jarvis/backend/internal/metrics"
+	"github.com/kj187/jarvis/backend/internal/settings"
 	"github.com/kj187/jarvis/backend/internal/users"
 	"github.com/kj187/jarvis/backend/internal/ws"
 )
@@ -55,6 +56,7 @@ func NewRouter(
 	recorder pollTriggerer,
 	authProvider auth.Provider,
 	userStore *users.Store,
+	settingsStore *settings.Store,
 	m *metrics.Metrics,
 	f fanout.Fanout,
 ) *echo.Echo {
@@ -114,13 +116,13 @@ func NewRouter(
 	if len(cfg.AllowedOrigins) > 0 {
 		e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
 			AllowOrigins:     cfg.AllowedOrigins,
-			AllowMethods:     []string{http.MethodGet, http.MethodPost, http.MethodDelete, http.MethodPatch, http.MethodOptions},
+			AllowMethods:     []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodPatch, http.MethodOptions},
 			AllowHeaders:     []string{echo.HeaderContentType, echo.HeaderAccept},
 			AllowCredentials: true,
 		}))
 	}
 
-	srv := NewServer(alertStore, silenceStore, store, hub, registry, cfg, recorder, authProvider, userStore, f)
+	srv := NewServer(alertStore, silenceStore, store, hub, registry, cfg, recorder, authProvider, userStore, settingsStore, f)
 
 	// Wire JWT secret key into auth middleware.
 	if len(cfg.SecretKey) > 0 {
@@ -187,6 +189,10 @@ func NewRouter(
 	//   pollRL   — 1 req/5s  per IP for /poll (matches the minimum client poll interval)
 	writeRL := rateLimiter(0.5, 10)                // 0.5 req/s = 30/min, burst 10
 	pollRL := rateLimiter(pollRLRate, pollRLBurst) // prod: 0.2 req/s = 1/5s, burst 2 (relaxed in e2e builds)
+	// Settings writes come bundled while a user clicks through the Settings
+	// sheet, and multiple users behind one NAT share an IP — looser than
+	// writeRL so normal use never gets throttled.
+	settingsRL := rateLimiter(2, 20) // 120 req/min per IP, burst 20
 
 	requireAuth := auth.RequireAuth(authProvider)
 
@@ -212,6 +218,10 @@ func NewRouter(
 	apiV1.POST("/poll", srv.triggerPoll, pollRL)
 
 	apiV1.GET("/clusters", srv.getClusters)
+
+	apiV1.GET("/settings", srv.getSettings, auth.OptionalAuth(authProvider))
+	apiV1.PUT("/settings", srv.putSettings, requireAuth, settingsRL)
+	apiV1.DELETE("/settings", srv.deleteSettings, requireAuth, settingsRL)
 
 	// ── E2E test routes (only when built with -tags e2e; no-op otherwise) ─────
 	srv.registerTestRoutes(apiV1)

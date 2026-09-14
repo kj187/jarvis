@@ -10,10 +10,12 @@ import { useUIStore, VIEW_MODE_KEY } from '@/store/uiStore'
 import { useAuthStore } from '@/store/authStore'
 import { useWebSocket } from '@/hooks/useWebSocket'
 import { useAlertCounts } from '@/hooks/useAlertCounts'
+import { useSettingsSync } from '@/hooks/useSettingsSync'
 
 export default function App() {
   useWebSocket()
   useAlertCounts()
+  useSettingsSync()
 
   const theme = useSettingsStore((s) => s.theme)
   const defaultFilters = useSettingsStore((s) => s.defaultFilters)
