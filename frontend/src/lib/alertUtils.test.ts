@@ -33,8 +33,11 @@ import {
   unescapeRegex,
   isRoundTrippableTagList,
   findRelatedAlerts,
+  orderLabelsForDisplay,
+  hiddenLabelsForDisplay,
 } from './alertUtils'
 import type { EnrichedAlert, LabelMatcher, Silence } from '@/types'
+import type { LabelDisplayConfig } from '@/lib/settingsUtils'
 
 function makeSilence(overrides: Partial<Silence> = {}): Silence {
   return {
@@ -320,6 +323,131 @@ describe('getFilterableLabels', () => {
     const alert = makeAlert()
     const labels = getFilterableLabels(alert)
     expect(labels['@claimed-by']).toBe('')
+  })
+})
+
+describe('orderLabelsForDisplay', () => {
+  const emptyConfig: LabelDisplayConfig = { order: [], hidden: [] }
+
+  it('sorts all labels alphabetically for an empty config, dropping HIDDEN_LABEL_KEYS', () => {
+    const labels = { job: 'a', alertname: 'X', customer: 'acme', severity: 'critical' }
+    expect(orderLabelsForDisplay(labels, emptyConfig)).toEqual([
+      ['customer', 'acme'],
+      ['job', 'a'],
+    ])
+  })
+
+  it('places configured order keys first in configured order, rest alphabetically', () => {
+    const labels = { job: 'a', customer: 'acme', hostname: 'h1', dbid: '7' }
+    const config: LabelDisplayConfig = { order: ['customer', 'hostname', 'job'], hidden: [] }
+    expect(orderLabelsForDisplay(labels, config)).toEqual([
+      ['customer', 'acme'],
+      ['hostname', 'h1'],
+      ['job', 'a'],
+      ['dbid', '7'],
+    ])
+  })
+
+  it('silently skips an order key the alert does not have', () => {
+    const labels = { job: 'a', customer: 'acme' }
+    const config: LabelDisplayConfig = { order: ['customer', 'hostname', 'job'], hidden: [] }
+    expect(orderLabelsForDisplay(labels, config)).toEqual([
+      ['customer', 'acme'],
+      ['job', 'a'],
+    ])
+  })
+
+  it('drops hidden keys from the result', () => {
+    const labels = { job: 'a', dbid: '7' }
+    const config: LabelDisplayConfig = { order: [], hidden: ['dbid'] }
+    expect(orderLabelsForDisplay(labels, config)).toEqual([['job', 'a']])
+  })
+
+  it('a key in both order and hidden is dropped — hidden wins', () => {
+    const labels = { job: 'a', dbid: '7' }
+    const config: LabelDisplayConfig = { order: ['dbid'], hidden: ['dbid'] }
+    expect(orderLabelsForDisplay(labels, config)).toEqual([['job', 'a']])
+  })
+
+  it('hiding severity has no effect — it was never a chip anyway', () => {
+    const labels = { job: 'a', severity: 'critical' }
+    const config: LabelDisplayConfig = { order: [], hidden: ['severity'] }
+    expect(orderLabelsForDisplay(labels, config)).toEqual([['job', 'a']])
+  })
+
+  it('applies the exclude set in addition to hidden', () => {
+    const labels = { job: 'a', customer: 'acme', dbid: '7' }
+    const config: LabelDisplayConfig = { order: [], hidden: ['dbid'] }
+    expect(orderLabelsForDisplay(labels, config, new Set(['job']))).toEqual([['customer', 'acme']])
+  })
+
+  it('drops __-prefixed labels', () => {
+    const labels = { job: 'a', __meta_something: 'x' }
+    expect(orderLabelsForDisplay(labels, emptyConfig)).toEqual([['job', 'a']])
+  })
+
+  it('places @cluster first with the default config — no visual regression', () => {
+    const labels = { job: 'a', '@cluster': 'prod', customer: 'acme' }
+    const config: LabelDisplayConfig = { order: ['@cluster'], hidden: [] }
+    expect(orderLabelsForDisplay(labels, config)).toEqual([
+      ['@cluster', 'prod'],
+      ['customer', 'acme'],
+      ['job', 'a'],
+    ])
+  })
+
+  it('is deterministic regardless of key insertion order', () => {
+    const config: LabelDisplayConfig = { order: ['customer'], hidden: [] }
+    const a = { job: 'a', customer: 'acme', dbid: '7' }
+    const b = { dbid: '7', customer: 'acme', job: 'a' }
+    expect(orderLabelsForDisplay(a, config)).toEqual(orderLabelsForDisplay(b, config))
+  })
+})
+
+describe('hiddenLabelsForDisplay', () => {
+  it('returns nothing for an empty config', () => {
+    const labels = { job: 'a', customer: 'acme' }
+    expect(hiddenLabelsForDisplay(labels, { order: [], hidden: [] })).toEqual([])
+  })
+
+  it('returns only the labels actually hidden by config.hidden', () => {
+    const labels = { job: 'a', customer: 'acme', dbid: '7' }
+    const config: LabelDisplayConfig = { order: [], hidden: ['dbid'] }
+    expect(hiddenLabelsForDisplay(labels, config)).toEqual([['dbid', '7']])
+  })
+
+  it('silently omits a hidden key the alert does not have', () => {
+    const labels = { job: 'a' }
+    const config: LabelDisplayConfig = { order: [], hidden: ['dbid'] }
+    expect(hiddenLabelsForDisplay(labels, config)).toEqual([])
+  })
+
+  it('never reveals HIDDEN_LABEL_KEYS even if listed in config.hidden', () => {
+    const labels = { job: 'a', severity: 'critical' }
+    const config: LabelDisplayConfig = { order: [], hidden: ['severity'] }
+    expect(hiddenLabelsForDisplay(labels, config)).toEqual([])
+  })
+
+  it('never reveals __-prefixed labels even if listed in config.hidden', () => {
+    const labels = { job: 'a', __meta_something: 'x' }
+    const config: LabelDisplayConfig = { order: [], hidden: ['__meta_something'] }
+    expect(hiddenLabelsForDisplay(labels, config)).toEqual([])
+  })
+
+  it('applies the exclude set in addition to hidden', () => {
+    const labels = { job: 'a', customer: 'acme', dbid: '7' }
+    const config: LabelDisplayConfig = { order: [], hidden: ['dbid', 'customer'] }
+    expect(hiddenLabelsForDisplay(labels, config, new Set(['customer']))).toEqual([['dbid', '7']])
+  })
+
+  it('sorts multiple hidden labels alphabetically', () => {
+    const labels = { job: 'a', dbid: '7', customer: 'acme' }
+    const config: LabelDisplayConfig = { order: [], hidden: ['job', 'dbid', 'customer'] }
+    expect(hiddenLabelsForDisplay(labels, config)).toEqual([
+      ['customer', 'acme'],
+      ['dbid', '7'],
+      ['job', 'a'],
+    ])
   })
 })
 

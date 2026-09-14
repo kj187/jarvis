@@ -231,7 +231,7 @@ test('H10 reset to defaults shows confirm state then resets', async ({ page }) =
   expect(storedBefore).toBe('absolute')
 
   // First click shows confirm state
-  await dialog.getByRole('button', { name: 'Reset to defaults' }).click()
+  await dialog.getByRole('button', { name: 'Reset all settings' }).click()
   await expect(dialog.getByRole('button', { name: /Click again to confirm/ })).toBeVisible()
 
   // Second click resets

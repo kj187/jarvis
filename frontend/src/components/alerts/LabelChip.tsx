@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, useState } from 'react'
+import { Eye, EyeOff } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useUIStore } from '@/store/uiStore'
 import { useSettingsStore } from '@/store/useSettingsStore'
@@ -119,5 +120,43 @@ export function LabelChip({
         </div>
       )}
     </div>
+  )
+}
+
+/**
+ * Trailing chip for an alert's chip row: "N labels hidden" when
+ * `hiddenLabelsForDisplay()` found labels this alert carries that Settings →
+ * Labels is suppressing. Click reveals them as normal chips for this one
+ * row — a per-alert peek, not a settings change (see AGENTS.md invariant
+ * #19: purely display, never touches the configured `hidden` list).
+ */
+export function HiddenLabelsToggle({
+  hidden,
+  muted = false,
+}: {
+  hidden: Array<[string, string]>
+  muted?: boolean
+}) {
+  const [revealed, setRevealed] = useState(false)
+  if (hidden.length === 0) return null
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation()
+          setRevealed((r) => !r)
+        }}
+        className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded border border-dashed border-border/60 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground/60 opacity-70 transition-opacity hover:opacity-100 hover:text-muted-foreground"
+        title={revealed ? 'Hide these labels again' : 'Show the labels hidden for this alert'}
+      >
+        {revealed ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+        {hidden.length} label{hidden.length === 1 ? '' : 's'} hidden
+      </button>
+      {revealed && hidden.map(([key, value]) => (
+        <LabelChip key={key} labelKey={key} value={value} muted={muted} />
+      ))}
+    </>
   )
 }

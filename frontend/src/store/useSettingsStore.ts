@@ -8,7 +8,7 @@ import {
   RESOLVED_PAGE_SIZE_OPTIONS,
   ALLOWED_SILENCE_DURATIONS,
 } from '@/lib/settingsUtils'
-import type { UserSettings, DefaultFilter, CardColumns, ResolvedPageSizeOption } from '@/lib/settingsUtils'
+import type { UserSettings, DefaultFilter, CardColumns, ResolvedPageSizeOption, LabelDisplayConfig } from '@/lib/settingsUtils'
 
 export {
   DEFAULT_SETTINGS,
@@ -16,7 +16,7 @@ export {
   RESOLVED_PAGE_SIZE_OPTIONS,
   ALLOWED_SILENCE_DURATIONS,
 }
-export type { UserSettings, DefaultFilter, CardColumns, ResolvedPageSizeOption }
+export type { UserSettings, DefaultFilter, CardColumns, ResolvedPageSizeOption, LabelDisplayConfig }
 
 export type SettingsWriteEvent =
   | { kind: 'update'; overrides: Partial<UserSettings> }

@@ -923,6 +923,15 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
 │   │                            SilenceForm can safely edit as tags, vs. a real regex needing raw-text
 │   │                            editing — see SilenceForm's `raw` matcher mode),
 │   │                            FAST_SILENCE_DURATIONS, HIDDEN_LABEL_KEYS, labelColorStyle, shortClaimant,
+│   │                            orderLabelsForDisplay (labelDisplay.order/hidden from useSettingsStore →
+│   │                            chip order for the card/list views + shared-label strips; display-only,
+│   │                            invariant #19 — never feeds filtering/silence-matching/related-alerts),
+│   │                            hiddenLabelsForDisplay (its counterpart: labels an alert actually has
+│   │                            that config.hidden is suppressing, alphabetical — feeds the "N labels
+│   │                            hidden" reveal chip in AlertCard/AlertListRow/AlertListView,
+│   │                            components/alerts/LabelChip.tsx's HiddenLabelsToggle; same
+│   │                            HIDDEN_LABEL_KEYS/`__`-prefix exclusions as orderLabelsForDisplay, so it
+│   │                            can never surface a dedicated-UI or internal label),
 │   │                            computeLabelBreakdown (alerts-overview modal: per-label-name
 │   │                            value counts, alertname/severity pinned to the top regardless
 │   │                            of coverage, `receiver` alias + rest of HIDDEN_LABEL_KEYS
@@ -964,8 +973,12 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
 │   │                            always renders the same avatar; no external lookup (no
 │   │                            Gravatar/third-party call) — see components/ui/avatar.tsx
 │   ├── settingsUtils.ts       → UserSettings, DEFAULT_SETTINGS + option constants,
+│   │                            LabelDisplayConfig ({ order: string[]; hidden: string[] }, default
+│   │                            `{ order: ['@cluster'], hidden: [] }` — matches pre-feature behavior),
 │   │                            resolveSettings, normalizeSettings (drops unknown keys/out-of-range
-│   │                            values from an unverified server blob), diffFromDefaults (pre-v2 →
+│   │                            values from an unverified server blob; labelDisplay: both order/hidden
+│   │                            must be arrays or the whole key is dropped, entries deduped, a key in
+│   │                            both arrays keeps only the hidden one), diffFromDefaults (pre-v2 →
 │   │                            sparse-overrides migration) — re-exported by useSettingsStore.ts
 │   └── utils.ts               → cn(), formatDuration() + misc helpers
 └── components/
@@ -1194,7 +1207,11 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │   │                        of chips reads as one unit; `emphasized` only adds weight (keeps its
     │   │                        per-key hue), `muted` = neutral fill, no hue (shared context strips).
     │   │                        Hover dropdown shows the full, untruncated value above the label-matcher
-    │   │                        operator buttons. `labelColorStyle` hue is confined to 40–329° — never red
+    │   │                        operator buttons. `labelColorStyle` hue is confined to 40–329° — never red.
+    │   │                        Also exports HiddenLabelsToggle: trailing "N labels hidden" chip driven by
+    │   │                        `hiddenLabelsForDisplay()` — local `revealed` state only (never touches
+    │   │                        `labelDisplay`), so it's a per-alert view-only peek at what Settings →
+    │   │                        Labels is hiding, not a way to change the configuration
     │   ├── ViewToggle.tsx     → ⊞ / ☰ toggle
     │   └── EmptyState.tsx     → large empty-state icon (no alerts)
     ├── comments/
@@ -1341,6 +1358,8 @@ interface UserSettings {
   defaultSilenceDurationMinutes: number         // default 60; ALLOWED_SILENCE_DURATIONS = [15,30,60,240,480,1440,4320]
   defaultCreatorName: string                    // default ''
   claimAnimationEnabled: boolean                // default true
+  labelDisplay: LabelDisplayConfig              // chip order/visibility, card+list views only;
+                                                 // default { order: ['@cluster'], hidden: [] }
 }
 ```
 

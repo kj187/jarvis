@@ -3,6 +3,7 @@ import { enUS } from 'date-fns/locale'
 import type React from 'react'
 import type { UpsertSilenceBody } from '@/api/client'
 import type { EnrichedAlert, LabelMatcher, Silence } from '@/types'
+import type { LabelDisplayConfig } from '@/lib/settingsUtils'
 
 export const tzAbbr = new Date().toLocaleTimeString('en', { timeZoneName: 'short' }).split(' ').pop() ?? ''
 
@@ -10,6 +11,63 @@ export const tzAbbr = new Date().toLocaleTimeString('en', { timeZoneName: 'short
 
 /** Label keys rendered by dedicated UI elements instead of generic label chips. */
 export const HIDDEN_LABEL_KEYS = new Set(['alertname', 'severity', 'receiver', '@receiver', '@claimed-by'])
+
+/**
+ * Orders an alert's labels for chip rendering: configured priority keys first
+ * in their configured order, everything else alphabetically.
+ *
+ * Display-only. Never use this to decide what a silence covers or what a
+ * filter matches (see AGENTS.md invariant #19).
+ */
+export function orderLabelsForDisplay(
+  labels: Record<string, string>,
+  config: LabelDisplayConfig,
+  exclude?: ReadonlySet<string>,
+): Array<[string, string]> {
+  const hidden = new Set(config.hidden)
+  return Object.entries(labels)
+    .filter(([key]) => {
+      if (HIDDEN_LABEL_KEYS.has(key)) return false
+      if (key.startsWith('__')) return false
+      if (hidden.has(key)) return false
+      if (exclude?.has(key)) return false
+      return true
+    })
+    .sort(([a], [b]) => {
+      const rankA = config.order.indexOf(a)
+      const rankB = config.order.indexOf(b)
+      const orderA = rankA === -1 ? Number.POSITIVE_INFINITY : rankA
+      const orderB = rankB === -1 ? Number.POSITIVE_INFINITY : rankB
+      if (orderA !== orderB) return orderA - orderB
+      return a.localeCompare(b)
+    })
+}
+
+/**
+ * The counterpart to `orderLabelsForDisplay`: labels an alert actually has
+ * that `config.hidden` is suppressing — for the "N labels hidden" reveal
+ * chip, so a user can peek at a specific alert's hidden labels without
+ * opening Settings. Never includes `HIDDEN_LABEL_KEYS` or `__`-prefixed
+ * labels — those have no user-facing "hidden" state to reveal, they're
+ * simply not chips (see invariant #19). Always alphabetical; there's no
+ * priority order for a list nobody is meant to look at for long.
+ */
+export function hiddenLabelsForDisplay(
+  labels: Record<string, string>,
+  config: LabelDisplayConfig,
+  exclude?: ReadonlySet<string>,
+): Array<[string, string]> {
+  const hidden = new Set(config.hidden)
+  return Object.entries(labels)
+    .filter(([key]) => {
+      if (HIDDEN_LABEL_KEYS.has(key)) return false
+      if (key.startsWith('__')) return false
+      if (!hidden.has(key)) return false
+      if (exclude?.has(key)) return false
+      return true
+    })
+    .sort(([a], [b]) => a.localeCompare(b))
+}
 
 /**
  * Deterministic per-key chip colors (djb2 hash → hue).

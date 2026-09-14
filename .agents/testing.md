@@ -248,6 +248,20 @@ to `src/lib/**` only:
   plus `fast-check` property tests (e.g. "regex built from
   `escapeRegexValue` matches only the original literal"; "every label
   `computeGroupLabelValues` returns is present on every input alert").
+  Includes `orderLabelsForDisplay` (label display config, issue #189):
+  empty-config alphabetical ordering with `HIDDEN_LABEL_KEYS` dropped,
+  configured-order-first placement, silently skipping an absent order key,
+  `hidden` dropping a key, hidden-wins when a key is in both `order` and
+  `hidden`, hiding an already-`HIDDEN_LABEL_KEYS` key being a no-op, the
+  `exclude` set stacking with `hidden`, `__`-prefixed keys always dropped,
+  the default `{ order: ['@cluster'], hidden: [] }` config (no visual
+  regression), and determinism under different input key insertion order.
+  Also `hiddenLabelsForDisplay` (its counterpart, feeding the "N labels
+  hidden" reveal chip): returns nothing for an empty config, returns exactly
+  the labels `config.hidden` suppresses, silently omits a hidden key the
+  alert doesn't have, never reveals `HIDDEN_LABEL_KEYS` or `__`-prefixed
+  labels even if listed in `hidden`, the `exclude` set stacks with `hidden`,
+  and multiple hidden labels sort alphabetically.
 - **100% coverage gate on `alertUtils.ts`** (statements/lines/functions;
   branches at 99% — the one excluded branch is `tzAbbr`'s `Intl`-dependent
   fallback, not practically testable without mocking `Date`/`Intl` for a
@@ -258,7 +272,14 @@ to `src/lib/**` only:
   rationale (pure resolution/validation logic, not a UI flow): `resolveSettings`
   layering, `normalizeSettings` dropping unknown keys/out-of-range values/invalid
   `defaultFilters` entries from an unverified server blob, and `diffFromDefaults`
-  (the pre-v2 → sparse-overrides migration step). **Not** under the 100%
+  (the pre-v2 → sparse-overrides migration step). Includes `labelDisplay`
+  normalization (issue #189): malformed input (non-object, `order`/`hidden`
+  not both arrays) drops the whole key, non-string/empty-string array entries
+  are dropped, duplicates within `order` are removed, a key present in both
+  `order` and `hidden` survives only in `hidden`, and a valid config
+  round-trips through `normalizeSettings` unchanged — the last one guards the
+  server read path (`hooks/useSettingsSync.ts`) specifically, since the local
+  (`none` auth mode) path never normalizes at all. **Not** under the 100%
   coverage gate — that stays scoped to `alertUtils.ts` only (`vitest.config.ts`
   `coverage.include`).
 
@@ -267,7 +288,27 @@ anything outside `src/lib/` stays E2E-only.
 
 Specs live under `frontend/e2e/`:
 
-- `e2e/functional/<mode>/*.spec.ts` — functional golden paths per auth mode (`none`, `internal`, `oidc`)
+- `e2e/functional/<mode>/*.spec.ts` — functional golden paths per auth mode (`none`, `internal`, `oidc`).
+  `functional/none/label-display.spec.ts` (issue #189, L1–L9): hiding a label
+  removes its chip from the card view (L1) and the list view (L2); a hidden
+  label stays fully visible in the alert detail panel — the guard for
+  invariant #19 (L3); adding a label to the priority order and dragging it
+  above another entry makes it the first chip — simulated with raw
+  `page.mouse` events against the Grip drag handle, since reordering has no
+  click target any more (L4); the search box in "Other labels" filters in
+  real time (L6); hiding a label keeps its alphabetical position instead of
+  moving to the end of the list (L7); "Reset all settings" restores every
+  chip and the original order (L5); the "N labels hidden" chip toggles that
+  alert's hidden labels back into view on click, and away again on a second
+  click (L8); the Labels section's own "Reset labels" button resets only
+  `labelDisplay`, leaving an unrelated setting (`defaultViewMode`) untouched
+  (L9). Deliberately **no** `internal`-mode spec for server-side persistence
+  of this setting — the persistence path is already proven generically (any
+  key) by `internal/settings-persistence.spec.ts` (updated for the "Reset
+  all settings" button rename), since the settings backend is an opaque blob
+  with no per-key code path; the one `labelDisplay`-specific piece
+  (normalization) is covered by `settingsUtils.test.ts` instead, at the
+  cheaper Vitest tier.
 - `e2e/screenshots/<mode>/*.screenshot.spec.ts` — screenshot generation for docs (`docs/assets/`)
 - `e2e/fixtures/`, `e2e/support/` — shared fixtures and helpers
 

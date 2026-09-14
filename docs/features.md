@@ -160,6 +160,7 @@ Settings and the theme toggle are always there either way; Login only appears si
 | **Card columns** | Fixed column count (1–6) for the Card View grid, or *Auto* to let it reflow with window width (up to 4). |
 | **Claim animation** | Toggle the animated snake border on the Claim button for unclaimed alerts. |
 | **Default filter** | Label matchers that are always active — see below. |
+| **Labels** | Which label chips show, and in what order — see below. |
 | **Default silence duration** | Pre-selected duration when the silence creation form opens (15 min to 3 days). |
 
 Which label sections Card and List view group by is no longer a Settings entry — it moved to the **Grouped** toolbar control, see [Grouping](#grouping). The resolved-view page size is set from its own per-page selector, not from this panel — see [Resolved View](#resolved-view).
@@ -173,6 +174,20 @@ Default filters appear as **locked chips** in the filter row of the header. They
 A **lock icon** and dimmed appearance distinguish them from manually added filters. Hovering over a locked chip shows the tooltip: *"Default filter set in Settings — open Settings from the user menu to change or remove."*
 
 To remove or modify a default filter, open Settings → Default Filter → click **×** on the chip, or clear the list and save.
+
+### Label display
+
+![Settings — Labels](assets/feature-settings-labels.png)
+
+By default every non-hidden label on an alert renders as a chip. When alerts carry many labels (`customer`, `hostname`, `instance`, `dbid`, …), that gets cluttered — Settings → Labels lets you hide labels you don't need as chips and pick a priority order for the ones you keep, so the labels you care about (e.g. `customer` → `hostname` → `job`) lead every card and list row. The Settings panel is two columns — Display, Default Filter and Silences on the left, Labels on the right — so this section no longer pushes the rest of the panel out of view.
+
+- **Priority order** — labels here render first, in this order; drag the grip handle (hover for a tooltip) to reorder, or drop one back to "Other labels" with **×**.
+- **Other labels** — everything else, alphabetical (hiding a label keeps its alphabetical spot instead of moving it to the end); toggle the eye icon to hide/show it as a chip, or use **↑** to promote it into the priority order. A search box filters this list in real time, and the list itself scrolls within a fixed height — a soft fade at the top/bottom edge shows there's more to scroll to, since browsers increasingly hide their own scrollbar until you're already scrolling.
+- **Reset labels** — resets only this section (priority order and hidden labels) back to its default. The "Reset all settings" button at the bottom of the panel is separate and, as the name says, resets everything — Display, filters, Silences and Labels together.
+
+This only changes chip *display* in the Card and List views (including the shared-label strip above grouped alerts) — it never affects filtering, silence matching, or the affected-alerts preview, and the alert **detail panel always shows every label**, hidden or not. A label that isn't configured (including one from an alerting rule added after you set this up) simply sorts alphabetically behind the ones you did configure — it never changes your existing setup on its own.
+
+If a given alert actually carries a label you've hidden, its chip row ends with a dim, dashed **"N labels hidden"** chip instead of silently dropping it — click it to reveal that alert's hidden labels inline (click again to hide them). This is a per-alert, view-only peek: it never changes your Settings configuration, so other alerts and other views are unaffected.
 
 ---
 

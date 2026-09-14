@@ -16,6 +16,13 @@ export const ALLOWED_SILENCE_DURATIONS = [15, 30, 60, 240, 480, 1440, 4320] as c
 
 const DEFAULT_FILTER_OPERATORS: LabelMatcherOperator[] = ['=', '!=', '=~', '!~']
 
+export interface LabelDisplayConfig {
+  /** Label keys rendered first, in exactly this order. */
+  order: string[]
+  /** Label keys never rendered as a chip in the card/list views. */
+  hidden: string[]
+}
+
 export interface UserSettings {
   // Display
   theme: 'dark' | 'light'
@@ -38,6 +45,9 @@ export interface UserSettings {
 
   // Animations
   claimAnimationEnabled: boolean
+
+  // Label chip display (card/list views only — see lib/alertUtils.ts orderLabelsForDisplay)
+  labelDisplay: LabelDisplayConfig
 }
 
 export const DEFAULT_SETTINGS: UserSettings = {
@@ -51,6 +61,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   defaultSilenceDurationMinutes: 60,
   defaultCreatorName: '',
   claimAnimationEnabled: true,
+  labelDisplay: { order: ['@cluster'], hidden: [] },
 }
 
 /** Layers global (Phase 3) and per-user overrides on top of the app defaults. */
@@ -119,8 +130,35 @@ export function normalizeSettings(raw: unknown): Partial<UserSettings> {
   if (typeof obj.claimAnimationEnabled === 'boolean') {
     out.claimAnimationEnabled = obj.claimAnimationEnabled
   }
+  if (
+    typeof obj.labelDisplay === 'object' &&
+    obj.labelDisplay !== null &&
+    !Array.isArray(obj.labelDisplay)
+  ) {
+    const ld = obj.labelDisplay as Record<string, unknown>
+    if (Array.isArray(ld.order) && Array.isArray(ld.hidden)) {
+      const hidden = dedupeStrings(ld.hidden)
+      const hiddenSet = new Set(hidden)
+      // Hidden wins over order — a key configured as both never renders, so
+      // keeping it in `order` too would be a dead entry (§3.2).
+      const order = dedupeStrings(ld.order).filter((key) => !hiddenSet.has(key))
+      out.labelDisplay = { order, hidden }
+    }
+  }
 
   return out
+}
+
+/** Non-string and empty-string entries dropped; duplicates removed, first occurrence wins. */
+function dedupeStrings(values: unknown[]): string[] {
+  const seen = new Set<string>()
+  const result: string[] = []
+  for (const value of values) {
+    if (typeof value !== 'string' || value === '' || seen.has(value)) continue
+    seen.add(value)
+    result.push(value)
+  }
+  return result
 }
 
 /** Diffs a full (pre-v2) settings blob against the app defaults, keeping only

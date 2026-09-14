@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import { ArrowUpRight, BellOff, User } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { getFilterableLabels, getSilenceState, getExpiredSilence, formatSilenceDuration, tzAbbr, shortClaimant } from '@/lib/alertUtils'
+import { getFilterableLabels, getSilenceState, getExpiredSilence, formatSilenceDuration, tzAbbr, shortClaimant, orderLabelsForDisplay, hiddenLabelsForDisplay } from '@/lib/alertUtils'
 import { renderTextWithLinks } from '@/lib/linkUtils'
 import { bucketFiringStarts } from '@/lib/heatmapUtils'
 import { AlertBadge } from './AlertBadge'
-import { LabelChip } from './LabelChip'
+import { LabelChip, HiddenLabelsToggle } from './LabelChip'
 import { AckButton } from './AckButton'
 import { HeatmapCellsRow } from './HeatmapCells'
 import { HIDDEN_LABEL_KEYS } from '@/lib/alertUtils'
@@ -91,16 +91,11 @@ function AlertEntry({
   const { data: stats } = useAlertStats(alert.fingerprint, alert.clusterName)
   const claim = alert.activeClaim ?? null
   const theme = useSettingsStore((s) => s.theme)
+  const labelDisplay = useSettingsStore((s) => s.labelDisplay)
   const maintainer = claim ? null : (alert.labels['maintainer'] ?? null)
-  const allLabels = getFilterableLabels(alert)
   const formatTime = useFormatTime()
-  const labels = Object.entries(allLabels)
-    .filter(([k]) => !HIDDEN_LABEL_KEYS.has(k) && !commonLabelKeys.has(k))
-    .sort(([a], [b]) => {
-      if (a === '@cluster') return -1
-      if (b === '@cluster') return 1
-      return 0
-    })
+  const labels = orderLabelsForDisplay(getFilterableLabels(alert), labelDisplay, commonLabelKeys)
+  const hiddenLabels = hiddenLabelsForDisplay(getFilterableLabels(alert), labelDisplay, commonLabelKeys)
   const summary = alert.annotations['summary']
   const description = alert.annotations['description']
   // Only dress up entries that share a card with siblings — a lone alert
@@ -172,6 +167,7 @@ function AlertEntry({
               {labels.map(([key, value], i) => (
                 <LabelChip key={key} labelKey={key} value={value} emphasized={i === 0} />
               ))}
+              <HiddenLabelsToggle hidden={hiddenLabels} />
             </div>
           </div>
         )}
@@ -298,13 +294,11 @@ export function AlertCard({
   const claimedCount = alerts.filter((a) => a.activeClaim != null).length
   const groupKeys = alerts.length > 1 ? alerts.map(makeAlertSelectionKeyForAlert) : null
 
+  const labelDisplay = useSettingsStore((s) => s.labelDisplay)
   const commonLabels = getCommonLabels(alerts)
   const commonLabelKeys = new Set(Object.keys(commonLabels))
-  const sortedCommonLabels = Object.entries(commonLabels).sort(([a], [b]) => {
-    if (a === '@cluster') return -1
-    if (b === '@cluster') return 1
-    return 0
-  })
+  const sortedCommonLabels = orderLabelsForDisplay(commonLabels, labelDisplay)
+  const hiddenCommonLabels = hiddenLabelsForDisplay(commonLabels, labelDisplay)
 
   const severityBorderColor: Record<string, string> = {
     critical: 'border-l-red-500',
@@ -358,11 +352,12 @@ export function AlertCard({
       {/* Common labels — shared by every alert in the group, so rendered as a
           quiet context strip (neutral, no per-key hue) that doesn't compete
           with each entry's own distinguishing labels */}
-      {!collapsed && sortedCommonLabels.length > 0 && (
-        <div className="flex flex-wrap gap-1 border-b border-border/60 px-3 py-2">
+      {!collapsed && (sortedCommonLabels.length > 0 || hiddenCommonLabels.length > 0) && (
+        <div data-testid="alert-card-common-labels" className="flex flex-wrap gap-1 border-b border-border/60 px-3 py-2">
           {sortedCommonLabels.map(([key, value]) => (
             <LabelChip key={key} labelKey={key} value={value} muted />
           ))}
+          <HiddenLabelsToggle hidden={hiddenCommonLabels} muted />
         </div>
       )}
 

@@ -6,11 +6,21 @@ import { manyAlerts } from '../../fixtures/alerts'
 const DIR = process.env.SCREENSHOTS_DIR ?? '../docs/assets'
 
 /**
- * Screenshot: the settings panel, cropped to the panel itself rather than
- * the full viewport — the sheet is always full-height (`inset-y-0`)
- * regardless of content, so a plain element screenshot would still carry a
- * lot of empty space below "Reset to defaults"; crop to the actual content
- * bottom instead (same technique as detail-tabs.screenshot.spec.ts).
+ * Screenshot: the settings panel, cropped to its actual content rather than
+ * the full viewport — the sheet frame is always full-height (`inset-y-0`)
+ * regardless of content, so a screenshot of the dialog itself would carry a
+ * lot of empty space below "Reset to defaults" once content is short.
+ *
+ * The panel (now that it includes the Labels section) is taller than the
+ * default 900px viewport. `Locator.screenshot()` normally handles an element
+ * taller than the viewport by scrolling and stitching multiple captures
+ * together — but the sheet is `position: fixed`, which doesn't move with
+ * page scroll, so that stitching captures the same fixed content repeatedly
+ * instead of scrolling through it. Growing the viewport to fit the whole
+ * panel before the single screenshot sidesteps that (same technique as
+ * detail-tabs.screenshot.spec.ts uses a manual clip for — this content is
+ * tall enough that scrolling-based stitching itself breaks, not just a
+ * fixed-viewport clip).
  * Regenerate: make e2e-screenshot NAME=feature-settings-panel
  */
 test('feature-settings-panel', async ({ page, am, jarvis }) => {
@@ -26,16 +36,11 @@ test('feature-settings-panel', async ({ page, am, jarvis }) => {
   await expect(panel).toBeVisible()
   await page.waitForTimeout(300)
 
-  const panelBox = (await panel.boundingBox())!
-  const contentBottom = await panel.evaluate((el) => {
-    const kids = el.querySelector('.sheet-scroll')?.children ?? []
-    const last = kids[kids.length - 1]
-    return last ? last.getBoundingClientRect().bottom : 0
-  })
-  const height = Math.min(panelBox.height, Math.max(200, contentBottom + 16 - panelBox.y))
+  const content = panel.locator('.sheet-scroll > *').first()
+  const contentHeight = await content.evaluate((el) => el.scrollHeight)
+  const viewport = page.viewportSize()!
+  await page.setViewportSize({ width: viewport.width, height: contentHeight + 32 })
+  await page.waitForTimeout(100)
 
-  await page.screenshot({
-    path: `${DIR}/feature-settings-panel.png`,
-    clip: { x: panelBox.x, y: panelBox.y, width: panelBox.width, height },
-  })
+  await content.screenshot({ path: `${DIR}/feature-settings-panel.png` })
 })

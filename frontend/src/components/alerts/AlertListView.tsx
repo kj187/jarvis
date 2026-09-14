@@ -4,13 +4,13 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { AlertListRow } from './AlertListRow'
 import { EmptyState } from './EmptyState'
 import { StatusBadge } from './AlertBadge'
-import { LabelChip } from './LabelChip'
+import { LabelChip, HiddenLabelsToggle } from './LabelChip'
 import { HIDDEN_LABEL_KEYS } from '@/lib/alertUtils'
 import { Sheet } from '@/components/ui/sheet'
 import { SilenceForm } from '@/components/silences/SilenceForm'
 import { SilenceExpireModal } from '@/components/silences/SilenceExpireModal'
 import { fetchClusters, deleteSilence } from '@/api/client'
-import { formatSilenceDuration, getFilterableLabels, severityOrder } from '@/lib/alertUtils'
+import { formatSilenceDuration, getFilterableLabels, severityOrder, orderLabelsForDisplay, hiddenLabelsForDisplay } from '@/lib/alertUtils'
 import { renderTextWithLinks } from '@/lib/linkUtils'
 import { useSettingsStore, RESOLVED_PAGE_SIZE_OPTIONS } from '@/store/useSettingsStore'
 import { useUIStore } from '@/store/uiStore'
@@ -208,6 +208,7 @@ export function AlertListView({
   const updateSettings = useSettingsStore((s) => s.update)
   const theme = useSettingsStore((s) => s.theme)
   const groupByLabel = useSettingsStore((s) => s.groupByLabel)
+  const labelDisplay = useSettingsStore((s) => s.labelDisplay)
   const isFullscreen = useUIStore((s) => s.isFullscreen)
   const collapsedStorageKey = `jarvis-list-collapsed-sections:${groupByLabel}`
   const orderStorageKey = `jarvis-list-section-order:${groupByLabel}`
@@ -801,9 +802,10 @@ export function AlertListView({
                               {group.clusterNames.map((c) => (
                                 <LabelChip key={c} labelKey="@cluster" value={c} muted />
                               ))}
-                              {Object.entries(group.commonLabels).map(([key, value]) => (
+                              {orderLabelsForDisplay(group.commonLabels, labelDisplay).map(([key, value]) => (
                                 <LabelChip key={key} labelKey={key} value={value} muted />
                               ))}
+                              <HiddenLabelsToggle hidden={hiddenLabelsForDisplay(group.commonLabels, labelDisplay)} muted />
                             </div>
                           </div>
                         </td>

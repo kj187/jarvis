@@ -1,10 +1,9 @@
 import { BellMinus, BellOff, RefreshCw, User } from 'lucide-react'
 import { AlertBadge, StatusBadge } from './AlertBadge'
 import { AckButton } from './AckButton'
-import { LabelChip } from './LabelChip'
-import { HIDDEN_LABEL_KEYS } from '@/lib/alertUtils'
+import { LabelChip, HiddenLabelsToggle } from './LabelChip'
 import { useAlertStats } from '@/hooks/useAlerts'
-import { getSilenceState, formatSilenceDuration, shortClaimant } from '@/lib/alertUtils'
+import { getSilenceState, formatSilenceDuration, shortClaimant, orderLabelsForDisplay, hiddenLabelsForDisplay } from '@/lib/alertUtils'
 import { renderTextWithLinks } from '@/lib/linkUtils'
 import { useFormatTime } from '@/hooks/useFormatTime'
 import { makeAlertSelectionKeyForAlert } from '@/lib/alertSelection'
@@ -48,6 +47,7 @@ export function AlertListRow({
   const alertname = alert.labels['alertname'] ?? '—'
   const isResolved = alert.status.state === 'resolved'
   const theme = useSettingsStore((s) => s.theme)
+  const labelDisplay = useSettingsStore((s) => s.labelDisplay)
 
   const { data: stats } = useAlertStats(alert.fingerprint, alert.clusterName)
   const formatTime = useFormatTime()
@@ -56,11 +56,18 @@ export function AlertListRow({
     ? getSilenceState(alert, silences)
     : { type: null as null, silence: null, remaining: undefined }
 
-  const uniqueLabels = Object.entries(alert.labels).filter(
-    ([key, value]) =>
-      ((!HIDDEN_LABEL_KEYS.has(key)) || (includeSeverityLabelChip && key === 'severity')) &&
-      !key.startsWith('__') &&
-      excludeLabels?.[key] !== value,
+  // excludeLabels only excludes on a matching value (unlike orderLabelsForDisplay's
+  // exclude set, which is key-only), so it's applied as a post-filter here.
+  let uniqueLabels = orderLabelsForDisplay(alert.labels, labelDisplay).filter(
+    ([key, value]) => excludeLabels?.[key] !== value,
+  )
+  // HIDDEN_LABEL_KEYS drops severity above — re-add it at the front when
+  // explicitly requested, subject to the same excludeLabels value check.
+  if (includeSeverityLabelChip && alert.labels['severity'] !== undefined && excludeLabels?.['severity'] !== alert.labels['severity']) {
+    uniqueLabels = [['severity', alert.labels['severity']], ...uniqueLabels]
+  }
+  const hiddenLabels = hiddenLabelsForDisplay(alert.labels, labelDisplay).filter(
+    ([key, value]) => excludeLabels?.[key] !== value,
   )
 
   // Claim is read-only in the list (claim/release lives in the detail panel) —
@@ -139,6 +146,7 @@ export function AlertListRow({
       {uniqueLabels.map(([key, value], i) => (
         <LabelChip key={key} labelKey={key} value={value} emphasized={indented && i === 0} />
       ))}
+      <HiddenLabelsToggle hidden={hiddenLabels} />
     </div>
   )
 

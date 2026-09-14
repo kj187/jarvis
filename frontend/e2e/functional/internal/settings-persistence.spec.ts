@@ -72,7 +72,7 @@ test('S2 reset to defaults clears the server row and reload stays on the default
   const deleteResponse = page.waitForResponse(
     (res) => res.url().includes('/api/v1/settings') && res.request().method() === 'DELETE',
   )
-  await dialog.getByRole('button', { name: 'Reset to defaults' }).click()
+  await dialog.getByRole('button', { name: 'Reset all settings' }).click()
   await expect(dialog.getByRole('button', { name: /Click again to confirm/ })).toBeVisible()
   await dialog.getByRole('button', { name: /Click again to confirm/ }).click()
   await deleteResponse
