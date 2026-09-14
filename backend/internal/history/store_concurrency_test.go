@@ -1,6 +1,7 @@
 package history
 
 import (
+	"context"
 	"sync"
 	"testing"
 	"time"
@@ -153,5 +154,69 @@ func runConcurrentResolveForClusterRace(t *testing.T, stores []*Store) {
 	}
 	if resolvedCount != 1 {
 		t.Fatalf("expected exactly 1 resolved event, got %d (total events %d)", resolvedCount, total)
+	}
+}
+
+// TestRecordStatusChange_AdvisoryLockTimeout_Postgres is the regression test
+// for BUG-04: RecordStatusChange used to run its whole transaction —
+// including the pg_advisory_xact_lock wait — on context.Background(), so a
+// peer stuck holding the same episode's lock (a hung pod, a transaction
+// stranded by a network partition) blocked it forever. Since that call runs
+// sequentially in applyPollResults, a single stuck episode stalled the
+// entire poll loop permanently: no further polls, no poll_snapshots
+// updates, no WS broadcasts, and no shutdown could unblock it either.
+//
+// Here a raw connection holds the episode's advisory lock open in an
+// uncommitted transaction, simulating that stuck peer. RecordStatusChange
+// for the same (fingerprint, cluster) must still return — with an error —
+// well within txTimeout, and specifically within lock_timeout (10s), which
+// is set as the transaction's first statement precisely so the wait aborts
+// deterministically instead of relying solely on context cancellation.
+func TestRecordStatusChange_AdvisoryLockTimeout_Postgres(t *testing.T) {
+	stores := newTestPostgresStores(t, 2)
+	const fp, cluster, amURL = "lock-timeout-fp", "lock-timeout-cluster", "http://am"
+
+	if err := stores[0].UpsertFingerprint(fp, "LockTimeoutAlert", cluster, nil); err != nil {
+		t.Fatalf("seed fingerprint: %v", err)
+	}
+	if _, _, err := stores[0].RecordStatusChange(fp, cluster, amURL, models.EventStatusFiring, time.Now(), nil); err != nil {
+		t.Fatalf("seed firing: %v", err)
+	}
+
+	holderConn, err := stores[0].db.Conn(context.Background())
+	if err != nil {
+		t.Fatalf("acquire raw conn: %v", err)
+	}
+	defer func() { _ = holderConn.Close() }()
+	holderTx, err := holderConn.BeginTx(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("begin holder tx: %v", err)
+	}
+	defer func() { _ = holderTx.Rollback() }()
+	if _, err := holderTx.ExecContext(context.Background(),
+		`SELECT pg_advisory_xact_lock(hashtext($1))`, fp+":"+cluster,
+	); err != nil {
+		t.Fatalf("acquire holder lock: %v", err)
+	}
+
+	done := make(chan error, 1)
+	start := time.Now()
+	go func() {
+		_, _, err := stores[1].RecordStatusChange(fp, cluster, amURL, models.EventStatusResolved, time.Now(), nil)
+		done <- err
+	}()
+
+	select {
+	case err := <-done:
+		elapsed := time.Since(start)
+		if err == nil {
+			t.Fatal("expected RecordStatusChange to fail while the episode's advisory lock is held, got nil error")
+		}
+		if elapsed >= txTimeout {
+			t.Fatalf("RecordStatusChange took %s to fail — expected lock_timeout (10s) to abort it before the outer txTimeout (%s)", elapsed, txTimeout)
+		}
+		t.Logf("RecordStatusChange failed after %s as expected: %v", elapsed, err)
+	case <-time.After(txTimeout + 15*time.Second):
+		t.Fatal("RecordStatusChange did not return within txTimeout+buffer — the advisory lock wait is unbounded again (BUG-04 regression)")
 	}
 }
