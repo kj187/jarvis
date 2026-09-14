@@ -10,7 +10,7 @@ import (
 	"github.com/kj187/jarvis/backend/internal/auth"
 )
 
-// maxSettingsBodyBytes bounds the raw PUT body (tmp/settings_storage.md §4.4).
+// maxSettingsBodyBytes bounds the raw PUT body.
 // The blob is opaque to the backend — this is a shape/size check only, never
 // a check against individual setting keys.
 const maxSettingsBodyBytes = 16 * 1024
@@ -24,7 +24,7 @@ type settingsResponse struct {
 // without login, or auth mode "none") gets user: null and resolves settings
 // from localStorage instead (Invariant #13 unaffected — DB-only, no AM call).
 func (s *Server) getSettings(c echo.Context) error {
-	global := map[string]interface{}{} // Phase 3 (§7): populated once app-wide defaults exist.
+	global := map[string]interface{}{} // Reserved for instance-wide defaults; always empty for now.
 
 	u := auth.UserFromContext(c)
 	if u == nil {
@@ -47,7 +47,7 @@ func (s *Server) getSettings(c echo.Context) error {
 }
 
 // PUT /api/v1/settings — replaces the caller's settings row wholesale (last
-// write wins, no merge, no versioning: tmp/settings_storage.md §4.5).
+// write wins, no merge, no versioning).
 func (s *Server) putSettings(c echo.Context) error {
 	u := auth.UserFromContext(c)
 	if u == nil {

@@ -73,7 +73,10 @@ function useURLState() {
 
   // Write URL on changes
   useEffect(() => {
-    const params = new URLSearchParams()
+    // Preserve URL state owned by other shell components (for example the
+    // Settings sheet) while replacing only the alert-page parameters.
+    const params = new URLSearchParams(window.location.search)
+    ;['state', 'q', 'matchers', 'alert', 'tab'].forEach((key) => params.delete(key))
     if (filters.state) params.set('state', filters.state)
     if (filters.search) params.set('q', filters.search)
     // Only persist user-added (unlocked) matchers to the URL. Locked matchers are
@@ -90,7 +93,11 @@ function useURLState() {
       if (detailTab !== 'details') params.set('tab', detailTab)
     }
     const qs = params.toString()
-    window.history.replaceState(null, '', qs ? `?${qs}` : window.location.pathname)
+    window.history.replaceState(
+      null,
+      '',
+      `${window.location.pathname}${qs ? `?${qs}` : ''}${window.location.hash}`,
+    )
   }, [viewMode, filters, selectedFingerprint, detailTab])
 }
 

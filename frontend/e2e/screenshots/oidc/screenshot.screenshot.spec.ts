@@ -14,12 +14,21 @@ const DIR = process.env.SCREENSHOTS_DIR ?? '../docs/assets'
  * - KubeNodeNotReady: silence expiring in ~3 days  (suppressed, contributes to count)
  * - PostgresReplicationLag: silence expiring in ~5 days (suppressed, contributes to count)
  * - 3 alerts claimed by sre-oncall
+ * - `team` label hidden → cards expose the "+N" hidden-labels chip
  *
  * Regenerate: make e2e-screenshot NAME=screenshot MODE=oidc
  */
 test('screenshot', async ({ page, am, jarvis }) => {
   // Login first — session cookie must be in place before any page navigation.
   await loginOIDC(page)
+
+  // Give the README hero a visible example of the configurable-label feature.
+  // The settings endpoint stores sparse per-user overrides, so all unrelated
+  // settings continue to resolve from their defaults.
+  const settingsResponse = await page.request.put(`${JARVIS_BASE_URL}/api/v1/settings`, {
+    data: { labelDisplay: { order: ['@cluster'], hidden: ['team'] } },
+  })
+  expect(settingsResponse.ok()).toBeTruthy()
 
   // fireWithHeatmapHistory freezes the clock to real "now" and backfills a
   // multi-week firing history per alert — must run before the claims/silences
@@ -73,6 +82,7 @@ test('screenshot', async ({ page, am, jarvis }) => {
   await page.goto('/?state=active')
   await expect(page.getByTestId('user-menu')).toBeVisible()
   await expect(page.getByTestId('alert-card').first()).toBeVisible()
+  await expect(page.getByRole('button', { name: /hidden label/ }).first()).toBeVisible()
   await page.waitForTimeout(500)
 
   await page.screenshot({ path: `${DIR}/screenshot.png`, fullPage: true })

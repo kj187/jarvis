@@ -4,7 +4,7 @@ import type { Page } from '@playwright/test'
 
 /**
  * Catalog (internal mode): with an auth provider active and a logged-in user,
- * settings live in the account row (tmp/settings_storage.md), not the browser.
+ * settings live in the account row, not the browser.
  *
  * Each test is self-contained (creates and logs in as its own admin) rather
  * than relying on state surviving *between* tests — the shared `page` fixture
@@ -72,7 +72,7 @@ test('S2 reset to defaults clears the server row and reload stays on the default
   const deleteResponse = page.waitForResponse(
     (res) => res.url().includes('/api/v1/settings') && res.request().method() === 'DELETE',
   )
-  await dialog.getByRole('button', { name: 'Reset to defaults' }).click()
+  await dialog.getByRole('button', { name: 'Reset all settings' }).click()
   await expect(dialog.getByRole('button', { name: /Click again to confirm/ })).toBeVisible()
   await dialog.getByRole('button', { name: /Click again to confirm/ }).click()
   await deleteResponse

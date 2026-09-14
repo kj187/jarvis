@@ -248,6 +248,18 @@ to `src/lib/**` only:
   plus `fast-check` property tests (e.g. "regex built from
   `escapeRegexValue` matches only the original literal"; "every label
   `computeGroupLabelValues` returns is present on every input alert").
+  Includes `partitionLabelsForDisplay` (label display config, issue #189):
+  empty-config alphabetical ordering with `HIDDEN_LABEL_KEYS` dropped,
+  pinned-keys-first placement, silently skipping an absent pinned or hidden
+  key, `hidden` moving a key into the `hidden` partition, hidden-wins when a
+  key is in both `order` and `hidden`, `HIDDEN_LABEL_KEYS`/`__`-prefixed keys
+  in neither partition even if configured, the `exclude` set applying to both
+  partitions, hidden labels sorted alphabetically, the default
+  `{ order: ['@cluster'], hidden: [] }` config (no visual regression), and
+  determinism under different input key insertion order. Also
+  `labelColorStyle`: `undefined` for an uncolored key or a non-palette value,
+  the exact per-theme HSL style for a palette hue, and a style for every
+  palette color in both themes.
 - **100% coverage gate on `alertUtils.ts`** (statements/lines/functions;
   branches at 99% — the one excluded branch is `tzAbbr`'s `Intl`-dependent
   fallback, not practically testable without mocking `Date`/`Intl` for a
@@ -258,7 +270,16 @@ to `src/lib/**` only:
   rationale (pure resolution/validation logic, not a UI flow): `resolveSettings`
   layering, `normalizeSettings` dropping unknown keys/out-of-range values/invalid
   `defaultFilters` entries from an unverified server blob, and `diffFromDefaults`
-  (the pre-v2 → sparse-overrides migration step). **Not** under the 100%
+  (the pre-v2 → sparse-overrides migration step). Includes `labelDisplay`
+  normalization (issue #189): malformed input (non-object, `order`/`hidden`
+  not both arrays) drops the whole key, non-string/empty-string array entries
+  are dropped, duplicates within `order` are removed, a key present in both
+  `order` and `hidden` survives only in `hidden`, and a valid config
+  round-trips through `normalizeSettings` unchanged; `labelColors` keeps only
+  non-empty keys with a known palette name (and round-trips) — the round-trip
+  tests guard the
+  server read path (`hooks/useSettingsSync.ts`) specifically, since the local
+  (`none` auth mode) path never normalizes at all. **Not** under the 100%
   coverage gate — that stays scoped to `alertUtils.ts` only (`vitest.config.ts`
   `coverage.include`).
 
@@ -267,7 +288,37 @@ anything outside `src/lib/` stays E2E-only.
 
 Specs live under `frontend/e2e/`:
 
-- `e2e/functional/<mode>/*.spec.ts` — functional golden paths per auth mode (`none`, `internal`, `oidc`)
+- `e2e/functional/<mode>/*.spec.ts` — functional golden paths per auth mode (`none`, `internal`, `oidc`).
+  `functional/none/settings.spec.ts` includes H12: opening Settings writes
+  `settings=open`, a reload reopens the sheet, and closing it removes only
+  that parameter while preserving alert-page URL state.
+  `functional/none/label-display.spec.ts` (issue #189, L1–L14): hiding a label
+  via the eye toggle removes its chip from the card view (L1) and the list view
+  (L2); a hidden label stays fully visible in the alert detail panel — the
+  guard for invariant #19 (L3); pinning a label and dragging it above
+  `@cluster` makes it the first chip — simulated with raw `page.mouse` events
+  against the grip handle (L4); pin and hide are mutually exclusive, in the UI
+  and in the stored `labelDisplay` (L5); the search box filters the whole label
+  list in real time and the drag grip returns once it's cleared (L6); hiding a
+  label keeps its alphabetical position (L7); the "+N" chip opens that
+  alert's hidden labels in a floating popover without changing the card's
+  own height — verified by comparing its bounding box before/after — and
+  dismisses on a second click or an outside click (L8); "Reset all settings"
+  restores every chip and the original order (L9); a palette color applies to
+  the chip, is stored by name, and can be removed again (L10); "Reset labels"
+  resets only `labelDisplay` and `labelColors` after its second confirmation
+  click, leaving `defaultViewMode` untouched (L11); a configured label stays
+  editable while no alert carries it (L12); "Hide all" / "Show all" toggles
+  every unpinned label but never a pinned one, and the card collapses them
+  into one "+N" chip that opens the same floating popover (L13), and only
+  touches the unpinned labels matching an active search (L14). Deliberately **no**
+  `internal`-mode spec for server-side persistence
+  of this setting — the persistence path is already proven generically (any
+  key) by `internal/settings-persistence.spec.ts` (updated for the "Reset
+  all settings" button rename), since the settings backend is an opaque blob
+  with no per-key code path; the one `labelDisplay`-specific piece
+  (normalization) is covered by `settingsUtils.test.ts` instead, at the
+  cheaper Vitest tier.
 - `e2e/screenshots/<mode>/*.screenshot.spec.ts` — screenshot generation for docs (`docs/assets/`)
 - `e2e/fixtures/`, `e2e/support/` — shared fixtures and helpers
 

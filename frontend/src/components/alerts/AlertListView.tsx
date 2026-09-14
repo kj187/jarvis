@@ -4,15 +4,16 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { AlertListRow } from './AlertListRow'
 import { EmptyState } from './EmptyState'
 import { StatusBadge } from './AlertBadge'
-import { LabelChip } from './LabelChip'
+import { LabelChip, HiddenLabelsToggle } from './LabelChip'
 import { HIDDEN_LABEL_KEYS } from '@/lib/alertUtils'
 import { Sheet } from '@/components/ui/sheet'
 import { SilenceForm } from '@/components/silences/SilenceForm'
 import { SilenceExpireModal } from '@/components/silences/SilenceExpireModal'
 import { fetchClusters, deleteSilence } from '@/api/client'
-import { formatSilenceDuration, getFilterableLabels, severityOrder } from '@/lib/alertUtils'
+import { formatSilenceDuration, getFilterableLabels, severityOrder, partitionLabelsForDisplay } from '@/lib/alertUtils'
 import { renderTextWithLinks } from '@/lib/linkUtils'
 import { useSettingsStore, RESOLVED_PAGE_SIZE_OPTIONS } from '@/store/useSettingsStore'
+import type { LabelDisplayConfig } from '@/lib/settingsUtils'
 import { useUIStore } from '@/store/uiStore'
 import { useLoginGuard } from '@/hooks/useLoginGuard'
 import { LoginModal } from '@/components/auth/LoginModal'
@@ -188,6 +189,19 @@ function loadStoredArray(key: string): string[] {
   }
 }
 
+/** Pinned-first chips plus the "+N" chip for hidden labels, partitioned once. */
+function PartitionedLabelChips({ labels, labelDisplay }: { labels: Record<string, string>; labelDisplay: LabelDisplayConfig }) {
+  const { visible, hidden } = partitionLabelsForDisplay(labels, labelDisplay)
+  return (
+    <>
+      {visible.map(([key, value]) => (
+        <LabelChip key={key} labelKey={key} value={value} />
+      ))}
+      <HiddenLabelsToggle hidden={hidden} />
+    </>
+  )
+}
+
 export function AlertListView({
   alerts,
   silences,
@@ -208,6 +222,7 @@ export function AlertListView({
   const updateSettings = useSettingsStore((s) => s.update)
   const theme = useSettingsStore((s) => s.theme)
   const groupByLabel = useSettingsStore((s) => s.groupByLabel)
+  const labelDisplay = useSettingsStore((s) => s.labelDisplay)
   const isFullscreen = useUIStore((s) => s.isFullscreen)
   const collapsedStorageKey = `jarvis-list-collapsed-sections:${groupByLabel}`
   const orderStorageKey = `jarvis-list-section-order:${groupByLabel}`
@@ -796,14 +811,12 @@ export function AlertListView({
                               <span className="pl-6 text-xs text-muted-foreground">{renderTextWithLinks(group.commonSummary)}</span>
                             )}
                             {/* Common labels shared by the whole group — a quiet
-                                muted strip (the alertname is already the heading) */}
+                                strip (the alertname is already the heading) */}
                             <div className="flex flex-wrap gap-1 pl-6">
                               {group.clusterNames.map((c) => (
-                                <LabelChip key={c} labelKey="@cluster" value={c} muted />
+                                <LabelChip key={c} labelKey="@cluster" value={c} />
                               ))}
-                              {Object.entries(group.commonLabels).map(([key, value]) => (
-                                <LabelChip key={key} labelKey={key} value={value} muted />
-                              ))}
+                              <PartitionedLabelChips labels={group.commonLabels} labelDisplay={labelDisplay} />
                             </div>
                           </div>
                         </td>

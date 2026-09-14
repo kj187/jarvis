@@ -21,6 +21,7 @@ re-render via `make diagrams`) — keep it in sync when the topology changes
 | `//go:build prod` tag | `embed.FS` cannot compile a non-existent `dist/` directory — two files (prod/!prod) instead of one |
 | TanStack Query WS patching | WS events patch the cache directly (`setQueryData`) — no extra refetch round-trip |
 | Zustand v5 with `persist` | `viewMode` + `filters` persisted in localStorage, but URL params take precedence |
+| Fixed palette for label chip colors | Settings store a color *name* (`LABEL_COLOR_HUES`); `labelColorStyle` derives a tuned background/text/border per theme from its hue, so every chip color stays legible in light and dark theme |
 
 ---
 
@@ -311,7 +312,7 @@ CREATE TABLE IF NOT EXISTS poll_snapshots (
 -- `settings` is an opaque JSON blob (internal/settings, `internal/api/settings_handler.go`)
 -- — the backend never inspects individual keys, so a new frontend setting
 -- never requires a migration. ON DELETE CASCADE removes it when the user is
--- deleted (admin panel). Not leader-gated, no fanout, no cache (§ below).
+-- deleted (admin panel). Not leader-gated, no fanout, no cache (see API Endpoints).
 CREATE TABLE IF NOT EXISTS user_settings (
     user_id    TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
     settings   TEXT NOT NULL,
@@ -437,9 +438,9 @@ GET    /api/v1/clusters                          full_protect?  → []ClusterInf
 GET    /api/v1/settings                          full_protect?  → { user: {...}|null, global: {} }
 #        user: null when unauthenticated OR authenticated with no row yet (frontend already
 #        knows which, from authStore) — the frontend resolves the storage location itself
-#        (tmp/settings_storage.md §2: driven by "is there an authenticated user", not authMode).
-#        global always {} until Phase 3 (app-wide defaults, not yet built). Reads the DB only —
-#        never calls Alertmanager (Invariant #13), never cached (§4.9 below), not leader-gated.
+#        (driven by "is there an authenticated user", not authMode).
+#        global: reserved for instance-wide defaults, always {} (not built). Reads the DB only —
+#        never calls Alertmanager (Invariant #13), never cached, not leader-gated.
 PUT    /api/v1/settings                          Auth  (RL)   Body: the settings object (sparse; whole row replaced,
 #        last write wins, no merge/versioning) — 400 on non-object JSON or a body > 16 KiB.
 #        The backend never inspects individual keys (see user_settings above) — validation is
@@ -922,7 +923,22 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
 │   │                            whether an AM regex matcher is a Jarvis-style escaped-literal-OR-list
 │   │                            SilenceForm can safely edit as tags, vs. a real regex needing raw-text
 │   │                            editing — see SilenceForm's `raw` matcher mode),
-│   │                            FAST_SILENCE_DURATIONS, HIDDEN_LABEL_KEYS, labelColorStyle, shortClaimant,
+│   │                            FAST_SILENCE_DURATIONS, HIDDEN_LABEL_KEYS, shortClaimant,
+│   │                            labelColorStyle(key, labelColors, theme) → CSSProperties | undefined;
+│   │                            labels have no automatic color — undefined (→ caller's neutral
+│   │                            `border-border bg-muted text-foreground` classes) unless labelColors[key]
+│   │                            is a palette name (LABEL_COLOR_HUES), then a per-theme tuned
+│   │                            { backgroundColor, color, borderColor } from that hue. Call sites:
+│   │                            LabelChip.tsx, AlertsOverviewModal.tsx, AlertDetailRelatedSection.tsx,
+│   │                            AlertDetailPanel.tsx's MatcherChip, SilenceMatcherChip.tsx (text color
+│   │                            only). Display-only (invariant #19),
+│   │                            partitionLabelsForDisplay(labels, labelDisplay, exclude?) →
+│   │                            { visible, hidden }: visible = pinned keys (labelDisplay.order) first
+│   │                            in pinned order, rest alphabetical; hidden = labelDisplay.hidden keys
+│   │                            alphabetical (feeds the "+N" HiddenLabelsToggle chip);
+│   │                            HIDDEN_LABEL_KEYS/`__`-prefixed/excluded keys in neither. Called once
+│   │                            per chip row in AlertCard/AlertListRow/AlertListView; display-only,
+│   │                            invariant #19 — never feeds filtering/silence matching),
 │   │                            computeLabelBreakdown (alerts-overview modal: per-label-name
 │   │                            value counts, alertname/severity pinned to the top regardless
 │   │                            of coverage, `receiver` alias + rest of HIDDEN_LABEL_KEYS
@@ -964,9 +980,19 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
 │   │                            always renders the same avatar; no external lookup (no
 │   │                            Gravatar/third-party call) — see components/ui/avatar.tsx
 │   ├── settingsUtils.ts       → UserSettings, DEFAULT_SETTINGS + option constants,
+│   │                            LabelDisplayConfig ({ order: string[] (pinned); hidden: string[] },
+│   │                            default `{ order: ['@cluster'], hidden: [] }` — matches pre-feature
+│   │                            behavior), LABEL_COLOR_HUES / LABEL_COLORS / LabelColor (fixed chip
+│   │                            palette: blue, cyan, teal, green, amber, orange, pink, purple — no
+│   │                            red), LabelColorMap (Record<string, LabelColor>, default {}),
 │   │                            resolveSettings, normalizeSettings (drops unknown keys/out-of-range
-│   │                            values from an unverified server blob), diffFromDefaults (pre-v2 →
-│   │                            sparse-overrides migration) — re-exported by useSettingsStore.ts
+│   │                            values from an unverified server blob; labelDisplay: both order/hidden
+│   │                            must be arrays or the whole key is dropped, entries deduped, a key in
+│   │                            both arrays keeps only the hidden one — pin and hide are mutually
+│   │                            exclusive; labelColors: entries kept only with a non-empty key and a
+│   │                            known palette name — everything else silently dropped, not the whole
+│   │                            map), diffFromDefaults (pre-v2 → sparse-overrides migration)
+│   │                            — re-exported by useSettingsStore.ts
 │   └── utils.ts               → cn(), formatDuration() + misc helpers
 └── components/
     ├── ui/                    → shadcn/ui: button, card, badge, dialog, sheet, select, input,
@@ -981,6 +1007,9 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │   │                        appears when an auth provider is configured
     │   │                        (providerInfo.mode !== 'none') and no session exists; Settings
     │   │                        and the theme toggle are always present regardless of auth state.
+    │   │                        Opening Settings sets `settings=open` in the current URL (preserving
+    │   │                        other query params); Header initializes the sheet from that param,
+    │   │                        removes it on close, and follows browser popstate navigation.
     │   │                        Separate always-present Info button (data-testid="info-menu") next
     │   │                        to the user-menu opens its own popover (`InfoColophon`) with the
     │   │                        brand footer — /logo.png, version (useVersion), copyright — moved
@@ -1002,7 +1031,9 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │                            unparseable duration (red border, parseDurationValue) is never
     │                            promoted from draft to a committed filter chip
     ├── alerts/
-    │   ├── AlertsPage.tsx     → useWebSocket, filter/search, card|list + detail panel, fullscreen, pagination
+    │   ├── AlertsPage.tsx     → useWebSocket, filter/search, card|list + detail panel, fullscreen, pagination;
+    │   │                        its URL-state writer replaces only alert-owned params and preserves
+    │   │                        shell-owned params such as `settings=open`
     │   ├── AlertCardGrid.tsx  → grouped by settings `groupByLabel` (default severity), per-group
     │   │                        pagination, drag-and-drop section reordering (persisted:
     │   │                        'jarvis-card-section-order:<label>'). Within a section, groups sort
@@ -1031,10 +1062,12 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │   │                        first + every label present on the currently visible (non-resolved)
     │   │                        alerts, each annotated with its distinct-value count.
     │   ├── AlertCard.tsx      → card + claim info + count badge + silence/detail actions + Fast-Silence (hover);
-    │   │                        common labels (shared by the whole group) render as a `muted`
+    │   │                        common labels (shared by the whole group) render as a quiet
     │   │                        LabelChip strip above the entries; multi-alert groups: each entry
     │   │                        leads with an identity line (position pill `n/total` + its
-    │   │                        distinguishing labels, first one `emphasized`); summary clamped to
+    │   │                        distinguishing labels, first one `emphasized`); every chip row
+    │   │                        (strip and entries) = partitionLabelsForDisplay → pinned-first chips +
+    │   │                        trailing "+N" HiddenLabelsToggle; summary clamped to
     │   │                        1 line / description to 2 (full text via title + detail panel);
     │   │                        expired-silence shown as an inline muted line, not a banner;
     │   │                        claim = one blue line above the identity line ("Claimed by:
@@ -1048,12 +1081,16 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │   ├── AlertListView.tsx  → sortable table, cols = Name [· State] · Actions (no Claim column —
     │   │                        claim/release lives only in the detail panel); expandable groups,
     │   │                        section reordering (persisted: 'jarvis-list-section-order:<label>');
-    │   │                        group-header common labels = `muted` LabelChip strip; group silence
+    │   │                        group-header common labels = quiet LabelChip strip (PartitionedLabelChips:
+    │   │                        pinned-first + "+N" chip, one partition per group); group silence
     │   │                        action is a labelled button ("Silence group" / "Extend/Recreate/Expire
     │   │                        group silence"). colSpans: `showStateColumn ? 3 : 2`
     │   ├── AlertListRow.tsx   → single row; when `indented` (inside a group) it drops the repeated
-    │   │                        alertname and leads with its own labels (first `emphasized`, context
-    │   │                        `muted`); claim shown read-only as a blue "Claimed by: <shortClaimant>
+    │   │                        alertname and leads with its own labels (first `emphasized`); chips =
+    │   │                        partitionLabelsForDisplay over getFilterableLabels minus `excludeLabels`
+    │   │                        (key+value match), so `@cluster` follows pin/hide like any label, + trailing
+    │   │                        "+N" chip; claim
+    │   │                        shown read-only as a blue "Claimed by: <shortClaimant>
     │   │                        · <time>" line above the chips; row actions = one AckButton (icon
     │   │                        variant, menu = Silence form + Fast-Silence durations) + contextual
     │   │                        expire/extend icon
@@ -1191,10 +1228,21 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │   │                        matcher via uiStore.addLabelMatcher (no-op if an identical one
     │   │                        already exists) and closes the modal
     │   ├── LabelChip.tsx      → one fixed size for every chip (`max-w-[200px]`, `text-[10px]`) so a row
-    │   │                        of chips reads as one unit; `emphasized` only adds weight (keeps its
-    │   │                        per-key hue), `muted` = neutral fill, no hue (shared context strips).
-    │   │                        Hover dropdown shows the full, untruncated value above the label-matcher
-    │   │                        operator buttons. `labelColorStyle` hue is confined to 40–329° — never red
+    │   │                        of chips reads as one unit; `emphasized` only adds font weight, unrelated
+    │   │                        to color. Neutral (`border-border bg-muted text-foreground`) unless this
+    │   │                        label key has a palette color in `labelColors` (useSettingsStore) — there
+    │   │                        is no automatic per-key color, so a chip is neutral everywhere,
+    │   │                        including the "common labels" shared-context strips, until you set one in
+    │   │                        Settings → Labels. Hover dropdown shows the full, untruncated value above
+    │   │                        the label-matcher operator buttons.
+    │   │                        Also exports HiddenLabelsToggle: trailing dashed "+N" chip for the
+    │   │                        `hidden` partition (aria-label "N hidden labels", title lists the keys);
+    │   │                        click opens them in a fixed-position portal popover (`hidden-labels-popover`,
+    │   │                        same technique as LabelChip's own dropdown) — never inline, so revealing
+    │   │                        never changes the card's height (AlertCardGrid's `column-count` grid
+    │   │                        reflows and visibly moves an alert to a different column on any height
+    │   │                        change). Local `open` state only, never touches settings, so it's a
+    │   │                        per-alert view-only peek.
     │   ├── ViewToggle.tsx     → ⊞ / ☰ toggle
     │   └── EmptyState.tsx     → large empty-state icon (no alerts)
     ├── comments/
@@ -1247,8 +1295,9 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │   │                        window (silenceTiming), created + expiry caps, left-aligned
     │   │                        remaining-time label
     │   ├── SilenceRemaining.tsx → compact colour-coded remaining-time label (list rows)
-    │   ├── SilenceMatcherChip.tsx → quiet matcher chip: only the label name tinted (labelColorStyle),
-    │   │                        op + value in neutral ink — calmer than the alert views' TruncatableChip
+    │   ├── SilenceMatcherChip.tsx → quiet matcher chip: only the label name tinted, and only when that
+    │   │                        key has a palette color (labelColorStyle — no automatic color), op +
+    │   │                        value always in neutral ink — calmer than the alert views' TruncatableChip
     │   ├── silenceDisplay.ts  → URGENCY_TEXT/FILL_CLASS maps, matcherOperator, silenceRemainingText
     │   │                        (shared by the three above; kept out of the .tsx files for react-refresh)
     │   ├── SilenceExpireModal.tsx → expire/extend confirmation (silence-ID link → AM)
@@ -1267,8 +1316,9 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │                            this browser" (mode 'none'), or "Stored in this browser — sign in to
     │                            sync across devices" (provider active, origin 'local'). Display: time
     │                            format, default view, card columns, group-by label,
-    │                            claim animation. Default Filter: add/remove locked header chips.
-    │                            Silences: default duration only. `resolvedPageSize` and
+    │                            claim animation. Silences: default duration only. Default Filter
+    │                            follows Silences and provides add/remove locked header chips.
+    │                            `resolvedPageSize` and
     │                            `defaultCreatorName` live in the same useSettingsStore but are NOT
     │                            editable here — resolvedPageSize is set via the "Per page" buttons in
     │                            AlertListView.tsx's resolved view; defaultCreatorName has no writer
@@ -1278,7 +1328,31 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │                            wired to any UI. No brand footer — logo/version/copyright live in the
     │                            header's info popover (layout/Header.tsx) instead. Theme lives in
     │                            useSettingsStore but is only toggled from the header's user menu, not
-    │                            from this sheet.
+    │                            from this sheet. Labels column (right side, "Pin & Hide"): one
+    │                            intro sentence, a search box, then ONE scrollable list (`label-list`)
+    │                            of identical LabelRow rows — key · "N alerts · M values" stats ·
+    │                            LabelColorSwatch · Pin toggle · Eye (hide) toggle. Pinned rows
+    │                            (labelDisplay.order, `pinned-labels`) come first in pinned order with a
+    │                            drag grip (PinnedLabelRows — mouse-tracked bounding-rect reorder, same
+    │                            technique as AlertCardGrid's section drag; grip only while
+    │                            the search is empty so the rows are the complete order), then a divider,
+    │                            then every other label alphabetically (`unpinned-labels`; a hidden row
+    │                            is dimmed in place, never re-sorted) under an "Other labels" caption
+    │                            with a "Hide all"/"Show all" bulk toggle — scoped to the unpinned rows
+    │                            the search currently shows, never touching pinned keys. Every
+    │                            non-hidden label renders as a chip. Pin and hide are mutually
+    │                            exclusive: pinning removes the key from `hidden`, hiding removes it
+    │                            from `order`; writes always build `{ order, hidden }` in that key order
+    │                            (computeNextOverrides compares via JSON.stringify). Listed keys = keys on
+    │                            loaded alerts ∪ configured keys (order/hidden/labelColors), minus
+    │                            HIDDEN_LABEL_KEYS/`__`-prefixed — "No labels seen yet." only when that
+    │                            union is empty, so a configuration stays editable with no alert firing.
+    │                            LabelColorSwatch opens a fixed-position portal popover with the 8
+    │                            palette colors + "no color" (writes the palette name to
+    │                            `labelColors[key]`). "Reset labels" restores `labelDisplay` and
+    │                            `labelColors` from defaults, guarded by the same
+    │                            second-click-within-3s confirmation pattern as "Reset all settings"
+    │                            (separate state/timer; each reset remains scoped).
     ├── auth/
     │   ├── LoginModal.tsx     → on-demand login (write_protect)
     │   ├── LoginPage.tsx      → full-page login (full_protect)
@@ -1341,10 +1415,15 @@ interface UserSettings {
   defaultSilenceDurationMinutes: number         // default 60; ALLOWED_SILENCE_DURATIONS = [15,30,60,240,480,1440,4320]
   defaultCreatorName: string                    // default ''
   claimAnimationEnabled: boolean                // default true
+  labelDisplay: LabelDisplayConfig              // pinned (order) / hidden chips, card+list views only;
+                                                 // default { order: ['@cluster'], hidden: [] }
+  labelColors: LabelColorMap                    // label key -> palette name (LABEL_COLOR_HUES); default {}.
+                                                 // Absent key = neutral (no automatic color — see
+                                                 // lib/alertUtils.ts labelColorStyle).
 }
 ```
 
-**Storage location** (tmp/settings_storage.md): decided by whether an
+**Storage location**: decided by whether an
 authenticated user currently exists, not by `JARVIS_AUTH_MODE` — a
 `write_protect` visitor who isn't logged in still edits settings freely, just
 into the browser's anonymous slot (the Settings sheet is never gated behind
@@ -1361,13 +1440,13 @@ never the full resolved blob — computed as:
 resolveSettings(globalDefaults, overrides) // = { ...DEFAULT_SETTINGS, ...globalDefaults, ...overrides }
 ```
 
-`globalDefaults` is `{}` until Phase 3 (app-wide defaults, `tmp/settings_storage.md` §7, not yet built).
+`globalDefaults` is reserved for instance-wide defaults and always `{}` (not built).
 `useSettingsStore` extends `UserSettings` with the *resolved* flat fields
 (unchanged consumer API) plus:
 
 ```typescript
 overrides: Partial<UserSettings>        // source of truth for persistence
-globalDefaults: Partial<UserSettings>   // {} until Phase 3
+globalDefaults: Partial<UserSettings>   // reserved for instance-wide defaults, always {}
 origin: 'local' | 'server'              // drives the SettingsSheet hint text
 syncState: 'idle' | 'saving' | 'error'  // last PUT/DELETE outcome
 anonOverrides: Partial<UserSettings>    // device's anon-slot overrides, kept across login/logout
@@ -1375,7 +1454,7 @@ userMirror: { id: string; overrides: Partial<UserSettings> } | null // last know
 
 update(partial)   // merges into overrides; a value that matches the default-without-it is REMOVED
                   // from overrides instead of being stored, so toggling back to default doesn't cement it
-reset()           // overrides = {}; server mode sends DELETE (not PUT {}), so Phase 3 defaults can apply
+reset()           // overrides = {}; server mode sends DELETE (not PUT {}), so future instance-wide defaults can apply
 applyRemote(user, global, origin, userId?)  // internal — used by useSettingsSync only
 setSyncState(s)   // internal — used by useSettingsSync only
 ```

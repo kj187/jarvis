@@ -141,7 +141,7 @@ Per-user preferences — stored in your account when you're signed in, or in thi
 
 ![Settings Panel](assets/feature-settings-panel.png)
 
-Open the Settings panel from the **user-menu** button in the top-right of the header (initials avatar when logged in, a generic account icon otherwise) → **Settings**. The same menu also holds the theme toggle and, when authenticated, login/logout and the admin panel — hover the button to open it. Settings apply immediately without a page reload.
+Open the Settings panel from the **user-menu** button in the top-right of the header (initials avatar when logged in, a generic account icon otherwise) → **Settings**. The same menu also holds the theme toggle and, when authenticated, login/logout and the admin panel — hover the button to open it. Settings apply immediately without a page reload. While the panel is open, `settings=open` is kept in the URL, so reloading or sharing that URL opens Settings again.
 
 **Where settings live:** if authentication is enabled and you're signed in, your settings are saved to your account and follow you across devices and browsers. If there is no login configured at all, or you simply haven't signed in yet, settings are saved to this browser only — a small status line under the Settings heading always says which is the case. You can still open Settings and change anything while signed out (a `write_protect` deployment lets anyone look around without an account); those changes just stay local to that browser instead of syncing. The first time you sign in on a device with local changes already made, those changes are copied to your account once — after that, your account's settings always win. Signing out falls back to whatever this browser had before you signed in; it does not touch or delete your account's settings.
 
@@ -159,8 +159,9 @@ Settings and the theme toggle are always there either way; Login only appears si
 | **Default view** | Choose whether the app starts in *Card* or *List* view on every page load. |
 | **Card columns** | Fixed column count (1–6) for the Card View grid, or *Auto* to let it reflow with window width (up to 4). |
 | **Claim animation** | Toggle the animated snake border on the Claim button for unclaimed alerts. |
-| **Default filter** | Label matchers that are always active — see below. |
 | **Default silence duration** | Pre-selected duration when the silence creation form opens (15 min to 3 days). |
+| **Default filter** | Label matchers that are always active — see below. |
+| **Labels** | Pin the label chips you care about to the front, hide the ones you don't, and optionally give a label a color — see below. |
 
 Which label sections Card and List view group by is no longer a Settings entry — it moved to the **Grouped** toolbar control, see [Grouping](#grouping). The resolved-view page size is set from its own per-page selector, not from this panel — see [Resolved View](#resolved-view).
 
@@ -173,6 +174,25 @@ Default filters appear as **locked chips** in the filter row of the header. They
 A **lock icon** and dimmed appearance distinguish them from manually added filters. Hovering over a locked chip shows the tooltip: *"Default filter set in Settings — open Settings from the user menu to change or remove."*
 
 To remove or modify a default filter, open Settings → Default Filter → click **×** on the chip, or clear the list and save.
+
+### Label display
+
+![Settings — Labels](assets/feature-settings-labels.png)
+
+By default every label on an alert renders as a chip. When alerts carry many labels (`customer`, `hostname`, `instance`, `dbid`, …), that gets cluttered — Settings → Labels lets you **pin** the labels you care about so they lead every card and list row (e.g. `customer` → `hostname` → `job`), and **hide** the ones you don't need. The Settings panel is two columns — Display, Silences and Default Filter on the left, Labels on the right.
+
+Labels is one list, every row the same: label name, how many alerts carry it and how many distinct values it has, a color swatch, a **pin** and an **eye**.
+
+- **Pin** — pinned labels move to the top of the list and render first on every alert, in that order. Drag the grip handle to reorder them; click the pin again to unpin.
+- **Hide** — the eye collapses a label into a small **+N** chip at the end of each alert's chip row. A hidden row stays in its alphabetical place, dimmed. Pinning a hidden label shows it again, and hiding a pinned label unpins it — a label is either pinned, normal or hidden.
+- **Color** — labels are neutral by default. The swatch opens a small palette (eight colors, each tuned for both light and dark theme); pick one and every chip for that label key gets it — card and list view, related alerts, the alerts overview, and silence matcher chips. Color is per label **key**, not per value.
+- **Hide all / Show all** — above the unpinned labels; hides or shows every label that isn't pinned in one click. Handy with many labels: pin the few you care about, then *Hide all* the rest. With a search active it only affects the matching labels.
+- **Filter labels…** narrows the list in real time (reordering is available again once the filter is cleared).
+- **Reset labels** — requires a second confirmation click, then resets only this section (pinned, hidden and colors). The "Reset all settings" button at the bottom of the panel resets everything.
+
+This only changes chip *display* in the Card and List views (including the shared-label strip above grouped alerts) — it never affects filtering, silence matching, or the affected-alerts preview, and the alert **detail panel always shows every label**, hidden or not. A label that isn't configured (including one from an alerting rule added after you set this up) simply sorts alphabetically behind the pinned ones and is shown until you hide it — it never changes your existing setup on its own. Every label that isn't hidden is shown. A configured label stays in the list even while no alert currently carries it.
+
+Click an alert's **+N** chip to open its hidden labels in a small floating layer (hover the chip first to see which ones, without opening it); click elsewhere or press Escape to close it again. It opens as a layer rather than growing the card in place, so it never shifts other alerts around in the card view. This is a per-alert, view-only peek — it never changes your settings.
 
 ---
 

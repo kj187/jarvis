@@ -122,6 +122,10 @@ frontend/
   setup — `detail-tabs` writes all five `feature-detail-tab-<tab>.png` images
   (one per detail-panel tab) from a single fire+seed; regenerating the series
   is still one `-g` run (`make e2e-screenshot NAME=detail-tabs`).
+- The Settings documentation uses both `feature-settings-panel` (the complete
+  two-column sheet) and `feature-settings-labels` (the Labels section embedded
+  in `docs/features.md`). The OIDC `screenshot` README hero persists `team` as
+  hidden so the “+N” hidden-labels chip is visible.
 - Fixtures are created **per test** via real APIs (AM for active alerts, Jarvis
   test endpoints for resolved/history). The `page` fixture auto-runs
   `am.clearAll()` + `jarvis.reset()` before every test → clean slate.
@@ -244,7 +248,8 @@ Quick reference: which spec file covers what. Use this to find the right place f
 | `silences-form-extended.spec.ts` | F3–F16 | Operator switch, regex tags+escaping, live match count, overlap warning, zero-match warning, duration presets, spinner normalisation, inline calendar, Now/Reset, end-after-start validation, author editability, reason required, preview summary, results step |
 | `silences-form-templates.spec.ts` | F1–F2, F14–F15, F17, G4–G8 | Form open/close (Cancel/ESC/backdrop), cluster guard, templates CRUD (create/apply/edit/delete) |
 | `silence-matching-semantics.spec.ts` | — | Differential tests against the real Alertmanager instance: form preview's affected-alerts count and actual post-submit suppression must agree — anchored `=~`/`!~` regex (not substring), regex-OR matcher escaping with metacharacter label values |
-| `settings.spec.ts` | H1–H11 (H8 removed), H1b | All settings: timeFormat, defaultViewMode, resolvedPageSize, defaultFilters, silenceDuration, defaultCreatorName, claimAnimation, reset defaults, persistence; brand footer (logo + version) |
+| `settings.spec.ts` | H1–H12 (H8 removed), H1b | All settings: timeFormat, defaultViewMode, resolvedPageSize, defaultFilters, silenceDuration, defaultCreatorName, claimAnimation, reset defaults, persistence; brand footer (logo + version); `settings=open` survives reload and is removed on close without dropping other URL params (H12) |
+| `label-display.spec.ts` | L1–L14 | Settings → Labels (issue #189): hide removes chips in card + list view but never from the detail panel (invariant #19), pin + drag reorder, pin/hide mutual exclusion, search, alphabetical position of hidden rows, "+N" reveal chip, reset all / "Reset labels" scope, palette color apply/remove, config editable with no firing alert, "Hide all"/"Show all" (unpinned only, search-scoped) |
 | `no-auth-notice.spec.ts` | I1 | NoAuth notice appears and dismiss persists |
 | `websocket.spec.ts` | J1–J4 | Reconnect indicator (force-close via patched WebSocket), `alerts_update` / `claim_set` / `claim_released` / `comment_added` live events |
 

@@ -113,11 +113,16 @@ function formatDuration(ms: number): string {
 }
 
 function MatcherChip({ matcher }: { matcher: SilenceMatcher }) {
+  const labelColors = useSettingsStore((s) => s.labelColors)
   const theme = useSettingsStore((s) => s.theme)
+  const colorStyle = labelColorStyle(matcher.name, labelColors, theme)
   return (
     <TruncatableChip
-      className="rounded border px-1.5 py-0.5 text-[10px] font-medium"
-      style={labelColorStyle(matcher.name, theme)}
+      className={cn(
+        'rounded border px-1.5 py-0.5 text-[10px] font-medium',
+        !colorStyle && 'border-border bg-muted text-foreground',
+      )}
+      style={colorStyle}
     >
       {matcher.name}{matcherOp(matcher)}{matcher.value}
     </TruncatableChip>

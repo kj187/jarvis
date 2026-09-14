@@ -9,10 +9,9 @@ import { normalizeSettings } from '@/lib/settingsUtils'
 const WRITE_DEBOUNCE_MS = 300
 
 /**
- * The single place that decides where settings live (tmp/settings_storage.md
- * §6.4). The store itself never imports an API client — it only exposes
- * `applyRemote` (this hook's read path) and `setSettingsWriter` (this hook's
- * write path). Mounted once in App.tsx, next to useWebSocket/useAlertCounts.
+ * The single place that decides where settings live. The store itself never
+ * imports an API client — it only exposes `applyRemote` (this hook's read
+ * path) and `setSettingsWriter` (this hook's write path). Mounted once in App.tsx, next to useWebSocket/useAlertCounts.
  */
 export function useSettingsSync(): void {
   const providerInfo = useAuthStore((s) => s.providerInfo)
@@ -72,7 +71,7 @@ export function useSettingsSync(): void {
   }, [isServerMode, userId, error, applyRemote, setSyncState])
 
   // Writer: debounced PUT on every change, DELETE on reset. Optimistic — a
-  // write failure never rolls the local state back (tmp/settings_storage.md §6.4).
+  // write failure never rolls the local state back.
   useEffect(() => {
     if (!isServerMode) {
       setSettingsWriter(null)

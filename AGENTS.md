@@ -189,6 +189,19 @@ Tool-specific entry points map to the same files (no duplicated content):
     back. SQLite has a single pod and no fanout, so this is a PostgreSQL
     multi-replica concern only — but the patch is unconditional (NoopFanout
     never delivers, so the receiver code just never runs there).
+19. **Label display configuration is display-only.** `labelDisplay.order`
+    (pinned) / `labelDisplay.hidden` and `labelColors` (`useSettingsStore`)
+    may only affect which chips `partitionLabelsForDisplay`
+    (`lib/alertUtils.ts`) emits for the card and list views — including the
+    per-alert "+N" chip (`HiddenLabelsToggle`,
+    `components/alerts/LabelChip.tsx`), whose reveal state is local and never
+    writes back to settings — and how `labelColorStyle` paints a chip (a CSS
+    style object or `undefined`). They must never reach
+    `getFilterableLabels`, `matchesLabelMatchers`,
+    `silenceWouldMatchAlert`/`silenceMatchesAlert`, the affected-alerts
+    preview, `findRelatedAlerts`, or the detail panel's Labels section — a
+    hidden label is invisible, not absent. Letting a display preference
+    decide what a silence covers is the same class of bug as invariant #12.
 
 ## Workflow Rules — always follow
 

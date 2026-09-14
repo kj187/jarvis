@@ -39,8 +39,7 @@ middleware chain actually populates that context for the route as registered
 ## `useSettingsStore`'s zustand `persist` must not get a narrow `partialize`
 
 **Symptom (near-miss, caught before merge)**: implementing server-side settings
-persistence (`tmp/settings_storage.md`), the natural design was a `partialize`
-that only wrote the new `{anonOverrides, userMirror}` bookkeeping fields to
+persistence, the natural design was a `partialize` that only wrote the new `{anonOverrides, userMirror}` bookkeeping fields to
 `localStorage['jarvis-user-settings']`, since those are conceptually "the
 persisted state." That would have silently broken every existing
 `frontend/e2e/functional/none/settings.spec.ts` test that reads
@@ -508,8 +507,8 @@ a mental model, even one that produces passing self-consistent unit tests.
 Unit tests against your own reference implementation can only catch
 regressions from that implementation; they cannot catch the implementation
 itself being wrong. See `frontend/e2e/functional/none/silence-matching-semantics.spec.ts`
-(differential tests against a real Alertmanager) and
-`tmp/fable/review_silence.md` T-06 for the broader pattern this guards against.
+(differential tests against a real Alertmanager) for the broader pattern this
+guards against.
 
 ## Silence matchers must exclude pseudo-labels (`@receiver`, `@cluster`, `receiver`)
 

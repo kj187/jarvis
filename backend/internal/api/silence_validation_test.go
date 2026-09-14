@@ -80,9 +80,9 @@ func TestValidateSilenceMatchers(t *testing.T) {
 			// Empirically verified against a running Alertmanager (0.32.2): a lone
 			// `!=` matcher is ALWAYS accepted, even though it also matches a missing
 			// label (x != "" is true) — AM's "meaningful matcher" check only applies
-			// to positive (`=`/`=~`) matchers. See tmp/fable/review_silence.md T-06:
-			// this exact case was originally (wrongly) rejected here, and the mistake
-			// was only caught by an E2E test against real Alertmanager.
+			// to positive (`=`/`=~`) matchers. This exact case was originally
+			// (wrongly) rejected here, and the mistake was only caught by an E2E
+			// test against real Alertmanager.
 			name:     "lone negative equal matcher is always accepted, regardless of empty-match",
 			matchers: []models.SilenceMatcher{{Name: "instance", Value: "x", IsEqual: false, IsRegex: false}},
 		},

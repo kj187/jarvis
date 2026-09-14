@@ -22,6 +22,22 @@ test('H1 settings panel opens via user menu and shows Settings heading', async (
   await expect(dialog.getByText('Silences')).toBeVisible()
 })
 
+test('H12 settings open state survives a reload via the URL', async ({ page }) => {
+  await dismissNoAuthNotice(page)
+  await page.goto('/?state=active')
+
+  const dialog = await openSettings(page)
+  await expect.poll(() => new URL(page.url()).searchParams.get('settings')).toBe('open')
+  await expect.poll(() => new URL(page.url()).searchParams.get('state')).toBe('active')
+
+  await page.reload()
+  await expect(dialog).toBeVisible()
+
+  await dialog.getByRole('button', { name: 'Close' }).click()
+  await expect.poll(() => new URL(page.url()).searchParams.has('settings')).toBe(false)
+  await expect.poll(() => new URL(page.url()).searchParams.get('state')).toBe('active')
+})
+
 test('H2 timeFormat toggle switches between Relative and Absolute', async ({ page }) => {
   await dismissNoAuthNotice(page)
   await page.addInitScript(() => {
@@ -231,7 +247,7 @@ test('H10 reset to defaults shows confirm state then resets', async ({ page }) =
   expect(storedBefore).toBe('absolute')
 
   // First click shows confirm state
-  await dialog.getByRole('button', { name: 'Reset to defaults' }).click()
+  await dialog.getByRole('button', { name: 'Reset all settings' }).click()
   await expect(dialog.getByRole('button', { name: /Click again to confirm/ })).toBeVisible()
 
   // Second click resets

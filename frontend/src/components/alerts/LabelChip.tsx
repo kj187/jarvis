@@ -1,4 +1,5 @@
-import { useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { cn } from '@/lib/utils'
 import { useUIStore } from '@/store/uiStore'
 import { useSettingsStore } from '@/store/useSettingsStore'
@@ -11,14 +12,10 @@ export function LabelChip({
   labelKey,
   value,
   emphasized = false,
-  muted = false,
 }: {
   labelKey: string
   value: string
   emphasized?: boolean
-  /** Neutral styling — no per-key hue. For strips of context labels that are
-      identical across a group and shouldn't compete with the real signal. */
-  muted?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number } | null>(null)
@@ -26,6 +23,7 @@ export function LabelChip({
   const popoverRef = useRef<HTMLDivElement | null>(null)
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const addLabelMatcher = useUIStore((s) => s.addLabelMatcher)
+  const labelColors = useSettingsStore((s) => s.labelColors)
   const theme = useSettingsStore((s) => s.theme)
 
   const show = () => {
@@ -62,9 +60,10 @@ export function LabelChip({
     setOpen(false)
   }
 
-  // `emphasized` keeps its per-key hue (a distinguishing label is easier to
-  // tell apart with colour); only `muted` context strips drop it.
-  const neutral = muted
+  // Neutral unless this key has a palette color set in Settings → Labels —
+  // labels have no automatic color.
+  const colorStyle = labelColorStyle(labelKey, labelColors, theme)
+  const neutral = !colorStyle
 
   return (
     <div
@@ -86,7 +85,7 @@ export function LabelChip({
           emphasized && 'font-semibold',
           neutral && 'border-border bg-muted text-foreground',
         )}
-        style={neutral ? undefined : labelColorStyle(labelKey, theme)}
+        style={colorStyle}
       >
         <span className={neutral ? 'text-muted-foreground' : undefined}>{labelKey}:</span> {value}
       </span>
@@ -119,5 +118,104 @@ export function LabelChip({
         </div>
       )}
     </div>
+  )
+}
+
+/**
+ * Trailing "+N" chip for a chip row: the labels Settings → Labels hides for
+ * this alert. Click opens them in a floating layer — a per-alert peek, never
+ * a settings change (see AGENTS.md invariant #19). Deliberately a popover
+ * rather than an inline reveal: the card grid balances alerts into columns
+ * via CSS `column-count` (AlertCardGrid.tsx), so growing a card's height
+ * in place reflows the whole grid and visibly jumps the alert into a
+ * different column — a fixed-position layer never changes the card's height.
+ * Same portal + viewport-clamp technique as LabelChip's own operator popover.
+ */
+export function HiddenLabelsToggle({
+  hidden,
+}: {
+  hidden: Array<[string, string]>
+}) {
+  const [open, setOpen] = useState(false)
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
+  const triggerRef = useRef<HTMLButtonElement | null>(null)
+  const popoverRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (!open) return
+    function onDown(e: MouseEvent) {
+      const target = e.target as Node
+      if (triggerRef.current?.contains(target) || popoverRef.current?.contains(target)) return
+      setOpen(false)
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+
+  // The popover's size isn't known until it's rendered — nudge it back onto
+  // the viewport right after paint (same technique as LabelChip's own
+  // dropdown and Settings → Labels' color swatch popover).
+  useLayoutEffect(() => {
+    if (!open) return
+    const el = popoverRef.current
+    if (!el) return
+    const rect = el.getBoundingClientRect()
+    const overflowRight = rect.right - (window.innerWidth - 8)
+    const overflowBottom = rect.bottom - (window.innerHeight - 8)
+    if (overflowRight > 0 || overflowBottom > 0) {
+      setPos((p) => (p ? {
+        top: overflowBottom > 0 ? Math.max(8, p.top - overflowBottom) : p.top,
+        left: overflowRight > 0 ? Math.max(8, p.left - overflowRight) : p.left,
+      } : p))
+    }
+  }, [open])
+
+  if (hidden.length === 0) return null
+
+  function toggleOpen(e: React.MouseEvent) {
+    e.stopPropagation()
+    if (!open && triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect()
+      setPos({ top: rect.bottom + 4, left: rect.left })
+    }
+    setOpen((o) => !o)
+  }
+
+  const noun = `hidden label${hidden.length === 1 ? '' : 's'}`
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={toggleOpen}
+        aria-label={`${hidden.length} ${noun}`}
+        aria-expanded={open}
+        className="inline-flex shrink-0 cursor-pointer items-center rounded border border-dashed border-border px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground/70 transition-colors hover:text-foreground"
+        title={open ? `Collapse ${noun}` : `Show ${hidden.length} ${noun}: ${hidden.map(([k]) => k).join(', ')}`}
+      >
+        +{hidden.length}
+      </button>
+      {open && pos && createPortal(
+        <div
+          ref={popoverRef}
+          data-testid="hidden-labels-popover"
+          className="fixed z-50 flex max-w-[280px] flex-wrap gap-1 rounded-lg border border-border bg-popover p-2 shadow-lg"
+          style={{ top: pos.top, left: pos.left }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {hidden.map(([key, value]) => (
+            <LabelChip key={key} labelKey={key} value={value} />
+          ))}
+        </div>,
+        document.body,
+      )}
+    </>
   )
 }

@@ -33,8 +33,10 @@ import {
   unescapeRegex,
   isRoundTrippableTagList,
   findRelatedAlerts,
+  partitionLabelsForDisplay,
 } from './alertUtils'
 import type { EnrichedAlert, LabelMatcher, Silence } from '@/types'
+import { LABEL_COLOR_HUES, LABEL_COLORS, type LabelColorMap, type LabelDisplayConfig } from '@/lib/settingsUtils'
 
 function makeSilence(overrides: Partial<Silence> = {}): Silence {
   return {
@@ -320,6 +322,112 @@ describe('getFilterableLabels', () => {
     const alert = makeAlert()
     const labels = getFilterableLabels(alert)
     expect(labels['@claimed-by']).toBe('')
+  })
+})
+
+describe('partitionLabelsForDisplay', () => {
+  const emptyConfig: LabelDisplayConfig = { order: [], hidden: [] }
+  const visible = (labels: Record<string, string>, config: LabelDisplayConfig, exclude?: ReadonlySet<string>) =>
+    partitionLabelsForDisplay(labels, config, exclude).visible
+  const hidden = (labels: Record<string, string>, config: LabelDisplayConfig, exclude?: ReadonlySet<string>) =>
+    partitionLabelsForDisplay(labels, config, exclude).hidden
+
+  it('sorts all labels alphabetically for an empty config, dropping HIDDEN_LABEL_KEYS', () => {
+    const labels = { job: 'a', alertname: 'X', customer: 'acme', severity: 'critical' }
+    expect(partitionLabelsForDisplay(labels, emptyConfig)).toEqual({
+      visible: [['customer', 'acme'], ['job', 'a']],
+      hidden: [],
+    })
+  })
+
+  it('places pinned keys first in pinned order, rest alphabetically', () => {
+    const labels = { job: 'a', customer: 'acme', hostname: 'h1', dbid: '7' }
+    const config: LabelDisplayConfig = { order: ['customer', 'hostname', 'job'], hidden: [] }
+    expect(visible(labels, config)).toEqual([
+      ['customer', 'acme'],
+      ['hostname', 'h1'],
+      ['job', 'a'],
+      ['dbid', '7'],
+    ])
+  })
+
+  it('silently skips a pinned key the alert does not have', () => {
+    const labels = { job: 'a', customer: 'acme' }
+    const config: LabelDisplayConfig = { order: ['customer', 'hostname', 'job'], hidden: [] }
+    expect(visible(labels, config)).toEqual([
+      ['customer', 'acme'],
+      ['job', 'a'],
+    ])
+  })
+
+  it('moves hidden keys from visible to hidden', () => {
+    const labels = { job: 'a', dbid: '7' }
+    const config: LabelDisplayConfig = { order: [], hidden: ['dbid'] }
+    expect(partitionLabelsForDisplay(labels, config)).toEqual({
+      visible: [['job', 'a']],
+      hidden: [['dbid', '7']],
+    })
+  })
+
+  it('a key in both order and hidden is hidden — hidden wins', () => {
+    const labels = { job: 'a', dbid: '7' }
+    const config: LabelDisplayConfig = { order: ['dbid'], hidden: ['dbid'] }
+    expect(partitionLabelsForDisplay(labels, config)).toEqual({
+      visible: [['job', 'a']],
+      hidden: [['dbid', '7']],
+    })
+  })
+
+  it('silently omits a hidden key the alert does not have', () => {
+    expect(hidden({ job: 'a' }, { order: [], hidden: ['dbid'] })).toEqual([])
+  })
+
+  it('never lists HIDDEN_LABEL_KEYS in either partition, even if configured', () => {
+    const labels = { job: 'a', severity: 'critical' }
+    const config: LabelDisplayConfig = { order: ['severity'], hidden: ['severity'] }
+    expect(partitionLabelsForDisplay(labels, config)).toEqual({ visible: [['job', 'a']], hidden: [] })
+  })
+
+  it('never lists __-prefixed labels in either partition, even if configured', () => {
+    const labels = { job: 'a', __meta_something: 'x' }
+    const config: LabelDisplayConfig = { order: [], hidden: ['__meta_something'] }
+    expect(partitionLabelsForDisplay(labels, config)).toEqual({ visible: [['job', 'a']], hidden: [] })
+  })
+
+  it('applies the exclude set to both partitions', () => {
+    const labels = { job: 'a', customer: 'acme', dbid: '7', team: 'x' }
+    const config: LabelDisplayConfig = { order: [], hidden: ['dbid', 'team'] }
+    expect(partitionLabelsForDisplay(labels, config, new Set(['job', 'team']))).toEqual({
+      visible: [['customer', 'acme']],
+      hidden: [['dbid', '7']],
+    })
+  })
+
+  it('sorts multiple hidden labels alphabetically, ignoring pinned order', () => {
+    const labels = { job: 'a', dbid: '7', customer: 'acme' }
+    const config: LabelDisplayConfig = { order: [], hidden: ['job', 'dbid', 'customer'] }
+    expect(hidden(labels, config)).toEqual([
+      ['customer', 'acme'],
+      ['dbid', '7'],
+      ['job', 'a'],
+    ])
+  })
+
+  it('places @cluster first with the default config — no visual regression', () => {
+    const labels = { job: 'a', '@cluster': 'prod', customer: 'acme' }
+    const config: LabelDisplayConfig = { order: ['@cluster'], hidden: [] }
+    expect(visible(labels, config)).toEqual([
+      ['@cluster', 'prod'],
+      ['customer', 'acme'],
+      ['job', 'a'],
+    ])
+  })
+
+  it('is deterministic regardless of key insertion order', () => {
+    const config: LabelDisplayConfig = { order: ['customer'], hidden: ['team', 'dbid'] }
+    const a = { job: 'a', customer: 'acme', dbid: '7', team: 'x', host: 'h' }
+    const b = { team: 'x', dbid: '7', host: 'h', customer: 'acme', job: 'a' }
+    expect(partitionLabelsForDisplay(a, config)).toEqual(partitionLabelsForDisplay(b, config))
   })
 })
 
@@ -906,26 +1014,37 @@ describe('buildGroupAckSilenceBody (S-06)', () => {
 })
 
 describe('labelColorStyle', () => {
-  it('is deterministic for the same key and theme', () => {
-    expect(labelColorStyle('instance', 'dark')).toEqual(labelColorStyle('instance', 'dark'))
+  it('returns undefined when the key has no color (labels have no automatic color)', () => {
+    expect(labelColorStyle('instance', {}, 'dark')).toBeUndefined()
+    expect(labelColorStyle('instance', { other: 'blue' }, 'dark')).toBeUndefined()
   })
 
-  it('differs between light and dark theme', () => {
-    expect(labelColorStyle('instance', 'light')).not.toEqual(labelColorStyle('instance', 'dark'))
+  it('returns undefined for a value that is not a palette color', () => {
+    const colors = { instance: '#3b82f6', job: 'toString' } as unknown as LabelColorMap
+    expect(labelColorStyle('instance', colors, 'dark')).toBeUndefined()
+    expect(labelColorStyle('job', colors, 'dark')).toBeUndefined()
   })
 
-  it('defaults to dark theme', () => {
-    expect(labelColorStyle('instance')).toEqual(labelColorStyle('instance', 'dark'))
+  it('derives a dark-theme style from the palette hue', () => {
+    expect(labelColorStyle('instance', { instance: 'blue' }, 'dark')).toEqual({
+      backgroundColor: `hsl(${LABEL_COLOR_HUES.blue} 45% 18%)`,
+      color: `hsl(${LABEL_COLOR_HUES.blue} 75% 72%)`,
+      borderColor: `hsl(${LABEL_COLOR_HUES.blue} 40% 32%)`,
+    })
   })
 
-  it('never produces a pure-red hue (red would read as an error state)', () => {
-    for (let i = 0; i < 2000; i++) {
-      const key = `label_${i}_${(i * 2654435761) >>> 0}`
-      const hueMatch = /hsl\((\d+) /.exec(String(labelColorStyle(key, 'dark').color))
-      expect(hueMatch).not.toBeNull()
-      const hue = Number(hueMatch![1])
-      expect(hue).toBeGreaterThanOrEqual(40)
-      expect(hue).toBeLessThanOrEqual(329)
+  it('derives a light-theme style from the palette hue', () => {
+    expect(labelColorStyle('instance', { instance: 'amber' }, 'light')).toEqual({
+      backgroundColor: `hsl(${LABEL_COLOR_HUES.amber} 60% 90%)`,
+      color: `hsl(${LABEL_COLOR_HUES.amber} 70% 28%)`,
+      borderColor: `hsl(${LABEL_COLOR_HUES.amber} 45% 70%)`,
+    })
+  })
+
+  it('yields a style for every palette color in both themes', () => {
+    for (const name of LABEL_COLORS) {
+      expect(labelColorStyle('k', { k: name }, 'dark')?.color).toMatch(/^hsl\(/)
+      expect(labelColorStyle('k', { k: name }, 'light')?.color).toMatch(/^hsl\(/)
     }
   })
 })

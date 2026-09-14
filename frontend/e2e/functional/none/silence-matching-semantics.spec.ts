@@ -7,9 +7,9 @@ const AM_URL = process.env.E2E_ALERTMANAGER_URL ?? 'http://localhost:9094'
 /**
  * Differential tests against a REAL Alertmanager: what the silence-form
  * preview claims will be affected must match what Alertmanager actually
- * suppresses after the silence is created. This is the class of bug from
- * tmp/fable/review_silence.md (S-01) that unit tests against a fake
- * reference implementation can't catch on their own — only Alertmanager
+ * suppresses after the silence is created. This is the class of bug (S-01)
+ * that unit tests against a fake reference implementation can't catch on
+ * their own — only Alertmanager
  * itself is authoritative on its own matching semantics.
  */
 

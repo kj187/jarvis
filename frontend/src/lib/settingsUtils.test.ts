@@ -49,6 +49,66 @@ describe('normalizeSettings', () => {
     })
     expect(result.defaultFilters).toEqual([{ name: 'severity', operator: '=', value: 'critical' }])
   })
+
+  it.each([
+    ['nope'],
+    [{ order: 'x' }],
+  ])('drops labelDisplay for malformed input %j', (value) => {
+    expect(normalizeSettings({ labelDisplay: value })).toEqual({})
+  })
+
+  it('drops non-string and empty-string entries from labelDisplay arrays', () => {
+    const result = normalizeSettings({
+      labelDisplay: { order: ['customer', 42, '', null], hidden: ['dbid', '', 7] },
+    })
+    expect(result.labelDisplay).toEqual({ order: ['customer'], hidden: ['dbid'] })
+  })
+
+  it('removes duplicates within labelDisplay.order, keeping the first occurrence', () => {
+    const result = normalizeSettings({
+      labelDisplay: { order: ['customer', 'hostname', 'customer'], hidden: [] },
+    })
+    expect(result.labelDisplay).toEqual({ order: ['customer', 'hostname'], hidden: [] })
+  })
+
+  it('a key in both order and hidden ends up only in hidden', () => {
+    const result = normalizeSettings({
+      labelDisplay: { order: ['customer', 'dbid'], hidden: ['dbid'] },
+    })
+    expect(result.labelDisplay).toEqual({ order: ['customer'], hidden: ['dbid'] })
+  })
+
+  it('a valid labelDisplay config survives normalizeSettings unchanged (round-trip)', () => {
+    const config = { order: ['customer', 'hostname'], hidden: ['dbid'] }
+    const result = normalizeSettings({ labelDisplay: config })
+    expect(result.labelDisplay).toEqual(config)
+  })
+
+  it.each([
+    ['nope'],
+    [['not', 'an', 'object']],
+  ])('drops labelColors for malformed input %j', (value) => {
+    expect(normalizeSettings({ labelColors: value })).toEqual({})
+  })
+
+  it('keeps only entries with a non-empty key and a known palette color', () => {
+    const result = normalizeSettings({
+      labelColors: {
+        customer: 'blue',
+        '': 'blue',
+        hostname: '#3b82f6',
+        dbid: 'red',
+        job: 123,
+        team: 'toString',
+      },
+    })
+    expect(result.labelColors).toEqual({ customer: 'blue' })
+  })
+
+  it('a valid labelColors map survives normalizeSettings unchanged (round-trip)', () => {
+    const colors = { customer: 'blue', hostname: 'amber', team: 'purple' }
+    expect(normalizeSettings({ labelColors: colors })).toEqual({ labelColors: colors })
+  })
 })
 
 describe('diffFromDefaults (v1 -> v2 migration)', () => {

@@ -3,6 +3,7 @@ import { enUS } from 'date-fns/locale'
 import type React from 'react'
 import type { UpsertSilenceBody } from '@/api/client'
 import type { EnrichedAlert, LabelMatcher, Silence } from '@/types'
+import { LABEL_COLOR_HUES, type LabelColorMap, type LabelDisplayConfig } from '@/lib/settingsUtils'
 
 export const tzAbbr = new Date().toLocaleTimeString('en', { timeZoneName: 'short' }).split(' ').pop() ?? ''
 
@@ -12,25 +13,63 @@ export const tzAbbr = new Date().toLocaleTimeString('en', { timeZoneName: 'short
 export const HIDDEN_LABEL_KEYS = new Set(['alertname', 'severity', 'receiver', '@receiver', '@claimed-by'])
 
 /**
- * Deterministic per-key chip colors (djb2 hash → hue).
- * The hue is confined to 40–329° so it can never land on a pure red — a red
- * chip on an alert reads as an error/critical state rather than as a label.
+ * Partitions an alert's labels for chip rendering. `visible`: pinned keys
+ * (`config.order`) first in their configured order, everything else
+ * alphabetically. `hidden`: the labels `config.hidden` collapses behind the
+ * "+N" chip, alphabetically. `HIDDEN_LABEL_KEYS` and `__`-prefixed labels are
+ * in neither — they are never generic chips.
+ *
+ * Display-only. Never use this to decide what a silence covers or what a
+ * filter matches (see AGENTS.md invariant #19).
  */
-export function labelColorStyle(key: string, theme: 'dark' | 'light' = 'dark'): React.CSSProperties {
-  let h = 5381
-  for (let i = 0; i < key.length; i++) h = ((h << 5) + h + key.charCodeAt(i)) >>> 0
-  const hue = (h % 290) + 40
+export function partitionLabelsForDisplay(
+  labels: Record<string, string>,
+  config: LabelDisplayConfig,
+  exclude?: ReadonlySet<string>,
+): { visible: Array<[string, string]>; hidden: Array<[string, string]> } {
+  const hiddenKeys = new Set(config.hidden)
+  const rank = (key: string) => {
+    const i = config.order.indexOf(key)
+    return i === -1 ? Number.POSITIVE_INFINITY : i
+  }
+  const visible: Array<[string, string]> = []
+  const hidden: Array<[string, string]> = []
+  for (const entry of Object.entries(labels)) {
+    const [key] = entry
+    if (HIDDEN_LABEL_KEYS.has(key) || key.startsWith('__') || exclude?.has(key)) continue
+    ;(hiddenKeys.has(key) ? hidden : visible).push(entry)
+  }
+  visible.sort(([a], [b]) => rank(a) - rank(b) || a.localeCompare(b))
+  hidden.sort(([a], [b]) => a.localeCompare(b))
+  return { visible, hidden }
+}
+
+/**
+ * Chip style for a label key's palette color (`labelColors`, Settings →
+ * Labels), tuned per theme — `undefined` when the key has no color, so the
+ * caller falls back to its neutral chip styling. Labels have no automatic
+ * color; coloring is opt-in only. Display-only, same as
+ * `partitionLabelsForDisplay` (AGENTS.md invariant #19).
+ */
+export function labelColorStyle(
+  key: string,
+  colors: Readonly<LabelColorMap>,
+  theme: 'dark' | 'light',
+): React.CSSProperties | undefined {
+  const name = colors[key]
+  if (!name || !Object.hasOwn(LABEL_COLOR_HUES, name)) return undefined
+  const hue = LABEL_COLOR_HUES[name]
   if (theme === 'light') {
     return {
-      backgroundColor: `hsl(${hue} 50% 90%)`,
+      backgroundColor: `hsl(${hue} 60% 90%)`,
       color: `hsl(${hue} 70% 28%)`,
-      borderColor: `hsl(${hue} 40% 70%)`,
+      borderColor: `hsl(${hue} 45% 70%)`,
     }
   }
   return {
-    backgroundColor: `hsl(${hue} 40% 16%)`,
-    color: `hsl(${hue} 70% 72%)`,
-    borderColor: `hsl(${hue} 35% 30%)`,
+    backgroundColor: `hsl(${hue} 45% 18%)`,
+    color: `hsl(${hue} 75% 72%)`,
+    borderColor: `hsl(${hue} 40% 32%)`,
   }
 }
 

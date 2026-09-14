@@ -8,7 +8,14 @@ import {
   RESOLVED_PAGE_SIZE_OPTIONS,
   ALLOWED_SILENCE_DURATIONS,
 } from '@/lib/settingsUtils'
-import type { UserSettings, DefaultFilter, CardColumns, ResolvedPageSizeOption } from '@/lib/settingsUtils'
+import type {
+  UserSettings,
+  DefaultFilter,
+  CardColumns,
+  ResolvedPageSizeOption,
+  LabelDisplayConfig,
+  LabelColorMap,
+} from '@/lib/settingsUtils'
 
 export {
   DEFAULT_SETTINGS,
@@ -16,14 +23,14 @@ export {
   RESOLVED_PAGE_SIZE_OPTIONS,
   ALLOWED_SILENCE_DURATIONS,
 }
-export type { UserSettings, DefaultFilter, CardColumns, ResolvedPageSizeOption }
+export type { UserSettings, DefaultFilter, CardColumns, ResolvedPageSizeOption, LabelDisplayConfig, LabelColorMap }
 
 export type SettingsWriteEvent =
   | { kind: 'update'; overrides: Partial<UserSettings> }
   | { kind: 'reset' }
 
 // Set once by useSettingsSync (the only place that knows about fetch); the
-// store itself never imports an API client (tmp/settings_storage.md §6.4).
+// store itself never imports an API client.
 let settingsWriter: ((event: SettingsWriteEvent) => void) | null = null
 
 export function setSettingsWriter(writer: ((event: SettingsWriteEvent) => void) | null): void {
@@ -44,7 +51,7 @@ function computeNextOverrides(
     // A value that exactly matches what's already effective without this
     // override is not an override — dropping it here means clicking a
     // setting back to its default doesn't permanently cement a redundant
-    // entry (tmp/settings_storage.md §6.3).
+    // entry.
     if (JSON.stringify(value) === JSON.stringify(effectiveWithoutOverride)) {
       delete next[key]
     } else {
@@ -57,7 +64,7 @@ function computeNextOverrides(
 interface SettingsStore extends UserSettings {
   /** Only what this user explicitly changed. Source of truth for persistence. */
   overrides: Partial<UserSettings>
-  /** Instance-wide defaults from the server (Phase 3); {} until then. */
+  /** Instance-wide defaults from the server — reserved, always {} for now. */
   globalDefaults: Partial<UserSettings>
   /** Storage backend currently in use — drives the SettingsSheet hint text. */
   origin: 'local' | 'server'
