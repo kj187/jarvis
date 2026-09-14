@@ -1,0 +1,63 @@
+import { describe, expect, it } from 'vitest'
+import {
+  resolveSettings,
+  normalizeSettings,
+  diffFromDefaults,
+  DEFAULT_SETTINGS,
+} from './settingsUtils'
+
+describe('resolveSettings', () => {
+  it('returns DEFAULT_SETTINGS when nothing is set', () => {
+    expect(resolveSettings({}, {})).toEqual(DEFAULT_SETTINGS)
+  })
+
+  it('layers override over global over app default', () => {
+    const resolved = resolveSettings({ theme: 'light', cardColumns: 3 }, { theme: 'dark' })
+    expect(resolved.theme).toBe('dark') // override wins
+    expect(resolved.cardColumns).toBe(3) // global wins over app default
+    expect(resolved.timeFormat).toBe(DEFAULT_SETTINGS.timeFormat) // untouched
+  })
+})
+
+describe('normalizeSettings', () => {
+  it.each([null, 'x', [], 42])('returns {} for non-object input %j', (input) => {
+    expect(normalizeSettings(input)).toEqual({})
+  })
+
+  it('drops unknown keys', () => {
+    expect(normalizeSettings({ theme: 'light', totallyUnknown: 'x' })).toEqual({ theme: 'light' })
+  })
+
+  it.each([
+    ['theme', 'neon'],
+    ['resolvedPageSize', 7],
+    ['cardColumns', 99],
+    ['defaultSilenceDurationMinutes', 13],
+  ])('drops invalid value for %s', (key, value) => {
+    const result = normalizeSettings({ [key]: value }) as Record<string, unknown>
+    expect(result[key]).toBeUndefined()
+  })
+
+  it('keeps only valid defaultFilters entries', () => {
+    const result = normalizeSettings({
+      defaultFilters: [
+        { name: 'severity', operator: '=', value: 'critical' },
+        { name: 'broken', operator: 'nope', value: 'x' },
+        { name: 123, operator: '=', value: 'x' },
+        'not-an-object',
+      ],
+    })
+    expect(result.defaultFilters).toEqual([{ name: 'severity', operator: '=', value: 'critical' }])
+  })
+})
+
+describe('diffFromDefaults (v1 -> v2 migration)', () => {
+  it('keeps only the keys that deviate from DEFAULT_SETTINGS', () => {
+    const fullV1Blob = { ...DEFAULT_SETTINGS, theme: 'light' as const }
+    expect(diffFromDefaults(fullV1Blob)).toEqual({ theme: 'light' })
+  })
+
+  it('returns {} when everything matches defaults', () => {
+    expect(diffFromDefaults({ ...DEFAULT_SETTINGS })).toEqual({})
+  })
+})

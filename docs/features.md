@@ -137,11 +137,13 @@ Labels are ordered by usefulness: `alertname` and `severity` are always pinned t
 
 ## User Settings
 
-Per-user preferences stored in the browser — no server config required.
+Per-user preferences — stored in your account when you're signed in, or in this browser when you're not. Either way, no server config is required.
 
 ![Settings Panel](assets/feature-settings-panel.png)
 
-Open the Settings panel from the **user-menu** button in the top-right of the header (initials avatar when logged in, a generic account icon otherwise) → **Settings**. The same menu also holds the theme toggle and, when authenticated, login/logout and the admin panel — hover the button to open it. Settings are persisted in `localStorage` and apply immediately without a page reload.
+Open the Settings panel from the **user-menu** button in the top-right of the header (initials avatar when logged in, a generic account icon otherwise) → **Settings**. The same menu also holds the theme toggle and, when authenticated, login/logout and the admin panel — hover the button to open it. Settings apply immediately without a page reload.
+
+**Where settings live:** if authentication is enabled and you're signed in, your settings are saved to your account and follow you across devices and browsers. If there is no login configured at all, or you simply haven't signed in yet, settings are saved to this browser only — a small status line under the Settings heading always says which is the case. You can still open Settings and change anything while signed out (a `write_protect` deployment lets anyone look around without an account); those changes just stay local to that browser instead of syncing. The first time you sign in on a device with local changes already made, those changes are copied to your account once — after that, your account's settings always win. Signing out falls back to whatever this browser had before you signed in; it does not touch or delete your account's settings.
 
 | Signed out | Signed in |
 |:---:|:---:|

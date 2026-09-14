@@ -306,6 +306,17 @@ CREATE TABLE IF NOT EXISTS poll_snapshots (
     payload      BYTEA NOT NULL,
     taken_at     TIMESTAMPTZ NOT NULL
 );
+
+-- One row per authenticated user with at least one non-default setting.
+-- `settings` is an opaque JSON blob (internal/settings, `internal/api/settings_handler.go`)
+-- — the backend never inspects individual keys, so a new frontend setting
+-- never requires a migration. ON DELETE CASCADE removes it when the user is
+-- deleted (admin panel). Not leader-gated, no fanout, no cache (§ below).
+CREATE TABLE IF NOT EXISTS user_settings (
+    user_id    TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    settings   TEXT NOT NULL,
+    updated_at DATETIME NOT NULL DEFAULT (datetime('now'))  -- TIMESTAMPTZ NOT NULL DEFAULT NOW() on PostgreSQL
+);
 ```
 
 **SQLite settings** (on open): `SetMaxOpenConns(1)`, `PRAGMA journal_mode=WAL`, `PRAGMA foreign_keys=ON`, `PRAGMA busy_timeout=5000`. PostgreSQL uses a capped pool: `JARVIS_DB_MAX_OPEN_CONNS` (default 10) sets MaxOpen **and** MaxIdle (so bursts reuse connections instead of churning them), plus `ConnMaxLifetime=30m` / `ConnMaxIdleTime=5m` — never unbounded, never `SetMaxOpenConns(1)` (Critical Invariant #8).
@@ -421,6 +432,20 @@ POST   /api/v1/poll                              None  (RL)   → triggers an im
 GET    /api/v1/clusters                          full_protect?  → []ClusterInfo
 #        health from the cached per-member up-state of the last poll (Cluster.MemberUpStates) —
 #        never live-pings AM; members without poll state yet count as healthy (writeOrder optimism)
+
+# ── Settings (opaque JSON blob, internal/settings) ───────────────────────────
+GET    /api/v1/settings                          full_protect?  → { user: {...}|null, global: {} }
+#        user: null when unauthenticated OR authenticated with no row yet (frontend already
+#        knows which, from authStore) — the frontend resolves the storage location itself
+#        (tmp/settings_storage.md §2: driven by "is there an authenticated user", not authMode).
+#        global always {} until Phase 3 (app-wide defaults, not yet built). Reads the DB only —
+#        never calls Alertmanager (Invariant #13), never cached (§4.9 below), not leader-gated.
+PUT    /api/v1/settings                          Auth  (RL)   Body: the settings object (sparse; whole row replaced,
+#        last write wins, no merge/versioning) — 400 on non-object JSON or a body > 16 KiB.
+#        The backend never inspects individual keys (see user_settings above) — validation is
+#        shape/size only. settingsRL = 120 req/min per IP, burst 20 (looser than writeRL: settings
+#        writes are debounced client-side but still bursty, and a NAT can share one IP).
+DELETE /api/v1/settings                          Auth  (RL)   deletes the row — the server side of "Reset to defaults"
 
 # ── Admin (auth + role=admin) ────────────────────────────────────────────────
 GET    /api/v1/admin/users                       Admin        → []User
@@ -830,10 +855,12 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
 ├── store/
 │   ├── uiStore.ts            → Zustand+persist('jarvis-ui'): nav page, view modes, filters, fullscreen, counts
 │   ├── authStore.ts          → user, providerInfo, hydrate() (retries on slow backend), login/logout
-│   └── useSettingsStore.ts   → Zustand+persist('jarvis-user-settings'): all user preferences
+│   └── useSettingsStore.ts   → Zustand+persist('jarvis-user-settings', v2): resolved user preferences
+│                                + sparse overrides — local (anon) or server (account) storage,
+│                                see "Settings Store" below; types/logic live in lib/settingsUtils.ts
 ├── types/index.ts    → Alert, Silence, Claim, Comment, AlertEvent, AlertStats, SilenceEvent,
 │                        SilenceTemplate, LabelMatcher, AuthUser, ProviderInfo, AdminUser,
-│                        HeatmapRange, AlertHeatmapResponse, ...
+│                        SettingsResponse, HeatmapRange, AlertHeatmapResponse, ...
 ├── hooks/
 │   ├── useAlerts.ts           → useAlerts, useAlertGroups, useAlertHistory, useAlertTimeline,
 │   │                            useAlertStats, useAlertHeatmap (staleTime 60s; enabled unconditionally
@@ -854,6 +881,8 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
 │   ├── useProtectedAction.ts  → wraps write actions; opens LoginModal when auth required
 │   ├── useLoginGuard.ts       → login-required state for guarded UI elements
 │   ├── useFormatTime.ts       → relative/absolute timestamp formatter (from settings)
+│   ├── useSettingsSync.ts     → mounted once in App.tsx; the only place deciding local vs.
+│   │                            server settings storage (see "Settings Store" below)
 │   └── useVersion.ts          → app version (staleTime Infinity)
 ├── lib/
 │   ├── refetch.ts             → FALLBACK_REFETCH_INTERVAL_MS (60s) — safety-net refetch cadence;
@@ -934,6 +963,10 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
 │   │                            functions kept out of the .tsx renderer so the same username
 │   │                            always renders the same avatar; no external lookup (no
 │   │                            Gravatar/third-party call) — see components/ui/avatar.tsx
+│   ├── settingsUtils.ts       → UserSettings, DEFAULT_SETTINGS + option constants,
+│   │                            resolveSettings, normalizeSettings (drops unknown keys/out-of-range
+│   │                            values from an unverified server blob), diffFromDefaults (pre-v2 →
+│   │                            sparse-overrides migration) — re-exported by useSettingsStore.ts
 │   └── utils.ts               → cn(), formatDuration() + misc helpers
 └── components/
     ├── ui/                    → shadcn/ui: button, card, badge, dialog, sheet, select, input,
@@ -1228,7 +1261,12 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │   ├── MatcherEditor.tsx  → matcher rows: operators + tag multi-value + suggestions
     │   └── SilenceTemplateTab.tsx → template CRUD + apply-to-form
     ├── settings/
-    │   └── SettingsSheet.tsx  → Display: time format, default view, card columns, group-by label,
+    │   └── SettingsSheet.tsx  → status line under the heading (`origin`/`syncState` from
+    │                            useSettingsStore): "Synced to your account", "Could not save —
+    │                            changes are local to this browser" (syncState 'error'), "Stored in
+    │                            this browser" (mode 'none'), or "Stored in this browser — sign in to
+    │                            sync across devices" (provider active, origin 'local'). Display: time
+    │                            format, default view, card columns, group-by label,
     │                            claim animation. Default Filter: add/remove locked header chips.
     │                            Silences: default duration only. `resolvedPageSize` and
     │                            `defaultCreatorName` live in the same useSettingsStore but are NOT
@@ -1286,6 +1324,10 @@ interface UIStore {
 
 ## Settings Store (`useSettingsStore`, persisted under `jarvis-user-settings`)
 
+`UserSettings`, `resolveSettings`, and `normalizeSettings` live in
+`lib/settingsUtils.ts` (the store re-exports them so all ~20 existing
+`useSettingsStore((s) => s.theme)`-style call sites are unaffected):
+
 ```typescript
 interface UserSettings {
   theme: 'dark' | 'light'                       // default 'dark'
@@ -1302,10 +1344,62 @@ interface UserSettings {
 }
 ```
 
+**Storage location** (tmp/settings_storage.md): decided by whether an
+authenticated user currently exists, not by `JARVIS_AUTH_MODE` — a
+`write_protect` visitor who isn't logged in still edits settings freely, just
+into the browser's anonymous slot (the Settings sheet is never gated behind
+login). | Situation | Storage |
+|---|---|
+| No auth provider (`providerInfo.mode === 'none'`) | localStorage only |
+| Auth provider active, logged in | DB only (`user_settings` row); localStorage keeps a read-cache mirror |
+| Auth provider active, not logged in | localStorage only (anonymous slot) |
+
+Only what a user explicitly changed is ever persisted — **sparse overrides**,
+never the full resolved blob — computed as:
+
+```typescript
+resolveSettings(globalDefaults, overrides) // = { ...DEFAULT_SETTINGS, ...globalDefaults, ...overrides }
+```
+
+`globalDefaults` is `{}` until Phase 3 (app-wide defaults, `tmp/settings_storage.md` §7, not yet built).
+`useSettingsStore` extends `UserSettings` with the *resolved* flat fields
+(unchanged consumer API) plus:
+
+```typescript
+overrides: Partial<UserSettings>        // source of truth for persistence
+globalDefaults: Partial<UserSettings>   // {} until Phase 3
+origin: 'local' | 'server'              // drives the SettingsSheet hint text
+syncState: 'idle' | 'saving' | 'error'  // last PUT/DELETE outcome
+anonOverrides: Partial<UserSettings>    // device's anon-slot overrides, kept across login/logout
+userMirror: { id: string; overrides: Partial<UserSettings> } | null // last known server row, read cache
+
+update(partial)   // merges into overrides; a value that matches the default-without-it is REMOVED
+                  // from overrides instead of being stored, so toggling back to default doesn't cement it
+reset()           // overrides = {}; server mode sends DELETE (not PUT {}), so Phase 3 defaults can apply
+applyRemote(user, global, origin, userId?)  // internal — used by useSettingsSync only
+setSyncState(s)   // internal — used by useSettingsSync only
+```
+
+`hooks/useSettingsSync.ts` (mounted once in `App.tsx`, next to `useWebSocket`)
+is the **only** place that decides where to read/write: local mode reads
+`anonOverrides` and never makes a request; server mode does
+`GET /api/v1/settings` via TanStack Query (`queryKey: ['settings', userId]`,
+`staleTime: Infinity`), adopts the anon slot exactly once if the account has
+no row yet, and registers a debounced (300ms) writer via
+`setSettingsWriter()` for `PUT`/`DELETE`. The store itself never imports the
+API client. A failed `GET`/`PUT`/`DELETE` never breaks the app — settings
+keep working from local state and `syncState`/the SettingsSheet status line
+surface the failure.
+
 ## localStorage Keys (complete)
 
 `jarvis-ui` · `jarvis-viewMode` · `jarvis-activeViewMode` · `jarvis-silencesViewMode` ·
-`jarvis-user-settings` · `jarvis-username` (manual author in mode "none") ·
+`jarvis-user-settings` (zustand `persist`, `version: 2` — whole store state, so the
+top-level `state.<key>` shape stays flat/backward-compatible; a `migrate` step
+converts a pre-v2 full blob into sparse `anonOverrides` via `diffFromDefaults`.
+While a server identity is active this key still holds `anonOverrides`/`userMirror`
+as a read cache — the DB row is authoritative, see "Settings Store" above) ·
+`jarvis-username` (manual author in mode "none") ·
 `jarvis_noauth_notice_dismissed` ·
 `jarvis-card-section-order:<label>` · `jarvis-list-section-order:<label>`
 (drag-and-drop section order per grouping label) ·
@@ -1353,6 +1447,7 @@ consumed snapshot (D3).
 **Protection** (`JARVIS_AUTH_MODE`, ignored when provider=none): `write_protect` (reads public, writes need login) · `full_protect` (everything needs login).
 
 - **Middleware**: `RequireAuth` (valid JWT cookie/header) on write routes + `/auth/me`; `RequireAdmin` on `/api/v1/admin/*`; `firstRunRedirect` → `/setup` when internal mode has no users.
+- **`OptionalAuth`**: like `RequireAuth` (resolves the cookie and sets `auth.ContextKey`) but never rejects the request — for routes that must answer both anonymous and authenticated callers differently without requiring login (`GET /api/v1/settings` is the only user so far). A route with neither `RequireAuth` nor `OptionalAuth` never gets `auth.ContextKey` set, so `auth.UserFromContext(c)` is always nil there even with a valid cookie present — this bit a first draft of the settings endpoint (PUT wrote correctly, but the unauthenticated-by-design GET always read back `user: null`, silently "losing" every write) before `OptionalAuth` was added; `internal/api/settings_handler_test.go`'s `TestGetSettings_RealHTTPRoundTrip` guards against a regression by driving a real cookie through a real `httptest.Server` + router instead of `c.Set(auth.ContextKey, ...)`, which would mask this class of bug.
 - **JWT**: HMAC-SHA256 signed with `JARVIS_SECRET_KEY`; claims `sub, username, email, role, provider, exp, iat`; delivered as secure HttpOnly cookie.
 - **OIDC**: `/auth/oidc/start` (PKCE + state cookie) → issuer → `/auth/oidc/callback` (state CSRF check, ID-token verify, `UpsertOIDCUser` by `sub`). Admin role from `JARVIS_OIDC_ADMIN_CLAIM` == `JARVIS_OIDC_ADMIN_VALUE`.
 - **Rate limits**: `/setup` 6/min · `/auth/login` 12/min · writes 30/min · `/poll` 1/5s · `/admin/users` 30/min.

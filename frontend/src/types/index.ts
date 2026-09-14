@@ -220,6 +220,15 @@ export interface AdminUser {
   lastLoginAt: string | null
 }
 
+// ── Settings ─────────────────────────────────────────────────────────────────
+
+/** Server response of GET /api/v1/settings. Both maps are sparse — only keys
+    that were explicitly set are present. */
+export interface SettingsResponse {
+  user: Record<string, unknown> | null
+  global: Record<string, unknown>
+}
+
 // ── WebSocket Events ──────────────────────────────────────────────────────────
 
 export interface WSEvent<T = unknown> {

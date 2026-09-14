@@ -17,6 +17,7 @@ import type { DefaultFilter } from '@/store/useSettingsStore'
 import type { LabelMatcherOperator } from '@/types'
 import { useAlerts } from '@/hooks/useAlerts'
 import { getFilterableLabels } from '@/lib/alertUtils'
+import { useAuthStore } from '@/store/authStore'
 
 interface SettingsSheetProps {
   open: boolean
@@ -200,6 +201,9 @@ export function SettingsSheet({ open, onClose }: SettingsSheetProps) {
   const settings = useSettingsStore()
   const update = useSettingsStore((s) => s.update)
   const reset = useSettingsStore((s) => s.reset)
+  const origin = useSettingsStore((s) => s.origin)
+  const syncState = useSettingsStore((s) => s.syncState)
+  const providerMode = useAuthStore((s) => s.providerInfo?.mode)
 
   const { data: allAlerts = [] } = useAlerts()
   const labelValueMap = useMemo(() => {
@@ -258,7 +262,21 @@ export function SettingsSheet({ open, onClose }: SettingsSheetProps) {
   return (
     <Sheet open={open} onClose={onClose} className="sm:max-w-lg lg:max-w-lg" ariaLabel="Settings">
       <div className="p-5 pt-10 space-y-6">
-        <h2 className="text-base font-semibold">Settings</h2>
+        <div className="space-y-1.5">
+          <h2 className="text-base font-semibold">Settings</h2>
+          {origin === 'server' ? (
+            <p className={cn('text-[10px]', syncState === 'error' ? 'text-destructive' : 'text-muted-foreground')}>
+              {syncState === 'error' ? 'Could not save — changes are local to this browser' : 'Synced to your account'}
+            </p>
+          ) : providerMode === 'none' || providerMode === undefined ? (
+            <p className="text-[10px] text-muted-foreground">Stored in this browser</p>
+          ) : (
+            <div className="flex items-start gap-1.5 rounded-md border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-[11px] text-amber-500">
+              <Info className="h-3.5 w-3.5 shrink-0 mt-px" />
+              <span>Stored in this browser — sign in to sync across devices</span>
+            </div>
+          )}
+        </div>
 
         {/* ── Display ── */}
         <Section title="Display">

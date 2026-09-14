@@ -133,6 +133,8 @@ make fixtures-unsilence            # expire test silences
 | `internal/api` | `fanout_integration_test.go` | D4 integration (`JARVIS_TEST_POSTGRES_DSN`-gated): two full "pods" — own `Store`/`Hub`/`fanout.PGFanout` each, sharing one database — a real `addComment` HTTP call reaches both pods' WS clients exactly once (no echo double-delivery); a second test drives a 9000-char comment body through the same path to exercise the oversized-message Ref fallback end-to-end, including the database refetch on the receiving pod |
 | `internal/auth` | `jwt_test.go` `internal_provider_test.go` `middleware_test.go` | JWT sign/verify, RequireAuth/RequireAdmin |
 | `internal/users` | `store_test.go` | User CRUD, OIDC upsert, bcrypt |
+| `internal/settings` | `store_test.go` | `Get` on unknown user → `("", nil)` not an error; `Put`→`Get` round-trip; `Put` twice → upsert (one row, last write wins); `Delete` (no-op on unknown user); cascade delete when the owning user row is deleted |
+| `internal/api` | `settings_handler_test.go` | `GET /settings` anonymous → `200 {user:null,global:{}}`; `PUT` anonymous → `401`; `PUT`→`GET` round-trip for the same user; `PUT` rejects non-object JSON (`[1,2,3]`, invalid JSON, `42`, `null`, a bare string) and bodies > 16 KiB with `400`; `PUT {}` is accepted (needed for adoption's empty-blob case); `DELETE` → `204`, subsequent `GET` → `user: null`; `TestGetSettings_RealHTTPRoundTrip` drives a real cookie through a real `httptest.Server` + full router (not the `c.Set(auth.ContextKey, ...)` shortcut the other tests use) — this is the one that catches a missing `auth.OptionalAuth` on the `GET` route (see `AGENTS.md` / `.agents/architecture.md` "Authentication & Authorization") |
 | `internal/ws` | `hub_test.go` | Broadcast, client register/unregister, slow client drop, `jarvis_ws_broadcasts_total`, `BuildEventJSON`+`BroadcastRaw` produce the same metric label as `BroadcastJSON` |
 | `internal/fanout` | `postgres_test.go` | `PGFanout` (`JARVIS_TEST_POSTGRES_DSN`-gated): delivers to the other instance only (echo suppression via `origin`), small messages delivered inline, oversized messages (> `maxNotifyPayloadBytes`) fall back to a `Ref` instead |
 | `internal/fanout` | `noop_test.go` | `NoopFanout`: `Publish` is a no-op, `Run` blocks until `ctx` is cancelled |
@@ -252,6 +254,13 @@ to `src/lib/**` only:
   cosmetic display value). Enforced by `pnpm test:unit:coverage` /
   `make test-frontend-unit`, in pre-commit and CI — a new function or branch
   added to this file needs a test in the same commit or the build fails.
+- `frontend/src/lib/settingsUtils.test.ts` — same `src/lib/**` inclusion, same
+  rationale (pure resolution/validation logic, not a UI flow): `resolveSettings`
+  layering, `normalizeSettings` dropping unknown keys/out-of-range values/invalid
+  `defaultFilters` entries from an unverified server blob, and `diffFromDefaults`
+  (the pre-v2 → sparse-overrides migration step). **Not** under the 100%
+  coverage gate — that stays scoped to `alertUtils.ts` only (`vitest.config.ts`
+  `coverage.include`).
 
 This does **not** reopen the door to a general component-test stack —
 anything outside `src/lib/` stays E2E-only.

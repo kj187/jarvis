@@ -145,6 +145,18 @@ Alert-state broadcasts (`alerts_update`, the poll-time `silences_update`)
 are **not** fanned out this way — every pod already derives those from its
 own poll or consumed snapshot.
 
+### User settings
+
+`user_settings` (one opaque JSON blob per user, `internal/settings`) is
+**not** part of any of the above machinery. Every `GET /api/v1/settings`
+reads the row straight from the database — no in-memory cache, so nothing
+needs invalidating across pods, no leader gating, and no WebSocket fanout,
+since there is no history side effect to serialize (Critical Invariant #15
+does not apply here). The trade-off: two browser tabs of the same user on
+different pods only converge on the next page load of either tab, not
+instantly — accepted as out of scope for a personal-preferences row that
+changes rarely.
+
 ### Failover
 
 Kill, evict, or drain the leader pod: PostgreSQL releases its session lock

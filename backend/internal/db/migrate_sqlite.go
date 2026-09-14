@@ -94,6 +94,11 @@ last_login_at  DATETIME
 )`,
 		`CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)`,
 		`CREATE INDEX IF NOT EXISTS idx_users_oidc_sub ON users(oidc_sub)`,
+		`CREATE TABLE IF NOT EXISTS user_settings (
+user_id    TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+settings   TEXT NOT NULL,
+updated_at DATETIME NOT NULL DEFAULT (datetime('now'))
+)`,
 	}
 
 	for _, stmt := range stmts {

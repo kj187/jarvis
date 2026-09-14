@@ -113,6 +113,11 @@ func migratePostgres(database *sql.DB) error {
 			payload      BYTEA NOT NULL,
 			taken_at     TIMESTAMPTZ NOT NULL
 		)`,
+		`CREATE TABLE IF NOT EXISTS user_settings (
+			user_id    TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+			settings   TEXT NOT NULL,
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)`,
 	}
 
 	// Session-level locks require a single dedicated connection: they are

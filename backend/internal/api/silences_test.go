@@ -18,6 +18,7 @@ import (
 	"github.com/kj187/jarvis/backend/internal/fanout"
 	"github.com/kj187/jarvis/backend/internal/history"
 	"github.com/kj187/jarvis/backend/internal/metrics"
+	"github.com/kj187/jarvis/backend/internal/settings"
 	"github.com/kj187/jarvis/backend/internal/users"
 	"github.com/kj187/jarvis/backend/internal/ws"
 	"github.com/labstack/echo/v4"
@@ -38,6 +39,7 @@ func newTestServerWithAM(t *testing.T, amURL string) *Server {
 	alertStore := &history.AlertStore{}
 	store := history.NewStore(database, dialect)
 	userStore := users.NewStore(database, dialect)
+	settingsStore := settings.NewStore(database, dialect)
 	hub := ws.NewHub(nil, nil, metrics.New("test"))
 	go hub.Run()
 
@@ -45,7 +47,7 @@ func newTestServerWithAM(t *testing.T, amURL string) *Server {
 		{Name: "testcluster", AlertmanagerURL: amURL, AlertmanagerLinkURL: amURL},
 	})
 	cfg := &config.Config{}
-	return NewServer(alertStore, history.NewSilenceStore(), store, hub, registry, cfg, nil, auth.NoneProvider{}, userStore, fanout.NoopFanout{})
+	return NewServer(alertStore, history.NewSilenceStore(), store, hub, registry, cfg, nil, auth.NoneProvider{}, userStore, settingsStore, fanout.NoopFanout{})
 }
 
 // fakeTriggerer records poll-trigger requests from mutation handlers.
