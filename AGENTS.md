@@ -281,8 +281,12 @@ Tool-specific entry points map to the same files (no duplicated content):
     3. **PR gate — ask before pushing.** When the user signals the change is
        done and wants to push, ask whether to open a PR directly via `gh`. On
        yes: `git push -u origin <branch>` and `gh pr create --base main`
-       with a Conventional Commit title + filled-in body. Report the branch
-       name and PR URL to the user.
+       with a Conventional Commit title + filled-in body. If the change
+       resolves a GitHub issue, the body must contain a closing keyword
+       (`Closes #<nr>`, one per issue) — only that links the PR under the
+       issue's "Development" section and closes the issue on merge; a plain
+       "issue #<nr>" mention does neither. Report the branch name and PR URL
+       to the user.
     4. **Watch the CI pipeline and fix failures directly.** After opening the
        PR, watch its checks (`gh pr checks <pr> --watch --fail-fast`, or
        `gh run watch`). If a check fails: pull the failing job's logs
