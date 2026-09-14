@@ -176,7 +176,7 @@ e2e-screenshot: ## Regenerate ONE screenshot: make e2e-screenshot NAME=card-view
 
 # ── Fixtures ───────────────────────────────────────────────────────────────────
 
-fixtures-create: ## Fire 10 Kubernetes-themed test alerts (test_suite=jarvis) to Alertmanager
+fixtures-create: ## Fire 27 Kubernetes-themed test alerts (test_suite=jarvis) to Alertmanager
 	@bash scripts/fire-test-alerts.sh
 
 fixtures-remove: ## Resolve all test alerts fired by fixtures-create
