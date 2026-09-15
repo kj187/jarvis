@@ -360,6 +360,7 @@ helm plugin install https://github.com/helm-unittest/helm-unittest --version v0.
 - [docs/metrics.md](docs/metrics.md) — Prometheus `/metrics` endpoint: exported metrics, scrape config, ServiceMonitor
 - [docs/retention.md](docs/retention.md) — optional data-retention sweep: what gets deleted, `JARVIS_RETENTION_*` config, sweep order
 - [AGENTS.md](AGENTS.md) — AI-agent entry point: conventions, critical invariants, task router
+- [docs/ai-agents.md](docs/ai-agents.md) — working with AI coding agents: layout, skills, tool adapters
 - [.agents/testing.md](.agents/testing.md) — full test strategy, matrix, and CI pipeline
 - [docs/security.md](docs/security.md) — security measures
 - [CONTRIBUTING.md](CONTRIBUTING.md) — contribution guidelines

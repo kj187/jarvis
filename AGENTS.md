@@ -5,8 +5,8 @@ Alertmanager. This file is the **single entry point for every AI coding
 agent**, whichever tool runs it, and contains the minimum context needed for
 any task. Deep references live in `.agents/`, step-by-step workflows as
 skills in `.agents/skills/` — load them on demand via the
-[Task Router](#task-router--load-on-demand) below. Never duplicate content from those files here or elsewhere; reference
-it instead.
+[Task Router](#task-router--load-on-demand) below. Never duplicate content
+from those files here or elsewhere; reference it instead.
 
 ## What Jarvis Is
 
@@ -27,7 +27,7 @@ Repository layout:
 - `backend/` — Go backend (`internal/api`, `internal/history`, `internal/alertmanager`, `internal/auth`, `internal/ws`, …)
 - `frontend/` — React app (`src/components`, `src/hooks`, `src/lib`, `src/store`, `e2e/`)
 - `charts/jarvis/` — Helm chart (+ helm-unittest tests under `tests/`, own `CHANGELOG.md`)
-- `docs/` — user-facing documentation (not AI context, except `docs/testing-e2e.md` and `docs/scope.md`)
+- `docs/` — user-facing documentation (not AI context, except `docs/testing-e2e.md`, `docs/scope.md` and `docs/ai-agents.md`)
 - `scripts/` — E2E runner, mock-OIDC config, manual test-alert/silence fixtures
 - `.agents/` — AI reference files (`architecture.md`, `testing.md`, `lessons.md`) and `skills/` — workflows as [Agent Skills](https://agentskills.io), one `<name>/SKILL.md` each (routed below)
 - `Makefile` — canonical entry for dev stack, tests, security scans, fixtures (`make help`)
@@ -36,14 +36,15 @@ Repository layout:
 
 Load the referenced file **before** starting the matching task. Do not guess
 details that these files own. Entries under `.agents/skills/` are skills —
-tools that support Agent Skills also offer them by name (`add-feature`,
-`scope-triage`, `release`, `security-check`); reading the `SKILL.md` directly
-is equivalent.
+tools that support Agent Skills also offer them by name; reading the
+`SKILL.md` directly is equivalent. All of this is tool-neutral — tool
+adapters and their rules live in `docs/ai-agents.md`.
 
 | Task | Load |
 |---|---|
 | Data model, DB schema, API endpoints, component tree, stores, WS events, auth, config env vars, alert state machine, technology decisions | `.agents/architecture.md` |
 | Adding a feature: new endpoint, new component, new WS event, new cluster parameter (TDD checklist) | `.agents/skills/add-feature/SKILL.md` |
+| Branching, committing, opening/merging a PR, fixing CI, changelog entries | `.agents/skills/pr-workflow/SKILL.md` |
 | Judging whether a feature idea fits the project scope (scope gate) | `docs/scope.md` |
 | Triaging a GitHub feature-request issue against the scope, drafting a reply | `.agents/skills/scope-triage/SKILL.md` |
 | Writing or running tests, test matrix, test utilities, CI pipeline | `.agents/testing.md` |
@@ -52,57 +53,24 @@ is equivalent.
 | Cutting a release — **only when the user explicitly asks** | `.agents/skills/release/SKILL.md` |
 | Security audit, new-code security checklist, security tooling | `.agents/skills/security-check/SKILL.md` |
 | Debugging surprising behavior — check before re-deriving a known gotcha | `.agents/lessons.md` |
-
-## Tool Adapters
-
-<!-- tool-adapters:start -->
-Everything outside this section — this file, `.agents/*.md`,
-`.agents/skills/` — is tool-neutral and uses only open conventions
-([AGENTS.md](https://agents.md), [Agent Skills](https://agentskills.io)). A
-tool that does not read those paths gets the thinnest possible adapter — a
-symlink or a one-line import, never content of its own.
-`scripts/check-agent-context.sh` enforces it (pre-commit + CI).
-
-| Tool | Project instructions | Skills |
-|---|---|---|
-| Codex | reads `AGENTS.md` natively | reads `.agents/skills/` natively (`$release`, `/skills`) |
-| GitHub Copilot (cloud agent, CLI, VS Code agent mode, code review) | reads `AGENTS.md` natively | reads `.agents/skills/` natively (VS Code: `/release`; elsewhere picked by description) |
-| Claude Code | adapter `CLAUDE.md` = `@AGENTS.md` (does not read `AGENTS.md` itself) | adapter `.claude/skills` → symlink to `../.agents/skills` (`/release 1.6.0`); Copilot also scans `.claude/skills` — verified in Copilot CLI to list each skill once |
-
-No `copilot-instructions.md` under `.github/`: every Copilot agent surface reads
-`AGENTS.md`, and a copy or symlink made it load the instructions twice.
-`.claude/settings.json` only pre-approves test/lint commands for convenience;
-hard rules are enforced by `.githooks/pre-commit`, the `Makefile` and CI, never
-by a tool's own configuration.
-
-- **New workflow**: `.agents/skills/<name>/SKILL.md` (frontmatter `name` =
-  directory, `description` says what it does and when to use it) + a Task
-  Router row. All tools pick it up; no adapter needed.
-- **New tool**: if it reads neither `AGENTS.md` nor `.agents/skills/`, add a
-  symlink or one-line import, a row above, and its entry in
-  `SYMLINK_ADAPTERS`/`FILE_ADAPTERS` in `scripts/check-agent-context.sh`.
-<!-- tool-adapters:end -->
+| Tool adapters, agent-context check | `docs/ai-agents.md` |
 
 ## Critical Invariants — NEVER break
 
 1. **Grace Period (`max(60s, 2×JARVIS_POLL_INTERVAL)`)**: Alert seen again
    within the grace period after `resolved` → reopen old event, create **no**
-   new one. Prevents ghost-resolve entries on poll misses. Configured on
-   `Store` via `SetGracePeriod` (`cmd/jarvis/main.go`, derived from
-   `cfg.PollInterval`) so a poll interval ≥ 60s can't make a single missed
-   poll permanently split one episode into two — a fixed 60s window could
-   never absorb a miss at intervals that long. `Recorder.claimReleaseDelay`
-   must in turn exceed the grace period (also derived in `main.go`), or the
-   delayed claim-release check could run before a grace-period-eligible
-   re-fire has had a chance to reopen the event.
+   new one — prevents ghost-resolve entries on poll misses. Set via
+   `Store.SetGracePeriod` (`cmd/jarvis/main.go`, derived from
+   `cfg.PollInterval`, so a missed poll is absorbed even at intervals ≥ 60s).
+   `Recorder.claimReleaseDelay` (also derived in `main.go`) must exceed it, or a
+   claim is released before
+   a re-fire can reopen the event (`.agents/lessons.md`).
 2. **Increment `occurrence_count` only on second firing**: Not on the very
    first occurrence — only when `hadPreviousEvent = true`.
-3. **`getEffectiveAlertState`**: Alert `suppressed` + **all** active silences
-   covering it (`status.silencedBy` can hold more than one) have ≤15 min
-   until expiry → returns `active`. Must consider every covering silence, not
-   just the first one found in `silencedBy` — a longer-running second silence
-   still keeps the alert suppressed. This logic **only** in
-   `lib/alertUtils.ts` — never duplicate.
+3. **`getEffectiveAlertState`**: Alert `suppressed` + **all** covering active
+   silences (`status.silencedBy` can hold several) expire within ≤15 min →
+   returns `active`; a single longer-running silence keeps it suppressed. This
+   logic **only** in `lib/alertUtils.ts` — never duplicate.
 4. **Filter functions exclusively in `lib/alertUtils.ts`**:
    `getFilterableLabels`, `matchesLabelMatchers`, `safeRegex` — no copy-paste
    into components.
@@ -114,11 +82,10 @@ by a tool's own configuration.
    check manually).
 7. **`cursor: pointer` on all clickable elements** — globally in CSS:
    `a, button, [role="button"] { cursor: pointer }`.
-8. **SQLite single writer**: `SetMaxOpenConns(1)` + WAL mode — only for the
-   SQLite dialect. PostgreSQL uses a **capped** pool
-   (`JARVIS_DB_MAX_OPEN_CONNS`, default 10, MaxIdle = MaxOpen) — never
-   unbounded (an unbounded pool exhausted RDS connection slots in
-   production, SQLSTATE 53300) and never `SetMaxOpenConns(1)`.
+8. **SQLite single writer**: `SetMaxOpenConns(1)` + WAL mode — SQLite only.
+   PostgreSQL uses a **capped** pool (`JARVIS_DB_MAX_OPEN_CONNS`, default 10,
+   MaxIdle = MaxOpen) — never unbounded (it exhausted RDS connection slots in
+   production) and never `SetMaxOpenConns(1)`.
 9. **`JARVIS_DB_DSN` never logged raw**: `db.RedactDSN()` must wrap the DSN
    before any log call. Password stays out of logs.
 10. **`rebind()` in `history/store.go`**: All SQL queries use `?`
@@ -127,117 +94,84 @@ by a tool's own configuration.
 11. **CORS/WS Origin**: No wildcard `*`. `JARVIS_ALLOWED_ORIGINS` is used as
     allow-list for both HTTP CORS and the WebSocket upgrade.
 12. **Silence-matching semantics must mirror Alertmanager, not UI-filter
-    semantics**: whether a silence *would actually match/cover* an alert
-    (affected-alerts preview, overlap detection, expired-silence lookup) is
-    decided exclusively by `silenceWouldMatchAlert` / `silenceMatchesAlert` in
-    `lib/alertUtils.ts` — anchored regex (`anchoredRegex`, `^(?:pattern)$`,
-    matching Alertmanager's RE2 compilation), evaluated only against the
-    alert's real labels (no `@cluster`/`@receiver`/`receiver` pseudo-labels).
-    `matchesLabelMatchers` (substring regex, pseudo-labels, comma-list
-    receivers) is a **separate, deliberately lenient** function for the
-    filter bar UI only — never use it to decide what a silence covers. Mixing
-    the two was the root cause of a preview showing "0 affected alerts" while
-    Alertmanager silenced alerts anyway (unanchored `!~` substring match
-    disagreeing with AM's anchored one).
+    semantics**: whether a silence *covers* an alert (affected-alerts preview,
+    overlap detection, expired-silence lookup) is decided only by
+    `silenceWouldMatchAlert` / `silenceMatchesAlert` (`lib/alertUtils.ts`) —
+    anchored regex (`anchoredRegex`, `^(?:pattern)$`, like Alertmanager's
+    RE2) against the alert's real labels only, no `@cluster`/`@receiver`/
+    `receiver` pseudo-labels. `matchesLabelMatchers` (substring regex,
+    pseudo-labels, comma-list receivers) is the deliberately lenient
+    filter-bar function — never use it for silence coverage (mixing
+    them showed "0 affected alerts" while Alertmanager silenced alerts;
+    `.agents/lessons.md`).
 13. **Client-facing read endpoints never call Alertmanager synchronously.**
     Reads are served from poll snapshots (`AlertStore`, `SilenceStore`,
-    cached member up-state) — only the recorder poll and explicit user
-    mutations (silence create/delete) go upstream, so AM load never scales
-    with the number of open browser tabs. Breaking this silently (live
-    proxying in `getSilences`/`getClusters`) roughly doubled AM CPU in a
-    real deployment.
-14. **A failed cluster fetch must never trigger resolves.** The last
-    successful snapshot of that cluster stays authoritative — for alerts
-    (`Recorder.lastGoodAlerts`, `recorder.go`) exactly as for silences
-    (`SilenceStore`, "snapshot only on a successful fetch" in `poll()`).
-    Letting `applyPollResults`'s prev/curr diff see zero alerts for a
-    transiently-failing cluster reads as every one of its alerts resolving:
-    phantom `resolved` events, wrong `occurrence_count` increments, and
-    premature claim releases on the next re-fire.
+    cached member up-state); only the recorder poll and explicit user
+    mutations (silence create/delete) go upstream — otherwise AM load scales
+    with open browser tabs (live proxying in `getSilences`/`getClusters`
+    roughly doubled AM CPU in a real deployment; `.agents/lessons.md`).
+14. **A failed cluster fetch must never trigger resolves.** Its last
+    successful snapshot stays authoritative — for alerts
+    (`Recorder.lastGoodAlerts`) as for silences (`SilenceStore` snapshots
+    only on success). Otherwise `applyPollResults` diffs zero alerts as mass
+    resolves: phantom `resolved` events, wrong `occurrence_count`, premature
+    claim releases (`.agents/lessons.md`).
 15. **History side effects and Alertmanager polling are leader-only on
-    PostgreSQL** (multi-replica; see `docs/persistence.md`). Exactly one pod
-    — decided by a PostgreSQL advisory lock (`internal/leader`) — polls
-    Alertmanager and writes `RecordStatusChange`/`RecordResolvedForCluster`,
-    occurrence counts, delayed claim releases, `reconcileStartupResolves`,
-    external-silence events, and retention sweeps
-    (`history.Recorder.IsLeader()`, `retention.Sweeper.shouldSweep()`).
-    Followers still serve reads/API/WS from snapshots the leader persists to
-    `poll_snapshots` (`internal/history/recorder_snapshot.go`) — never from
-    their own poll, since there isn't one. SQLite has no followers to gate
-    against (`StaticElector` is always leader), so this invariant is a
-    no-op there, not a different code path.
+    PostgreSQL** (`docs/persistence.md`). Exactly one pod (advisory lock,
+    `internal/leader`) polls and writes history:
+    `RecordStatusChange`/`RecordResolvedForCluster`, occurrence counts, delayed claim releases, `reconcileStartupResolves`,
+    external-silence events, retention sweeps (`history.Recorder.IsLeader()`,
+    `retention.Sweeper.shouldSweep()`). Followers serve reads/API/WS from the
+    leader's `poll_snapshots` (`internal/history/recorder_snapshot.go`), never
+    from an own poll. On SQLite `StaticElector` is always leader — same code
+    path, no gate.
 16. **`RecordStatusChange` stays transactional and, on PostgreSQL,
-    advisory-xact-locked per episode.** The read-last → grace-delete →
-    insert → count-update sequence runs inside one transaction
-    (`Store.withTx`); on PostgreSQL the transaction sets `lock_timeout =
-    '10s'` as its first statement, then acquires
-    `pg_advisory_xact_lock(hashtext(fingerprint || ':' || cluster_name))`,
-    serializing concurrent writers for the same episode across pods (SQLite
-    needs no such lock — `SetMaxOpenConns(1)` already serializes it).
-    Without this, two pods (or two connections during a rolling update)
-    racing the same fingerprint could both read the same "last event" before
-    either commits and both insert — duplicate event rows. `Store.withTx`
-    itself additionally bounds every history transaction to `txTimeout`
-    (30s) regardless of the caller's context — `RecordStatusChange` and
-    `RecordResolvedForCluster` run on `context.Background()`, so without
-    this cap a peer stuck holding the same episode's advisory lock (a hung
-    pod, a transaction stranded by a network partition) blocked the call
-    forever, and since it runs sequentially in `applyPollResults`, the
-    entire poll loop stalled with it — no further polls, no
-    `poll_snapshots` updates, no WS broadcasts, not even unblocked by
-    shutdown.
+    advisory-xact-locked per episode.** Read-last → grace-delete → insert →
+    count-update runs in one `Store.withTx`; on PostgreSQL it first sets
+    `lock_timeout = '10s'`, then takes
+    `pg_advisory_xact_lock(hashtext(fingerprint || ':' || cluster_name))` —
+    otherwise concurrent pods insert duplicate event rows (SQLite is already
+    serialized by `SetMaxOpenConns(1)`). `withTx` also caps every history
+    transaction at `txTimeout` (30s) regardless of the caller's context — a
+    peer stuck on the lock must never stall the sequential poll loop
+    (`.agents/lessons.md`).
 17. **`AlertStore.Get()` returns a deterministically ordered snapshot**:
     `startsAt` desc, then `fingerprint` asc, then `clusterName` asc
-    (`internal/history/alert_store.go`). The active slice arrives in
-    unstable upstream-Alertmanager order and the resolved buffer is a Go map
-    (unstable range), so without this sort every poll reshuffles the list
-    that `GET /api/v1/alerts`, `/api/v1/alerts/groups` and the WS
-    `alerts_update` broadcast all pass straight through — and the frontend
-    grouping preserves incoming order, so alert rows inside a group visibly
-    flicker on each refresh. `fingerprint`+`clusterName` is unique and stable
-    per alert, making the sort a total order. Never re-introduce an unsorted
-    alert-list read path.
+    (`internal/history/alert_store.go`) — a total order over unstable
+    upstream order and the resolved-buffer map. `GET /api/v1/alerts`,
+    `/api/v1/alerts/groups` and WS `alerts_update` pass it straight through
+    and the frontend keeps incoming order, so an unsorted read path makes
+    rows flicker on every poll (`.agents/lessons.md`). Never re-introduce an
+    unsorted alert-list read path.
 18. **Every pod's in-memory `AlertStore` must reflect a claim the instant it
-    is broadcast — not just the originating pod's.** `claims.go` patches the
-    handling pod's `AlertStore` (`SetActiveClaim`/`ClearActiveClaim`) and
-    fans the `claim_set`/`claim_released` WS event out to every other pod;
-    those pods' fanout receivers (`HandleFanoutMessage` /
-    `HandleFanoutRef` → `applyClaimSideEffect`, `internal/api/fanout_dispatch.go`)
-    must apply the **same** `AlertStore` patch, not only re-broadcast the WS
-    event. Client-facing reads are served from `AlertStore` (Invariant #13),
-    and a claim mutation's success handler immediately refetches
-    `GET /api/v1/alerts` — that refetch is not sticky and load-balances onto
-    any pod. A pod that only re-broadcast the event would serve a claim-less
-    snapshot until its next poll/snapshot-rebuild re-hydrates claims from the
-    DB (`GetActiveClaims`), and the just-shown claim visibly flickers out and
-    back. SQLite has a single pod and no fanout, so this is a PostgreSQL
-    multi-replica concern only — but the patch is unconditional (NoopFanout
-    never delivers, so the receiver code just never runs there).
+    is broadcast — not just the originating pod's.** `claims.go` patches its
+    own `AlertStore` (`SetActiveClaim`/`ClearActiveClaim`) and fans
+    `claim_set`/`claim_released` out; receiving pods (`HandleFanoutMessage` /
+    `HandleFanoutRef` → `applyClaimSideEffect`, `internal/api/fanout_dispatch.go`) must apply the **same** patch, not only
+    re-broadcast. The post-mutation refetch of `GET /api/v1/alerts` lands on
+    any pod (invariant #13), so a pod without the patch makes the claim
+    flicker out and back (`.agents/lessons.md`). PostgreSQL multi-replica
+    only; the patch is unconditional (NoopFanout never delivers).
 19. **Label display configuration is display-only.** `labelDisplay.order`
     (pinned) / `labelDisplay.hidden` and `labelColors` (`useSettingsStore`)
     may only affect which chips `partitionLabelsForDisplay`
-    (`lib/alertUtils.ts`) emits for the card and list views — including the
-    per-alert "+N" chip (`HiddenLabelsToggle`,
-    `components/alerts/LabelChip.tsx`), whose reveal state is local and never
-    writes back to settings — and how `labelColorStyle` paints a chip (a CSS
-    style object or `undefined`). They must never reach
-    `getFilterableLabels`, `matchesLabelMatchers`,
+    (`lib/alertUtils.ts`) emits for card and list views — incl. the per-alert
+    "+N" chip (`HiddenLabelsToggle`, `components/alerts/LabelChip.tsx`), whose
+    reveal state is local and never writes back to settings — and how
+    `labelColorStyle` paints them. They
+    must never reach `getFilterableLabels`, `matchesLabelMatchers`,
     `silenceWouldMatchAlert`/`silenceMatchesAlert`, the affected-alerts
     preview, `findRelatedAlerts`, or the detail panel's Labels section — a
-    hidden label is invisible, not absent. Letting a display preference
-    decide what a silence covers is the same class of bug as invariant #12.
+    hidden label is invisible, not absent (same bug class as #12).
 20. **Settings migrations run before normalization drops unknown keys, and
-    stay.** `normalizeSettings` (`lib/settingsUtils.ts`) keeps only keys it
-    knows, so a removed or renamed setting is silently deleted from every
-    blob it reads unless its migration runs first —
-    `migrateLegacyDefaultFilters` at the top of `normalizeSettings` (server
-    read path) and inside `migratePersistedSettings` (zustand `persist`
-    `version`/`migrate`, the localStorage path, which is never normalized —
-    `useSettingsSync.ts` hands `anonOverrides` through raw). In the pre-v2
-    branch the migration must also precede `diffFromDefaults`, which only
-    walks `DEFAULT_SETTINGS` keys. Server rows are never rewritten
-    proactively, so a legacy-key migration must never be removed while rows
-    written by an older release may still exist.
+    stay.** `normalizeSettings` (`lib/settingsUtils.ts`) keeps only known
+    keys, so a removed or renamed setting is silently deleted unless its
+    migration runs first: `migrateLegacyDefaultFilters` at the top of
+    `normalizeSettings` (server read path) and inside
+    `migratePersistedSettings` (zustand `persist` migrate — the localStorage
+    path, never normalized); in the pre-v2 branch also before
+    `diffFromDefaults`, which only walks `DEFAULT_SETTINGS` keys. Server rows are never rewritten, so a legacy-key
+    migration stays while rows from older releases may exist.
 
 ## Workflow Rules — always follow
 
@@ -272,12 +206,13 @@ by a tool's own configuration.
    | Test files, test commands, CI workflows, pre-commit hook, Makefile targets | `.agents/testing.md` |
    | Security tooling, checklists, auth/origin behavior | `.agents/skills/security-check/SKILL.md` |
    | Feature-workflow conventions (validation rules, type-sync, checklists) | `.agents/skills/add-feature/SKILL.md` |
+   | Branch/PR/CI/merge workflow, changelog rules for PRs | `.agents/skills/pr-workflow/SKILL.md` |
    | Release process, workflows in `release.yml`, versioning, changelog/release-notes format | `.agents/skills/release/SKILL.md` |
+   | Issue-triage workflow, reply guidelines | `.agents/skills/scope-triage/SKILL.md` |
    | Anything under `charts/jarvis/` except `tests/` (templates, values, `Chart.yaml`, chart README) | `charts/jarvis/CHANGELOG.md` → `## [Unreleased]` (rule 13) |
    | Scope definition, in/out-of-scope boundaries, litmus test | `docs/scope.md` |
-   | Issue-triage workflow, reply guidelines | `.agents/skills/scope-triage/SKILL.md` |
-   | Project description, invariants, workflow rules, commit format, repo layout | `AGENTS.md` itself |
-   | New or renamed `.agents/` reference file or skill, tool adapter, `scripts/check-agent-context.sh` | `AGENTS.md` → Task Router / Tool Adapters (+ `.agents/testing.md` for the check) |
+   | Project description, invariants, workflow rules, commit format, repo layout, Task Router | `AGENTS.md` itself |
+   | Tool adapter, `scripts/check-agent-context.sh` | `docs/ai-agents.md` |
    | E2E stack, specs, fixtures, auth modes | `docs/testing-e2e.md` |
    | Database backend behavior, multi-replica HA (leader election, snapshot distribution, WS fanout, failover), Kubernetes HA deployment | `docs/persistence.md` |
    | Hard-won debugging insight or non-obvious gotcha | `.agents/lessons.md` |
@@ -296,8 +231,9 @@ by a tool's own configuration.
 8. **Releases**: Never trigger a release without an explicit user request.
    Only when the user explicitly asks (e.g. "release 1.6.0", `release`
    skill): load `.agents/skills/release/SKILL.md` and run its flow
-   end-to-end. It has exactly **one** stop: the review gate (release notes, app + chart version, breaking-change
-   classification shown before anything is committed or pushed). After the
+   end-to-end. It has exactly **one** stop: the review gate (release notes,
+   app + chart version, breaking-change classification shown before anything
+   is committed or pushed). After the
    user's go, no further confirmations. Chart-only releases (chart changes
    without a new app version) follow the same file, section "Chart-only
    Release".
@@ -305,47 +241,14 @@ by a tool's own configuration.
    Actions). Its PRs run through CI — green CI → merge, no manual
    intervention needed.
 10. **`main` is PR-only — always work on a feature branch, with user gates.**
-    The GitHub ruleset `protect-main` has no bypass actors: direct pushes to
-    `main` are rejected for everyone, including admins. This applies to
-    AI-driven changes and the release prep commit alike
-    (`.agents/skills/release/SKILL.md`).
-    The mandatory workflow for **every** code change (bug fix, feature,
-    refactor, docs) has three interactive gates — **ask, don't assume**:
-
-    1. **Branch gate — ask before starting new work.** When the user asks for
-       a new change, before writing code or committing, ask whether to create
-       a feature branch and propose a name (`git switch -c <type>/<slug>`,
-       e.g. `feat/silence-templates`, `fix/ws-reconnect`). On yes: start from
-       an up-to-date `main` (`git switch main && git pull --ff-only`), then
-       create the branch. **Never commit on local `main`.** If you already
-       committed on `main` by mistake, recover: create the branch at the
-       current commit, then `git reset --hard origin/main` on `main` — the
-       commit is preserved on the branch, nothing is lost.
-    2. Commit on the branch (`git commit -s`, tests in the same commit; run
-       the done-gate checks from rule 7 first).
-    3. **PR gate — ask before pushing.** When the user signals the change is
-       done and wants to push, ask whether to open a PR directly via `gh`. On
-       yes: `git push -u origin <branch>` and `gh pr create --base main`
-       with a Conventional Commit title + filled-in body. If the change
-       resolves a GitHub issue, the body must contain a closing keyword
-       (`Closes #<nr>`, one per issue) — only that links the PR under the
-       issue's "Development" section and closes the issue on merge; a plain
-       "issue #<nr>" mention does neither. Report the branch name and PR URL
-       to the user.
-    4. **Watch the CI pipeline and fix failures directly.** After opening the
-       PR, watch its checks (`gh pr checks <pr> --watch --fail-fast`, or
-       `gh run watch`). If a check fails: pull the failing job's logs
-       (`gh run view --log-failed`), fix the cause on the branch, commit
-       (`-s`), push, and re-watch. Repeat until all required checks are green.
-    5. **Merge gate — only on explicit user go-ahead.** With green CI, ask
-       whether to merge (`required_approving_review_count` is 0, so self-merge
-       works). On yes: `gh pr merge --squash --delete-branch`. Never merge on
-       the user's behalf without an explicit request.
-    6. **Cleanup after merge.** Once the PR is merged: `git switch main`,
-       `git pull --ff-only`, and delete the now-merged local branch
-       (`git branch -d <branch>`). This leaves the user back on an up-to-date
-       `main` with no stale branches, so no unrelated follow-up work lands on
-       a merged branch.
+    Direct pushes to `main` are rejected for everyone (ruleset
+    `protect-main`) — for AI-driven changes and the release prep commit
+    alike. Every change goes branch → commit (`-s`, tests in the same commit)
+    → PR → watch CI and fix failures → squash merge → cleanup, and you **ask
+    the user** at three gates: before creating
+    the branch (propose `<type>/<slug>`), before pushing/opening the PR, and
+    before merging. Never commit on local `main`. Exact steps, CI-failure
+    handling and cleanup → `.agents/skills/pr-workflow/SKILL.md`.
 11. **Scope gate — check every new feature against `docs/scope.md` before
     building it.** Applies to user-requested and self-proposed features
     alike. If the feature is out of scope or borderline, say so and explain
@@ -364,38 +267,15 @@ by a tool's own configuration.
     WS event), update and re-render it in that same commit, like every other
     doc-sync duty in rule 6.
 13. **Breaking changes are always stated explicitly — app and Helm chart.**
-    Every version section of `CHANGELOG.md` (app) and
-    `charts/jarvis/CHANGELOG.md` (chart), and every release-notes file, has a
-    **Breaking Changes** section. When there are none it says so ("No
-    breaking changes.") — the section is never omitted, so its absence can
-    never be mistaken for "none". Concretely:
-    - **App**: the root `CHANGELOG.md` is **generated at release time only**
-      (git-chglog from the commits) — never edit it by hand in a feature PR
-      and never add an `Unreleased` section there (the release step prepends
-      the generated section, a manual one ends up duplicated/orphaned). The
-      squash commit subject becomes the changelog line — the repo's squash
-      title setting is `PR_TITLE`, so the **PR title** is the changelog line:
-      make it a meaningful, user-understandable Conventional Commit. A breaking change
-      (removed/renamed env var or config, changed API/WS contract, required
-      manual migration) needs a `BREAKING CHANGE: <what + migration>` footer
-      at the start of a line in the squash commit message (the squash message
-      setting is `COMMIT_MESSAGES`, so a footer in any branch commit body
-      carries over). git-chglog renders only that footer into
-      the Breaking Changes section — a `feat!:` subject alone is not enough.
-      This asymmetry with the chart is deliberate: commits are the app's
-      changelog source (Dependabot PRs, no merge conflicts); the chart has no
-      own tags and its changes hide in `fix(db)`/`feat(config)` commits.
-    - **Chart**: every change under `charts/jarvis/` (except `tests/`) adds an
-      entry under `## [Unreleased]` in `charts/jarvis/CHANGELOG.md` **in the
-      same commit**, including its breaking-change classification. Breaking
-      for the chart = anything that can make `helm install`/`upgrade` fail or
-      change an existing release without a values change (removed/renamed
-      values, changed defaults, new validations rejecting previously accepted
-      values, new resources needing extra permissions, selector changes). A
-      breaking chart change bumps the chart's major version at release.
-    - Enforced by `scripts/check-changelogs.sh` (pre-commit hook + CI `Helm`
-      job). Format, templates and release-time steps →
-      `.agents/skills/release/SKILL.md`.
+    Every version section of `CHANGELOG.md`, `charts/jarvis/CHANGELOG.md` and
+    every release-notes file has a **Breaking Changes** section ("No breaking
+    changes." when none — never omitted). The root `CHANGELOG.md` is generated
+    at release time: never edit it in a feature PR; the **PR title** becomes
+    its line, and a breaking change needs a `BREAKING CHANGE:` footer. Every
+    change under `charts/jarvis/` (except `tests/`) adds an `## [Unreleased]`
+    entry to the chart changelog in the same commit. Details →
+    `.agents/skills/pr-workflow/SKILL.md`; enforced by
+    `scripts/check-changelogs.sh`.
 
 ## Commit Format — Conventional Commits
 

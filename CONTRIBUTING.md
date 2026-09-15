@@ -14,11 +14,11 @@ project knowledge follows open, tool-neutral conventions:
 [AGENTS.md](AGENTS.md) (project rules and invariants), reference docs in
 [.agents/](.agents/) (architecture, testing, lessons learned), and step-by-step
 workflows as [Agent Skills](https://agentskills.io) in
-[.agents/skills/](.agents/skills/) (`add-feature`, `scope-triage`,
-`security-check`, `release`). A tool that doesn't read those paths gets only a
-symlink or one-line import — the table in
-[AGENTS.md → Tool Adapters](AGENTS.md#tool-adapters) lists them and explains
-how to add a workflow or another tool. `make check-agent-context` (also run by
+[.agents/skills/](.agents/skills/) (`add-feature`, `pr-workflow`,
+`scope-triage`, `security-check`, `release`). A tool that doesn't read those
+paths gets only a symlink or one-line import —
+[docs/ai-agents.md](docs/ai-agents.md) lists the adapters and explains how to
+add a workflow or another tool. `make check-agent-context` (also run by
 the pre-commit hook and CI) keeps it that way.
 
 ## Prerequisites

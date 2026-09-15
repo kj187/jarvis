@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Keeps the AI agent context tool-agnostic (AGENTS.md → "Tool Adapters").
+# Keeps the AI agent context tool-agnostic (docs/ai-agents.md).
 #
 # Usage:
 #   scripts/check-agent-context.sh        # pre-commit, CI, make check-agent-context
@@ -16,8 +16,8 @@
 #      limit among the supported tools is 32 KiB, including the user's global
 #      file).
 #   4. Every doc/script path mentioned in AGENTS.md exists.
-#   5. Neutral files never mention a specific tool or tool-only syntax —
-#      except AGENTS.md between the tool-adapters markers.
+#   5. AGENTS.md and everything under .agents/ never mention a specific tool
+#      or tool-only syntax — tool details belong in docs/ai-agents.md.
 
 set -euo pipefail
 
@@ -29,7 +29,7 @@ MAX_SKILL_LINES=500
 SKILLS_REF_VERSION=0.1.1
 
 # Adding a tool that reads neither AGENTS.md nor .agents/skills/: add its
-# adapter here and a row to AGENTS.md → "Tool Adapters".
+# adapter here and a row to the adapter table in docs/ai-agents.md.
 # path:expected symlink target
 SYMLINK_ADAPTERS=(
   ".claude/skills:../.agents/skills"
@@ -41,8 +41,6 @@ FILE_ADAPTERS=(
 
 SKILLS_DIR=".agents/skills"
 DENYLIST='claude|copilot|codex|anthropic|openai|gemini|\$ARGUMENTS|/project:|AskUserQuestion|TodoWrite'
-MARKER_START='<!-- tool-adapters:start -->'
-MARKER_END='<!-- tool-adapters:end -->'
 
 errors=0
 fail() {
@@ -114,25 +112,18 @@ while IFS= read -r path; do
 done <<< "$(grep -o '`[A-Za-z0-9_./<>*-]*\.\(md\|sh\|mmd\|json\)`' AGENTS.md | tr -d '`' | grep '/' | sort -u || true)"
 
 # ── 5. Neutral files stay tool-agnostic ───────────────────────────────────────
-if [ "$(grep -cxF "$MARKER_START" AGENTS.md)" != 1 ] || [ "$(grep -cxF "$MARKER_END" AGENTS.md)" != 1 ]; then
-  fail "AGENTS.md must contain exactly one '$MARKER_START' / '$MARKER_END' pair"
-fi
-
 check_neutral() { # file, content
   local hits
   hits="$(printf '%s\n' "$2" | grep -inE "$DENYLIST" || true)"
   if [ -n "$hits" ]; then
-    fail "$1 mentions a specific tool or tool-only syntax (tool details belong in AGENTS.md → Tool Adapters):"
+    fail "$1 mentions a specific tool or tool-only syntax (tool details belong in docs/ai-agents.md):"
     printf '%s\n' "$hits" | sed 's/^/      /' >&2
   fi
 }
 
-# AGENTS.md with the adapter section blanked out (line numbers still match).
-check_neutral AGENTS.md "$(awk -v s="$MARKER_START" -v e="$MARKER_END" '
-  $0 == s { skip = 1 } { print (skip ? "" : $0) } $0 == e { skip = 0 }' AGENTS.md)"
 while IFS= read -r file; do
   check_neutral "$file" "$(cat "$file")"
-done <<< "$(find .agents -name '*.md' -type f | sort)"
+done <<< "$(printf 'AGENTS.md\n'; find .agents -name '*.md' -type f | sort)"
 
 if [ "$errors" -gt 0 ]; then
   exit 1
