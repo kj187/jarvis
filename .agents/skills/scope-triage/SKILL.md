@@ -1,3 +1,8 @@
+---
+name: scope-triage
+description: Triage a GitHub feature-request issue against the Jarvis project scope (docs/scope.md) and draft a copy/paste reply. The issue number or URL comes from the user's request.
+---
+
 # Jarvis — Feature Request Scope Triage
 
 Given a GitHub issue (feature request), decide whether it fits the project

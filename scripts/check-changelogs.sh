@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Enforces the changelog rules from .agents/release.md for a set of changed files.
+# Enforces the changelog rules from .agents/skills/release/SKILL.md for a set of changed files.
 #
 # Usage:
 #   git diff --cached --name-only        | scripts/check-changelogs.sh   # pre-commit
@@ -37,7 +37,7 @@ chart_changes="$(printf '%s\n' "$changed" \
 if [ -n "$chart_changes" ] && ! printf '%s\n' "$changed" | grep -qx "$CHART_CHANGELOG"; then
   fail "chart files changed without updating $CHART_CHANGELOG:"
   printf '%s\n' "$chart_changes" | sed 's/^/      /' >&2
-  echo "    Add an entry under '## [Unreleased]' (incl. '### Breaking Changes') — see .agents/release.md." >&2
+  echo "    Add an entry under '## [Unreleased]' (incl. '### Breaking Changes') — see .agents/skills/release/SKILL.md." >&2
 fi
 
 # ── 2. Chart changelog structure ──────────────────────────────────────────────

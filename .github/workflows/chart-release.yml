@@ -2,7 +2,7 @@ name: Chart Release
 
 # Publishes the Helm chart when its version in Chart.yaml has not been
 # published yet. Chart versioning is decoupled from the app version (see
-# .agents/release.md). Published versions are immutable — the existence guard
+# .agents/skills/release/SKILL.md). Published versions are immutable — the existence guard
 # skips re-publishing instead of overwriting.
 #
 # Two entry points:

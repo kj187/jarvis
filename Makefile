@@ -12,7 +12,7 @@ FRONTEND_CONTAINER = jarvis_frontend_1
         up-postgres down-postgres \
         test-all test-backend test-frontend test-frontend-unit fuzz-backend \
         helm-lint helm-test \
-        lint gosec govulncheck audit security-all \
+        lint gosec govulncheck audit security-all check-agent-context \
         scan scan-history scan-staged scan-all \
         build \
         e2e-build e2e-down e2e e2e-mode e2e-screenshots e2e-screenshot \
@@ -110,6 +110,9 @@ audit: ## pnpm audit — CVEs in frontend dependencies (requires dev container r
 	podman exec $(FRONTEND_CONTAINER) sh -c "cd /app && pnpm audit --audit-level=high"
 
 security-all: gosec govulncheck audit ## Run all security tools (gosec + govulncheck + audit)
+
+check-agent-context: ## AI agent context: skills, tool adapters and AGENTS.md stay tool-agnostic
+	scripts/check-agent-context.sh
 
 # ── Secret scanning ────────────────────────────────────────────────────────────
 

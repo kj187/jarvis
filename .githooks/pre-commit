@@ -46,6 +46,10 @@ fi
 echo "  [Changelog] Checking chart changelog and release notes..."
 git diff --cached --name-only | scripts/check-changelogs.sh
 
+# ── AI agent context (always; cheap, checks the working tree) ─────────────────
+echo "  [Agent context] Checking skills, tool adapters and AGENTS.md..."
+scripts/check-agent-context.sh
+
 # ── Secret scanning (always, all file types) ──────────────────────────────────
 echo "  [Security] Running gitleaks (secret scan)..."
 git diff --cached | podman run --rm -i \

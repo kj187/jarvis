@@ -1,8 +1,13 @@
+---
+name: release
+description: Fully automated Jarvis release — preflight, changelogs, release notes, tag, push, CI monitoring. Use only when the user explicitly asks for a release; the target version (e.g. 1.6.0) comes from the user's request, otherwise it is derived from the commits.
+---
+
 # Jarvis — Creating a Release
 
-Automated release with **one review gate**: `/release X.Y.Z` runs preflight,
-changelogs (app + Helm chart), curated release notes and version bumps, then
-**stops once** to show the user the release notes and versions (step 13).
+Automated release with **one review gate**: a release request for `X.Y.Z`
+(the `release` skill) runs preflight, changelogs (app + Helm chart), curated
+release notes and version bumps, then **stops once** to show the user the release notes and versions (step 13).
 After the user's go, the rest — commit, PR, merge, tag, push, CI monitoring —
 runs without further questions.
 
@@ -20,11 +25,16 @@ stopping for confirmations — except the single review gate in step 13.
 
 ## Input
 
-The user provides the target version as argument (`/release 1.6.0`) or in
-prose. Accept `X.Y.Z` or `vX.Y.Z`; normalize to tag `vX.Y.Z`. If **no**
-version is given, derive the bump from the commits since the last tag
-(Conventional Commits → semver table below) and state the derived version in
-the final report — do not ask.
+The user provides the target version with the request (e.g. "release 1.6.0",
+as skill argument or in prose). Accept `X.Y.Z` or `vX.Y.Z`; normalize to tag
+`vX.Y.Z`. If **no** version is given, derive the bump from the commits since
+the last tag (Conventional Commits → semver table below) and state the derived
+version in the final report — do not ask.
+
+The flow needs a local checkout with an authenticated `gh` that may push
+branches and tags, merge PRs and watch workflow runs. A sandboxed or cloud
+agent session without those rights cannot run it — stop and tell the user
+instead of working around it.
 
 ---
 
@@ -304,7 +314,7 @@ First stable release: `v1.0.0`. Before that: `v0.x.y` (no stability guarantee).
 
 ## Hotfix Release
 
-Same flow — `/release X.Y.(Z+1)` from `main` after the fix is merged. There
+Same flow — a release of `X.Y.(Z+1)` from `main` after the fix is merged. There
 is no separate fast path: the notes file and CHANGELOG are cheap and keep the
 release history consistent.
 

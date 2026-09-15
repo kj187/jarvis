@@ -17,6 +17,7 @@ Entries up to and including 1.7.6 were reconstructed from the git history when t
 
 - The chart now ships its own `CHANGELOG.md`; the Artifact Hub links point to both the chart and the app changelog.
 - The chart is published only after the image for its `appVersion` exists — as part of an app release, or on its own for chart-only releases. The README documents the versioning rules (breaking change → major).
+- `Chart.yaml` comments point to the release process at its new location (`.agents/skills/release/SKILL.md`); comment-only, no rendered change.
 
 ### Fixed
 

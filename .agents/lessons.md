@@ -9,6 +9,31 @@ instead of duplicating.
 
 ---
 
+## AI tools overlap in what they read — a symlinked adapter loads the same instructions twice
+
+**Symptom**: With a tool's own instructions file symlinked to `AGENTS.md`, a
+CLI smoke test of that tool reported the full `AGENTS.md` text twice in its
+context, plus a stray one-line import meant for a different tool. Separately,
+the slash-command names documented for one tool no longer matched how its
+commands were actually invoked.
+**Cause**: Tools do not read disjoint file sets. One tool reads `AGENTS.md`
+*and* its own instructions file *and* another tool's root file (without
+resolving that file's import syntax); skill directories are scanned under
+several tool-specific roots, so a symlinked skill root can surface the same
+skill twice unless the tool deduplicates by name. The smallest project-instruction limit among the supported
+tools is 32 KiB combined, including the user's global file, so duplicated or
+oversized instructions are silently truncated.
+**Rule**: Give a tool an adapter only when it reads neither `AGENTS.md` nor
+`.agents/skills/`, and never mirror `AGENTS.md` into a file that tools also
+reading `AGENTS.md` pick up — drop such files instead. A directory symlink for
+skills is fine where the tools scanning both roots were verified to list each
+skill once (the adapter table records what was verified). Verify tool behavior against current vendor docs and a real session
+before documenting it — invocation syntax and discovery paths change between
+releases. Enforced by `scripts/check-agent-context.sh`; adapter table in
+`AGENTS.md` → Tool Adapters.
+
+---
+
 ## A route with neither `RequireAuth` nor `OptionalAuth` never gets `auth.ContextKey` — even with a valid cookie
 
 **Symptom**: Building `GET /api/v1/settings` (deliberately unauthenticated —
