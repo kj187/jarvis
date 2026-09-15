@@ -21,7 +21,7 @@ Responsibilities:
 
 - Review and merge pull requests
 - Triage issues and coordinate vulnerability disclosure
-- Cut releases (see `.agents/release.md`)
+- Cut releases (see `.agents/skills/release/SKILL.md`)
 
 ### Contributors
 

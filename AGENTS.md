@@ -1,11 +1,11 @@
 # AGENTS.md — Jarvis
 
 You are a developer working on Jarvis, a web frontend for Prometheus
-Alertmanager. This file is the **single entry point for every AI agent**
-(Claude Code, GitHub Copilot, Codex, …) and contains the minimum context
-needed for any task. Deep, task-specific references live in `.agents/` —
-load them on demand via the [Task Router](#task-router--load-on-demand)
-below. Never duplicate content from those files here or elsewhere; reference
+Alertmanager. This file is the **single entry point for every AI coding
+agent**, whichever tool runs it, and contains the minimum context needed for
+any task. Deep references live in `.agents/`, step-by-step workflows as
+skills in `.agents/skills/` — load them on demand via the
+[Task Router](#task-router--load-on-demand) below. Never duplicate content from those files here or elsewhere; reference
 it instead.
 
 ## What Jarvis Is
@@ -29,35 +29,59 @@ Repository layout:
 - `charts/jarvis/` — Helm chart (+ helm-unittest tests under `tests/`, own `CHANGELOG.md`)
 - `docs/` — user-facing documentation (not AI context, except `docs/testing-e2e.md` and `docs/scope.md`)
 - `scripts/` — E2E runner, mock-OIDC config, manual test-alert/silence fixtures
-- `.agents/` — task-specific AI reference files (routed below)
+- `.agents/` — AI reference files (`architecture.md`, `testing.md`, `lessons.md`) and `skills/` — workflows as [Agent Skills](https://agentskills.io), one `<name>/SKILL.md` each (routed below)
 - `Makefile` — canonical entry for dev stack, tests, security scans, fixtures (`make help`)
 
 ## Task Router — load on demand
 
 Load the referenced file **before** starting the matching task. Do not guess
-details that these files own.
+details that these files own. Entries under `.agents/skills/` are skills —
+tools that support Agent Skills also offer them by name (`add-feature`,
+`scope-triage`, `release`, `security-check`); reading the `SKILL.md` directly
+is equivalent.
 
 | Task | Load |
 |---|---|
 | Data model, DB schema, API endpoints, component tree, stores, WS events, auth, config env vars, alert state machine, technology decisions | `.agents/architecture.md` |
-| Adding a feature: new endpoint, new component, new WS event, new cluster parameter (TDD checklist) | `.agents/add-feature.md` |
+| Adding a feature: new endpoint, new component, new WS event, new cluster parameter (TDD checklist) | `.agents/skills/add-feature/SKILL.md` |
 | Judging whether a feature idea fits the project scope (scope gate) | `docs/scope.md` |
-| Triaging a GitHub feature-request issue against the scope, drafting a reply | `.agents/scope-triage.md` |
+| Triaging a GitHub feature-request issue against the scope, drafting a reply | `.agents/skills/scope-triage/SKILL.md` |
 | Writing or running tests, test matrix, test utilities, CI pipeline | `.agents/testing.md` |
 | E2E / screenshot stack: Playwright specs, fixtures, auth modes, `compose.e2e.yml` | `docs/testing-e2e.md` |
 | Database backends, multi-replica HA (leader election, snapshot distribution, WS fanout, failover), Kubernetes deployment, SQLite → PostgreSQL migration | `docs/persistence.md` |
-| Cutting a release — **only when the user explicitly asks** | `.agents/release.md` |
-| Security audit, new-code security checklist, security tooling | `.agents/security.md` |
+| Cutting a release — **only when the user explicitly asks** | `.agents/skills/release/SKILL.md` |
+| Security audit, new-code security checklist, security tooling | `.agents/skills/security-check/SKILL.md` |
 | Debugging surprising behavior — check before re-deriving a known gotcha | `.agents/lessons.md` |
 
-Tool-specific entry points map to the same files (no duplicated content):
+## Tool Adapters
 
-- **Claude Code**: `CLAUDE.md` includes this file; `/project:architecture`,
-  `/project:add-feature`, `/project:testing`, `/project:release`,
-  `/project:security-check`, `/project:scope-triage` include the
-  corresponding `.agents/` file.
-- **GitHub Copilot**: `.github/copilot-instructions.md` is a symlink to this file.
-- **Codex**: reads `AGENTS.md` natively.
+<!-- tool-adapters:start -->
+Everything outside this section — this file, `.agents/*.md`,
+`.agents/skills/` — is tool-neutral and uses only open conventions
+([AGENTS.md](https://agents.md), [Agent Skills](https://agentskills.io)). A
+tool that does not read those paths gets the thinnest possible adapter — a
+symlink or a one-line import, never content of its own.
+`scripts/check-agent-context.sh` enforces it (pre-commit + CI).
+
+| Tool | Project instructions | Skills |
+|---|---|---|
+| Codex | reads `AGENTS.md` natively | reads `.agents/skills/` natively (`$release`, `/skills`) |
+| GitHub Copilot (cloud agent, CLI, VS Code agent mode, code review) | reads `AGENTS.md` natively | reads `.agents/skills/` natively (VS Code: `/release`; elsewhere picked by description) |
+| Claude Code | adapter `CLAUDE.md` = `@AGENTS.md` (does not read `AGENTS.md` itself) | adapter `.claude/skills` → symlink to `../.agents/skills` (`/release 1.6.0`); Copilot also scans `.claude/skills` — verified in Copilot CLI to list each skill once |
+
+No `copilot-instructions.md` under `.github/`: every Copilot agent surface reads
+`AGENTS.md`, and a copy or symlink made it load the instructions twice.
+`.claude/settings.json` only pre-approves test/lint commands for convenience;
+hard rules are enforced by `.githooks/pre-commit`, the `Makefile` and CI, never
+by a tool's own configuration.
+
+- **New workflow**: `.agents/skills/<name>/SKILL.md` (frontmatter `name` =
+  directory, `description` says what it does and when to use it) + a Task
+  Router row. All tools pick it up; no adapter needed.
+- **New tool**: if it reads neither `AGENTS.md` nor `.agents/skills/`, add a
+  symlink or one-line import, a row above, and its entry in
+  `SYMLINK_ADAPTERS`/`FILE_ADAPTERS` in `scripts/check-agent-context.sh`.
+<!-- tool-adapters:end -->
 
 ## Critical Invariants — NEVER break
 
@@ -225,8 +249,9 @@ Tool-specific entry points map to the same files (no duplicated content):
 3. **Pre-commit hook** (`.githooks/pre-commit`) runs checks based on staged
    paths: Go tests + golangci-lint incl. gosec (backend), pnpm audit + eslint +
    jscpd (frontend, needs running dev container), helm lint/unittest (charts),
-   the changelog check `scripts/check-changelogs.sh` and a gitleaks secret
-   scan (always). **Never `--no-verify`.**
+   the changelog check `scripts/check-changelogs.sh`, the agent-context check
+   `scripts/check-agent-context.sh` and a gitleaks secret scan (always).
+   **Never `--no-verify`.**
 4. **Frontend checklist**: `cursor: pointer` on all clickable elements · no
    `console.log` · no `dangerouslySetInnerHTML` · import shared utils from
    `lib/alertUtils.ts` (never re-implement in components) · handle loading
@@ -245,13 +270,14 @@ Tool-specific entry points map to the same files (no duplicated content):
    |---|---|
    | Go model, DB schema/migration, API route, WS event, env var, store/state shape, component/hook/lib file, state machine | `.agents/architecture.md` |
    | Test files, test commands, CI workflows, pre-commit hook, Makefile targets | `.agents/testing.md` |
-   | Security tooling, checklists, auth/origin behavior | `.agents/security.md` |
-   | Feature-workflow conventions (validation rules, type-sync, checklists) | `.agents/add-feature.md` |
-   | Release process, workflows in `release.yml`, versioning, changelog/release-notes format | `.agents/release.md` |
+   | Security tooling, checklists, auth/origin behavior | `.agents/skills/security-check/SKILL.md` |
+   | Feature-workflow conventions (validation rules, type-sync, checklists) | `.agents/skills/add-feature/SKILL.md` |
+   | Release process, workflows in `release.yml`, versioning, changelog/release-notes format | `.agents/skills/release/SKILL.md` |
    | Anything under `charts/jarvis/` except `tests/` (templates, values, `Chart.yaml`, chart README) | `charts/jarvis/CHANGELOG.md` → `## [Unreleased]` (rule 13) |
    | Scope definition, in/out-of-scope boundaries, litmus test | `docs/scope.md` |
-   | Issue-triage workflow, reply guidelines | `.agents/scope-triage.md` |
+   | Issue-triage workflow, reply guidelines | `.agents/skills/scope-triage/SKILL.md` |
    | Project description, invariants, workflow rules, commit format, repo layout | `AGENTS.md` itself |
+   | New or renamed `.agents/` reference file or skill, tool adapter, `scripts/check-agent-context.sh` | `AGENTS.md` → Task Router / Tool Adapters (+ `.agents/testing.md` for the check) |
    | E2E stack, specs, fixtures, auth modes | `docs/testing-e2e.md` |
    | Database backend behavior, multi-replica HA (leader election, snapshot distribution, WS fanout, failover), Kubernetes HA deployment | `docs/persistence.md` |
    | Hard-won debugging insight or non-obvious gotcha | `.agents/lessons.md` |
@@ -268,9 +294,9 @@ Tool-specific entry points map to the same files (no duplicated content):
    If a check cannot be run or fails for pre-existing reasons, say so
    explicitly with the command and output — do not claim green.
 8. **Releases**: Never trigger a release without an explicit user request.
-   Only when the user explicitly asks (e.g. `/release 1.6.0`): load
-   `.agents/release.md` and run its flow end-to-end. It has exactly **one**
-   stop: the review gate (release notes, app + chart version, breaking-change
+   Only when the user explicitly asks (e.g. "release 1.6.0", `release`
+   skill): load `.agents/skills/release/SKILL.md` and run its flow
+   end-to-end. It has exactly **one** stop: the review gate (release notes, app + chart version, breaking-change
    classification shown before anything is committed or pushed). After the
    user's go, no further confirmations. Chart-only releases (chart changes
    without a new app version) follow the same file, section "Chart-only
@@ -281,7 +307,8 @@ Tool-specific entry points map to the same files (no duplicated content):
 10. **`main` is PR-only — always work on a feature branch, with user gates.**
     The GitHub ruleset `protect-main` has no bypass actors: direct pushes to
     `main` are rejected for everyone, including admins. This applies to
-    AI-driven changes and the release prep commit alike (`.agents/release.md`).
+    AI-driven changes and the release prep commit alike
+    (`.agents/skills/release/SKILL.md`).
     The mandatory workflow for **every** code change (bug fix, feature,
     refactor, docs) has three interactive gates — **ask, don't assume**:
 
@@ -367,7 +394,8 @@ Tool-specific entry points map to the same files (no duplicated content):
       values, new resources needing extra permissions, selector changes). A
       breaking chart change bumps the chart's major version at release.
     - Enforced by `scripts/check-changelogs.sh` (pre-commit hook + CI `Helm`
-      job). Format, templates and release-time steps → `.agents/release.md`.
+      job). Format, templates and release-time steps →
+      `.agents/skills/release/SKILL.md`.
 
 ## Commit Format — Conventional Commits
 

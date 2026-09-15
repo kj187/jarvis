@@ -1,3 +1,8 @@
+---
+name: security-check
+description: Run all Jarvis security tools (gosec, govulncheck, golangci-lint, pnpm audit) and the new-code security checklist. Use for a security audit, before a release, or after larger changes.
+---
+
 # Jarvis — Security Check
 
 On-demand security review — everything the pre-commit hook does, runnable

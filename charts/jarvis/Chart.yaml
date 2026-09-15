@@ -5,10 +5,11 @@ type: application
 # Chart version — decoupled from the app version, semver by chart impact
 # (breaking → major). Chart changes land under "## [Unreleased]" in
 # CHANGELOG.md; the version is bumped at app release time (see
-# .agents/release.md), and a push to main publishes it (chart-release.yml).
+# .agents/skills/release/SKILL.md), and a push to main publishes it
+# (chart-release.yml).
 version: 1.7.6
 # App version — the image tag deployed by default. Bumped as part of the app
-# release process (see .agents/release.md).
+# release process (see .agents/skills/release/SKILL.md).
 appVersion: "1.11.0"
 keywords:
   - alertmanager

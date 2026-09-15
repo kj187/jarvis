@@ -1,3 +1,8 @@
+---
+name: add-feature
+description: TDD workflow and checklist for adding a new backend endpoint, frontend component, WS event, or cluster parameter to Jarvis. Use before building a new feature.
+---
+
 # Jarvis — Adding a New Feature
 
 TDD workflow + conventions checklist for new features. Base rules (TDD in the

@@ -414,6 +414,7 @@ troubleshooting are documented in **`docs/testing-e2e.md`**.
 | `frontend/**` | `pnpm audit --audit-level=high` + `pnpm lint` (eslint) + `pnpm test:unit:coverage` (Vitest + 100% coverage gate, `lib/alertUtils.ts`) + `pnpm duplication` (jscpd) — executed **inside the running dev container** (`jarvis_frontend_1`); hook fails if the container is not running |
 | `charts/**` | `helm lint` + `helm unittest` |
 | always | `scripts/check-changelogs.sh` — chart changes (outside `tests/`) must update `charts/jarvis/CHANGELOG.md`; every chart-changelog version section starts with a non-empty `### Breaking Changes`; changed `.github/release-notes/*.md` contain a Breaking Changes heading (a no-op when none of those paths are staged) |
+| always | `scripts/check-agent-context.sh` (also `make check-agent-context`) — the AI agent context stays tool-agnostic: every `.agents/skills/*/` passes the Agent Skills reference validator (`skills-ref`, pinned, run via `agentskills` / `uvx` / `pipx`) and `SKILL.md` ≤ 500 lines; tool adapters match the lists in the script (`AGENTS.md` → Tool Adapters); `AGENTS.md` ≤ 30,000 bytes (the smallest project-instruction limit among the supported tools is 32 KiB, including the user's global file); every doc/script path in `AGENTS.md` exists; no tool names or tool-only syntax in `AGENTS.md` (outside the tool-adapters markers) or any `.agents/**/*.md` |
 | always | **gitleaks** secret scan of the staged diff (via podman, config `.gitleaks.toml`) |
 
 ```bash
@@ -434,6 +435,7 @@ Split across five workflows.
 pin-check:           # ratchet: verify all GitHub Actions are SHA-pinned (globs .github/workflows/*.yml)
 dco:                 # PR-only: every commit must carry a Signed-off-by trailer (git commit -s)
 secrets:             # gitleaks secret scanning
+agent-context:       # scripts/check-agent-context.sh (same rules as the pre-commit hook)
 
 backend:
   - services.postgres: postgres:17 container, health-checked; JARVIS_TEST_POSTGRES_DSN set for the
@@ -487,7 +489,7 @@ not yet in the registry **and** the image for its `appVersion` exists. Called
 by `release.yml` (`workflow_call`, after the image build) for app releases;
 also triggers on `charts/**` pushes to `main` for chart-only releases (skips
 with a notice while the image is missing). Chart versioning is decoupled from
-the app version — see `.agents/release.md`.
+the app version — see `.agents/skills/release/SKILL.md`.
 
 Screenshots are **not** run in CI (documentation artifact; binary PNGs would
 create noisy diffs). Regenerate locally and commit the PNGs when the UI

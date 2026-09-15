@@ -177,7 +177,7 @@ jobs:
             # silently falling back to the generated CHANGELOG section.
             NOTES_FILE=".github/release-notes/${GITHUB_REF_NAME}.md"
             if [ ! -f "${NOTES_FILE}" ]; then
-              echo "::error::${NOTES_FILE} is missing — every stable release needs curated notes (.agents/release.md)."
+              echo "::error::${NOTES_FILE} is missing — every stable release needs curated notes (.agents/skills/release/SKILL.md)."
               exit 1
             fi
             cp "${NOTES_FILE}" release-body.md
