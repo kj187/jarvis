@@ -4,6 +4,9 @@ info:
   title: CHANGELOG
   repository_url: https://github.com/kj187/jarvis
 options:
+  # Stable tags only: a release candidate (vX.Y.Z-rc.N) must never become the
+  # previous tag of the real vX.Y.Z, or its changelog section renders empty.
+  tag_filter_pattern: "^v\\d+\\.\\d+\\.\\d+$"
   commits:
     filters:
       Type:

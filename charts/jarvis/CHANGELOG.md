@@ -8,6 +8,8 @@ Entries up to and including 1.7.6 were reconstructed from the git history when t
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-09-15
+
 ### Breaking Changes
 
 - SQLite (`database.dsn` is a file path) combined with `replicaCount > 1` or `autoscaling.enabled` now fails the render **regardless of `persistence.enabled`**. Previously the guard only fired with a PVC, so the default emptyDir setup rendered fine — while every pod polled Alertmanager independently and kept its own divergent history. Migration: set `replicaCount: 1` or switch to PostgreSQL (`database.dsn: postgres://...`, see [docs/persistence.md](../../docs/persistence.md)). ([#194](https://github.com/kj187/jarvis/pull/194))
@@ -15,6 +17,7 @@ Entries up to and including 1.7.6 were reconstructed from the git history when t
 
 ### Changed
 
+- `appVersion` bumped to `1.12.0`.
 - The chart now ships its own `CHANGELOG.md`; the Artifact Hub links point to both the chart and the app changelog.
 - The chart is published only after the image for its `appVersion` exists — as part of an app release, or on its own for chart-only releases. The README documents the versioning rules (breaking change → major).
 - `Chart.yaml` comments point to the release process at its new location (`.agents/skills/release/SKILL.md`); comment-only, no rendered change.
@@ -207,7 +210,8 @@ No breaking changes (first published chart version).
 
 Chart versions 1.0.3–1.0.5 only bumped `appVersion` to the matching app release.
 
-[Unreleased]: https://github.com/kj187/jarvis/compare/v1.11.0...HEAD
+[Unreleased]: https://github.com/kj187/jarvis/compare/v1.12.0...HEAD
+[2.0.0]: https://github.com/kj187/jarvis/compare/v1.11.0...v1.12.0
 [1.7.6]: https://github.com/kj187/jarvis/compare/v1.10.1...v1.11.0
 [1.7.5]: https://github.com/kj187/jarvis/compare/v1.10.0...v1.10.1
 [1.7.4]: https://github.com/kj187/jarvis/compare/v1.9.3...v1.10.0

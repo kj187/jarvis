@@ -1,3 +1,52 @@
+<a name="v1.12.0"></a>
+## [v1.12.0](https://github.com/kj187/jarvis/compare/v1.11.0...v1.12.0) (2026-09-15)
+
+### Breaking Changes
+
+No breaking changes.
+
+### Bug Fixes
+
+* **claims:** patch every pod's AlertStore on claim fanout, not just the origin ([#183](https://github.com/kj187/jarvis/issues/183))
+* **config:** fail fast when auth.provider lacks its secret material ([#193](https://github.com/kj187/jarvis/issues/193))
+* **db:** bound RecordStatusChange/RecordResolvedForCluster transactions ([#200](https://github.com/kj187/jarvis/issues/200))
+* **db:** increment occurrence_count without a cluster_name filter ([#199](https://github.com/kj187/jarvis/issues/199))
+* **db:** make RecordResolvedForCluster transactional and advisory-locked ([#198](https://github.com/kj187/jarvis/issues/198))
+* **db:** carry annotations over into resolved event rows ([#197](https://github.com/kj187/jarvis/issues/197))
+* **db:** break recorded_at ties on id in getLastEventForClusterOn ([#196](https://github.com/kj187/jarvis/issues/196))
+* **db:** serialize PostgreSQL schema migrations with an advisory lock ([#195](https://github.com/kj187/jarvis/issues/195))
+* **db:** reject SQLite with multiple replicas regardless of persistence.enabled ([#194](https://github.com/kj187/jarvis/issues/194))
+* **db:** render chart Secret independently for DSN and auth key ([#192](https://github.com/kj187/jarvis/issues/192))
+
+### Chores
+
+* **config:** make the AI agent context tool-agnostic ([#210](https://github.com/kj187/jarvis/issues/210))
+* **deps:** bump the minor-patch group across 1 directory with 11 updates ([#204](https://github.com/kj187/jarvis/issues/204))
+* **deps:** bump the codeql-action group across 1 directory with 4 updates ([#205](https://github.com/kj187/jarvis/issues/205))
+* **deps:** bump github.com/jackc/pgx/v5 in /backend ([#190](https://github.com/kj187/jarvis/issues/190))
+* **deps:** bump golang.org/x/crypto from 0.56.0 to 0.57.0 in /backend ([#203](https://github.com/kj187/jarvis/issues/203))
+* **deps:** bump the minor-patch group in /frontend with 3 updates ([#185](https://github.com/kj187/jarvis/issues/185))
+* **release:** explicit breaking changes, Helm chart changelog, image-first chart publishing ([#209](https://github.com/kj187/jarvis/issues/209))
+
+### Documentation
+
+* require closing keyword in PRs that resolve an issue ([#207](https://github.com/kj187/jarvis/issues/207))
+* **agents:** slim AGENTS.md, move PR workflow into a skill ([#211](https://github.com/kj187/jarvis/issues/211))
+* **release:** forbid hard-wrapping release-notes prose ([#184](https://github.com/kj187/jarvis/issues/184))
+
+### Features
+
+* **alerts:** toolbar Grouped control, compact status buttons, doc screenshot refresh ([#188](https://github.com/kj187/jarvis/issues/188))
+* **alerts:** multi-column card grid, recency sort, columns setting ([#187](https://github.com/kj187/jarvis/issues/187))
+* **config:** add server-side persistence for user settings ([#202](https://github.com/kj187/jarvis/issues/202))
+* **frontend:** saved filters menu, Alertmanager-style ?filter= URL syntax ([#208](https://github.com/kj187/jarvis/issues/208))
+* **frontend:** redesign label display to Pin & Hide, persist settings URL state ([#206](https://github.com/kj187/jarvis/issues/206))
+* **frontend:** header redesign, claim UX, and detail-panel polish ([#186](https://github.com/kj187/jarvis/issues/186))
+
+### Tests
+
+* **alerts:** expand fixture script with label-heavy test alerts ([#201](https://github.com/kj187/jarvis/issues/201))
+
 <a name="v1.11.0"></a>
 ## [v1.11.0](https://github.com/kj187/jarvis/compare/v1.10.1...v1.11.0) (2026-09-09)
 
