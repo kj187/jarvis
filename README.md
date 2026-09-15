@@ -100,7 +100,7 @@ Now open http://localhost:8080
 
 ```bash
 helm install jarvis oci://ghcr.io/kj187/charts/jarvis \
-  --version 1.11.0 \
+  --version 1.7.6 \
   --set clusters[0].name=dev \
   --set clusters[0].alertmanagerUrl=http://alertmanager:9093 \
   --set database.dsn='postgres://jarvis:secret@postgres.monitoring.svc:5432/jarvis?sslmode=require'

@@ -34,10 +34,18 @@ helm uninstall jarvis
 ## Versioning
 
 The chart version is **decoupled** from the app version. `appVersion` in
-`Chart.yaml` pins the default image tag; the chart `version` is bumped
-whenever the chart itself changes (including appVersion-only bumps). The chart
-is published automatically by `.github/workflows/chart-release.yml` when a
-change under `charts/` lands on `main` — published versions are immutable.
+`Chart.yaml` pins the default image tag; the chart `version` follows semver by
+the impact of the chart change itself — a **breaking change bumps the major
+version**, new values or resources the minor, fixes and appVersion-only bumps
+the patch. The chart is published automatically by
+`.github/workflows/chart-release.yml` — as part of an app release after the
+image is built, or on its own when a chart-only version bump lands on `main`.
+A chart is only published once the image for its `appVersion` exists.
+Published versions are immutable.
+
+All chart changes are documented in [CHANGELOG.md](CHANGELOG.md). Every
+version lists its **Breaking Changes** explicitly (or states that there are
+none) — read that section before `helm upgrade` across versions.
 
 ## Verify the chart signature
 

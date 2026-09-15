@@ -2,8 +2,10 @@ apiVersion: v2
 name: jarvis
 description: Web frontend for Prometheus Alertmanager with persistent alert history
 type: application
-# Chart version — decoupled from the app version. Bump it manually in the same
-# commit as any chart change; a push to main publishes it (chart-release.yml).
+# Chart version — decoupled from the app version, semver by chart impact
+# (breaking → major). Chart changes land under "## [Unreleased]" in
+# CHANGELOG.md; the version is bumped at app release time (see
+# .agents/release.md), and a push to main publishes it (chart-release.yml).
 version: 1.7.6
 # App version — the image tag deployed by default. Bumped as part of the app
 # release process (see .agents/release.md).
@@ -26,7 +28,9 @@ annotations:
   artifacthub.io/links: |
     - name: Documentation
       url: https://github.com/kj187/jarvis/tree/main/docs
-    - name: Changelog
+    - name: Chart changelog
+      url: https://github.com/kj187/jarvis/blob/main/charts/jarvis/CHANGELOG.md
+    - name: App changelog
       url: https://github.com/kj187/jarvis/blob/main/CHANGELOG.md
     - name: Chart source
       url: https://github.com/kj187/jarvis/tree/main/charts/jarvis

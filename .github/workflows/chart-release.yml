@@ -1,10 +1,18 @@
 name: Chart Release
 
-# Publishes the Helm chart when charts/ changes on main and the version in
-# Chart.yaml has not been published yet. Chart versioning is decoupled from
-# the app version: bump `version` in Chart.yaml in the same commit as the
-# chart change. Published versions are immutable — the existence guard skips
-# re-publishing instead of overwriting.
+# Publishes the Helm chart when its version in Chart.yaml has not been
+# published yet. Chart versioning is decoupled from the app version (see
+# .agents/release.md). Published versions are immutable — the existence guard
+# skips re-publishing instead of overwriting.
+#
+# Two entry points:
+# - workflow_call from release.yml, AFTER the image is built, signed and
+#   attested (require_image: true) — the path for every app release, so a
+#   chart is never published pointing at an image that doesn't exist (yet).
+# - push to main touching charts/** (and workflow_dispatch) — the chart-only
+#   release path. It publishes only when the image for the chart's appVersion
+#   already exists; a release PR merge (appVersion not built yet) skips here
+#   and leaves publishing to the release workflow.
 
 on:
   push:
@@ -12,6 +20,12 @@ on:
     paths:
       - 'charts/**'
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      require_image:
+        description: Fail (instead of skip) when the appVersion image does not exist.
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -24,6 +38,11 @@ jobs:
       contents: read
       packages: write
       id-token: write # required for keyless cosign signing via GitHub OIDC
+    # The release PR merge (push) and the release workflow (workflow_call) can
+    # overlap — serialize so both never race the existence guard.
+    concurrency:
+      group: chart-publish
+      cancel-in-progress: false
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # ratchet:actions/checkout@v7.0.1
@@ -37,8 +56,10 @@ jobs:
         id: chart
         run: |
           VERSION=$(awk '/^version:/{print $2}' charts/jarvis/Chart.yaml)
+          APP_VERSION=$(awk '/^appVersion:/{gsub(/"/, "", $2); print $2}' charts/jarvis/Chart.yaml)
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "Chart version: ${VERSION}"
+          echo "app_version=${APP_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Chart version: ${VERSION} (appVersion ${APP_VERSION})"
 
       - name: Log in to GHCR (Helm)
         run: |
@@ -65,12 +86,29 @@ jobs:
             echo "published=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Lint chart
+      - name: Check that the appVersion image exists
+        id: image
         if: steps.guard.outputs.published == 'false'
+        env:
+          IMAGE: ghcr.io/kj187/jarvis:${{ steps.chart.outputs.app_version }}
+          REQUIRE_IMAGE: ${{ inputs.require_image && 'true' || 'false' }}
+        run: |
+          if docker buildx imagetools inspect "${IMAGE}" >/dev/null 2>&1; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          elif [ "${REQUIRE_IMAGE}" = "true" ]; then
+            echo "::error::${IMAGE} does not exist — refusing to publish a chart that points at it."
+            exit 1
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::${IMAGE} not built yet — skipping; the release workflow publishes this chart after the image."
+          fi
+
+      - name: Lint chart
+        if: steps.guard.outputs.published == 'false' && steps.image.outputs.present == 'true'
         run: helm lint charts/jarvis/
 
       - name: Package and push chart
-        if: steps.guard.outputs.published == 'false'
+        if: steps.guard.outputs.published == 'false' && steps.image.outputs.present == 'true'
         id: push
         run: |
           VERSION="${{ steps.chart.outputs.version }}"
@@ -82,9 +120,11 @@ jobs:
       - name: Install cosign
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # ratchet:sigstore/cosign-installer@v4.1.2
 
-      # Runs on every execution (not only after a push) so a re-run or
-      # workflow_dispatch can heal a published-but-unsigned version.
+      # Runs whenever the version exists in the registry (not only right after
+      # a push) so a re-run or workflow_dispatch can heal a
+      # published-but-unsigned version. Skipped when nothing was published.
       - name: Sign chart with keyless signing (GitHub OIDC)
+        if: steps.guard.outputs.published == 'true' || steps.push.outcome == 'success'
         run: |
           DIGEST="${{ steps.push.outputs.digest }}"
           if [ -n "${DIGEST}" ]; then

@@ -413,6 +413,7 @@ troubleshooting are documented in **`docs/testing-e2e.md`**.
 | `backend/**` | `go test ./... -count=1 -timeout 60s` + golangci-lint (incl. gosec; govulncheck runs in CI only) |
 | `frontend/**` | `pnpm audit --audit-level=high` + `pnpm lint` (eslint) + `pnpm test:unit:coverage` (Vitest + 100% coverage gate, `lib/alertUtils.ts`) + `pnpm duplication` (jscpd) — executed **inside the running dev container** (`jarvis_frontend_1`); hook fails if the container is not running |
 | `charts/**` | `helm lint` + `helm unittest` |
+| always | `scripts/check-changelogs.sh` — chart changes (outside `tests/`) must update `charts/jarvis/CHANGELOG.md`; every chart-changelog version section starts with a non-empty `### Breaking Changes`; changed `.github/release-notes/*.md` contain a Breaking Changes heading (a no-op when none of those paths are staged) |
 | always | **gitleaks** secret scan of the staged diff (via podman, config `.gitleaks.toml`) |
 
 ```bash
@@ -458,6 +459,7 @@ frontend:
   - pnpm duplication  # jscpd code duplication check
 
 helm:
+  - scripts/check-changelogs.sh on the PR diff (PR-only; same rules as the pre-commit hook)
   - helm lint + helm unittest
 ```
 
@@ -480,9 +482,12 @@ results to the OpenSSF API (README badge) and uploads SARIF to code scanning.
 
 ### `.github/workflows/chart-release.yml`
 
-Publishes + cosign-signs the Helm chart when `charts/**` changes on `main`
-and the `version` in `Chart.yaml` is not yet in the registry (chart versioning
-is decoupled from the app version — see `.agents/release.md`).
+Publishes + cosign-signs the Helm chart when the `version` in `Chart.yaml` is
+not yet in the registry **and** the image for its `appVersion` exists. Called
+by `release.yml` (`workflow_call`, after the image build) for app releases;
+also triggers on `charts/**` pushes to `main` for chart-only releases (skips
+with a notice while the image is missing). Chart versioning is decoupled from
+the app version — see `.agents/release.md`.
 
 Screenshots are **not** run in CI (documentation artifact; binary PNGs would
 create noisy diffs). Regenerate locally and commit the PNGs when the UI
