@@ -38,8 +38,10 @@ The chart version is **decoupled** from the app version. `appVersion` in
 the impact of the chart change itself — a **breaking change bumps the major
 version**, new values or resources the minor, fixes and appVersion-only bumps
 the patch. The chart is published automatically by
-`.github/workflows/chart-release.yml` when a change under `charts/` lands on
-`main` — published versions are immutable.
+`.github/workflows/chart-release.yml` — as part of an app release after the
+image is built, or on its own when a chart-only version bump lands on `main`.
+A chart is only published once the image for its `appVersion` exists.
+Published versions are immutable.
 
 All chart changes are documented in [CHANGELOG.md](CHANGELOG.md). Every
 version lists its **Breaking Changes** explicitly (or states that there are

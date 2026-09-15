@@ -269,8 +269,12 @@ Tool-specific entry points map to the same files (no duplicated content):
    explicitly with the command and output — do not claim green.
 8. **Releases**: Never trigger a release without an explicit user request.
    Only when the user explicitly asks (e.g. `/release 1.6.0`): load
-   `.agents/release.md` and run its flow end-to-end — it is fully
-   non-interactive, do not stop for confirmations.
+   `.agents/release.md` and run its flow end-to-end. It has exactly **one**
+   stop: the review gate (release notes, app + chart version, breaking-change
+   classification shown before anything is committed or pushed). After the
+   user's go, no further confirmations. Chart-only releases (chart changes
+   without a new app version) follow the same file, section "Chart-only
+   Release".
 9. **Dependabot** runs every Monday (Go deps, npm/pnpm grouped, GitHub
    Actions). Its PRs run through CI — green CI → merge, no manual
    intervention needed.
@@ -342,13 +346,13 @@ Tool-specific entry points map to the same files (no duplicated content):
       (git-chglog from the commits) — never edit it by hand in a feature PR
       and never add an `Unreleased` section there (the release step prepends
       the generated section, a manual one ends up duplicated/orphaned). The
-      squash commit subject becomes the changelog line — for single-commit
-      PRs GitHub uses the commit subject, otherwise the PR title — so make
-      both meaningful Conventional Commits. A breaking change
+      squash commit subject becomes the changelog line — the repo's squash
+      title setting is `PR_TITLE`, so the **PR title** is the changelog line:
+      make it a meaningful, user-understandable Conventional Commit. A breaking change
       (removed/renamed env var or config, changed API/WS contract, required
       manual migration) needs a `BREAKING CHANGE: <what + migration>` footer
-      at the start of a line in the squash commit message (with the repo's
-      `COMMIT_MESSAGES` squash setting, a footer in any branch commit body
+      at the start of a line in the squash commit message (the squash message
+      setting is `COMMIT_MESSAGES`, so a footer in any branch commit body
       carries over). git-chglog renders only that footer into
       the Breaking Changes section — a `feat!:` subject alone is not enough.
       This asymmetry with the chart is deliberate: commits are the app's

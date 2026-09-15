@@ -13,6 +13,11 @@ Entries up to and including 1.7.6 were reconstructed from the git history when t
 - SQLite (`database.dsn` is a file path) combined with `replicaCount > 1` or `autoscaling.enabled` now fails the render **regardless of `persistence.enabled`**. Previously the guard only fired with a PVC, so the default emptyDir setup rendered fine — while every pod polled Alertmanager independently and kept its own divergent history. Migration: set `replicaCount: 1` or switch to PostgreSQL (`database.dsn: postgres://...`, see [docs/persistence.md](../../docs/persistence.md)). ([#194](https://github.com/kj187/jarvis/pull/194))
 - `auth.provider` other than `none` now fails the render unless `auth.secretKey` or `auth.existingSecret` is set, and `auth.provider: oidc` additionally requires `auth.oidc.issuer`, `auth.oidc.clientId` and `auth.oidc.redirectUrl`. Such releases previously rendered, but the pod never started (`CreateContainerConfigError`). Migration: set the missing values. ([#193](https://github.com/kj187/jarvis/pull/193))
 
+### Changed
+
+- The chart now ships its own `CHANGELOG.md`; the Artifact Hub links point to both the chart and the app changelog.
+- The chart is published only after the image for its `appVersion` exists — as part of an app release, or on its own for chart-only releases. The README documents the versioning rules (breaking change → major).
+
 ### Fixed
 
 - The generated Secret renders `dsn`, `secret-key` and `oidc-client-secret` independently. Setting `database.existingSecret` no longer suppresses the auth secret key the Deployment references. ([#192](https://github.com/kj187/jarvis/pull/192))

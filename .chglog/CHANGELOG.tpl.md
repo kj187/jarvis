@@ -20,4 +20,11 @@ No breaking changes.
 * {{ if .Scope }}**{{ .Scope }}:** {{ end }}{{ .Subject }}
 {{ end }}
 {{ end -}}
+{{ if .RevertCommits -}}
+### Reverts
+
+{{ range .RevertCommits -}}
+* {{ .Revert.Header }}
+{{ end }}
+{{ end -}}
 {{ end -}}

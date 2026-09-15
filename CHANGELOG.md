@@ -682,6 +682,10 @@ No breaking changes.
 
 * **alerts:** extend fire/resolve scripts with error severity alerts
 
+### Reverts
+
+* ci(docker): drop arm64 build — QEMU SIGILL crash on pnpm install
+
 <a name="v1.0.3"></a>
 ## [v1.0.3](https://github.com/kj187/jarvis/compare/v1.0.2...v1.0.3) (2026-06-16)
 

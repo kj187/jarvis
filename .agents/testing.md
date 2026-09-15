@@ -482,9 +482,12 @@ results to the OpenSSF API (README badge) and uploads SARIF to code scanning.
 
 ### `.github/workflows/chart-release.yml`
 
-Publishes + cosign-signs the Helm chart when `charts/**` changes on `main`
-and the `version` in `Chart.yaml` is not yet in the registry (chart versioning
-is decoupled from the app version — see `.agents/release.md`).
+Publishes + cosign-signs the Helm chart when the `version` in `Chart.yaml` is
+not yet in the registry **and** the image for its `appVersion` exists. Called
+by `release.yml` (`workflow_call`, after the image build) for app releases;
+also triggers on `charts/**` pushes to `main` for chart-only releases (skips
+with a notice while the image is missing). Chart versioning is decoupled from
+the app version — see `.agents/release.md`.
 
 Screenshots are **not** run in CI (documentation artifact; binary PNGs would
 create noisy diffs). Regenerate locally and commit the PNGs when the UI
