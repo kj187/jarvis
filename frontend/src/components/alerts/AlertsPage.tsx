@@ -4,15 +4,19 @@ import { Input } from '@/components/ui/input'
 import { ViewToggle } from './ViewToggle'
 import { AlertsOverviewModal } from './AlertsOverviewModal'
 import { MatcherChipsBar } from '@/components/layout/MatcherChipsBar'
+import { SavedFiltersMenu } from './SavedFiltersMenu'
 import { useAlerts } from '@/hooks/useAlerts'
 import { useSilences } from '@/hooks/useSilences'
 import { useUIStore, isDetailTab } from '@/store/uiStore'
+import { useSettingsStore } from '@/store/useSettingsStore'
 import { useAuthStore } from '@/store/authStore'
 import { AlertCardGrid } from './AlertCardGrid'
 import { GroupingControl } from './GroupingControl'
 import { AlertListView } from './AlertListView'
 import { AlertDetailPanel } from './AlertDetailPanel'
 import { matchesLabelMatchers, getEffectiveAlertState } from '@/lib/alertUtils'
+import { findDefaultSavedFilter, hasAlertViewParams } from '@/lib/savedFilters'
+import { FILTER_PARAM, LEGACY_MATCHERS_PARAM, formatMatchers, readUrlMatchers } from '@/lib/filterUrl'
 import { parseAlertSelectionKey } from '@/lib/alertSelection'
 import type { EnrichedAlert } from '@/types'
 
@@ -39,8 +43,7 @@ function useURLState() {
     setFilter,
     setSelectedFingerprint,
     setDetailTab,
-    clearLabelMatchers,
-    addLabelMatcher,
+    setLabelMatchers,
   } = useUIStore()
   const hasHydrated = useRef(false)
 
@@ -48,7 +51,8 @@ function useURLState() {
   useEffect(() => {
     if (hasHydrated.current) return
     hasHydrated.current = true
-    const params = new URLSearchParams(window.location.search)
+    const search = window.location.search
+    const params = new URLSearchParams(search)
     setFilter('state', params.get('state') ?? 'active')
     const q = params.get('q')
     if (q) setFilter('search', q)
@@ -59,15 +63,15 @@ function useURLState() {
       const tab = params.get('tab')
       if (isDetailTab(tab)) setDetailTab(tab)
     }
-    const matchersRaw = params.get('matchers')
-    if (matchersRaw) {
-      try {
-        const matchers = JSON.parse(matchersRaw)
-        if (Array.isArray(matchers)) {
-          clearLabelMatchers()
-          matchers.forEach((m) => addLabelMatcher(m))
-        }
-      } catch { /* ignore */ }
+    const urlMatchers = readUrlMatchers(params)
+    if (urlMatchers) {
+      setLabelMatchers(urlMatchers)
+    } else if (!hasAlertViewParams(search)) {
+      // No state/q/filter/alert in the URL at all — the URL is not
+      // authoritative for anything, so apply the saved filter marked as
+      // default, if any (replaces whatever localStorage restored).
+      const def = findDefaultSavedFilter(useSettingsStore.getState().savedFilters)
+      if (def) setLabelMatchers(def.matchers)
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -76,17 +80,11 @@ function useURLState() {
     // Preserve URL state owned by other shell components (for example the
     // Settings sheet) while replacing only the alert-page parameters.
     const params = new URLSearchParams(window.location.search)
-    ;['state', 'q', 'matchers', 'alert', 'tab'].forEach((key) => params.delete(key))
+    ;['state', 'q', FILTER_PARAM, LEGACY_MATCHERS_PARAM, 'alert', 'tab'].forEach((key) => params.delete(key))
     if (filters.state) params.set('state', filters.state)
     if (filters.search) params.set('q', filters.search)
-    // Only persist user-added (unlocked) matchers to the URL. Locked matchers are
-    // derived from Settings on every mount — persisting them would cause duplicates
-    // when the component remounts (e.g. switching between Alerts and Silences tabs).
-    const unlockedMatchers = filters.labelMatchers.filter((m) => !m.locked)
-    if (unlockedMatchers.length > 0) {
-      params.set('matchers', JSON.stringify(unlockedMatchers.map(
-        ({ name, operator, value }) => ({ name, operator, value }),
-      )))
+    if (filters.labelMatchers.length > 0) {
+      params.set(FILTER_PARAM, formatMatchers(filters.labelMatchers))
     }
     if (selectedFingerprint) {
       params.set('alert', selectedFingerprint)
@@ -217,6 +215,9 @@ export function AlertsPage() {
       {/* Sub-header: filter inputs + active chips + view controls */}
       {!isFullscreen && (
           <div data-testid="alerts-toolbar" className="flex items-center gap-2 px-4 flex-wrap">
+            {/* Saved filters quick-select/manage menu */}
+            <SavedFiltersMenu />
+
             {/* Active matcher chips + inline add */}
             <MatcherChipsBar allowAdd />
 

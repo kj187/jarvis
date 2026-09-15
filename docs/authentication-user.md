@@ -176,7 +176,7 @@ Sessions are stored as signed JWT cookies:
 ## User Settings Storage
 
 With an auth provider active, a signed-in user's Settings (theme, default
-view, default filters, etc. — see [Features → User Settings](features.md#user-settings))
+view, saved filters, etc. — see [Features → User Settings](features.md#user-settings))
 are stored server-side against the account and follow them across devices.
 Without an auth provider (`JARVIS_AUTH_PROVIDER` unset) — or while signed out
 in `write_protect` mode — settings stay in that browser's `localStorage`

@@ -44,7 +44,7 @@ test('H2 timeFormat toggle switches between Relative and Absolute', async ({ pag
     localStorage.setItem('jarvis-user-settings', JSON.stringify({
       state: {
         theme: 'dark', timeFormat: 'relative', defaultViewMode: 'card',
-        defaultFilters: [], resolvedPageSize: 25, defaultSilenceDurationMinutes: 60,
+        resolvedPageSize: 25, defaultSilenceDurationMinutes: 60,
         defaultCreatorName: '', claimAnimationEnabled: true,
         groupByLabel: 'severity',
       },
@@ -85,7 +85,7 @@ test('H3 defaultViewMode card/list setting persists', async ({ page, am, jarvis 
     localStorage.setItem('jarvis-user-settings', JSON.stringify({
       state: {
         theme: 'dark', timeFormat: 'relative', defaultViewMode: 'card',
-        defaultFilters: [], resolvedPageSize: 25, defaultSilenceDurationMinutes: 60,
+        resolvedPageSize: 25, defaultSilenceDurationMinutes: 60,
         defaultCreatorName: '', claimAnimationEnabled: true,
         groupByLabel: 'severity',
       },
@@ -109,59 +109,13 @@ test('H3 defaultViewMode card/list setting persists', async ({ page, am, jarvis 
   await page.getByRole('button', { name: 'Close' }).click()
 })
 
-test('H5 defaultFilters adds a locked chip to the matcher bar', async ({ page, am, jarvis }) => {
-  await dismissNoAuthNotice(page)
-  await am.fire(manyAlerts)
-  await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, manyAlerts.length)
-
-  await page.addInitScript(() => {
-    localStorage.setItem('jarvis-user-settings', JSON.stringify({
-      state: {
-        theme: 'dark', timeFormat: 'relative', defaultViewMode: 'card',
-        defaultFilters: [], resolvedPageSize: 25, defaultSilenceDurationMinutes: 60,
-        defaultCreatorName: '', claimAnimationEnabled: true,
-        groupByLabel: 'severity',
-      },
-      version: 0,
-    }))
-    localStorage.setItem('jarvis-ui', JSON.stringify({
-      state: { activePage: 'alerts', filters: { state: 'active', search: '', labelMatchers: [] } },
-      version: 0,
-    }))
-  })
-  await page.goto('/?state=active')
-
-  const dialog = await openSettings(page)
-
-  // Add a default filter: severity = critical
-  // The settings default filter section has ComboInput with placeholder="label" and "value"
-  const labelField = dialog.locator('input[placeholder="label"]')
-  await labelField.fill('severity')
-
-  // Find the value input (there's only one with placeholder="value" in the settings dialog)
-  const valueField = dialog.locator('input[placeholder="value"]')
-  await valueField.fill('critical')
-  // Do NOT press Enter here — that would submit and disable the button immediately.
-  // Instead click the + button directly to add the filter.
-  await dialog.getByRole('button', { name: 'Add default filter' }).click()
-
-  // Chip text may be split across DOM spans — use the Remove button as proxy (unambiguous aria role)
-  await expect(dialog.getByRole('button', { name: 'Remove filter severity=critical' })).toBeVisible({ timeout: 5_000 })
-
-  // Close settings
-  await page.getByRole('button', { name: 'Close' }).click()
-
-  // Locked chip should now appear in the alerts filter bar
-  await expect(page.locator('[title*="Settings"]').first()).toBeVisible({ timeout: 5_000 })
-})
-
 test('H6 defaultSilenceDurationMinutes select changes stored value', async ({ page }) => {
   await dismissNoAuthNotice(page)
   await page.addInitScript(() => {
     localStorage.setItem('jarvis-user-settings', JSON.stringify({
       state: {
         theme: 'dark', timeFormat: 'relative', defaultViewMode: 'card',
-        defaultFilters: [], resolvedPageSize: 25, defaultSilenceDurationMinutes: 60,
+        resolvedPageSize: 25, defaultSilenceDurationMinutes: 60,
         defaultCreatorName: '', claimAnimationEnabled: true,
         groupByLabel: 'severity',
       },
@@ -191,7 +145,7 @@ test('H9 claimAnimationEnabled toggle switches state', async ({ page }) => {
     localStorage.setItem('jarvis-user-settings', JSON.stringify({
       state: {
         theme: 'dark', timeFormat: 'relative', defaultViewMode: 'card',
-        defaultFilters: [], resolvedPageSize: 25, defaultSilenceDurationMinutes: 60,
+        resolvedPageSize: 25, defaultSilenceDurationMinutes: 60,
         defaultCreatorName: '', claimAnimationEnabled: true,
         groupByLabel: 'severity',
       },
@@ -226,7 +180,7 @@ test('H10 reset to defaults shows confirm state then resets', async ({ page }) =
     localStorage.setItem('jarvis-user-settings', JSON.stringify({
       state: {
         theme: 'dark', timeFormat: 'relative', defaultViewMode: 'card',
-        defaultFilters: [], resolvedPageSize: 25, defaultSilenceDurationMinutes: 60,
+        resolvedPageSize: 25, defaultSilenceDurationMinutes: 60,
         defaultCreatorName: '', claimAnimationEnabled: true,
         groupByLabel: 'severity',
       },
@@ -314,7 +268,7 @@ test('H4 resolvedPageSize per-page buttons update localStorage', async ({ page, 
     localStorage.setItem('jarvis-user-settings', JSON.stringify({
       state: {
         theme: 'dark', timeFormat: 'relative', defaultViewMode: 'list',
-        defaultFilters: [], resolvedPageSize: 25, defaultSilenceDurationMinutes: 60,
+        resolvedPageSize: 25, defaultSilenceDurationMinutes: 60,
         defaultCreatorName: '', claimAnimationEnabled: true,
         groupByLabel: 'severity',
       },
@@ -351,7 +305,7 @@ test('H7 defaultCreatorName from settings pre-fills the author in the silence fo
     localStorage.setItem('jarvis-user-settings', JSON.stringify({
       state: {
         theme: 'dark', timeFormat: 'relative', defaultViewMode: 'card',
-        defaultFilters: [], resolvedPageSize: 25, defaultSilenceDurationMinutes: 60,
+        resolvedPageSize: 25, defaultSilenceDurationMinutes: 60,
         defaultCreatorName: 'h7-settings-user', claimAnimationEnabled: true,
         groupByLabel: 'severity',
       },

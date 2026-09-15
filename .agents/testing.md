@@ -268,8 +268,8 @@ to `src/lib/**` only:
   added to this file needs a test in the same commit or the build fails.
 - `frontend/src/lib/settingsUtils.test.ts` — same `src/lib/**` inclusion, same
   rationale (pure resolution/validation logic, not a UI flow): `resolveSettings`
-  layering, `normalizeSettings` dropping unknown keys/out-of-range values/invalid
-  `defaultFilters` entries from an unverified server blob, and `diffFromDefaults`
+  layering, `normalizeSettings` dropping unknown keys/out-of-range values from
+  an unverified server blob, and `diffFromDefaults`
   (the pre-v2 → sparse-overrides migration step). Includes `labelDisplay`
   normalization (issue #189): malformed input (non-object, `order`/`hidden`
   not both arrays) drops the whole key, non-string/empty-string array entries
@@ -279,9 +279,50 @@ to `src/lib/**` only:
   non-empty keys with a known palette name (and round-trips) — the round-trip
   tests guard the
   server read path (`hooks/useSettingsSync.ts`) specifically, since the local
-  (`none` auth mode) path never normalizes at all. **Not** under the 100%
+  (`none` auth mode) path never normalizes at all. Also `savedFilters`
+  normalization (name trim/cap/dedupe case-insensitively, matcher validation,
+  extra fields like `id`/`locked` stripped, matcher dedup, at most one
+  `isDefault: true`, capped at `MAX_SAVED_FILTERS`, and a valid config
+  round-trips including key order) and the `defaultFilters` → `savedFilters`
+  legacy migration (`migrateLegacyDefaultFilters`, AGENTS.md invariant #20):
+  converts a legacy blob into one saved filter named "Default" marked as
+  default, is a no-op without the legacy key, drops it without adding
+  `savedFilters` for an empty/invalid legacy value, `savedFilters` wins
+  unchanged when both keys are present, is idempotent, and
+  `normalizeSettings` itself migrates a raw `defaultFilters` blob (the guard
+  for the server read path, since `normalizeSettings` is the only place that
+  normalizes). `migratePersistedSettings` (the store's `persist` `migrate`,
+  extracted here for unit-testability) is tested end-to-end for a v0 flat
+  blob, a v2 state with the legacy key in `overrides`/`anonOverrides`/
+  `userMirror.overrides`/flat top-level, a v2 state with no legacy key
+  (unchanged), and `null`/non-object input (no throw). **Not** under the 100%
   coverage gate — that stays scoped to `alertUtils.ts` only (`vitest.config.ts`
   `coverage.include`).
+- `frontend/src/lib/savedFilters.test.ts` — list/comparison helpers for saved
+  filters (`toSavedFilterMatchers`, `matcherListsEqual`, `findActiveSavedFilter`,
+  `findDefaultSavedFilter`, `validateSavedFilterName`, the `addSavedFilter`/
+  `renameSavedFilter`/`replaceSavedFilterMatchers`/`deleteSavedFilter`/
+  `toggleDefaultSavedFilter` list operations, `hasAlertViewParams`,
+  `resolveSavedFilterStatus` — empty with or without a base, saved regardless
+  of the base, modified only while the base still exists, unsaved without a
+  base or with a base name that no longer exists). Kept out
+  of `alertUtils.ts` — it never evaluates an alert (Critical Invariant #4 stays
+  with `matchesLabelMatchers`), so it doesn't extend that file's 100% coverage
+  gate. Covers set-equality independent of order/duplicates, first-match /
+  no-match lookups, name validation (empty, case-insensitive duplicate, a
+  case-only rename via `exceptName`), that every list operation touches only
+  its target and that its result round-trips through `normalizeSettings`
+  unchanged, and `hasAlertViewParams` for each of `state`/`q`/`matchers`/`filter`/
+  `alert` vs. an empty query or `settings=open` alone.
+- `frontend/src/lib/filterUrl.test.ts` — `?filter=` URL serialization in
+  Alertmanager matcher syntax: `formatMatchers` (all six operators, bare
+  pseudo-label names, quoted/escaped values and reserved-char names),
+  `parseMatchers` (hand-written variants without braces / with whitespace /
+  unquoted values / trailing comma, escapes, a table of malformed inputs →
+  `null`) plus a fast-check round-trip property over arbitrary matcher lists,
+  and `readUrlMatchers` (`filter` wins over legacy JSON `matchers`, invalid
+  legacy entries dropped, empty/malformed → `null`). Not under the coverage
+  gate either — serialization, not filtering (Invariant #4).
 
 This does **not** reopen the door to a general component-test stack —
 anything outside `src/lib/` stays E2E-only.
@@ -319,6 +360,41 @@ Specs live under `frontend/e2e/`:
   with no per-key code path; the one `labelDisplay`-specific piece
   (normalization) is covered by `settingsUtils.test.ts` instead, at the
   cheaper Vitest tier.
+  `functional/none/saved-filters.spec.ts` (K1–K13, replaces the removed
+  "Default Filter" Settings section): saving the current chips under a name
+  and seeing the row appear as active (K1); applying a saved filter replaces
+  the matchers but leaves search untouched, and the URL reflects the new
+  matchers — the alert detail panel is a full-viewport modal (Sheet) whose
+  backdrop blocks every other toolbar interaction while open, a pre-existing
+  behavior unrelated to this feature, so applying happens with no alert
+  selected; `setLabelMatchers` (uiStore.ts) only ever touches
+  `filters.labelMatchers`, so it cannot itself clear a selection (K2); after
+  removing a loaded filter's only chip and adding a different one, the CLOSED
+  button still names the base ("Critical", via
+  `saved-filters-menu-label`), shows the unsaved dot and a "changed, not saved
+  yet" title, the popover marks the base row "modified" and offers no
+  one-click overwrite on other rows, and "Save changes to Critical" writes the
+  new matchers (K3 — it also guards that an empty chip list keeps the base);
+  renaming flags a case-insensitive duplicate while typing with the confirm
+  button disabled, Esc cancels without closing the popover, Enter commits
+  (K4); deleting needs a second confirming click and never touches the
+  current chips (K5); the saved filter marked default is applied only when
+  the URL carries none of `state`/`q`/`matchers`/`alert` — not on a reload
+  (which always has `state`) and not on top of an explicit shared link (K6);
+  a default filter's chips are ordinary, removable chips and the removal
+  survives a reload (K7); a legacy `defaultFilters` blob (`version: 2`, spread
+  across `overrides`/`anonOverrides`) is migrated into a saved filter named
+  "Default" through the real store on load, and the persisted blob no longer
+  contains the string `defaultFilters` afterwards (K8, guards AGENTS.md
+  invariant #20); the save row is replaced by a hint when the current filter
+  is empty or already saved, and the empty case shows no unsaved dot (K9);
+  "Reset all settings" clears saved filters (K10); the unsaved dot also
+  appears for a filter built from scratch (K11); the "modified" state and its
+  base survive a reload of the same tab (sessionStorage), "save as new" via
+  Enter leaves the base untouched and becomes active, and re-applying a
+  filter replaces the chips again (K12); with no known base, overwriting
+  another saved filter from its row writes nothing on the first click and
+  only overwrites after "Click again to overwrite" (K13).
 - `e2e/screenshots/<mode>/*.screenshot.spec.ts` — screenshot generation for docs (`docs/assets/`)
 - `e2e/fixtures/`, `e2e/support/` — shared fixtures and helpers
 

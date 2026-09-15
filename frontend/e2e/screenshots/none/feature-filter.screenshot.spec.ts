@@ -18,10 +18,7 @@ test('feature-filter', async ({ page, am, jarvis }) => {
   await dismissNoAuthNotice(page)
   await fireWithHeatmapHistory(page, am, jarvis, JARVIS_BASE_URL, manyAlerts)
 
-  const matchers = JSON.stringify([
-    { name: 'severity', operator: '=', value: 'critical' },
-  ])
-  await page.goto(`/?state=active&matchers=${encodeURIComponent(matchers)}`)
+  await page.goto(`/?state=active&filter=${encodeURIComponent('{severity="critical"}')}`)
   await expect(page.getByTestId('alert-card').first()).toBeVisible()
   await page.waitForTimeout(300)
 

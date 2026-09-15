@@ -18,9 +18,7 @@ export default function App() {
   useSettingsSync()
 
   const theme = useSettingsStore((s) => s.theme)
-  const defaultFilters = useSettingsStore((s) => s.defaultFilters)
   const defaultViewMode = useSettingsStore((s) => s.defaultViewMode)
-  const syncLockedMatchers = useUIStore((s) => s.syncLockedMatchers)
   const setViewMode = useUIStore((s) => s.setViewMode)
   const activePage = useUIStore((s) => s.activePage)
   const isFullscreen = useUIStore((s) => s.isFullscreen)
@@ -32,11 +30,6 @@ export default function App() {
   useLayoutEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
   }, [theme])
-
-  // Sync settings default filters → locked matchers in uiStore whenever they change
-  useEffect(() => {
-    syncLockedMatchers(defaultFilters)
-  }, [defaultFilters, syncLockedMatchers])
 
   // Apply settings default only if there is no previously selected view mode.
   useEffect(() => {

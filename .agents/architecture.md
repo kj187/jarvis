@@ -851,12 +851,12 @@ current leader. No leader-only traffic routing exists or is planned.
 
 ```
 main.tsx              → ReactDOM.createRoot, QueryClient (staleTime 10s, retry 2), authStore.hydrate(), App
-App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect) / RootLayout; applies theme + default filters
+App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect) / RootLayout; applies theme
 ├── api/client.ts     → All fetch wrappers (alerts, silences, templates, claims, comments, auth, admin, poll, clusters)
 ├── store/
 │   ├── uiStore.ts            → Zustand+persist('jarvis-ui'): nav page, view modes, filters, fullscreen, counts
 │   ├── authStore.ts          → user, providerInfo, hydrate() (retries on slow backend), login/logout
-│   └── useSettingsStore.ts   → Zustand+persist('jarvis-user-settings', v2): resolved user preferences
+│   └── useSettingsStore.ts   → Zustand+persist('jarvis-user-settings', v3): resolved user preferences
 │                                + sparse overrides — local (anon) or server (account) storage,
 │                                see "Settings Store" below; types/logic live in lib/settingsUtils.ts
 ├── types/index.ts    → Alert, Silence, Claim, Comment, AlertEvent, AlertStats, SilenceEvent,
@@ -985,14 +985,57 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
 │   │                            behavior), LABEL_COLOR_HUES / LABEL_COLORS / LabelColor (fixed chip
 │   │                            palette: blue, cyan, teal, green, amber, orange, pink, purple — no
 │   │                            red), LabelColorMap (Record<string, LabelColor>, default {}),
-│   │                            resolveSettings, normalizeSettings (drops unknown keys/out-of-range
-│   │                            values from an unverified server blob; labelDisplay: both order/hidden
+│   │                            SavedFilter ({ name, matchers: SavedFilterMatcher[], isDefault },
+│   │                            matcherKey (name/operator/value identity, shared with savedFilters.ts),
+│   │                            MAX_SAVED_FILTERS = 20, MAX_SAVED_FILTER_NAME_LENGTH = 60 — the
+│   │                            toolbar menu, see components/alerts/SavedFiltersMenu.tsx and
+│   │                            lib/savedFilters.ts), resolveSettings, normalizeSettings (drops
+│   │                            unknown keys/out-of-range values from an unverified server blob;
+│   │                            labelDisplay: both order/hidden
 │   │                            must be arrays or the whole key is dropped, entries deduped, a key in
 │   │                            both arrays keeps only the hidden one — pin and hide are mutually
 │   │                            exclusive; labelColors: entries kept only with a non-empty key and a
 │   │                            known palette name — everything else silently dropped, not the whole
-│   │                            map), diffFromDefaults (pre-v2 → sparse-overrides migration)
+│   │                            map; savedFilters: name trimmed+capped at 60 chars, duplicate names
+│   │                            case-insensitively dropped (first wins), matchers validated/deduped,
+│   │                            extra fields like a stray `id`/`locked` stripped, at most one
+│   │                            `isDefault: true` survives, result capped at MAX_SAVED_FILTERS),
+│   │                            diffFromDefaults (pre-v2 → sparse-overrides migration),
+│   │                            migrateLegacyDefaultFilters (the removed `defaultFilters` setting →
+│   │                            one saved filter named "Default", marked as default — idempotent,
+│   │                            called at the top of normalizeSettings; AGENTS.md invariant #20),
+│   │                            migratePersistedSettings (the store's `persist` `migrate` for
+│   │                            versions 0/2/3, pulled out here for unit-testability — runs
+│   │                            migrateLegacyDefaultFilters before diffFromDefaults in the v0 branch)
 │   │                            — re-exported by useSettingsStore.ts
+│   ├── filterUrl.ts           → `?filter=` URL serialization of the label-matcher chips in
+│   │                            Alertmanager matcher syntax (`{severity="critical",ns=~"prod-.*"}`,
+│   │                            ~2.5× shorter than the former JSON — keeps long filters under proxy
+│   │                            request-line limits, e.g. ingress-nginx 8 KB → 414): formatMatchers
+│   │                            (values always quoted, names only when they contain reserved
+│   │                            chars — `@cluster`/`@claimed-by`/`@age` stay bare; `>`/`<` are the
+│   │                            Jarvis-only @age extension), parseMatchers (lenient like AM: optional
+│   │                            braces, whitespace, unquoted values, trailing comma; unknown escapes
+│   │                            kept literally; null on syntax error), readUrlMatchers (`filter` wins,
+│   │                            legacy JSON `matchers` links still read with invalid entries dropped,
+│   │                            never written). FILTER_PARAM / LEGACY_MATCHERS_PARAM. Serialization
+│   │                            only — never evaluates an alert (Invariant #4)
+│   ├── savedFilters.ts        → list/comparison helpers for saved filters — deliberately NOT alert
+│   │                            filtering logic (Critical Invariant #4 stays with
+│   │                            matchesLabelMatchers in alertUtils.ts, and this file stays out of
+│   │                            that file's 100% coverage gate): toSavedFilterMatchers (strips the
+│   │                            runtime `id`, dedupes), matcherListsEqual (set equality of
+│   │                            (name,operator,value), order/duplicate-insensitive — never evaluates
+│   │                            an alert), findActiveSavedFilter / findDefaultSavedFilter,
+│   │                            validateSavedFilterName ('empty' | 'duplicate' | null, with an
+│   │                            `exceptName` for case-only renames), addSavedFilter /
+│   │                            renameSavedFilter / replaceSavedFilterMatchers / deleteSavedFilter /
+│   │                            toggleDefaultSavedFilter (pure list ops, new arrays only),
+│   │                            hasAlertViewParams (true iff the URL query has `state`/`q`/
+│   │                            `filter`/legacy `matchers`/`alert` — used by AlertsPage.tsx to decide whether the
+│   │                            default saved filter applies), resolveSavedFilterStatus
+│   │                            (empty | saved | modified(base) | unsaved — a base name that no longer
+│   │                            exists is ignored, never trusted)
 │   └── utils.ts               → cn(), formatDuration() + misc helpers
 └── components/
     ├── ui/                    → shadcn/ui: button, card, badge, dialog, sheet, select, input,
@@ -1025,15 +1068,35 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │   └── MatcherChipsBar.tsx → chip-based label filter (=, !=, =~, !~, and @age-only >, <),
     │                            tag multi-value, suggestions (always includes `@age`/`@claimed-by`
     │                            via PSEUDO_FIELD_SUGGESTIONS — @age never appears from the live
-    │                            label snapshot, @claimed-by only when some alert is claimed),
-    │                            locked default-filter chips; operator auto-snaps to `>`/`=` when
+    │                            label snapshot, @claimed-by only when some alert is claimed);
+    │                            operator auto-snaps to `>`/`=` when
     │                            the field switches into/out of `@age`; an @age draft with an
     │                            unparseable duration (red border, parseDurationValue) is never
     │                            promoted from draft to a committed filter chip
     ├── alerts/
     │   ├── AlertsPage.tsx     → useWebSocket, filter/search, card|list + detail panel, fullscreen, pagination;
     │   │                        its URL-state writer replaces only alert-owned params and preserves
-    │   │                        shell-owned params such as `settings=open`
+    │   │                        shell-owned params such as `settings=open`; on first mount, if the URL
+    │   │                        has none of `state`/`q`/`matchers`/`alert` (hasAlertViewParams), applies
+    │   │                        the saved filter marked default (findDefaultSavedFilter), if any
+    │   ├── SavedFiltersMenu.tsx → quick-select/manage popover for saved label filters (rendered first
+    │   │                        in `alerts-toolbar`, left of MatcherChipsBar). Nothing auto-saves. Status
+    │   │                        comes from lib/savedFilters.ts resolveSavedFilterStatus(chips, savedFilters,
+    │   │                        uiStore.savedFilterBase): `saved` → button shows the name (filled bookmark);
+    │   │                        `modified` → base name in italics + amber dot
+    │   │                        (`saved-filters-unsaved-dot`), footer "Save changes to <base>" plus "save as
+    │   │                        new"; `unsaved` → icon-only square button (h-7 w-7, no label/chevron) + dot,
+    │   │                        footer "save as new", each row a two-click overwrite ("Overwrite?");
+    │   │                        `empty` → icon-only button, hint only. The menu keeps
+    │   │                        savedFilterBase in step: any `saved` match becomes the base; apply/save/
+    │   │                        save-as-new/overwrite set it, rename follows it, delete clears it; an empty
+    │   │                        chip list deliberately keeps it (remove-then-add is an edit). Rows show name
+    │   │                        + matcher summary, star (default), rename (inline, live duplicate check,
+    │   │                        Enter/Esc — Esc is preventDefault'ed so the popover stays open), delete
+    │   │                        (second-click-within-3s, same pattern as "Reset all settings"). Live
+    │   │                        name validation disables Save/confirm; list scrolls inside a viewport-capped
+    │   │                        popover with a count (n/20); transient popover state resets on open. Shows
+    │   │                        the settings sync error (origin 'server' + syncState 'error') inline
     │   ├── AlertCardGrid.tsx  → grouped by settings `groupByLabel` (default severity), per-group
     │   │                        pagination, drag-and-drop section reordering (persisted:
     │   │                        'jarvis-card-section-order:<label>'). Within a section, groups sort
@@ -1316,8 +1379,11 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │                            this browser" (mode 'none'), or "Stored in this browser — sign in to
     │                            sync across devices" (provider active, origin 'local'). Display: time
     │                            format, default view, card columns, group-by label,
-    │                            claim animation. Silences: default duration only. Default Filter
-    │                            follows Silences and provides add/remove locked header chips.
+    │                            claim animation. Silences: default duration only. Saved label
+    │                            filters (`savedFilters`) have no Settings section of their own —
+    │                            they're managed from `SavedFiltersMenu.tsx` in the alert toolbar
+    │                            instead, next to what they filter (replaces the removed
+    │                            "Default Filter" section — see AGENTS.md invariant #20).
     │                            `resolvedPageSize` and
     │                            `defaultCreatorName` live in the same useSettingsStore but are NOT
     │                            editable here — resolvedPageSize is set via the "Per page" buttons in
@@ -1387,13 +1453,19 @@ interface UIStore {
   filters: {
     state: string                              // default 'active'
     search: string
-    labelMatchers: LabelMatcher[]              // includes locked default-filter chips
+    labelMatchers: LabelMatcher[]
   }
   wsConnected: boolean                         // NOT persisted
   alertCounts: AlertCounts                      // { filtered, total, byState: { active, suppressed, resolved }, silenceCount }
 }
-// syncLockedMatchers(defaults) replaces locked matchers from Settings, preserves user-added ones.
+// savedFilterBase: string | null — NOT persisted in jarvis-ui; sessionStorage key
+//   'jarvis-saved-filter-base' (per tab, survives reload). Name of the saved filter the chips were
+//   last applied/saved from, so SavedFiltersMenu can say "<name> (modified)". Hint only.
+// setLabelMatchers(matchers) replaces the entire labelMatchers list with fresh ids —
+// used to apply a saved filter (lib/savedFilters.ts) and to hydrate `filter` from the URL.
 // URL params override persisted state on first mount; afterwards store → URL (replaceState).
+// On first mount, if the URL has none of state/q/filter/alert (hasAlertViewParams), the
+// saved filter marked default (findDefaultSavedFilter) is applied instead — see AlertsPage.tsx.
 ```
 
 ## Settings Store (`useSettingsStore`, persisted under `jarvis-user-settings`)
@@ -1410,7 +1482,9 @@ interface UserSettings {
   groupByLabel: string                          // card/list grouping label; default 'severity'
   cardColumns: 'auto' | 1 | 2 | 3 | 4 | 5 | 6    // Card view column count override; default 'auto'
                                                  // (responsive 1/2/3/4 breakpoint, AlertCardGrid.tsx useColumns())
-  defaultFilters: DefaultFilter[]               // locked header chips; default []
+  savedFilters: SavedFilter[]                   // toolbar quick-select/manage menu; default []
+                                                 // { name, matchers: SavedFilterMatcher[], isDefault }
+                                                 // — see "Frontend Component Tree" lib/savedFilters.ts
   resolvedPageSize: 10 | 25 | 50 | 100          // default 25
   defaultSilenceDurationMinutes: number         // default 60; ALLOWED_SILENCE_DURATIONS = [15,30,60,240,480,1440,4320]
   defaultCreatorName: string                    // default ''
@@ -1473,9 +1547,13 @@ surface the failure.
 ## localStorage Keys (complete)
 
 `jarvis-ui` · `jarvis-viewMode` · `jarvis-activeViewMode` · `jarvis-silencesViewMode` ·
-`jarvis-user-settings` (zustand `persist`, `version: 2` — whole store state, so the
-top-level `state.<key>` shape stays flat/backward-compatible; a `migrate` step
-converts a pre-v2 full blob into sparse `anonOverrides` via `diffFromDefaults`.
+`jarvis-user-settings` (zustand `persist`, `version: 3` — whole store state, so the
+top-level `state.<key>` shape stays flat/backward-compatible; `migrate`
+(`lib/settingsUtils.ts` `migratePersistedSettings`) runs two steps as needed: a
+pre-v2 full blob into sparse `anonOverrides` via `diffFromDefaults`, then (v2 → v3)
+the removed `defaultFilters` setting into a `savedFilters` entry named "Default"
+via `migrateLegacyDefaultFilters` — across `overrides`/`anonOverrides`/
+`userMirror.overrides` and the flat top-level copy (AGENTS.md invariant #20).
 While a server identity is active this key still holds `anonOverrides`/`userMirror`
 as a read cache — the DB row is authoritative, see "Settings Store" above) ·
 `jarvis-username` (manual author in mode "none") ·
@@ -1486,17 +1564,24 @@ as a read cache — the DB row is authoritative, see "Settings Store" above) ·
 `jarvis:collapsed:expired-silence:<fingerprint>:<cluster>` (expired-silence
 banner collapse state in AlertDetailPanel, default collapsed)
 
+sessionStorage: `jarvis-saved-filter-base` (uiStore.savedFilterBase — which saved
+filter the current chips came from; per tab, so two tabs never confuse each other)
+
 ## URL State Params
 
 | Param | Example | Default (not in URL) |
 |---|---|---|
 | `state` | `active` | `active` (always written) |
 | `q` | `node` | empty |
-| `matchers` | `[{"name":"env","operator":"=","value":"prod"}]` | empty — **only unlocked** matchers are serialized (locked ones come from Settings on mount) |
+| `filter` | `{env="prod",namespace=~"prod-.*"}` — Alertmanager matcher syntax (`lib/filterUrl.ts`) | empty — all current `labelMatchers` are serialized |
+| `matchers` | legacy `[{"name":"env","operator":"=","value":"prod"}]` — still read on hydration (ignored when `filter` is present), removed from the URL on the first write | — never written |
 | `alert` | `<cluster>::<fingerprint>` (URL-encoded selection key from `lib/alertSelection.ts`; legacy fingerprint-only still parsed) | empty |
 | `tab` | `related` (detail-panel tab, one of `DETAIL_TABS` in `uiStore.ts` — validated via `isDetailTab`; only written when an alert is selected and the tab isn't `details`) | `details` |
 
-**Hydration order**: URL params → store (on first mount). Afterwards: store → URL (`replaceState`).
+**Hydration order**: URL params → store (on first mount). Afterwards: store → URL (`replaceState`). If
+the URL has none of `state`/`q`/`filter`/`matchers`/`alert` at all (`lib/savedFilters.ts` `hasAlertViewParams`
+— e.g. a bare `/` or `/?settings=open`), the saved filter marked default (`findDefaultSavedFilter`) is
+applied on top, once, right after hydration — see "Settings Store" `savedFilters` above.
 
 ---
 

@@ -15,7 +15,6 @@ async function resetPersistedUIState(page: Page) {
         theme: 'dark',
         timeFormat: 'relative',
         defaultViewMode: 'card',
-        defaultFilters: [],
         resolvedPageSize: 25,
         defaultSilenceDurationMinutes: 60,
         defaultCreatorName: '',
@@ -89,12 +88,24 @@ test('C1 exact matcher is added and reflected in URL', async ({ page, am, jarvis
   await value.fill('critical')
   await value.press('Enter')
 
-  await expect.poll(() => decodeURIComponent(page.url())).toContain('"name":"severity"')
-  await expect.poll(() => decodeURIComponent(page.url())).toContain('"operator":"="')
-  await expect.poll(() => decodeURIComponent(page.url())).toContain('"value":"critical"')
+  await expect.poll(() => new URL(page.url()).searchParams.get('filter')).toBe('{severity="critical"}')
+  expect(new URL(page.url()).searchParams.has('matchers')).toBe(false)
 })
 
 test('C10 matcher state is restored from URL', async ({ page, am, jarvis }) => {
+  await dismissNoAuthNotice(page)
+  await resetPersistedUIState(page)
+  await am.fire(kubernetesAlerts)
+  await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, kubernetesAlerts.length)
+
+  await page.goto(`/?state=active&filter=${encodeURIComponent('{severity="critical"}')}`)
+  await ensureAlertsPage(page)
+
+  await expect(page.getByText('severity', { exact: true })).toBeVisible()
+  await expect(page.getByText('critical', { exact: true })).toBeVisible()
+})
+
+test('C10b legacy JSON matchers link is restored and rewritten to filter', async ({ page, am, jarvis }) => {
   await dismissNoAuthNotice(page)
   await resetPersistedUIState(page)
   await am.fire(kubernetesAlerts)
@@ -106,6 +117,8 @@ test('C10 matcher state is restored from URL', async ({ page, am, jarvis }) => {
 
   await expect(page.getByText('severity', { exact: true })).toBeVisible()
   await expect(page.getByText('critical', { exact: true })).toBeVisible()
+  await expect.poll(() => new URL(page.url()).searchParams.get('filter')).toBe('{severity="critical"}')
+  expect(new URL(page.url()).searchParams.has('matchers')).toBe(false)
 })
 
 test('C11 search via ?q= filters by alertname/labels', async ({ page, am, jarvis }) => {
@@ -165,8 +178,7 @@ test('D1 @age filter matches by alert age', async ({ page, am, jarvis }) => {
   await value.press('Enter')
 
   // Operator auto-snaps to `>` when the field becomes @age (decision 1/7).
-  await expect.poll(() => decodeURIComponent(page.url())).toContain('"name":"@age"')
-  await expect.poll(() => decodeURIComponent(page.url())).toContain('"operator":">"')
+  await expect.poll(() => new URL(page.url()).searchParams.get('filter')).toBe('{@age>"15m"}')
   await expect.poll(() => visibleAlertCount(page)).toBe(1)
   await expect(page.getByText('D1OldAlert').first()).toBeVisible()
   await expect(page.getByText('D1FreshAlert')).toHaveCount(0)
@@ -194,7 +206,7 @@ test('D2 @claimed-by filter matches the active claim', async ({ page, am, jarvis
   await value.fill('d2-claimer')
   await value.press('Enter')
 
-  await expect.poll(() => decodeURIComponent(page.url())).toContain('"name":"@claimed-by"')
+  await expect.poll(() => new URL(page.url()).searchParams.get('filter')).toBe('{@claimed-by="d2-claimer"}')
   await expect.poll(() => visibleAlertCount(page)).toBe(1)
 })
 
@@ -215,9 +227,9 @@ test('D3 invalid @age duration cannot be committed as a chip', async ({ page, am
   await value.fill('bogus')
   await value.press('Enter')
 
-  // Draft stays open (not promoted to a real filter) — no matchers param in the URL.
+  // Draft stays open (not promoted to a real filter) — no filter param in the URL.
   await page.waitForTimeout(300)
-  expect(page.url()).not.toContain('matchers=')
+  expect(new URL(page.url()).searchParams.has('filter')).toBe(false)
   await expect.poll(() => visibleAlertCount(page)).toBe(kubernetesAlerts.length)
 })
 

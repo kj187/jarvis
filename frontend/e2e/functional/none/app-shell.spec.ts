@@ -10,7 +10,6 @@ async function resetPersistedUIState(page: Page) {
         theme: 'dark',
         timeFormat: 'relative',
         defaultViewMode: 'card',
-        defaultFilters: [],
         resolvedPageSize: 25,
         defaultSilenceDurationMinutes: 60,
         defaultCreatorName: '',

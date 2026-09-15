@@ -202,6 +202,18 @@ Tool-specific entry points map to the same files (no duplicated content):
     preview, `findRelatedAlerts`, or the detail panel's Labels section — a
     hidden label is invisible, not absent. Letting a display preference
     decide what a silence covers is the same class of bug as invariant #12.
+20. **Settings migrations run before normalization drops unknown keys, and
+    stay.** `normalizeSettings` (`lib/settingsUtils.ts`) keeps only keys it
+    knows, so a removed or renamed setting is silently deleted from every
+    blob it reads unless its migration runs first —
+    `migrateLegacyDefaultFilters` at the top of `normalizeSettings` (server
+    read path) and inside `migratePersistedSettings` (zustand `persist`
+    `version`/`migrate`, the localStorage path, which is never normalized —
+    `useSettingsSync.ts` hands `anonOverrides` through raw). In the pre-v2
+    branch the migration must also precede `diffFromDefaults`, which only
+    walks `DEFAULT_SETTINGS` keys. Server rows are never rewritten
+    proactively, so a legacy-key migration must never be removed while rows
+    written by an older release may still exist.
 
 ## Workflow Rules — always follow
 

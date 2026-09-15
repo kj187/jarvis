@@ -3,7 +3,6 @@ import { createPortal } from 'react-dom'
 import { X, RotateCcw, Info, Grip, Pin, Eye, EyeOff, Search } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Sheet } from '@/components/ui/sheet'
-import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 import { formatTime, HIDDEN_LABEL_KEYS, labelColorStyle } from '@/lib/alertUtils'
@@ -14,9 +13,7 @@ import {
   DEFAULT_SETTINGS,
 } from '@/store/useSettingsStore'
 import type { CardColumns } from '@/store/useSettingsStore'
-import type { DefaultFilter } from '@/store/useSettingsStore'
 import { LABEL_COLORS, type LabelColor } from '@/lib/settingsUtils'
-import type { LabelMatcherOperator } from '@/types'
 import { useAlerts } from '@/hooks/useAlerts'
 import { getFilterableLabels } from '@/lib/alertUtils'
 import { useAuthStore } from '@/store/authStore'
@@ -59,66 +56,6 @@ function SegmentedControl<T extends string>({
           {opt.label}
         </button>
       ))}
-    </div>
-  )
-}
-
-// ── Default filter autocomplete input ─────────────────────────────────────────
-
-function ComboInput({
-  value,
-  onChangeValue,
-  placeholder,
-  options,
-  className,
-  onKeyDown,
-}: {
-  value: string
-  onChangeValue: (v: string) => void
-  placeholder?: string
-  options: string[]
-  className?: string
-  onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void
-}) {
-  const [open, setOpen] = useState(false)
-  const containerRef = useRef<HTMLDivElement>(null)
-  const filtered = options.filter(
-    (o) => !value || o.toLowerCase().includes(value.toLowerCase()),
-  )
-
-  return (
-    <div ref={containerRef} className={cn('relative', className)}>
-      <Input
-        value={value}
-        onChange={(e) => onChangeValue(e.target.value)}
-        placeholder={placeholder}
-        className="h-7 text-xs bg-input"
-        onFocus={() => setOpen(true)}
-        onBlur={() => setTimeout(() => setOpen(false), 150)}
-        onKeyDown={(e) => {
-          if (e.key === 'Escape') setOpen(false)
-          onKeyDown?.(e)
-        }}
-        autoComplete="off"
-      />
-      {open && filtered.length > 0 && (
-        <div className="absolute left-0 top-full mt-1 z-50 min-w-full max-h-48 overflow-y-auto rounded border border-border shadow-lg combo-dropdown bg-input">
-          {filtered.map((opt) => (
-            <button
-              key={opt}
-              type="button"
-              onMouseDown={(e) => {
-                e.preventDefault()
-                onChangeValue(opt)
-                setOpen(false)
-              }}
-              className="w-full px-3 py-1.5 text-left text-xs text-foreground hover:bg-accent/60 cursor-pointer whitespace-nowrap"
-            >
-              {opt}
-            </button>
-          ))}
-        </div>
-      )}
     </div>
   )
 }
@@ -614,8 +551,6 @@ function SettingsSwitch({
   )
 }
 
-const OPERATORS: LabelMatcherOperator[] = ['=', '!=', '=~', '!~']
-
 const SILENCE_DURATION_LABELS: Record<number, string> = {
   15: '15 min',
   30: '30 min',
@@ -637,18 +572,6 @@ export function SettingsSheet({ open, onClose }: SettingsSheetProps) {
   const providerMode = useAuthStore((s) => s.providerInfo?.mode)
 
   const { data: allAlerts = [] } = useAlerts()
-  const labelValueMap = useMemo(() => {
-    const map = new Map<string, Set<string>>()
-    allAlerts.forEach((a) => {
-      Object.entries(getFilterableLabels(a)).forEach(([k, v]) => {
-        if (!v) return
-        if (!map.has(k)) map.set(k, new Set())
-        map.get(k)!.add(v)
-      })
-    })
-    return map
-  }, [allAlerts])
-  const availableLabelNames = useMemo(() => Array.from(labelValueMap.keys()).sort(), [labelValueMap])
 
   // ── Labels (Settings → Labels) ──
   const labelDisplay = settings.labelDisplay
@@ -776,31 +699,6 @@ export function SettingsSheet({ open, onClose }: SettingsSheetProps) {
     })
   }
 
-  // Default filter add-row state
-  const [newName, setNewName] = useState('')
-  const [newOp, setNewOp] = useState<LabelMatcherOperator>('=')
-  const [newValue, setNewValue] = useState('')
-
-  const newValueOptions = newName && labelValueMap.has(newName)
-    ? Array.from(labelValueMap.get(newName)!).sort()
-    : []
-
-  function addDefaultFilter() {
-    if (!newName || !newValue) return
-    const next: DefaultFilter = { name: newName, operator: newOp, value: newValue }
-    const already = settings.defaultFilters.some(
-      (f) => f.name === next.name && f.operator === next.operator && f.value === next.value,
-    )
-    if (!already) update({ defaultFilters: [...settings.defaultFilters, next] })
-    setNewName('')
-    setNewOp('=')
-    setNewValue('')
-  }
-
-  function removeDefaultFilter(i: number) {
-    update({ defaultFilters: settings.defaultFilters.filter((_, idx) => idx !== i) })
-  }
-
   // Confirm-reset state
   const [confirmReset, setConfirmReset] = useState(false)
   const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -845,7 +743,7 @@ export function SettingsSheet({ open, onClose }: SettingsSheetProps) {
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col gap-x-10 gap-y-6 lg:flex-row">
-        {/* ── Left column: Display, Default Filter, Silences ── */}
+        {/* ── Left column: Display, Silences ── */}
         <div className="space-y-6 lg:flex-1 lg:basis-0">
 
         {/* ── Display ── */}
@@ -941,82 +839,6 @@ export function SettingsSheet({ open, onClose }: SettingsSheetProps) {
               ))}
             </Select>
           </SettingRow>
-        </Section>
-
-        <div className="h-px bg-border" />
-
-        {/* ── Default Filter ── */}
-        <Section title="Default Filter">
-          <p className="text-[10px] text-muted-foreground -mt-1">
-            These filters are always active in the header and can only be changed here.
-          </p>
-
-          {/* Add row — same layout as header */}
-          <div className="flex items-center gap-1">
-            <ComboInput
-              value={newName}
-              onChangeValue={setNewName}
-              placeholder="label"
-              options={availableLabelNames}
-              className="flex-1"
-              onKeyDown={(e) => e.key === 'Enter' && addDefaultFilter()}
-            />
-            <Select
-              value={newOp}
-              onChange={(e) => setNewOp(e.target.value as LabelMatcherOperator)}
-              className="h-7 w-14 shrink-0"
-              selectClassName="text-xs font-mono"
-            >
-              {OPERATORS.map((op) => (
-                <option key={op} value={op}>{op}</option>
-              ))}
-            </Select>
-            <ComboInput
-              value={newValue}
-              onChangeValue={setNewValue}
-              placeholder="value"
-              options={newValueOptions}
-              className="flex-1"
-              onKeyDown={(e) => e.key === 'Enter' && addDefaultFilter()}
-            />
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              className="h-7 w-7 shrink-0"
-              onClick={addDefaultFilter}
-              disabled={!newName || !newValue}
-              aria-label="Add default filter"
-            >
-              +
-            </Button>
-          </div>
-
-          {/* Active default filter chips */}
-          {settings.defaultFilters.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {settings.defaultFilters.map((f, i) => (
-                <div
-                  key={i}
-                  className="flex items-center rounded border border-border h-7 bg-input"
-                >
-                  <span className="px-2 text-xs text-muted-foreground shrink-0">{f.name}</span>
-                  <div className="h-3.5 w-px bg-border shrink-0" />
-                  <span className="px-1.5 text-xs text-muted-foreground font-mono shrink-0">{f.operator}</span>
-                  <div className="h-3.5 w-px bg-border shrink-0" />
-                  <span className="px-2 text-xs text-foreground shrink-0">{f.value}</span>
-                  <button
-                    type="button"
-                    onClick={() => removeDefaultFilter(i)}
-                    className="mr-1.5 ml-0.5 cursor-pointer text-muted-foreground hover:text-foreground shrink-0"
-                    aria-label={`Remove filter ${f.name}${f.operator}${f.value}`}
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
         </Section>
 
         </div>

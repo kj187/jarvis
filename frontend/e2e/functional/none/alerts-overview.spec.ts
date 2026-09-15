@@ -15,7 +15,6 @@ async function resetPersistedUIState(page: Page) {
         theme: 'dark',
         timeFormat: 'relative',
         defaultViewMode: 'card',
-        defaultFilters: [],
         resolvedPageSize: 25,
         defaultSilenceDurationMinutes: 60,
         defaultCreatorName: '',
@@ -65,8 +64,7 @@ test('opens the overview, shows the label breakdown, and clicking a value applie
 
   // Modal closes and the matcher chip is applied.
   await expect(page.getByRole('heading', { name: 'Alerts Overview' })).toBeHidden()
-  await expect.poll(() => decodeURIComponent(page.url())).toContain('"name":"severity"')
-  await expect.poll(() => decodeURIComponent(page.url())).toContain('"value":"critical"')
+  await expect.poll(() => new URL(page.url()).searchParams.get('filter') ?? '').toContain('severity="critical"')
   await expect.poll(() => visibleAlertCount(page)).toBe(2)
 })
 
@@ -76,8 +74,7 @@ test('clicking an already-applied value does not add a duplicate matcher chip', 
   await am.fire(kubernetesAlerts)
   await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, kubernetesAlerts.length)
 
-  const matchers = encodeURIComponent(JSON.stringify([{ name: 'severity', operator: '=', value: 'critical' }]))
-  await page.goto(`/?state=active&matchers=${matchers}`)
+  await page.goto(`/?state=active&filter=${encodeURIComponent('{severity="critical"}')}`)
   await ensureAlertsPage(page)
   await expect.poll(() => visibleAlertCount(page)).toBe(2)
 
