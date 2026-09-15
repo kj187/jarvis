@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import {
   resolveSettings,
-  diffFromDefaults,
+  migratePersistedSettings,
   DEFAULT_SETTINGS,
   CARD_COLUMN_OPTIONS,
   RESOLVED_PAGE_SIZE_OPTIONS,
@@ -10,7 +10,8 @@ import {
 } from '@/lib/settingsUtils'
 import type {
   UserSettings,
-  DefaultFilter,
+  SavedFilter,
+  SavedFilterMatcher,
   CardColumns,
   ResolvedPageSizeOption,
   LabelDisplayConfig,
@@ -23,7 +24,7 @@ export {
   RESOLVED_PAGE_SIZE_OPTIONS,
   ALLOWED_SILENCE_DURATIONS,
 }
-export type { UserSettings, DefaultFilter, CardColumns, ResolvedPageSizeOption, LabelDisplayConfig, LabelColorMap }
+export type { UserSettings, SavedFilter, SavedFilterMatcher, CardColumns, ResolvedPageSizeOption, LabelDisplayConfig, LabelColorMap }
 
 export type SettingsWriteEvent =
   | { kind: 'update'; overrides: Partial<UserSettings> }
@@ -156,25 +157,8 @@ export const useSettingsStore = create<SettingsStore>()(
       // `state.<key>` shape existing tooling (and the "none" mode E2E specs)
       // already reads directly from localStorage.
       name: 'jarvis-user-settings',
-      version: 2,
-      migrate: (persistedState, version) => {
-        if (version < 2) {
-          // Pre-v2 persisted the full resolved UserSettings blob directly at
-          // the top level with no override/mirror bookkeeping at all; diff it
-          // against the app defaults to get the sparse anon overrides.
-          const anonOverrides = diffFromDefaults((persistedState ?? {}) as Partial<UserSettings>)
-          return {
-            ...resolveSettings({}, anonOverrides),
-            overrides: anonOverrides,
-            globalDefaults: {},
-            origin: 'local',
-            syncState: 'idle',
-            anonOverrides,
-            userMirror: null,
-          }
-        }
-        return persistedState
-      },
+      version: 3,
+      migrate: migratePersistedSettings,
     },
   ),
 )

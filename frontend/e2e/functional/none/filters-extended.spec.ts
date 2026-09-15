@@ -17,7 +17,6 @@ async function resetPersistedUIState(page: Page) {
         theme: 'dark',
         timeFormat: 'relative',
         defaultViewMode: 'card',
-        defaultFilters: [],
         resolvedPageSize: 25,
         defaultSilenceDurationMinutes: 60,
         defaultCreatorName: '',
@@ -74,7 +73,7 @@ test('C2 filter with != operator excludes matching alerts', async ({ page, am, j
 
   await expect(page.getByText('!=')).toBeVisible()
 
-  await expect.poll(() => decodeURIComponent(page.url())).toContain('"operator":"!="')
+  await expect.poll(() => new URL(page.url()).searchParams.get('filter')).toBe('{severity!="critical"}')
 })
 
 test('C2 filter with =~ operator (regex match)', async ({ page, am, jarvis }) => {
@@ -101,7 +100,7 @@ test('C2 filter with =~ operator (regex match)', async ({ page, am, jarvis }) =>
   await valueInput.press('Enter')
 
   await expect(page.getByText('=~')).toBeVisible()
-  await expect.poll(() => decodeURIComponent(page.url())).toContain('"operator":"=~"')
+  await expect.poll(() => new URL(page.url()).searchParams.get('filter')).toBe('{severity=~"critical"}')
 })
 
 test('C3 regex filter with pipe-joined values in =~ chip', async ({ page, am, jarvis }) => {
@@ -130,8 +129,7 @@ test('C3 regex filter with pipe-joined values in =~ chip', async ({ page, am, ja
   await valueInput.press('Enter')
 
   // URL should contain both values (they're joined by | in the regex value)
-  await expect.poll(() => decodeURIComponent(page.url())).toContain('critical')
-  await expect.poll(() => decodeURIComponent(page.url())).toContain('warning')
+  await expect.poll(() => new URL(page.url()).searchParams.get('filter')).toBe('{severity=~"critical|warning"}')
 })
 
 test('C4 label name suggestions appear from loaded alerts', async ({ page, am, jarvis }) => {
@@ -200,8 +198,7 @@ test('C6 multiple matchers combine as AND (both must match)', async ({ page, am,
   await expect(page.getByRole('button', { name: /^Remove filter/ })).toHaveCount(2)
 
   // URL contains both matchers
-  await expect.poll(() => decodeURIComponent(page.url())).toContain('"name":"severity"')
-  await expect.poll(() => decodeURIComponent(page.url())).toContain('"name":"cluster"')
+  await expect.poll(() => new URL(page.url()).searchParams.get('filter')).toBe('{severity="critical",cluster="e2e"}')
 })
 
 test('C7 draft chip is promoted to filter when both label and value are filled', async ({ page, am, jarvis }) => {
@@ -220,15 +217,14 @@ test('C7 draft chip is promoted to filter when both label and value are filled',
   // Fill label only — still draft (no filter in URL yet)
   await labelInput.fill('severity')
   await labelInput.press('Enter')
-  const urlBefore = page.url()
-  expect(decodeURIComponent(urlBefore)).not.toContain('"value":"critical"')
+  expect(new URL(page.url()).searchParams.has('filter')).toBe(false)
 
   // Fill value → promoted
   const valueInput = page.getByLabel('Label value')
   await valueInput.fill('critical')
   await valueInput.press('Enter')
 
-  await expect.poll(() => decodeURIComponent(page.url())).toContain('"value":"critical"')
+  await expect.poll(() => new URL(page.url()).searchParams.get('filter')).toBe('{severity="critical"}')
 })
 
 test('C8 removing individual filter chips clears them', async ({ page, am, jarvis }) => {
@@ -257,49 +253,7 @@ test('C8 removing individual filter chips clears them', async ({ page, am, jarvi
   await page.getByRole('button', { name: /^Remove filter/ }).first().click()
   await expect(page.getByRole('button', { name: /^Remove filter/ })).toHaveCount(0)
 
-  await expect.poll(() => decodeURIComponent(page.url())).not.toContain('"name"')
-})
-
-test('C9 locked default filter chips appear from settings and cannot be removed', async ({ page, am, jarvis }) => {
-  await dismissNoAuthNotice(page)
-  await am.fire(manyAlerts)
-  await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, manyAlerts.length)
-
-  await page.addInitScript(() => {
-    localStorage.setItem('jarvis-user-settings', JSON.stringify({
-      state: {
-        theme: 'dark',
-        timeFormat: 'relative',
-        defaultViewMode: 'card',
-        defaultFilters: [{ name: 'severity', operator: '=', value: 'critical' }],
-        resolvedPageSize: 25,
-        defaultSilenceDurationMinutes: 60,
-        defaultCreatorName: '',
-        claimAnimationEnabled: true,
-      },
-      version: 0,
-    }))
-    localStorage.setItem('jarvis-ui', JSON.stringify({
-      state: {
-        activePage: 'alerts',
-        filters: { state: 'active', search: '', labelMatchers: [] },
-      },
-      version: 0,
-    }))
-  })
-  await page.goto('/?state=active')
-  await page.getByRole('button', { name: /^Alerts\b/ }).click()
-
-  // Locked chip shows severity=critical
-  await expect(page.getByText('severity').first()).toBeVisible({ timeout: 5_000 })
-  await expect(page.getByText('critical').first()).toBeVisible()
-
-  // Locked chip has the title about settings
-  const lockedChip = page.locator('[title*="Settings"]').first()
-  await expect(lockedChip).toBeVisible()
-
-  // No remove button on locked chip (locked chips don't have remove buttons)
-  await expect(lockedChip.locator('button')).toHaveCount(0)
+  await expect.poll(() => new URL(page.url()).searchParams.has('filter')).toBe(false)
 })
 
 test('C13 search combines with filter chips but is not the focus here', async ({ page, am, jarvis }) => {

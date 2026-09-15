@@ -59,15 +59,23 @@ interface UIStore {
   addLabelMatcher: (matcher: Omit<LabelMatcher, 'id'>) => void
   updateLabelMatcher: (id: string, partial: Partial<LabelMatcher>) => void
   removeLabelMatcher: (id: string) => void
-  clearLabelMatchers: () => void
-  resetFilters: () => void
-  /** Replaces all locked matchers with the given defaults. Non-locked matchers are preserved. */
-  syncLockedMatchers: (defaults: Omit<LabelMatcher, 'id' | 'locked'>[]) => void
+  /** Replaces the entire label-matcher list with the given matchers (fresh
+      ids) — used to apply a saved filter (lib/savedFilters.ts) and to
+      hydrate `matchers` from the URL. Replaces, never appends. */
+  setLabelMatchers: (matchers: Omit<LabelMatcher, 'id'>[]) => void
+  /** Name of the saved filter the current chips were last applied/saved
+      from — lets the saved-filters menu say "Critical (modified)" instead
+      of a generic "unsaved". A hint only: lib/savedFilters.ts
+      resolveSavedFilterStatus ignores a name that no longer exists. Kept in
+      sessionStorage (survives a reload, not shared between tabs), never in
+      the persisted `jarvis-ui` state. */
+  savedFilterBase: string | null
+  setSavedFilterBase: (name: string | null) => void
   setWsConnected: (connected: boolean) => void
   setAlertCounts: (counts: AlertCounts) => void
 }
 
-const defaultFilters: Filters = {
+const initialFilters: Filters = {
   state: 'active',
   search: '',
   labelMatchers: [],
@@ -76,6 +84,7 @@ const defaultFilters: Filters = {
 export const VIEW_MODE_KEY = 'jarvis-viewMode'
 export const ACTIVE_VIEW_MODE_KEY = 'jarvis-activeViewMode'
 export const SILENCES_VIEW_MODE_KEY = 'jarvis-silencesViewMode'
+export const SAVED_FILTER_BASE_KEY = 'jarvis-saved-filter-base'
 
 function loadViewMode(): ViewMode {
   try {
@@ -101,6 +110,13 @@ function loadSilencesViewMode(): ViewMode {
   return 'card'
 }
 
+function loadSavedFilterBase(): string | null {
+  try {
+    return sessionStorage.getItem(SAVED_FILTER_BASE_KEY)
+  } catch { /* ignore */ }
+  return null
+}
+
 let _nextId = 1
 function nextId(): string {
   return String(_nextId++)
@@ -117,7 +133,8 @@ export const useUIStore = create<UIStore>()(
       selectedFingerprint: null,
       selectedGroupKeys: null,
       detailTab: 'details',
-      filters: defaultFilters,
+      filters: initialFilters,
+      savedFilterBase: loadSavedFilterBase(),
       wsConnected: false,
       alertCounts: { filtered: 0, total: 0, byState: { active: 0, suppressed: 0, resolved: 0 }, silenceCount: 0 },
 
@@ -170,53 +187,25 @@ export const useUIStore = create<UIStore>()(
         set((s) => ({
           filters: {
             ...s.filters,
-            // Never remove locked matchers from the header
-            labelMatchers: s.filters.labelMatchers.filter((m) => m.id !== id || m.locked),
+            labelMatchers: s.filters.labelMatchers.filter((m) => m.id !== id),
           },
         })),
 
-      clearLabelMatchers: () =>
+      setLabelMatchers: (matchers) =>
         set((s) => ({
           filters: {
             ...s.filters,
-            labelMatchers: s.filters.labelMatchers.filter((m) => m.locked),
+            labelMatchers: matchers.map((m) => ({ ...m, id: nextId() })),
           },
         })),
 
-      resetFilters: () =>
-        set((s) => ({
-          filters: {
-            ...defaultFilters,
-            labelMatchers: s.filters.labelMatchers.filter((m) => m.locked),
-          },
-        })),
-
-      syncLockedMatchers: (defaults) =>
-        set((s) => {
-          // Build a set of keys for the incoming locked matchers so we can
-          // drop any non-locked matchers that would become duplicates.
-          const lockedKeys = new Set(
-            defaults.map((d) => `${d.name}${d.operator}${d.value}`),
-          )
-          return {
-            filters: {
-              ...s.filters,
-              labelMatchers: [
-                ...defaults.map((d) => ({
-                  ...d,
-                  id: `locked:${d.name}${d.operator}${d.value}`,
-                  locked: true as const,
-                })),
-                // Drop old locked matchers AND any unlocked duplicates
-                ...s.filters.labelMatchers.filter(
-                  (m) =>
-                    !m.locked &&
-                    !lockedKeys.has(`${m.name}${m.operator}${m.value}`),
-                ),
-              ],
-            },
-          }
-        }),
+      setSavedFilterBase: (name) => {
+        try {
+          if (name === null) sessionStorage.removeItem(SAVED_FILTER_BASE_KEY)
+          else sessionStorage.setItem(SAVED_FILTER_BASE_KEY, name)
+        } catch { /* ignore */ }
+        set({ savedFilterBase: name })
+      },
 
       setWsConnected: (connected) => set({ wsConnected: connected }),
       setAlertCounts: (counts) => set({ alertCounts: counts }),
@@ -225,11 +214,7 @@ export const useUIStore = create<UIStore>()(
       name: 'jarvis-ui',
       partialize: (s) => ({
         activePage: s.activePage,
-        filters: {
-          ...s.filters,
-          // Locked matchers are derived from Settings on every mount — never persist them.
-          labelMatchers: s.filters.labelMatchers.filter((m) => !m.locked),
-        },
+        filters: s.filters,
       }),
     },
   ),

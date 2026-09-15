@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { X, Lock, Plus, ChevronDown } from 'lucide-react'
+import { X, Plus, ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useUIStore } from '@/store/uiStore'
 import { useAlerts } from '@/hooks/useAlerts'
@@ -211,26 +211,6 @@ function TagField({
   )
 }
 
-// ── Locked chip (default filter from Settings) ────────────────────────────────
-
-function LockedMatcherChip({ name, operator, value }: { name: string; operator: string; value: string }) {
-  return (
-    <div
-      className="flex items-center rounded border border-border/60 h-7 opacity-75 bg-input"
-      title="Default filter set in Settings — open Settings from the user menu to change or remove"
-    >
-      <span className="px-2 text-xs text-muted-foreground shrink-0 select-none whitespace-nowrap overflow-hidden text-ellipsis" style={{ maxWidth: '120px' }}>
-        {name}
-      </span>
-      <div className="h-3.5 w-px bg-border shrink-0" />
-      <span className="px-1.5 text-xs text-muted-foreground font-mono shrink-0">{operator}</span>
-      <div className="h-3.5 w-px bg-border shrink-0" />
-      <span className="px-2 text-xs text-foreground shrink-0">{value}</span>
-      <Lock className="mr-1.5 ml-0.5 h-2.5 w-2.5 text-muted-foreground/50 shrink-0" />
-    </div>
-  )
-}
-
 // ── Editable filter chip ──────────────────────────────────────────────────────
 
 type Draft = { name: string; operator: LabelMatcherOperator; value: string }
@@ -370,20 +350,16 @@ export function MatcherChipsBar({ allowAdd = false }: { allowAdd?: boolean }) {
 
   return (
     <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-      {filters.labelMatchers.map((m) =>
-        m.locked ? (
-          <LockedMatcherChip key={m.id} name={m.name} operator={m.operator} value={m.value} />
-        ) : (
-          <EditableMatcherChip
-            key={m.id}
-            value={{ name: m.name, operator: m.operator, value: m.value }}
-            labelValueMap={labelValueMap}
-            labelNames={labelNames}
-            onChange={(next) => updateLabelMatcher(m.id, next)}
-            onRemove={() => removeLabelMatcher(m.id)}
-          />
-        ),
-      )}
+      {filters.labelMatchers.map((m) => (
+        <EditableMatcherChip
+          key={m.id}
+          value={{ name: m.name, operator: m.operator, value: m.value }}
+          labelValueMap={labelValueMap}
+          labelNames={labelNames}
+          onChange={(next) => updateLabelMatcher(m.id, next)}
+          onRemove={() => removeLabelMatcher(m.id)}
+        />
+      ))}
 
       {drafts.map((draft) => (
         <EditableMatcherChip

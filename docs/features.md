@@ -115,9 +115,35 @@ Jarvis exposes the full Alertmanager matcher syntax as an interactive chip UI. Y
 
 **URL serialization:**
 The complete filter state is encoded into the URL as query parameters. This means:
-- You can bookmark a filtered view and return to it directly (e.g. `?matchers=[{"name":"env","operator":"=","value":"prod"}]`)
+- You can bookmark a filtered view and return to it directly — label filters use Alertmanager's matcher syntax, e.g. `?filter={env="prod",namespace=~"prod-.*"}` (the Jarvis pseudo-labels work too: `{@age>"15m",@claimed-by=""}`)
+- Older links using the previous `?matchers=[…]` JSON format still open and are rewritten to `?filter=` automatically
 - You can copy the URL and share it with a teammate — they land on exactly the same filtered list
 - Filters survive page reloads and view mode changes
+
+### Saved filters
+
+![Saved filters](assets/feature-saved-filters.png)
+
+The bookmark button at the left of the filter row lets you save the current set of chips under a name, apply a saved filter with one click, and manage the list — all without opening Settings. Each entry shows its name and, below it, the matchers it contains.
+
+**Nothing is saved automatically.** The button always tells you where you stand:
+
+| Button | Meaning |
+|---|---|
+| Bookmark icon only | No chips, or chips that were never saved (a small amber dot marks the latter). |
+| **Critical** (filled bookmark) | The current chips are exactly the saved filter "Critical". |
+| ***Critical*** (italic, amber dot) | You started from "Critical" and changed the chips — the changes aren't saved yet. Hover for details. |
+
+- **Apply** — clicking a saved filter's name **replaces** the current chips with its matchers. Your search text is left untouched, and the result is written to the URL like any manually built filter, so it stays shareable. Re-applying the filter you started from is also how you discard unsaved changes.
+- **Save changes** — after changing a saved filter, the menu shows *Save changes to "Critical"*, plus a field to save the changed chips as a **new** filter instead. The changed state (and which filter it came from) survives a reload of the same tab.
+- **Save as new** — type a name and press **Enter** or click **Save**. A name that already exists (case-insensitive) is flagged while you type.
+- **Overwrite another filter** — when the current chips aren't based on a saved filter (built from scratch, or opened from a shared link), each entry offers a refresh icon that replaces that filter's matchers with the current chips. It needs a second click (*Overwrite?*) because the old matchers are gone afterwards.
+- **Rename** — the pencil icon turns the entry into a text field: **Enter** saves, **Esc** cancels.
+- **Delete** — the trash icon needs a second click (*Delete?*), mirroring "Reset all settings". The current chips stay as they are.
+- **Default** — the star marks at most one saved filter as the default. It is applied automatically the moment you open Jarvis with no filter, search, state or alert in the link at all — for example a plain bookmark of the home page. It is never applied on top of a shared link, and not re-applied on reload (the reloaded URL already carries your current chips). A default filter's chips are ordinary chips you can remove with **×**.
+- Saved filters are capped at 20 (the menu shows how many you have) and are stored per user exactly like every other setting — see [User Settings](#user-settings) below. If saving to your account fails, the menu says so. "Reset all settings" clears them along with everything else.
+
+> Filters previously configured as *default filters* in Settings were converted into a saved filter named **Default**, marked as the default.
 
 ---
 
@@ -160,26 +186,15 @@ Settings and the theme toggle are always there either way; Login only appears si
 | **Card columns** | Fixed column count (1–6) for the Card View grid, or *Auto* to let it reflow with window width (up to 4). |
 | **Claim animation** | Toggle the animated snake border on the Claim button for unclaimed alerts. |
 | **Default silence duration** | Pre-selected duration when the silence creation form opens (15 min to 3 days). |
-| **Default filter** | Label matchers that are always active — see below. |
 | **Labels** | Pin the label chips you care about to the front, hide the ones you don't, and optionally give a label a color — see below. |
 
-Which label sections Card and List view group by is no longer a Settings entry — it moved to the **Grouped** toolbar control, see [Grouping](#grouping). The resolved-view page size is set from its own per-page selector, not from this panel — see [Resolved View](#resolved-view).
-
-### Default filters — permanent header chips
-
-![Locked filter chip in header](assets/feature-settings-locked-filter.png)
-
-Default filters appear as **locked chips** in the filter row of the header. They behave like regular label matchers but cannot be removed from the header — they stay active at all times, across page reloads and view changes.
-
-A **lock icon** and dimmed appearance distinguish them from manually added filters. Hovering over a locked chip shows the tooltip: *"Default filter set in Settings — open Settings from the user menu to change or remove."*
-
-To remove or modify a default filter, open Settings → Default Filter → click **×** on the chip, or clear the list and save.
+Which label sections Card and List view group by is no longer a Settings entry — it moved to the **Grouped** toolbar control, see [Grouping](#grouping). The resolved-view page size is set from its own per-page selector, not from this panel — see [Resolved View](#resolved-view). Reusable label filters are no longer a Settings entry either — see [Saved filters](#saved-filters) above.
 
 ### Label display
 
 ![Settings — Labels](assets/feature-settings-labels.png)
 
-By default every label on an alert renders as a chip. When alerts carry many labels (`customer`, `hostname`, `instance`, `dbid`, …), that gets cluttered — Settings → Labels lets you **pin** the labels you care about so they lead every card and list row (e.g. `customer` → `hostname` → `job`), and **hide** the ones you don't need. The Settings panel is two columns — Display, Silences and Default Filter on the left, Labels on the right.
+By default every label on an alert renders as a chip. When alerts carry many labels (`customer`, `hostname`, `instance`, `dbid`, …), that gets cluttered — Settings → Labels lets you **pin** the labels you care about so they lead every card and list row (e.g. `customer` → `hostname` → `job`), and **hide** the ones you don't need. The Settings panel is two columns — Display and Silences on the left, Labels on the right.
 
 Labels is one list, every row the same: label name, how many alerts carry it and how many distinct values it has, a color swatch, a **pin** and an **eye**.
 

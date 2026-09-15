@@ -39,7 +39,7 @@ function seedLabelDisplay(
     localStorage.setItem('jarvis-user-settings', JSON.stringify({
       state: {
         theme: 'dark', timeFormat: 'relative', defaultViewMode: 'card',
-        defaultFilters: [], resolvedPageSize: 25, defaultSilenceDurationMinutes: 60,
+        resolvedPageSize: 25, defaultSilenceDurationMinutes: 60,
         defaultCreatorName: '', claimAnimationEnabled: true, groupByLabel: 'severity',
         labelDisplay: cfg,
         ...extra,
