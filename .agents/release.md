@@ -1,8 +1,13 @@
 # Jarvis — Creating a Release
 
 Fully automated release: `/release X.Y.Z` runs end-to-end without further
-questions — preflight, changelog, curated release notes, version bumps, tag,
-push, CI monitoring.
+questions — preflight, changelogs (app + Helm chart), curated release notes,
+version bumps, tag, push, CI monitoring.
+
+**Breaking changes are always explicit** (AGENTS.md → Workflow Rules #13):
+the app `CHANGELOG.md`, the chart `charts/jarvis/CHANGELOG.md` and the release
+notes each carry a *Breaking Changes* section for every version — "No breaking
+changes." when there are none, never omitted.
 
 **Never trigger a release without an explicit user request.** Load and follow
 this file only when the user explicitly asks for a release (root `AGENTS.md`
@@ -38,61 +43,102 @@ the final report — do not ask.
    All completed runs must have `conclusion: success`. If CI is still
    running, wait (`gh run watch`). If red, abort.
 5. Local backend tests: `cd backend && go test ./...` — must be green.
+6. **Classify breaking changes** (decides the version numbers below):
+   - **App**: `git log $(git describe --tags --abbrev=0)..HEAD --grep='BREAKING CHANGE'`
+     plus a read of the commits since the last tag (removed/renamed env vars
+     or config, changed API/WS contract, required manual migration). A
+     breaking app change requires a major `X.0.0` — if the requested version
+     isn't one, abort and report why. A breaking change that is missing its
+     `BREAKING CHANGE:` footer is still breaking: write it into the generated
+     changelog section by hand (step 8).
+   - **Chart**: read `## [Unreleased]` in `charts/jarvis/CHANGELOG.md`. Any
+     entry under its *Breaking Changes* → the chart version bump is major.
+     Cross-check against `git diff <prev-tag>..HEAD -- charts/jarvis/` — a
+     chart change without an `[Unreleased]` entry is a bug; add the entry.
 
 ### Phase 2 — Prepare release commit (on a release branch — `main` is PR-only)
 
-6. **Create the release branch** (direct pushes to `main` are rejected —
+7. **Create the release branch** (direct pushes to `main` are rejected —
    ruleset `protect-main`, AGENTS.md → Workflow Rules #10):
    ```bash
    git checkout -b release/vX.Y.Z
    ```
-7. **Generate CHANGELOG** (tag does not exist yet → `--next-tag`):
+8. **Generate the app CHANGELOG section and prepend it** (tag does not exist
+   yet → `--next-tag`; the `vX.Y.Z` query renders only the new version, so
+   hand edits to older sections survive):
    ```bash
-   git-chglog --next-tag vX.Y.Z --output CHANGELOG.md
+   { git-chglog --next-tag vX.Y.Z vX.Y.Z; cat CHANGELOG.md; } > CHANGELOG.md.new
+   mv CHANGELOG.md.new CHANGELOG.md
    ```
-8. **Write curated release notes** to `.github/release-notes/vX.Y.Z.md`.
+   The template (`.chglog/CHANGELOG.tpl.md`) always renders `### Breaking
+   Changes` first — the `BREAKING CHANGE:` footers, or "No breaking changes.".
+   Edit that section by hand when step 6 found a breaking change without a
+   footer. When only the chart has breaking changes, replace the line with:
+   `No breaking changes in the app. The Helm chart <version> released
+   alongside has breaking changes — see [charts/jarvis/CHANGELOG.md](charts/jarvis/CHANGELOG.md).`
+9. **Release the chart CHANGELOG** (`charts/jarvis/CHANGELOG.md`):
+   - Rename `## [Unreleased]` to `## [<chart version>] - YYYY-MM-DD` and add a
+     fresh, empty `## [Unreleased]` above it (no subsections — the next chart
+     change adds them).
+   - Add the bullet ``- `appVersion` bumped to `X.Y.Z`.`` under
+     `### Changed` (create the subsection if needed).
+   - No `[Unreleased]` content (appVersion-only release)? The new section is
+     `### Breaking Changes` → `No breaking changes.` + `### Changed` →
+     appVersion bump.
+   - Update the link references at the bottom: `[Unreleased]` compares
+     `vX.Y.Z...HEAD`, the new version compares `vPREV...vX.Y.Z`.
+   - Subsection order per version: Breaking Changes (always first, never
+     empty) → Added → Changed → Deprecated → Removed → Fixed → Security.
+10. **Write curated release notes** to `.github/release-notes/vX.Y.Z.md`.
    The release workflow uses this file as the release body and **appends**
    the artifact sections itself (image digest, cosign/attestation verify,
    Helm install, SBOM) — do **not** include those in the notes file.
    - `vX.0.0` (first or new major) → Template A below
    - otherwise → Template B below
-9. **Bump versions in README** — the two occurrences in the Getting Started
-   block:
+11. **Bump versions in README** — the two occurrences in the Getting Started
+   block. The image tag is the **app** version, the `helm install --version`
+   is the **chart** version (decoupled — never the app version, that chart
+   doesn't exist). Run before step 12 bumps `Chart.yaml`:
    ```bash
    PREV=$(git describe --tags --abbrev=0)
    PREV_CLEAN="${PREV#v}"
-   sed -i "s|ghcr.io/kj187/jarvis:${PREV_CLEAN}|ghcr.io/kj187/jarvis:X.Y.Z|g" README.md
-   sed -i "s|--version ${PREV_CLEAN}|--version X.Y.Z|g" README.md
+   PREV_CHART=$(awk '/^version:/{print $2}' charts/jarvis/Chart.yaml)
+   sed -i '' "s|ghcr.io/kj187/jarvis:${PREV_CLEAN}|ghcr.io/kj187/jarvis:X.Y.Z|g" README.md
+   sed -i '' "s|--version ${PREV_CHART} |--version <chart version> |g" README.md
    ```
    Verify both occurrences changed (image tag + helm `--version`).
-10. **Bump chart versions** in `charts/jarvis/Chart.yaml` — chart version is
+12. **Bump chart versions** in `charts/jarvis/Chart.yaml` — chart version is
     **decoupled** from the app version, but an app release must ship a chart
     that deploys it:
     - `appVersion`: new app version (`"X.Y.Z"`, quoted)
-    - `version`: bump by the impact of the chart change itself
-      (appVersion-only bump → patch)
-11. **Commit everything together** (signed off — the DCO check runs on the PR):
+    - `version`: semver by the impact of the chart changes in the released
+      `[Unreleased]` section — any breaking change → **major**, new
+      values/resources → minor, fixes or appVersion-only → patch. Must match
+      the version used in step 9.
+13. **Check and commit everything together** (signed off — the DCO check runs on the PR):
     ```bash
-    git add CHANGELOG.md README.md charts/jarvis/Chart.yaml .github/release-notes/vX.Y.Z.md
+    printf '%s\n' CHANGELOG.md charts/jarvis/CHANGELOG.md .github/release-notes/vX.Y.Z.md \
+      | scripts/check-changelogs.sh
+    git add CHANGELOG.md README.md charts/jarvis/Chart.yaml charts/jarvis/CHANGELOG.md .github/release-notes/vX.Y.Z.md
     git commit -s -m "chore(release): prepare vX.Y.Z"
     ```
 
 ### Phase 3 — PR, merge, tag & push
 
-12. **Push the branch and open the PR**:
+14. **Push the branch and open the PR**:
     ```bash
     git push -u origin release/vX.Y.Z
     gh pr create --title "chore(release): prepare vX.Y.Z" \
-      --body "Release preparation for vX.Y.Z (changelog, release notes, README, chart bump)."
+      --body "Release preparation for vX.Y.Z (app + chart changelog, release notes, README, chart bump)."
     ```
-13. **Wait for all required checks, then merge** (merge commit, not squash —
+15. **Wait for all required checks, then merge** (merge commit, not squash —
     keeps the signed-off prep commit intact) and update local `main`:
     ```bash
     gh pr checks release/vX.Y.Z --watch --fail-fast
     gh pr merge release/vX.Y.Z --merge --delete-branch
     git checkout main && git pull origin main
     ```
-14. **Create the annotated tag on the merge commit and push it immediately**.
+16. **Create the annotated tag on the merge commit and push it immediately**.
     The merge to `main` already triggered the chart publish
     (`chart-release.yml`, `charts/**` changed); the tag push triggers the
     image build + GitHub Release. Pushing the tag right after the merge keeps
@@ -105,18 +151,19 @@ the final report — do not ask.
 
 ### Phase 4 — Monitor & verify (done-gate)
 
-15. Watch both workflows to completion:
+17. Watch both workflows to completion:
     ```bash
     gh run list --workflow=release.yml --limit 1
     gh run watch <run-id> --exit-status
     gh run list --workflow=chart-release.yml --limit 1   # only runs if chart version is new
     ```
-16. Verify the release exists and report to the user:
+18. Verify the release exists and report to the user:
     ```bash
     gh release view vX.Y.Z --json url,assets
     ```
     Final report must include: release URL, image ref
-    `ghcr.io/kj187/jarvis:X.Y.Z`, chart version, and whether the SBOM asset
+    `ghcr.io/kj187/jarvis:X.Y.Z`, chart version (flag it if it is a new
+    major with breaking changes), and whether the SBOM asset
     is attached. If any workflow failed, report the failing step and log
     excerpt — never claim success.
 
@@ -134,12 +181,32 @@ manual line breaks (or a fixed ~72/80-column fill) render as a cramped,
 ragged narrow column on the release page. This applies to the blurb,
 `### Added`/`### Fixed`/… bullets, and every other line of prose in the file.
 
+**Breaking Changes section — mandatory in both templates, never omitted.** It
+always has exactly two bullets, one for the app and one for the Helm chart
+released alongside, each either "No breaking changes." or the concrete break
+plus its migration (what fails, what to change). Source: step 6 — app from
+the commits/footers, chart from the released `[Unreleased]` section of
+`charts/jarvis/CHANGELOG.md`. Place it right after the theme sentence so
+nobody upgrades past it.
+
+**Credit people who shaped a change.** When a feature or fix goes back to a
+GitHub issue with a substantial proposal or report, link the issue in the
+bullet and thank its author by handle (`Thanks to @user for the detailed
+proposal in #123!`) — contributions are not only code. Phrase it as
+"requested/proposed in", not "implements", when only part of the issue was
+built.
+
 **Template A — Initial / major release (v1.0.0, v2.0.0, …)**
 
 ```markdown
 # 🎉 <Project Name> vX.0.0 — <headline>
 
 <One punchy sentence: what this is and why it exists.>
+
+## Breaking Changes
+
+- **Jarvis:** <No breaking changes. | what breaks + migration>
+- **Helm chart <chart version>:** <No breaking changes. | what breaks + migration>
 
 ---
 
@@ -178,6 +245,10 @@ Full feature list → [README](https://github.com/kj187/jarvis#readme)
 <One sentence summarising the theme of this release
 (e.g. "Focus on stability and PostgreSQL reliability").>
 
+### Breaking Changes
+- **Jarvis:** <No breaking changes. | what breaks + migration>
+- **Helm chart <chart version>:** <No breaking changes. | what breaks + migration>
+
 ### Added
 - <item — user-facing phrasing, not commit subject>
 
@@ -193,7 +264,7 @@ Full feature list → [README](https://github.com/kj187/jarvis#readme)
 **Full diff:** [vPREV...vNEW](https://github.com/kj187/jarvis/compare/vPREV...vNEW)
 ```
 
-Omit empty sections.
+Omit empty sections — except *Breaking Changes*, which is always present.
 
 ---
 
@@ -203,7 +274,12 @@ Omit empty sections.
 |---|---|---|
 | `PATCH` | Bug fix, security patch, small improvements | `fix:`, `security:` |
 | `MINOR` | New feature, backwards-compatible | `feat:` |
-| `MAJOR` | Breaking change (API, config format, DB schema migration required) | `BREAKING CHANGE:` |
+| `MAJOR` | Breaking change (API, config format, DB schema migration required) | `BREAKING CHANGE:` footer |
+
+The **Helm chart** is versioned separately with the same scheme, judged by
+chart impact: breaking (see AGENTS.md → Workflow Rules #13 for the
+definition) → major, new values/resources → minor, fixes and appVersion-only
+bumps → patch.
 
 First stable release: `v1.0.0`. Before that: `v0.x.y` (no stability guarantee).
 

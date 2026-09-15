@@ -26,7 +26,7 @@ Repository layout:
 
 - `backend/` — Go backend (`internal/api`, `internal/history`, `internal/alertmanager`, `internal/auth`, `internal/ws`, …)
 - `frontend/` — React app (`src/components`, `src/hooks`, `src/lib`, `src/store`, `e2e/`)
-- `charts/jarvis/` — Helm chart (+ helm-unittest tests under `tests/`)
+- `charts/jarvis/` — Helm chart (+ helm-unittest tests under `tests/`, own `CHANGELOG.md`)
 - `docs/` — user-facing documentation (not AI context, except `docs/testing-e2e.md` and `docs/scope.md`)
 - `scripts/` — E2E runner, mock-OIDC config, manual test-alert/silence fixtures
 - `.agents/` — task-specific AI reference files (routed below)
@@ -225,7 +225,8 @@ Tool-specific entry points map to the same files (no duplicated content):
 3. **Pre-commit hook** (`.githooks/pre-commit`) runs checks based on staged
    paths: Go tests + golangci-lint incl. gosec (backend), pnpm audit + eslint +
    jscpd (frontend, needs running dev container), helm lint/unittest (charts),
-   and a gitleaks secret scan (always). **Never `--no-verify`.**
+   the changelog check `scripts/check-changelogs.sh` and a gitleaks secret
+   scan (always). **Never `--no-verify`.**
 4. **Frontend checklist**: `cursor: pointer` on all clickable elements · no
    `console.log` · no `dangerouslySetInnerHTML` · import shared utils from
    `lib/alertUtils.ts` (never re-implement in components) · handle loading
@@ -246,7 +247,8 @@ Tool-specific entry points map to the same files (no duplicated content):
    | Test files, test commands, CI workflows, pre-commit hook, Makefile targets | `.agents/testing.md` |
    | Security tooling, checklists, auth/origin behavior | `.agents/security.md` |
    | Feature-workflow conventions (validation rules, type-sync, checklists) | `.agents/add-feature.md` |
-   | Release process, workflows in `release.yml`, versioning | `.agents/release.md` |
+   | Release process, workflows in `release.yml`, versioning, changelog/release-notes format | `.agents/release.md` |
+   | Anything under `charts/jarvis/` except `tests/` (templates, values, `Chart.yaml`, chart README) | `charts/jarvis/CHANGELOG.md` → `## [Unreleased]` (rule 13) |
    | Scope definition, in/out-of-scope boundaries, litmus test | `docs/scope.md` |
    | Issue-triage workflow, reply guidelines | `.agents/scope-triage.md` |
    | Project description, invariants, workflow rules, commit format, repo layout | `AGENTS.md` itself |
@@ -330,12 +332,34 @@ Tool-specific entry points map to the same files (no duplicated content):
     alters what an existing diagram shows (new upstream call, new store, new
     WS event), update and re-render it in that same commit, like every other
     doc-sync duty in rule 6.
+13. **Breaking changes are always stated explicitly — app and Helm chart.**
+    Every version section of `CHANGELOG.md` (app) and
+    `charts/jarvis/CHANGELOG.md` (chart), and every release-notes file, has a
+    **Breaking Changes** section. When there are none it says so ("No
+    breaking changes.") — the section is never omitted, so its absence can
+    never be mistaken for "none". Concretely:
+    - **App**: a breaking change (removed/renamed env var or config, changed
+      API/WS contract, required manual migration) needs a
+      `BREAKING CHANGE: <what + migration>` footer in the commit body (for
+      squash merges: in the PR's squash commit message). git-chglog renders
+      only that footer into the changelog — a `feat!:` subject alone is not
+      enough.
+    - **Chart**: every change under `charts/jarvis/` (except `tests/`) adds an
+      entry under `## [Unreleased]` in `charts/jarvis/CHANGELOG.md` **in the
+      same commit**, including its breaking-change classification. Breaking
+      for the chart = anything that can make `helm install`/`upgrade` fail or
+      change an existing release without a values change (removed/renamed
+      values, changed defaults, new validations rejecting previously accepted
+      values, new resources needing extra permissions, selector changes). A
+      breaking chart change bumps the chart's major version at release.
+    - Enforced by `scripts/check-changelogs.sh` (pre-commit hook + CI `Helm`
+      job). Format, templates and release-time steps → `.agents/release.md`.
 
 ## Commit Format — Conventional Commits
 
 ```
 feat(<scope>): ...     → MINOR  |  fix(<scope>): ...     → PATCH
-security(<scope>): ... → PATCH  |  BREAKING CHANGE: ...  → MAJOR
+security(<scope>): ... → PATCH  |  BREAKING CHANGE: ...  → MAJOR (footer, see Workflow Rule 13)
 test(<scope>): ...     → no bump (tests always in same commit as implementation)
 refactor / docs / chore → no bump
 ```

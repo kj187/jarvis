@@ -1,6 +1,10 @@
 <a name="v1.11.0"></a>
 ## [v1.11.0](https://github.com/kj187/jarvis/compare/v1.10.1...v1.11.0) (2026-09-09)
 
+### Breaking Changes
+
+No breaking changes.
+
 ### Bug Fixes
 
 * **alerts:** return alert snapshot in a deterministic order ([#170](https://github.com/kj187/jarvis/issues/170))
@@ -20,6 +24,7 @@
 * **deps:** bump the codeql-action group with 4 updates ([#166](https://github.com/kj187/jarvis/issues/166))
 * **deps:** bump github.com/coreos/go-oidc/v3 in /backend ([#164](https://github.com/kj187/jarvis/issues/164))
 * **deps-dev:** bump [@playwright](https://github.com/playwright)/test from 1.62.1 to 1.63.0 in /frontend in the minor-patch group ([#174](https://github.com/kj187/jarvis/issues/174))
+* **release:** prepare v1.11.0
 
 ### Documentation
 
@@ -33,6 +38,10 @@
 
 <a name="v1.10.1"></a>
 ## [v1.10.1](https://github.com/kj187/jarvis/compare/v1.10.0...v1.10.1) (2026-09-05)
+
+### Breaking Changes
+
+No breaking changes.
 
 ### Chores
 
@@ -53,6 +62,10 @@
 <a name="v1.10.0"></a>
 ## [v1.10.0](https://github.com/kj187/jarvis/compare/v1.9.3...v1.10.0) (2026-09-05)
 
+### Breaking Changes
+
+No breaking changes.
+
 ### Chores
 
 * **release:** prepare v1.10.0
@@ -63,6 +76,10 @@
 
 <a name="v1.9.3"></a>
 ## [v1.9.3](https://github.com/kj187/jarvis/compare/v1.9.2...v1.9.3) (2026-08-17)
+
+### Breaking Changes
+
+No breaking changes.
 
 ### Chores
 
@@ -79,6 +96,10 @@
 <a name="v1.9.2"></a>
 ## [v1.9.2](https://github.com/kj187/jarvis/compare/v1.9.1...v1.9.2) (2026-07-17)
 
+### Breaking Changes
+
+No breaking changes.
+
 ### Bug Fixes
 
 * **config:** add codecov.yml with thresholds to stop flaky coverage checks ([#127](https://github.com/kj187/jarvis/issues/127))
@@ -90,6 +111,10 @@
 
 <a name="v1.9.1"></a>
 ## [v1.9.1](https://github.com/kj187/jarvis/compare/v1.9.0...v1.9.1) (2026-07-16)
+
+### Breaking Changes
+
+No breaking changes.
 
 ### Bug Fixes
 
@@ -105,6 +130,10 @@
 
 <a name="v1.9.0"></a>
 ## [v1.9.0](https://github.com/kj187/jarvis/compare/v1.8.0...v1.9.0) (2026-07-15)
+
+### Breaking Changes
+
+No breaking changes.
 
 ### Bug Fixes
 
@@ -130,6 +159,10 @@
 
 <a name="v1.8.0"></a>
 ## [v1.8.0](https://github.com/kj187/jarvis/compare/v1.7.0...v1.8.0) (2026-07-13)
+
+### Breaking Changes
+
+No breaking changes.
 
 ### Bug Fixes
 
@@ -171,6 +204,10 @@
 <a name="v1.7.0"></a>
 ## [v1.7.0](https://github.com/kj187/jarvis/compare/v1.7.0-rc.1...v1.7.0) (2026-07-09)
 
+### Breaking Changes
+
+No breaking changes.
+
 ### Chores
 
 * **release:** prepare v1.7.0
@@ -181,6 +218,10 @@
 
 <a name="v1.7.0-rc.1"></a>
 ## [v1.7.0-rc.1](https://github.com/kj187/jarvis/compare/v1.6.0...v1.7.0-rc.1) (2026-07-08)
+
+### Breaking Changes
+
+No breaking changes.
 
 ### Bug Fixes
 
@@ -221,6 +262,10 @@
 
 <a name="v1.6.0"></a>
 ## [v1.6.0](https://github.com/kj187/jarvis/compare/v1.5.3...v1.6.0) (2026-07-04)
+
+### Breaking Changes
+
+No breaking changes.
 
 ### Bug Fixes
 
@@ -282,6 +327,10 @@
 <a name="v1.5.3"></a>
 ## [v1.5.3](https://github.com/kj187/jarvis/compare/v1.5.2...v1.5.3) (2026-06-30)
 
+### Breaking Changes
+
+No breaking changes.
+
 ### Bug Fixes
 
 * update Alertmanager, Grafana, and Prometheus URLs to use localhost for local testing
@@ -300,6 +349,10 @@
 <a name="v1.5.2"></a>
 ## [v1.5.2](https://github.com/kj187/jarvis/compare/v1.5.1...v1.5.2) (2026-06-29)
 
+### Breaking Changes
+
+No breaking changes.
+
 ### Bug Fixes
 
 * **claims:** increase claimReleaseDelay from 65 s to 20 min
@@ -316,6 +369,10 @@
 <a name="v1.5.1"></a>
 ## [v1.5.1](https://github.com/kj187/jarvis/compare/v1.5.0...v1.5.1) (2026-06-29)
 
+### Breaking Changes
+
+No breaking changes.
+
 ### Bug Fixes
 
 * **silences:** skip [@receiver](https://github.com/receiver) pseudo-label when filtering silences
@@ -326,6 +383,10 @@
 
 <a name="v1.5.0"></a>
 ## [v1.5.0](https://github.com/kj187/jarvis/compare/v1.4.0...v1.5.0) (2026-06-26)
+
+### Breaking Changes
+
+No breaking changes.
 
 ### Bug Fixes
 
@@ -439,6 +500,10 @@
 <a name="v1.4.0"></a>
 ## [v1.4.0](https://github.com/kj187/jarvis/compare/v1.3.1...v1.4.0) (2026-06-22)
 
+### Breaking Changes
+
+No breaking changes.
+
 ### Bug Fixes
 
 * **api:** log 4xx as WARN, 5xx as ERROR in request middleware
@@ -472,6 +537,10 @@
 <a name="v1.3.1"></a>
 ## [v1.3.1](https://github.com/kj187/jarvis/compare/v1.3.0...v1.3.1) (2026-06-19)
 
+### Breaking Changes
+
+No breaking changes.
+
 ### Bug Fixes
 
 * **helm:** use Recreate update strategy when SQLite PVC enabled
@@ -486,6 +555,10 @@
 
 <a name="v1.3.0"></a>
 ## [v1.3.0](https://github.com/kj187/jarvis/compare/v1.2.0...v1.3.0) (2026-06-19)
+
+### Breaking Changes
+
+No breaking changes.
 
 ### Bug Fixes
 
@@ -525,6 +598,10 @@
 <a name="v1.2.0"></a>
 ## [v1.2.0](https://github.com/kj187/jarvis/compare/v1.1.0...v1.2.0) (2026-06-18)
 
+### Breaking Changes
+
+No breaking changes.
+
 ### Documentation
 
 * update CHANGELOG and README for v1.2.0
@@ -535,6 +612,10 @@
 
 <a name="v1.1.0"></a>
 ## [v1.1.0](https://github.com/kj187/jarvis/compare/v1.0.5...v1.1.0) (2026-06-18)
+
+### Breaking Changes
+
+No breaking changes.
 
 ### Bug Fixes
 
@@ -570,6 +651,10 @@
 <a name="v1.0.5"></a>
 ## [v1.0.5](https://github.com/kj187/jarvis/compare/v1.0.4...v1.0.5) (2026-06-16)
 
+### Breaking Changes
+
+No breaking changes.
+
 ### Bug Fixes
 
 * **silences:** group silence recreate prefills wrong cluster and matchers
@@ -580,6 +665,10 @@
 
 <a name="v1.0.4"></a>
 ## [v1.0.4](https://github.com/kj187/jarvis/compare/v1.0.3...v1.0.4) (2026-06-16)
+
+### Breaking Changes
+
+No breaking changes.
 
 ### Documentation
 
@@ -595,6 +684,10 @@
 
 <a name="v1.0.3"></a>
 ## [v1.0.3](https://github.com/kj187/jarvis/compare/v1.0.2...v1.0.3) (2026-06-16)
+
+### Breaking Changes
+
+No breaking changes.
 
 ### Bug Fixes
 
@@ -621,6 +714,10 @@
 <a name="v1.0.2"></a>
 ## [v1.0.2](https://github.com/kj187/jarvis/compare/v1.0.1...v1.0.2) (2026-06-16)
 
+### Breaking Changes
+
+No breaking changes.
+
 ### Bug Fixes
 
 * **api:** return empty JSON arrays instead of null for empty slices
@@ -632,6 +729,10 @@
 
 <a name="v1.0.1"></a>
 ## [v1.0.1](https://github.com/kj187/jarvis/compare/v1.0.0...v1.0.1) (2026-06-15)
+
+### Breaking Changes
+
+No breaking changes.
 
 ### Bug Fixes
 
@@ -653,6 +754,10 @@
 
 <a name="v1.0.0"></a>
 ## v1.0.0 (2026-06-12)
+
+### Breaking Changes
+
+No breaking changes.
 
 ### Bug Fixes
 
