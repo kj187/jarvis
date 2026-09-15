@@ -9,6 +9,27 @@ instead of duplicating.
 
 ---
 
+## A peer stuck on an episode's advisory lock stalled the whole poll loop
+
+**Symptom**: On PostgreSQL, a pod could stop polling entirely — no further
+polls, no `poll_snapshots` updates, no WS broadcasts — and not even shutdown
+unblocked it.
+**Cause**: `RecordStatusChange` and `RecordResolvedForCluster` run on
+`context.Background()` and take the per-episode
+`pg_advisory_xact_lock(hashtext(fingerprint || ':' || cluster_name))`
+(Critical Invariant #16). A peer holding that lock indefinitely (a hung pod, a
+transaction stranded by a network partition) blocked the call forever, and
+since it runs sequentially in `applyPollResults`, the entire poll loop stalled
+with it. The lock itself exists because two pods (or two connections during a
+rolling update) racing the same fingerprint could otherwise both read the same
+"last event" before either commits and both insert — duplicate event rows.
+**Rule**: `Store.withTx` bounds every history transaction to `txTimeout` (30s)
+regardless of the caller's context, and on PostgreSQL the transaction sets
+`lock_timeout = '10s'` as its first statement. Never run a history write
+without a deadline on the poll path.
+
+---
+
 ## AI tools overlap in what they read — a symlinked adapter loads the same instructions twice
 
 **Symptom**: With a tool's own instructions file symlinked to `AGENTS.md`, a
@@ -20,17 +41,18 @@ commands were actually invoked.
 *and* its own instructions file *and* another tool's root file (without
 resolving that file's import syntax); skill directories are scanned under
 several tool-specific roots, so a symlinked skill root can surface the same
-skill twice unless the tool deduplicates by name. The smallest project-instruction limit among the supported
-tools is 32 KiB combined, including the user's global file, so duplicated or
-oversized instructions are silently truncated.
+skill twice unless the tool deduplicates by name. The smallest
+project-instruction limit among the supported tools is 32 KiB combined,
+including the user's global file, so duplicated or oversized instructions are
+silently truncated.
 **Rule**: Give a tool an adapter only when it reads neither `AGENTS.md` nor
 `.agents/skills/`, and never mirror `AGENTS.md` into a file that tools also
 reading `AGENTS.md` pick up — drop such files instead. A directory symlink for
 skills is fine where the tools scanning both roots were verified to list each
-skill once (the adapter table records what was verified). Verify tool behavior against current vendor docs and a real session
+skill once (the adapter table in `docs/ai-agents.md` records what was
+verified). Verify tool behavior against current vendor docs and a real session
 before documenting it — invocation syntax and discovery paths change between
-releases. Enforced by `scripts/check-agent-context.sh`; adapter table in
-`AGENTS.md` → Tool Adapters.
+releases. Enforced by `scripts/check-agent-context.sh`.
 
 ---
 

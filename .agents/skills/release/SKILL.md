@@ -83,8 +83,9 @@ instead of working around it.
    mv CHANGELOG.md.new CHANGELOG.md
    ```
    The root `CHANGELOG.md` is only ever written here — feature PRs never touch
-   it (no `Unreleased` section; AGENTS.md → Workflow Rules #13). If one
-   exists anyway, fold it into the generated section and remove it.
+   it (no `Unreleased` section; `.agents/skills/pr-workflow/SKILL.md` →
+   Changelog rules). If one exists anyway, fold it into the generated section
+   and remove it.
    The template (`.chglog/CHANGELOG.tpl.md`) always renders `### Breaking
    Changes` first — the `BREAKING CHANGE:` footers, or "No breaking changes.".
    Edit that section by hand when step 6 found a breaking change without a
@@ -304,8 +305,8 @@ Omit empty sections — except *Breaking Changes*, which is always present.
 | `MAJOR` | Breaking change (API, config format, DB schema migration required) | `BREAKING CHANGE:` footer |
 
 The **Helm chart** is versioned separately with the same scheme, judged by
-chart impact: breaking (see AGENTS.md → Workflow Rules #13 for the
-definition) → major, new values/resources → minor, fixes and appVersion-only
+chart impact: breaking (see `.agents/skills/pr-workflow/SKILL.md` →
+Changelog rules for the definition) → major, new values/resources → minor, fixes and appVersion-only
 bumps → patch.
 
 First stable release: `v1.0.0`. Before that: `v0.x.y` (no stability guarantee).

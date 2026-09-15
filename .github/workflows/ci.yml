@@ -69,8 +69,8 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # ratchet:actions/checkout@v7.0.1
-      # Skills, tool adapters and AGENTS.md stay tool-agnostic (AGENTS.md →
-      # Tool Adapters). Same script as the pre-commit hook.
+      # Skills, tool adapters and AGENTS.md stay tool-agnostic
+      # (docs/ai-agents.md). Same script as the pre-commit hook.
       - name: Check agent context
         run: scripts/check-agent-context.sh
 
