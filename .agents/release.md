@@ -70,6 +70,9 @@ the final report — do not ask.
    { git-chglog --next-tag vX.Y.Z vX.Y.Z; cat CHANGELOG.md; } > CHANGELOG.md.new
    mv CHANGELOG.md.new CHANGELOG.md
    ```
+   The root `CHANGELOG.md` is only ever written here — feature PRs never touch
+   it (no `Unreleased` section; AGENTS.md → Workflow Rules #13). If one
+   exists anyway, fold it into the generated section and remove it.
    The template (`.chglog/CHANGELOG.tpl.md`) always renders `### Breaking
    Changes` first — the `BREAKING CHANGE:` footers, or "No breaking changes.".
    Edit that section by hand when step 6 found a breaking change without a
@@ -103,8 +106,9 @@ the final report — do not ask.
    PREV=$(git describe --tags --abbrev=0)
    PREV_CLEAN="${PREV#v}"
    PREV_CHART=$(awk '/^version:/{print $2}' charts/jarvis/Chart.yaml)
-   sed -i '' "s|ghcr.io/kj187/jarvis:${PREV_CLEAN}|ghcr.io/kj187/jarvis:X.Y.Z|g" README.md
-   sed -i '' "s|--version ${PREV_CHART} |--version <chart version> |g" README.md
+   # perl -pi instead of sed -i: identical on macOS (BSD sed) and Linux (GNU sed)
+   perl -pi -e "s|ghcr.io/kj187/jarvis:\Q${PREV_CLEAN}\E|ghcr.io/kj187/jarvis:X.Y.Z|g" README.md
+   perl -pi -e "s|--version \Q${PREV_CHART}\E |--version <chart version> |g" README.md
    ```
    Verify both occurrences changed (image tag + helm `--version`).
 12. **Bump chart versions** in `charts/jarvis/Chart.yaml` — chart version is

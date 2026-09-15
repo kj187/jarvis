@@ -338,12 +338,22 @@ Tool-specific entry points map to the same files (no duplicated content):
     **Breaking Changes** section. When there are none it says so ("No
     breaking changes.") — the section is never omitted, so its absence can
     never be mistaken for "none". Concretely:
-    - **App**: a breaking change (removed/renamed env var or config, changed
-      API/WS contract, required manual migration) needs a
-      `BREAKING CHANGE: <what + migration>` footer in the commit body (for
-      squash merges: in the PR's squash commit message). git-chglog renders
-      only that footer into the changelog — a `feat!:` subject alone is not
-      enough.
+    - **App**: the root `CHANGELOG.md` is **generated at release time only**
+      (git-chglog from the commits) — never edit it by hand in a feature PR
+      and never add an `Unreleased` section there (the release step prepends
+      the generated section, a manual one ends up duplicated/orphaned). The
+      squash commit subject becomes the changelog line — for single-commit
+      PRs GitHub uses the commit subject, otherwise the PR title — so make
+      both meaningful Conventional Commits. A breaking change
+      (removed/renamed env var or config, changed API/WS contract, required
+      manual migration) needs a `BREAKING CHANGE: <what + migration>` footer
+      at the start of a line in the squash commit message (with the repo's
+      `COMMIT_MESSAGES` squash setting, a footer in any branch commit body
+      carries over). git-chglog renders only that footer into
+      the Breaking Changes section — a `feat!:` subject alone is not enough.
+      This asymmetry with the chart is deliberate: commits are the app's
+      changelog source (Dependabot PRs, no merge conflicts); the chart has no
+      own tags and its changes hide in `fix(db)`/`feat(config)` commits.
     - **Chart**: every change under `charts/jarvis/` (except `tests/`) adds an
       entry under `## [Unreleased]` in `charts/jarvis/CHANGELOG.md` **in the
       same commit**, including its breaking-change classification. Breaking
