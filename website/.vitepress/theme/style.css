@@ -78,7 +78,22 @@
 .home-showcase {
   max-width: 1152px;
   margin: 0 auto;
-  padding: 16px 24px 96px;
+  padding: 48px 24px 96px;
+}
+@media (min-width: 640px) {
+  .home-showcase {
+    padding: 80px 48px 96px;
+  }
+}
+@media (min-width: 960px) {
+  .home-showcase {
+    padding: 96px 64px 96px;
+  }
+}
+/* VitePress hides heading anchors with `.vp-doc .header-anchor`, and the home
+   layout is not `.vp-doc` — so this heading's anchor rendered as a stray "#". */
+.home-showcase .header-anchor {
+  display: none;
 }
 .home-showcase h2 {
   border-top: none;
@@ -89,4 +104,10 @@
   border: 1px solid var(--vp-c-border);
   border-radius: 14px;
   box-shadow: 0 18px 50px -24px rgb(0 0 0 / 55%);
+}
+/* The app's own screenshots are theme-specific; show the one that matches the
+   site theme. VitePress ships no such utility of its own. */
+html:not(.dark) .dark-only,
+html.dark .light-only {
+  display: none;
 }

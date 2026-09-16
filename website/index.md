@@ -43,11 +43,20 @@ features:
 
 ## The alert list you actually work in
 
-![Jarvis card view — alerts grouped in a multi-column card grid](./assets/feature-card-view.png)
+<div class="dark-only">
+
+![Jarvis card view in dark theme — alerts grouped into a multi-column card grid, each card showing severity, labels, a firing sparkline and claim and silence buttons](./assets/feature-card-view.png)
+
+</div>
+<div class="light-only">
+
+![Jarvis card view in light theme — alerts grouped into a multi-column card grid, each card showing severity, labels, a firing sparkline and claim and silence buttons](./assets/feature-card-view-light.png)
+
+</div>
 
 Claim an alert with one click, silence it from the card, group by any label,
 and keep the filters you use every day one keystroke away.
 
-[Explore all features](/features) · [Run it locally](/getting-started)
+[Explore all features](/features) · [Run it locally](/demo)
 
 </div>

@@ -118,6 +118,16 @@ so without the badge pass first it mangles nested syntax.
   renders string icons (`v-html`); an object `icon: { svg: … }` is silently
   ignored because object icons go through `VPImage` and expect `src`.
   No emoji.
+- Screenshots of the app are theme-specific, so the home showcase ships both
+  and toggles them with `.light-only` / `.dark-only` (defined in
+  `theme/style.css` — VitePress has no such utility of its own). A screenshot
+  placed on the home page therefore needs a light counterpart in the
+  screenshot suite; `card-view` / `card-view-light` in
+  `frontend/e2e/screenshots/none/card-view.screenshot.spec.ts` is the pattern.
+- Headings inside hand-written blocks on the home page render a visible `#`:
+  VitePress hides heading anchors via `.vp-doc .header-anchor`, and the home
+  layout is not `.vp-doc`. `theme/style.css` hides them for `.home-showcase`;
+  a new block needs the same rule.
 
 ---
 

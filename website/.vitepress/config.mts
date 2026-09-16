@@ -152,8 +152,9 @@ export default defineConfig({
     },
 
     footer: {
-      message: 'Released under the Apache 2.0 License.',
-      copyright: 'Jarvis is not affiliated with Prometheus or Alertmanager.',
+      message:
+        'Released under the Apache 2.0 License. Jarvis is not affiliated with Prometheus or Alertmanager.',
+      copyright: 'Copyright © 2026 Julian Kleinhans',
     },
   },
 })
