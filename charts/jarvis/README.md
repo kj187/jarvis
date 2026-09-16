@@ -92,6 +92,7 @@ Tests cover four suites (`deployment`, `configmap`, `secret`, `ingress`) and run
 | `serviceAccount.name` | string | `""` | ServiceAccount name (auto-generated when empty) |
 | `leaderElection.podLabel.enabled` | bool | `true` | Label the current leader pod `jarvis.kj187.de/role=leader` (informational only — every pod serves all traffic). Renders a `Role`+`RoleBinding` (`pods`: `get`, `patch`) and sets `automountServiceAccountToken: true` on the pod; meaningful only with PostgreSQL and `replicaCount`/HPA `> 1`, harmless to leave on otherwise |
 | `podAnnotations` | object | `{}` | Pod annotations |
+| `podLabels` | object | `{}` | Extra pod labels, merged into the pod template's labels |
 | `podSecurityContext` | object | `{runAsNonRoot: true, runAsUser: 65532, ...}` | Pod-level security context |
 | `securityContext` | object | `{allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, ...}` | Container-level security context |
 | `service.type` | string | `ClusterIP` | Kubernetes Service type |
@@ -138,8 +139,13 @@ Tests cover four suites (`deployment`, `configmap`, `secret`, `ingress`) and run
 | `persistence.storageClass` | string | `""` | StorageClass name |
 | `persistence.accessMode` | string | `ReadWriteOnce` | PVC access mode |
 | `persistence.size` | string | `1Gi` | PVC size |
+| `persistence.annotations` | object | `{}` | PVC annotations (e.g. `helm.sh/resource-policy: keep`) |
 | `resources` | object | `{}` | Resource requests/limits |
+| `updateStrategy.type` | string | `""` | Deployment update strategy. Empty auto-selects: `Recreate` when `persistence.enabled` — an RWO volume (EBS and friends) cannot be mounted by two pods at once, so a rolling update forces a detachment and the old pod hits disk I/O errors — and `RollingUpdate` otherwise. Set it explicitly to override (e.g. `RollingUpdate` on PostgreSQL) |
 | `autoscaling.enabled` | bool | `false` | Enable HPA (requires PostgreSQL — same reasoning as `replicaCount` above) |
+| `autoscaling.minReplicas` | int | `1` | Lower bound for the HPA |
+| `autoscaling.maxReplicas` | int | `3` | Upper bound for the HPA |
+| `autoscaling.targetCPUUtilizationPercentage` | int | `80` | Target average CPU utilization that drives scaling |
 | `podDisruptionBudget.enabled` | bool | `false` | Create a `PodDisruptionBudget` — prevents voluntary disruptions (node drains, upgrades) from taking down every replica at once. Meaningful only with `replicaCount`/HPA `> 1` (PostgreSQL) |
 | `podDisruptionBudget.minAvailable` | int | `1` | Minimum pods that must stay available during a voluntary disruption |
 | `nodeSelector` | object | `{}` | Node selector |

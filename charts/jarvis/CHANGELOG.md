@@ -8,6 +8,14 @@ Entries up to and including 1.7.6 were reconstructed from the git history when t
 
 ## [Unreleased]
 
+### Breaking Changes
+
+- No breaking changes.
+
+### Fixed
+
+- The values table in the chart README documents six values that existed but were listed nowhere: `podLabels`, `persistence.annotations`, `updateStrategy.type`, `autoscaling.minReplicas`, `autoscaling.maxReplicas` and `autoscaling.targetCPUUtilizationPercentage`. `updateStrategy.type` matters most — its auto-selection (`Recreate` with a PVC, `RollingUpdate` otherwise) was explained only in a `values.yaml` comment and therefore reached neither the website nor Artifact Hub. Documentation only, no rendered change.
+
 ## [2.0.0] - 2026-09-15
 
 ### Breaking Changes

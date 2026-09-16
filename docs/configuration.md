@@ -176,7 +176,7 @@ Off by default: Jarvis keeps history forever unless you tell it otherwise.
 | `JARVIS_RETENTION_EVENTS_DAYS` | *(inherits)* | Alert lifecycle events |
 | `JARVIS_RETENTION_CLAIMS_DAYS` | *(inherits)* | Released claims |
 | `JARVIS_RETENTION_SILENCE_EVENTS_DAYS` | *(inherits)* | Silence events |
-| `JARVIS_RETENTION_COMMENTS_DAYS` | *(inherits)* | Comments |
+| `JARVIS_RETENTION_COMMENTS_DAYS` | `0` (kept forever) | Comments — **never** inherits `JARVIS_RETENTION_DAYS`; only an explicit value here enables deletion |
 | `JARVIS_RETENTION_SWEEP_INTERVAL` | `12h` | How often the sweep runs |
 
 What exactly gets deleted, in which order, and how this affects per-cluster
