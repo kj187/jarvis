@@ -27,7 +27,8 @@ docs) has three interactive gates — **ask, don't assume**:
    current commit, then `git reset --hard origin/main` on `main` — the
    commit is preserved on the branch, nothing is lost.
 2. Commit on the branch (`git commit -s`, tests in the same commit; run
-   the done-gate checks from `AGENTS.md` → Workflow Rules #7 first).
+   the done-gate checks from `AGENTS.md` → Workflow Rules #7 first, and the
+   [documentation check](#documentation-check) below).
 3. **PR gate — ask before pushing.** When the user signals the change is
    done and wants to push, ask whether to open a PR directly via `gh`. On
    yes: `git push -u origin <branch>` and `gh pr create --base main`
@@ -51,6 +52,26 @@ docs) has three interactive gates — **ask, don't assume**:
    (`git branch -d <branch>`). This leaves the user back on an up-to-date
    `main` with no stale branches, so no unrelated follow-up work lands on
    a merged branch.
+
+---
+
+## Documentation check
+
+Run this before the merge gate on **every** PR that changes behavior — the
+documentation website deploys `docs/` on every push to `main`, so whatever
+is missing here goes live as stale documentation.
+
+- Does the PR change something a user sees or configures? Then `docs/` must
+  describe it (usually `docs/features.md`, plus the matching topic file for
+  auth, retention, metrics, persistence, security) — in this PR, not later.
+- Does the PR add a file under `docs/`? Then load
+  `.agents/skills/website/SKILL.md`: the file needs an entry in
+  `website/scripts/pages.mjs` **and** a sidebar link in
+  `website/.vitepress/config.mts`.
+- Does the PR touch `website/` itself? Then `make website` must pass (it
+  fails on dead internal links) and the website skill gets updated.
+- The doc-sync table in `AGENTS.md` → Workflow Rules #6 covers the rest
+  (architecture, testing, skills, chart changelog, diagrams).
 
 ---
 
