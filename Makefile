@@ -1,8 +1,10 @@
 COMPOSE_DEV        = podman compose -f compose.dev.yml
+COMPOSE_DEMO       = podman compose -p jarvis-demo -f compose.demo.yml
 COMPOSE_TEST_DEPS  = podman compose -f compose.dev-dependencies.yml
 COMPOSE_E2E        = podman compose -f compose.e2e.yml
 GITLEAKS           = podman run --rm -v "$(CURDIR):/repo:ro,z" zricethezav/gitleaks:latest
 FRONTEND_CONTAINER = jarvis_frontend_1
+DEMO_AM_URL        = http://localhost:$(DEMO_AM_PORT)
 
 .PHONY: help \
         setup \
@@ -10,6 +12,7 @@ FRONTEND_CONTAINER = jarvis_frontend_1
         up-alertmanager down-alertmanager \
         up-alertmanager-ha down-alertmanager-ha \
         up-postgres down-postgres \
+        demo-up demo-seed demo-resolve demo-reset demo-down \
         test-all test-backend test-frontend test-frontend-unit fuzz-backend \
         helm-lint helm-test \
         lint gosec govulncheck audit security-all check-agent-context \
@@ -65,6 +68,36 @@ up-postgres: ## Start test PostgreSQL (port 5432, jarvis/jarvis/jarvis) — auto
 
 down-postgres: ## Stop test PostgreSQL
 	$(COMPOSE_TEST_DEPS) stop test-postgres
+
+# ── Demo stack (compose.demo.yml — separate from the dev stack) ─────────────────
+# Published image + a throwaway Alertmanager. Own data volume, so demo-reset can
+# wipe the history without touching ./data used by the dev stack. The dev stack
+# also binds 8080 — run both at once with DEMO_PORT=8081 DEMO_AM_PORT=9096.
+
+DEMO_PORT    ?= 8080
+DEMO_AM_PORT ?= 9093
+DEMO_ENV      = JARVIS_DEMO_PORT=$(DEMO_PORT) JARVIS_DEMO_AM_PORT=$(DEMO_AM_PORT)
+
+demo-up: ## Start the demo stack (Jarvis on :8080, Alertmanager on :9093)
+	$(DEMO_ENV) $(COMPOSE_DEMO) up -d
+	@echo ""
+	@echo "Jarvis:       http://localhost:$(DEMO_PORT)"
+	@echo "Alertmanager: http://localhost:$(DEMO_AM_PORT)"
+	@echo "Next: make demo-seed"
+
+demo-seed: ## Fire the 18 demo alerts into the demo Alertmanager (~2 min)
+	@ALERTMANAGER_URL=$(DEMO_AM_URL) bash scripts/fire-test-alerts.sh --profile demo
+
+demo-resolve: ## Resolve the demo alerts — they move to Jarvis's Resolved view, history stays
+	@ALERTMANAGER_URL=$(DEMO_AM_URL) bash scripts/resolve-test-alerts.sh --profile demo
+
+demo-reset: ## Wipe the demo stack completely (alerts + Jarvis history) and start it fresh
+	$(DEMO_ENV) $(COMPOSE_DEMO) down -v
+	$(DEMO_ENV) $(COMPOSE_DEMO) up -d
+	@echo "Demo reset. Next: make demo-seed"
+
+demo-down: ## Stop the demo stack, keep its data (use demo-reset to wipe)
+	$(DEMO_ENV) $(COMPOSE_DEMO) down
 
 # ── Tests ──────────────────────────────────────────────────────────────────────
 

@@ -66,8 +66,12 @@ Card view, list view, label filters, saved filters, silence management, alert hi
 
 **No clone needed — runs entirely from the published image.**
 
-All you need is Podman or Docker. Create a `compose.yml`, point it at your
-Alertmanager, and start it:
+All you need is Podman or Docker, and **a reachable Alertmanager** — the
+snippet below does not start one. Replace `http://alertmanager:9093` with your
+own instance; if it runs outside this compose network, use its real address.
+
+Just looking around? [docs/demo.md](docs/demo.md) brings up Jarvis
+*and* a throwaway Alertmanager filled with realistic alerts in five minutes.
 
 ```yaml
 services:
@@ -123,6 +127,7 @@ Everything below is also published at **<https://kj187.github.io/jarvis/>**.
 
 **Getting started**
 
+- [docs/demo.md](docs/demo.md) — try it locally: Jarvis plus a throwaway Alertmanager and 18 demo alerts, in five minutes
 - [docs/installation.md](docs/installation.md) — Compose, Kubernetes/Helm, signature verification, upgrading
 - [docs/configuration.md](docs/configuration.md) — every environment variable, in one place
 - [docs/features.md](docs/features.md) — what the UI can do, with screenshots

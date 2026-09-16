@@ -9,6 +9,25 @@ instead of duplicating.
 
 ---
 
+## A second compose file shares the first one's project — and `down -v` its volumes
+
+**Symptom**: `make demo-reset` (`podman compose -f compose.demo.yml down -v`)
+tried to remove `jarvis_jarvis_gomodcache` and `jarvis_jarvis_pnpmstore` — the
+**dev stack's** volumes. It only failed because the dev containers were
+running; with the dev stack stopped it would have deleted the Go module and
+pnpm caches.
+**Cause**: Compose derives the project name from the directory, not from the
+file. Every `compose.*.yml` in the repo root is project `jarvis`, so `-v`
+removes every volume in that project, whichever file declared it.
+**Rule**: A compose file that anyone is ever going to `down -v` gets its own
+project: `name: jarvis-demo` in the file **and** `-p jarvis-demo` on the
+command (`COMPOSE_DEMO` in the `Makefile`) — the flag is what actually applies
+under podman-compose. Volume names then carry the project prefix
+(`jarvis-demo_demo_data`), which is also how you verify the isolation:
+`podman volume ls`.
+
+---
+
 ## Release video: blurry zooms, flicker, CJK font, ffmpeg OOM, overlong ending
 
 **Symptom**: Zoomed video shots looked pixelated; app text and title cards

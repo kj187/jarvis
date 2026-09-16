@@ -9,6 +9,10 @@ Docker alike — replace `podman` with `docker` in any command.
 - [Verify what you are running](#verify-what-you-are-running) — signatures and SBOM
 - [Upgrading](#upgrading) — what to expect between versions
 
+This page assumes you have an Alertmanager to point Jarvis at. If you do not,
+or you are still evaluating, the [local demo](demo.md) starts Jarvis and
+a throwaway Alertmanager with demo alerts in five minutes.
+
 The image tag used on this page is the current release. Available tags are
 listed on the [releases page](https://github.com/kj187/jarvis/releases).
 
@@ -18,7 +22,11 @@ listed on the [releases page](https://github.com/kj187/jarvis/releases).
 
 No clone and no build step — everything runs from the published image.
 
-Create a `compose.yml`, point it at your Alertmanager, and start it:
+**This snippet does not start an Alertmanager.** It assumes you have one and
+that Jarvis can reach it: `http://alertmanager:9093` only resolves if such a
+service exists on the same compose network. Point it at your own instance
+instead — and if you just want to see Jarvis working first, the
+[local demo](demo.md) starts both, with demo alerts.
 
 ```yaml
 services:

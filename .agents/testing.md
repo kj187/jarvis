@@ -81,13 +81,27 @@ JARVIS_TEST_POSTGRES_DSN='postgres://jarvis:jarvis@localhost:5432/jarvis?sslmode
   go test ./internal/history/...   # unset → these tests t.Skip; CI always sets it (postgres:17 service container)
 
 # ── Manual test fixtures against the dev stack ───────────────
-make fixtures-create               # fire 27 Kubernetes-themed test alerts (label test_suite=jarvis)
+make fixtures-create               # fire all 27 Kubernetes-themed test alerts (label test_suite=jarvis)
 make fixtures-remove               # resolve those alerts
 make fixtures-refire               # resolve + wait 70s (must clear the 60s grace period,
                                     # Critical Invariant #1) + re-fire — guarantees a new
                                     # occurrence. Takes ~3-4 minutes. See .agents/lessons.md
 make fixtures-silence              # create escaped-regex silence (recreate-bug repro)
 make fixtures-unsilence            # expire test silences
+
+# fire-test-alerts.sh / resolve-test-alerts.sh take --profile demo|full (default: full).
+# demo = alerts 1-18 (realistic incidents), full = + 19-27 (link/label/escaping edge
+# cases the screenshot suite needs). The fixtures-* targets always use full.
+
+# ── Demo stack (compose.demo.yml, project jarvis-demo) ───────
+# Published image + throwaway Alertmanager, own volume — independent of the dev
+# stack, which is why demo-reset may wipe it. Docs: docs/demo.md
+make demo-up                       # Jarvis :8080 + Alertmanager :9093
+                                   # DEMO_PORT / DEMO_AM_PORT override both (dev stack also binds 8080)
+make demo-seed                     # fire the 18 demo alerts (--profile demo)
+make demo-resolve                  # resolve them — they move to the Resolved view, history stays
+make demo-reset                    # down -v + up: empty Jarvis, repeatable demo
+make demo-down                     # stop, keep the volume
 ```
 
 ---

@@ -79,6 +79,7 @@ export default defineConfig({
         text: 'Getting Started',
         items: [
           { text: 'Overview', link: '/getting-started' },
+          { text: 'Try it locally (demo)', link: '/demo' },
           { text: 'Installation', link: '/installation' },
           { text: 'Configuration', link: '/configuration' },
         ],

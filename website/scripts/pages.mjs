@@ -9,6 +9,7 @@
  */
 export const PAGES = [
   { src: 'README.md', route: 'getting-started', title: 'Getting Started' },
+  { src: 'docs/demo.md', route: 'demo' },
   { src: 'docs/installation.md', route: 'installation' },
   { src: 'docs/configuration.md', route: 'configuration' },
   { src: 'docs/features.md', route: 'features' },

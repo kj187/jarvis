@@ -31,7 +31,7 @@ Repository layout:
 - `website/` — VitePress documentation site; renders the repo's own markdown, deployed to GitHub Pages
 - `scripts/` — E2E runner, mock-OIDC config, manual test-alert/silence fixtures
 - `.agents/` — AI reference files (`architecture.md`, `testing.md`, `lessons.md`) and `skills/` — workflows as [Agent Skills](https://agentskills.io), one `<name>/SKILL.md` each (routed below)
-- `Makefile` — canonical entry for dev stack, tests, security scans, fixtures (`make help`)
+- `Makefile` — canonical entry for dev stack, demo stack, tests, security scans, fixtures (`make help`)
 
 ## Task Router — load on demand
 
