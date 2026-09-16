@@ -212,7 +212,7 @@ adapters and their rules live in `docs/ai-agents.md`.
    | Security tooling, checklists, auth/origin behavior | `.agents/skills/security-check/SKILL.md` |
    | Feature-workflow conventions (validation rules, type-sync, checklists) | `.agents/skills/add-feature/SKILL.md` |
    | Branch/PR/CI/merge workflow, changelog rules for PRs | `.agents/skills/pr-workflow/SKILL.md` |
-   | Release process, workflows in `release.yml`, versioning, changelog/release-notes format | `.agents/skills/release/SKILL.md` |
+   | Release process, workflows in `release.yml`, versioning, changelog/release-notes format, social media post rules | `.agents/skills/release/SKILL.md` |
    | Issue-triage workflow, reply guidelines | `.agents/skills/scope-triage/SKILL.md` |
    | Anything under `charts/jarvis/` except `tests/` (templates, values, `Chart.yaml`, chart README) | `charts/jarvis/CHANGELOG.md` → `## [Unreleased]` (rule 13) |
    | Scope definition, in/out-of-scope boundaries, litmus test | `docs/scope.md` |
@@ -236,12 +236,13 @@ adapters and their rules live in `docs/ai-agents.md`.
 8. **Releases**: Never trigger a release without an explicit user request.
    Only when the user explicitly asks (e.g. "release 1.6.0", `release`
    skill): load `.agents/skills/release/SKILL.md` and run its flow
-   end-to-end. It has exactly **one** stop: the review gate (release notes,
-   app + chart version, breaking-change classification shown before anything
-   is committed or pushed). After the
-   user's go, no further confirmations. Chart-only releases (chart changes
-   without a new app version) follow the same file, section "Chart-only
-   Release".
+   end-to-end. It asks exactly **one** upfront question (produce a release
+   video? — Phase 0, before preflight) and has exactly **one** stop: the
+   review gate (release notes, app + chart version, breaking-change
+   classification, drafted social posts, YouTube URL if a video was made —
+   shown before anything is committed or pushed). After the user's go, no
+   further confirmations. Chart-only releases (chart changes without a new
+   app version) follow the same file, section "Chart-only Release".
 9. **Dependabot** runs every Monday (Go deps, npm/pnpm grouped, GitHub
    Actions). Its PRs run through CI — green CI → merge, no manual
    intervention needed.
