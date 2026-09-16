@@ -105,6 +105,14 @@ export default defineConfig({
           { text: 'Data Retention', link: '/retention' },
           { text: 'Metrics', link: '/metrics' },
           { text: 'Security', link: '/security' },
+          { text: 'Behind a Proxy', link: '/reverse-proxy' },
+        ],
+      },
+      {
+        text: 'Help',
+        items: [
+          { text: 'Troubleshooting', link: '/troubleshooting' },
+          { text: 'FAQ', link: '/faq' },
         ],
       },
       {

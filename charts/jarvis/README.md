@@ -294,7 +294,7 @@ including the other auth methods and multi-cluster numbering, is in
 
 ### Ingress with WebSocket support
 
-Jarvis uses WebSocket (`/ws`) for live alert updates. The ingress must not strip or block the `Upgrade` / `Connection` headers.
+Jarvis uses WebSocket (`/ws`) for live alert updates. The ingress must not strip or block the `Upgrade` / `Connection` headers, and `config.allowedOrigins` must name the URL the browser uses — see [docs/reverse-proxy.md](../../docs/reverse-proxy.md).
 
 #### ingress-nginx
 

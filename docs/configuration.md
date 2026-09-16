@@ -24,7 +24,7 @@ Values are read once at startup — a change means a restart.
 | `JARVIS_LOG_LEVEL` | `info` | Log verbosity: `info` or `debug` |
 | `JARVIS_LOG_REQUESTS` | `false` | Log every HTTP request. Noisy — for debugging a proxy or auth problem, not for normal operation |
 | `JARVIS_POLL_INTERVAL` | `15s` | How often Alertmanager is polled (Go duration, e.g. `30s`). Also scales the grace period to `max(60s, 2 × interval)` — see [Alert lifecycle](alert-lifecycle.md) |
-| `JARVIS_ALLOWED_ORIGINS` | *(same origin)* | Comma-separated origins allowed for CORS and the WebSocket upgrade, e.g. `https://jarvis.example.com`. Required whenever the browser reaches Jarvis under a different host than the backend itself. No wildcard is accepted |
+| `JARVIS_ALLOWED_ORIGINS` | *(same origin)* | Comma-separated origins allowed for CORS and the WebSocket upgrade, e.g. `https://jarvis.example.com`. Required whenever the browser reaches Jarvis under a different host than the backend itself — see [Running behind a proxy](reverse-proxy.md). No wildcard is accepted |
 | `JARVIS_RUNBOOK_BASE_URL` | — | Prefix for runbook links. Prepended to the `runbook` label or annotation when its value is not already an absolute URL, e.g. `https://wiki.example.com/runbooks/` |
 
 ---

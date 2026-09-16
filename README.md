@@ -140,6 +140,7 @@ Everything below is also published at **<https://kj187.github.io/jarvis/>**.
 - [docs/metrics.md](docs/metrics.md) — Prometheus `/metrics` endpoint: exported metrics, scrape config, ServiceMonitor
 - [docs/retention.md](docs/retention.md) — optional data-retention sweep: what gets deleted, `JARVIS_RETENTION_*` config, sweep order
 - [docs/security.md](docs/security.md) — security measures
+- [docs/reverse-proxy.md](docs/reverse-proxy.md) — nginx, Traefik, Caddy and ingress: allowed origins and WebSocket passthrough
 - [charts/jarvis/README.md](charts/jarvis/README.md) — Helm values reference and deployment examples
 
 **Understanding it**
@@ -147,6 +148,11 @@ Everything below is also published at **<https://kj187.github.io/jarvis/>**.
 - [docs/architecture.md](docs/architecture.md) — data-flow overview: who talks to whom, and when (with diagram)
 - [docs/alert-lifecycle.md](docs/alert-lifecycle.md) — state machine, grace period, episodes, restart/outage guarantees (with diagram)
 - [docs/scope.md](docs/scope.md) — what Jarvis is, and what it will never become
+
+**When something is wrong**
+
+- [docs/troubleshooting.md](docs/troubleshooting.md) — by symptom: no live updates, no alerts, startup failures, render errors
+- [docs/faq.md](docs/faq.md) — the questions that come up before installing
 
 **Contributing**
 

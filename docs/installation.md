@@ -81,6 +81,10 @@ environment:
   JARVIS_ALLOWED_ORIGINS: https://jarvis.example.com
 ```
 
+The proxy also has to pass the WebSocket upgrade through. Worked
+configurations for nginx, Traefik, Caddy and ingress controllers are in
+[Running behind a proxy](reverse-proxy.md).
+
 ---
 
 ## Kubernetes / Helm
