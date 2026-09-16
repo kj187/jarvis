@@ -48,6 +48,8 @@ make e2e                           # functional suite across all auth modes (non
 make e2e-mode MODE=oidc            # functional suite for ONE mode
 make e2e-screenshots               # regenerate all docs screenshots
 make e2e-screenshot NAME=card-view # regenerate ONE screenshot
+make release-video VERSION=1.13.0  # release demo video (TTS → record → render), only on request; PROJECT=intro for the product video —
+                                   # .agents/skills/release-video/SKILL.md; STEP=tts|record|render
 
 # ── Helm (no cluster needed — helm-unittest plugin required) ─
 helm lint charts/jarvis/           # Static chart validation
@@ -401,6 +403,7 @@ Specs live under `frontend/e2e/`:
   another saved filter from its row writes nothing on the first click and
   only overwrites after "Click again to overwrite" (K13).
 - `e2e/screenshots/<mode>/*.screenshot.spec.ts` — screenshot generation for docs (`docs/assets/`)
+- `e2e/video/` — demo-video recorder, renderer, release and intro storyboard templates (`playwright.video.config.ts`; per-project storyboards in gitignored `e2e/_video/`; `.agents/skills/release-video/SKILL.md`). Not a test and not run in CI.
 - `e2e/fixtures/`, `e2e/support/` — shared fixtures and helpers
 
 The complete spec inventory (which spec file covers which scenario), the

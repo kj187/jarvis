@@ -5,11 +5,10 @@ description: Fully automated Jarvis release — preflight, changelogs, release n
 
 # Jarvis — Creating a Release
 
-Automated release with **one review gate**: a release request for `X.Y.Z`
-(the `release` skill) runs preflight, changelogs (app + Helm chart), curated
-release notes and version bumps, then **stops once** to show the user the release notes and versions (step 13).
-After the user's go, the rest — commit, PR, merge, tag, push, CI monitoring —
-runs without further questions.
+Release flow with **one review gate**: ask about video upfront, run preflight,
+prepare changelogs and release notes, optionally record the video, draft social
+posts, then **stop once** at the review gate (step 13) to show everything
+before anything is committed or pushed. After the user's go — no further stops.
 
 **Breaking changes are always explicit** (AGENTS.md → Workflow Rules #13):
 the app `CHANGELOG.md`, the chart `charts/jarvis/CHANGELOG.md` and the release
@@ -39,6 +38,12 @@ instead of working around it.
 ---
 
 ## Step-by-Step
+
+### Phase 0 — Video decision (before anything else)
+
+Ask the user exactly once: **"Produce a release video for YouTube and LinkedIn? (yes / no)"**
+No answer, "no", or anything non-affirmative means no video — proceed without it.
+Record the decision; it drives two later steps (step 10a and step 13).
 
 ### Phase 1 — Preflight (abort on any failure, report why)
 
@@ -111,6 +116,20 @@ instead of working around it.
    Helm install, SBOM) — do **not** include those in the notes file.
    - `vX.0.0` (first or new major) → Template A below
    - otherwise → Template B below
+10a. **Video & social posts** (video only if Phase 0 was yes; social posts
+   always). Run this now — the release notes from step 10 give both their
+   material:
+   - If Phase 0 was yes: run `.agents/skills/release-video/SKILL.md` now. It
+     hands back the video files, covers, and the YouTube title/description
+     (also written to `youtube.txt` in `VIDEO_OUT`). Ask the user to upload
+     the video to YouTube before the review gate, so its URL is ready there.
+   - Draft the **social media posts** (see *Social media posts* below) for
+     LinkedIn, X and Reddit. Use the release URL
+     (`https://github.com/kj187/jarvis/releases/tag/vX.Y.Z` — deterministic,
+     safe to reference before the release exists) and, only if a video was
+     produced, the placeholder `<YOUTUBE_URL>` (resolved at the review
+     gate). Write them to `~/Downloads/jarvis-X.Y.Z-social/` in addition to
+     showing them in chat.
 11. **Bump versions in README** — the two occurrences in the Getting Started
    block. The image tag is the **app** version, the `helm install --version`
    is the **chart** version (decoupled — never the app version, that chart
@@ -138,7 +157,16 @@ instead of working around it.
     - the breaking-change classification from step 6 (app + chart),
     - the complete release notes (`.github/release-notes/vX.Y.Z.md`),
     - the new chart CHANGELOG section,
-    - what was deliberately left out of the notes (and why).
+    - what was deliberately left out of the notes (and why),
+    - the drafted **social media posts** (LinkedIn, X, Reddit) from step 10a.
+
+    If Phase 0 was yes, ask for the **YouTube URL** now (the video was
+    already produced in step 10a) and fill it into the *Watch the
+    highlights* block and every `<YOUTUBE_URL>` placeholder in the social
+    posts; show the notes again. The LinkedIn post's own URL is a separate,
+    later follow-up (see *Video block in the release notes* below) — it is
+    essentially never known at this point, since the user posts it only
+    after the release is public.
 
     Then wait. Requested changes → apply, show again. Only an explicit go
     continues with step 14; from there on, no further confirmations.
@@ -226,6 +254,14 @@ exists by the time the release is created:
 appended to the feature's bullet after `<br><br>` (same physical line), with a
 `width` that keeps it compact (≤ 720, never above the PNG's pixel width).
 
+**Release video (optional, only when the user said yes at Phase 0).**
+The *Watch the highlights* block — YouTube thumbnail linked to the video —
+goes directly after *Breaking Changes*; format in
+`.agents/skills/release-video/SKILL.md`. The YouTube URL is usually already
+known by the review gate (step 10a produced the video ahead of time); a
+LinkedIn mention in the same block almost never is — see that section for
+the follow-up-edit path.
+
 **Credit people who shaped a change.** When a feature or fix goes back to a
 GitHub issue with a substantial proposal or report, link the issue in the
 bullet and thank its author by handle (`Thanks to @user for the detailed
@@ -302,6 +338,45 @@ Full feature list → [README](https://github.com/kj187/jarvis#readme)
 ```
 
 Omit empty sections — except *Breaking Changes*, which is always present.
+
+---
+
+## Social media posts
+
+Drafted at step 10a, shown again at the review gate (step 13) — always as a
+copy/paste block in chat **and** as files in
+`~/Downloads/jarvis-X.Y.Z-social/` (`linkedin.txt`,
+`linkedin-first-comment.txt`, `x.txt`, `reddit.md`). English, derived from
+the same release notes as the GitHub release body.
+
+**Style, every channel plus the YouTube text and release-notes prose above**
+— avoid the AI-written tells: emojis LinkedIn ≤ 1–2 total, X ≤ 1, Reddit/
+YouTube none, never an emoji list or ✅/🚀/🔥 chain; no "excited to
+announce", "game-changer", "dive into", "seamless", "supercharge", "unlock",
+"elevate"; no reflexive em-dash-per-sentence or rule-of-three lists; concrete
+over promotional — what used to be annoying, what works now, not ad copy.
+
+**LinkedIn.** Hook in the first two lines (the pain removed, not "excited to
+announce"). 3–5 features, short title + one sentence each (share the 1–2
+emoji budget above across the whole post, not one per feature). Fixes in one
+line if substantial; breaking changes (app or chart) in one clear sentence.
+Credit contributors by name. Close with a question + 3–5 hashtags
+(#Prometheus #Alertmanager #SRE #OpenSource #Kubernetes). **No links in the
+body** — release/repo/YouTube URLs go in the first comment
+(`linkedin-first-comment.txt`). Hints for the user: upload the square video
+natively with its cover, post Tue–Thu morning, answer comments early.
+
+**X.** One post ≤ 280 chars (a link counts as 23 chars) with the release or
+YouTube link, ≤ 2 hashtags. Optional thread of 3–5 posts, one feature each,
+≤ 280 chars. Note for the user: without X Premium, native video caps at
+2:20 — link YouTube instead, or cut a short clip.
+
+**Reddit.** Factual title, no clickbait, no emoji. Markdown body: honest
+maintainer disclosure ("I maintain Jarvis, a …"), 1–2 sentences on what it
+is, new features as a short list, links (repo, release, video), invite
+feedback. Suggest matching subreddits (r/PrometheusMonitoring, r/sre,
+r/kubernetes, r/devops, r/selfhosted); remind the user to check each one's
+self-promotion rules and not cross-post everywhere the same day.
 
 ---
 
@@ -406,67 +481,11 @@ deleted manually — `gh release delete v1.7.0-rc.1 --cleanup-tag`.
 
 ## What GitHub Actions does automatically (after tag push)
 
-From `.github/workflows/release.yml`:
-
-Three jobs, strictly in this order — a failure stops everything after it, so
-neither a chart nor a GitHub Release ever points at an image that wasn't
-built.
-
-**Job `build-and-push`:**
-1. Derive image tags via `docker/metadata-action` → `{{version}}` (e.g.
-   `1.2.3`) + `{{major}}.{{minor}}` (e.g. `1.2`) + `latest` (metadata-action
-   `latest=auto` default on semver tags). **No `v` prefix.**
-2. Build multi-arch image (`linux/amd64` + `linux/arm64`) from `Containerfile`
-   (multi-stage), with BuildKit SBOM + provenance (`mode=max`), push to GHCR.
-3. Sign the image keylessly with **cosign** (GitHub OIDC).
-4. Publish **SLSA build provenance** to the GitHub attestations API
-   (`actions/attest-build-provenance`, also pushed to the registry) →
-   consumers can `gh attestation verify oci://ghcr.io/kj187/jarvis:X.Y.Z --repo kj187/jarvis`.
-5. Outputs the image digest for the later jobs.
-
-**Job `chart`** (stable tags only; calls `.github/workflows/chart-release.yml`
-via `workflow_call` with `require_image: true`) — see *Helm chart workflow*
-below.
-
-**Job `release`** (after `build-and-push`, and `chart` unless skipped for a
-pre-release):
-1. Generate a standalone **SPDX SBOM** (syft, installed via
-   `anchore/sbom-action/download-syft`, run directly against the pushed image
-   digest) → `sbom.spdx.json`.
-2. Sign it keylessly: `cosign sign-blob --bundle sbom.spdx.json.sigstore.json`
-   — consumers verify with `cosign verify-blob`; the `*.sigstore.json` asset
-   is also what OpenSSF Scorecard's *Signed-Releases* check looks for.
-3. Build the release body: stable tags **require**
-   `.github/release-notes/vX.Y.Z.md` (the job fails without it — no silent
-   CHANGELOG fallback), then appends image pull + digest, cosign verify,
-   `gh attestation verify`, Helm install + chart CHANGELOG link + chart cosign
-   verify, and SBOM verify. Pre-release tags get an auto-generated
-   commit-log body and an `image.tag` override hint instead of the chart
-   section — see [Release Candidates](#release-candidates-pre-releases).
-4. Create the GitHub Release via `gh release create --notes-file
-   release-body.md --verify-tag` with `sbom.spdx.json` +
-   `sbom.spdx.json.sigstore.json` as assets — `--latest` for a real release,
-   `--prerelease` for a pre-release tag. Releases are immutable: if a release
-   for the tag already exists, the job fails — never overwrite a published
-   release; delete it manually first if a re-release is really intended.
-
-**Helm chart workflow** (`.github/workflows/chart-release.yml`):
-- Entry points: `workflow_call` from `release.yml` (app releases, after the
-  image) and push to `main` touching `charts/**` / `workflow_dispatch`
-  ([chart-only releases](#chart-only-release)). Runs are serialized
-  (`concurrency: chart-publish`).
-- Reads `version` and `appVersion` from `charts/jarvis/Chart.yaml` — chart
-  versioning is **decoupled** from the app version and maintained manually.
-- Existence guard: if that chart version is already in the registry, the run
-  skips publishing (published chart versions are immutable, never overwritten).
-- Image guard: publishes only if `ghcr.io/kj187/jarvis:<appVersion>` exists.
-  Missing → the release PR merge run skips with a notice (the release
-  workflow publishes after the build); the `workflow_call` run fails.
-- Otherwise: `helm lint` → `helm package` → `helm push` to
-  `oci://ghcr.io/kj187/charts` → keyless **cosign** signature (GitHub OIDC).
-- The signing step runs whenever the version exists in the registry and
-  verifies before signing, so a `workflow_dispatch` re-run heals a
-  published-but-unsigned version.
+Background reference, not needed to run the flow — read
+`.agents/skills/release/references/github-actions.md` when debugging a
+failed release workflow run (step 18/19): the three jobs in
+`release.yml` (`build-and-push` → `chart` → `release`: build, sign, SBOM,
+GitHub Release) and the Helm chart workflow's existence/image guards.
 
 ---
 

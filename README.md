@@ -21,6 +21,12 @@ It was inspired by [Karma](https://github.com/prymitive/karma), which is a great
 
  ![Jarvis Screenshot](docs/assets/screenshot.png)
 
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=gssfmws8B6o"><img src="https://img.youtube.com/vi/gssfmws8B6o/maxresdefault.jpg" alt="Jarvis in two and a half minutes (video)" width="720"></a>
+</p>
+
+<p align="center"><i>Two and a half minutes through Jarvis: every cluster live, the full alert history, claims and comments, and silences with a preview.</i></p>
+
 ## Why Jarvis?
 
 Most Alertmanager UIs are read-only dashboards. Jarvis is built for teams that need to *act* on alerts, not just observe them:

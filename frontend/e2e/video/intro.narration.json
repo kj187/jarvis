@@ -1,0 +1,23 @@
+{
+  "voice": "af_heart",
+  "speed": 1.0,
+  "segments": [
+    { "id": "intro", "text": "Alertmanager tells you that something is wrong. Jarvis helps your team do something about it." },
+    { "id": "clusters", "text": "Jarvis connects all your Alertmanager clusters, from development to production, in one view." },
+    { "id": "live", "text": "Every change is pushed live to your browser. When a new alert fires, it simply appears. No refresh needed." },
+    { "id": "search", "text": "Search across every alert. Type a few letters, and only what matters stays on screen." },
+    { "id": "filters", "text": "Save the filters you need every day, and switch between them with a single click." },
+    { "id": "understand", "text": "Open any alert to see its labels, its links, and a heatmap of when it fired. The full history is stored, so nothing gets lost after a restart." },
+    { "id": "claim", "text": "Claim an alert with one click, so everyone knows who is on it. Add a short note, and it shows up right on the card for the whole team." },
+    { "id": "comments", "text": "Comments stay with the alert, even when it fires again, so the next person on call knows the whole story." },
+    { "id": "fast-silence", "text": "Silencing is at the heart of Jarvis. Fast-Silence mutes an alert in one click, for as long as you choose." },
+    { "id": "silence-form", "text": "For more control, open the full silence form. Before you create it, Jarvis shows exactly which alerts will be affected." },
+    { "id": "silence-group", "text": "A whole group of alerts can be silenced at once, with the same preview." },
+    { "id": "silence-templates", "text": "Recurring maintenance windows become reusable templates. Pick one, and the matchers and reason are filled in for you." },
+    { "id": "silences-page", "text": "And every silence is managed on its own page, where you can extend, edit or expire it." },
+    { "id": "auth", "text": "Secure Jarvis the way you need it: open for trusted networks, with built-in user management, or with single sign-on through any OIDC provider." },
+    { "id": "deploy", "text": "It runs as a single container. Start with SQLite, move to PostgreSQL, and scale to a highly available setup on Kubernetes with the Helm chart." },
+    { "id": "security", "text": "Every release ships signed container images and a software bill of materials, and the container runs hardened by default." },
+    { "id": "outro", "text": "Jarvis is free and open source. Get started on GitHub, at k j one eight seven slash jarvis." }
+  ]
+}

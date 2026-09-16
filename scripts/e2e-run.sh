@@ -5,6 +5,7 @@
 #   scripts/e2e-run.sh test        <mode>            # functional suite for a mode
 #   scripts/e2e-run.sh screenshots <mode>            # all screenshots for a mode
 #   scripts/e2e-run.sh screenshot  <mode> <name>     # single screenshot (-g <name>)
+#   scripts/e2e-run.sh video       <mode>            # release-video storyboard, once per $VIDEO_FORMATS
 #
 #   <mode> = none | internal | oidc
 #
@@ -13,7 +14,7 @@
 
 set -euo pipefail
 
-ACTION="${1:?usage: e2e-run.sh <test|screenshots|screenshot> <mode> [name]}"
+ACTION="${1:?usage: e2e-run.sh <test|screenshots|screenshot|video> <mode> [name]}"
 MODE="${2:?mode required: none|internal|oidc}"
 NAME="${3:-}"
 
@@ -99,6 +100,17 @@ case "$ACTION" in
     echo "==> [${MODE}] generating single screenshot '${NAME}'"
     "${COMPOSE[@]}" run --rm e2e-playwright \
       sh -c "${PW_SETUP} && pnpm exec playwright test --config playwright.screenshots.e2e.config.ts -g '${NAME}'"
+    ;;
+  video)
+    # Release video (scripts/release-video.sh): one recording per format, one
+    # stack boot. Frames and timelines land in frontend/e2e/_video/<VIDEO_PROJECT>/.
+    # Inter replaces the image's CJK fallback for system-ui (e2e/video/fonts.conf).
+    VIDEO_FONTS="apt-get update -qq && apt-get install -y -qq --no-install-recommends fonts-inter fonts-jetbrains-mono >/dev/null && cp e2e/video/fonts.conf /etc/fonts/local.conf && fc-cache -f >/dev/null"
+    for format in ${VIDEO_FORMATS:-landscape square}; do
+      echo "==> [${MODE}] recording release video (${format})"
+      "${COMPOSE[@]}" run --rm -e VIDEO_FORMAT="${format}" -e VIDEO_VERSION="${VIDEO_VERSION:-}" -e VIDEO_PROJECT="${VIDEO_PROJECT:-release}" e2e-playwright \
+        sh -c "${VIDEO_FONTS} && ${PW_SETUP} && pnpm exec playwright test --config playwright.video.config.ts"
+    done
     ;;
   *)
     echo "ERROR: unknown action '$ACTION'" >&2; exit 1 ;;

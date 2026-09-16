@@ -1,0 +1,23 @@
+{
+  "voice": "af_heart",
+  "speed": 1.0,
+  "segments": [
+    { "id": "intro", "text": "Jarvis one point twelve is here — a big usability round for the alert view. Let's walk through what's new." },
+    { "id": "saved-filters", "text": "The filters you use every day now live in the toolbar. Pick one, and the matcher chips are applied instantly." },
+    { "id": "saved-filters-default", "text": "Star the one you start your day with. Open Jarvis without a filter in the link, and it is applied for you. Unstar it, and you are back to every alert." },
+    { "id": "labels", "text": "A card carries a lot of labels, and only a few of them tell you which alert this is. Pin those, and they move to the front of every card — in a color you choose." },
+    { "id": "labels-hide", "text": "The rest can be hidden. A hidden label still filters and still shows in the detail panel, it just stops competing for space on your cards." },
+    { "id": "labels-chip", "text": "Back on the cards, your pinned label comes first. Hidden labels sit behind a plus chip and open in a popover, so nothing jumps around." },
+    { "id": "grouping", "text": "Grouping moved out of the settings and into the toolbar. Every label is there, searchable, with the number of alerts behind it." },
+    { "id": "grouping-effect", "text": "Pick one, and the board regroups. Here, one section per cluster." },
+    { "id": "columns", "text": "Cards now flow into columns balanced by their real height, and the most recently fired group comes first." },
+    { "id": "columns-slider", "text": "If you prefer a fixed layout, the new card columns slider pins the count on every screen." },
+    { "id": "header", "text": "The header got quieter. Cluster health, refresh and info open on hover, right under the bar." },
+    { "id": "header-menu", "text": "And settings, theme and your account all live in one user menu, always in the same place." },
+    { "id": "claims", "text": "Open an alert, and claiming it is a single click in the detail panel. No form, no dialog — your team sees the owner right away." },
+    { "id": "claims-note", "text": "If you want to say what you are doing, add a short note afterwards. It shows up right on the card, where your team is looking anyway." },
+    { "id": "more", "text": "Three more things: filter links now use Alertmanager's own matcher syntax, your settings follow your account across devices, and the cards themselves got a lot calmer." },
+    { "id": "reliability", "text": "Under the hood, this release fixes a batch of history issues, most of them for PostgreSQL setups with several replicas." },
+    { "id": "outro", "text": "Jarvis is free and open source. Find it on GitHub, at k j one eight seven slash jarvis." }
+  ]
+}

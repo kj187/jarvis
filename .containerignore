@@ -9,6 +9,8 @@ playwright-report
 test-results
 .git
 tmp
+# Release/intro video work files (GBs of frames) — never part of an image build context
+frontend/e2e/_video
 # Docs website: regenerated content + build output, never part of an image build context
 website/content
 website/.vitepress/dist
