@@ -6,12 +6,6 @@ stack it fronts can also monitor Jarvis itself. The endpoint is **public**
 only aggregate counts and configured cluster names, never alert names,
 labels, or annotations.
 
-> **Breaking label change**: `jarvis_alertmanager_up` and
-> `jarvis_cluster_fetch_duration_seconds` gained a `member` label (HA-cluster
-> support). Existing dashboards/alerts that group only by `cluster` still
-> work with `sum by (cluster) (...)`; ones that assert on the exact label set
-> need the `member` label added.
-
 ## Scrape-time gauges
 
 Computed from the in-memory alert store, the WebSocket hub, and the poller's

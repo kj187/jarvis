@@ -27,22 +27,41 @@ the pre-commit hook and CI) keeps it that way.
 - Git
 
 No local Go or Node installation required — everything runs in containers.
+Every command below works with Docker too; replace `podman` with `docker`.
+
+## Tech Stack
+
+- **Backend**: Go 1.26 · Echo v4 · SQLite / PostgreSQL (`pgx/v5`, CGO-free) · gorilla/websocket
+- **Frontend**: React 19 · TypeScript 6 · Vite 8 · Tailwind CSS v4 · Zustand v5 · TanStack Query v5
+- **Infrastructure**: Podman multi-stage build · distroless/static-debian12
 
 ## Development Setup
 
 ```bash
+git clone https://github.com/kj187/jarvis.git
+cd jarvis
+
 # 1. Activate pre-commit hooks (once after cloning)
 make setup
 
 # 2. Copy and configure environment
 cp .env.example .env
-# Edit .env — configure at least one cluster
+# Edit .env — set at minimum JARVIS_CLUSTER_1_NAME and JARVIS_CLUSTER_1_ALERTMANAGER_URL
 
 # 3. Start development stack (hot-reload)
-podman compose -f compose.dev.yml up
+make up
 # Frontend: http://localhost:5173 (Vite HMR)
 # Backend:  http://localhost:8080 (air hot-reload)
 ```
+
+To build and run the production image locally instead:
+
+```bash
+podman compose up --build -d   # http://localhost:8080
+```
+
+`make help` lists every target — dev stack, tests, security scans, fixtures,
+the documentation website.
 
 ## Pull Request Process
 
@@ -84,6 +103,21 @@ message. The `DCO` check in CI fails any pull request containing commits
 without a sign-off.
 
 ## Testing
+
+```bash
+make test-all        # backend (go test -race) + frontend E2E + helm lint + helm unittest
+make test-backend    # go test -race ./...
+make test-frontend   # functional E2E across all auth modes (none + internal + oidc)
+make helm-lint       # helm lint charts/jarvis/
+make helm-test       # helm unittest charts/jarvis/
+```
+
+Helm unit tests need no Kubernetes cluster, but the plugin has to be installed
+once:
+
+```bash
+helm plugin install https://github.com/helm-unittest/helm-unittest --version v0.8.2
+```
 
 See [.agents/testing.md](.agents/testing.md) for the full test strategy and
 commands, and [docs/testing-e2e.md](docs/testing-e2e.md) for the E2E /

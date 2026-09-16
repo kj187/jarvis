@@ -89,6 +89,8 @@ When `JARVIS_AUTH_PROVIDER` is `internal` or `oidc`, `JARVIS_AUTH_MODE` determin
 | `JARVIS_AUTH_OIDC_CLIENT_SECRET` | for `oidc` | — | OIDC client secret |
 | `JARVIS_AUTH_OIDC_REDIRECT_URL` | for `oidc` | — | Callback URL (must match provider config) |
 | `JARVIS_AUTH_OIDC_SCOPES` | no | `openid,profile,email` | Comma-separated OIDC scopes |
+| `JARVIS_OIDC_ADMIN_CLAIM` | no | — | Token claim that grants the admin role, e.g. `groups`. Needs `JARVIS_OIDC_ADMIN_VALUE` — see [Role Mapping](#role-mapping) |
+| `JARVIS_OIDC_ADMIN_VALUE` | no | — | Value that claim must contain, e.g. `jarvis-admins` |
 
 ---
 
@@ -157,7 +159,25 @@ Users are redirected to the OIDC provider on login. The login modal shows a sing
 
 ### Role Mapping
 
-OIDC users are assigned the `user` role by default. To grant admin rights, an admin must promote the user via the admin panel after first login.
+OIDC users get the `user` role by default. There are two ways to grant admin
+rights.
+
+**From a token claim.** Set both variables and Jarvis reads the role straight
+from the ID token on every login:
+
+```env
+JARVIS_OIDC_ADMIN_CLAIM=groups
+JARVIS_OIDC_ADMIN_VALUE=jarvis-admins
+```
+
+The claim may be a single string or a list — Keycloak's `groups` and
+Cognito's `cognito:groups` both work. A user whose claim contains the
+configured value becomes `admin`, everyone else stays `user`. Because this is
+evaluated at each login, revoking the group in the identity provider takes
+effect the next time the user signs in.
+
+**Manually.** With no claim mapping configured, an existing admin promotes the
+user in the admin panel after their first login.
 
 ---
 

@@ -60,6 +60,7 @@ export default defineConfig({
     logo: '/logo.png',
     nav: [
       { text: 'Getting Started', link: '/getting-started' },
+      { text: 'Installation', link: '/installation' },
       { text: 'Features', link: '/features' },
       { text: 'Architecture', link: '/architecture' },
       { text: 'Helm Chart', link: '/helm-chart' },
@@ -76,7 +77,11 @@ export default defineConfig({
     sidebar: [
       {
         text: 'Getting Started',
-        items: [{ text: 'Getting Started', link: '/getting-started' }],
+        items: [
+          { text: 'Overview', link: '/getting-started' },
+          { text: 'Installation', link: '/installation' },
+          { text: 'Configuration', link: '/configuration' },
+        ],
       },
       {
         text: 'Product',
