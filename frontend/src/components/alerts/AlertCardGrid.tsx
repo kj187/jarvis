@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
 import { ChevronDown, ChevronRight, Grip } from 'lucide-react'
 import { AlertCard } from './AlertCard'
-import { EmptyState } from './EmptyState'
+import { EmptyState } from '@/components/common/EmptyState'
 import { Sheet } from '@/components/ui/sheet'
 import { SilenceForm } from '@/components/silences/SilenceForm'
 import { useQuery } from '@tanstack/react-query'

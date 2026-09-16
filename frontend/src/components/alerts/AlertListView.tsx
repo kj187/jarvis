@@ -2,7 +2,7 @@ import { Fragment, useState, useEffect, useRef, type MouseEvent as ReactMouseEve
 import { ArrowUpDown, Bell, BellMinus, BellOff, ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Grip, RefreshCw } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { AlertListRow } from './AlertListRow'
-import { EmptyState } from './EmptyState'
+import { EmptyState } from '@/components/common/EmptyState'
 import { StatusBadge } from './AlertBadge'
 import { LabelChip, HiddenLabelsToggle } from './LabelChip'
 import { HIDDEN_LABEL_KEYS } from '@/lib/alertUtils'

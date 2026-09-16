@@ -3,6 +3,7 @@ import { Loader2, X, ArrowUpDown, ArrowUp, ArrowDown, Search, Maximize2, User } 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
+import { EmptyState } from '@/components/common/EmptyState'
 import { SilenceCard } from './SilenceCard'
 import { SilenceGroupCard } from './SilenceGroupCard'
 import { SilenceListView } from './SilenceListView'
@@ -278,9 +279,7 @@ export function SilencesPage() {
 
       {isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
 
-      {!isLoading && groups.length === 0 && (
-        <p className="text-sm text-muted-foreground">No active silences.</p>
-      )}
+      {!isLoading && groups.length === 0 && <EmptyState message="No active silences" />}
 
       {viewMode === 'card' ? (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">

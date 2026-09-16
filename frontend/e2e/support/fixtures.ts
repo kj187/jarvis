@@ -23,7 +23,11 @@ export const test = base.extend<JarvisFixtures>({
     await use(new JarvisClient(JARVIS_URL))
   },
   // Clean slate before every test: clear AM alerts + reset Jarvis DB/store.
+  // Reduced motion so the empty-state Owl mesh backdrop (OwlMeshBackdrop.tsx)
+  // paints one static frame instead of animating — keeps screenshots and
+  // functional specs deterministic.
   page: async ({ page, am, jarvis }, use) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' })
     await am.clearAll()
     await jarvis.reset()
     await use(page)

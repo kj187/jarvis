@@ -979,6 +979,18 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
 │   │                            functions kept out of the .tsx renderer so the same username
 │   │                            always renders the same avatar; no external lookup (no
 │   │                            Gravatar/third-party call) — see components/ui/avatar.tsx
+│   ├── owlMesh.ts             → pure geometry/animation for the Owl-mesh empty-state backdrop:
+│   │                            sampleEdgePoints(pixels, w, h) — gradient-magnitude edge detection
+│   │                            (premultiplied luminance + alpha gradient, mirrors
+│   │                            `e2e/video/backdrops.js`'s `sampleLogo` weighting) on a bitmap,
+│   │                            no DOM access; buildMeshNodes → centers/scales into a layout box,
+│   │                            assigns each node a small unique drift phase/speed/amplitude
+│   │                            (mulberry32-seeded, deterministic); nodePositionAt(node, t) — pure
+│   │                            function of `t`, resting position + bounded elliptical drift, no
+│   │                            assemble animation (that stays video-only); buildMeshEdges — static
+│   │                            neighbourhood graph computed once from resting positions. 100% unit
+│   │                            tested (owlMesh.test.ts, synthetic bitmaps). Consumed by
+│   │                            `components/common/OwlMeshBackdrop.tsx`
 │   ├── settingsUtils.ts       → UserSettings, DEFAULT_SETTINGS + option constants,
 │   │                            LabelDisplayConfig ({ order: string[] (pinned); hidden: string[] },
 │   │                            default `{ order: ['@cluster'], hidden: [] }` — matches pre-feature
@@ -1040,6 +1052,25 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
 └── components/
     ├── ui/                    → shadcn/ui: button, card, badge, dialog, sheet, select, input,
     │                            textarea, date-time-picker, tooltip, truncatable-chip, avatar
+    ├── common/
+    │   ├── EmptyState.tsx     → shared empty view for alerts (AlertListView.tsx, AlertCardGrid.tsx —
+    │   │                        default message "No alerts") and silences (SilencesPage.tsx —
+    │   │                        `message="No active silences"`): centered OwlMeshBackdrop + a
+    │   │                        muted-foreground caption below it
+    │   └── OwlMeshBackdrop.tsx → `<canvas>`, rAF loop: samples `/logo.png`'s edge points
+    │                            (lib/owlMesh.ts sampleEdgePoints, offscreen canvas → ImageData),
+    │                            lays out nodes once (buildMeshNodes/buildMeshEdges), repaints each
+    │                            frame from nodePositionAt(node, t) — no re-sampling, no rebuilt
+    │                            edges. Colors read from `--color-muted-foreground` (lines) /
+    │                            `--color-link` (nodes) via getComputedStyle, re-read on a
+    │                            `data-theme` MutationObserver (App.tsx sets that attribute — see
+    │                            Settings Store below). Paused on `document.hidden`; a single static
+    │                            frame (no rAF loop) under `prefers-reduced-motion: reduce` — the
+    │                            shared Playwright `page` fixture (e2e/support/fixtures.ts) forces
+    │                            that emulated media so functional/screenshot specs stay
+    │                            deterministic. `aria-hidden`, `pointer-events-none`. Purely a UI
+    │                            component — no assemble animation (that stays video-only, see
+    │                            `e2e/video/backdrops.js`'s `owl()`)
     ├── layout/
     │   ├── Header.tsx         → nav tabs, cluster status, WS indicator, polling/refresh,
     │   │                        create-silence, mobile hamburger. Settings + theme toggle +
@@ -1306,8 +1337,7 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │   │                        reflows and visibly moves an alert to a different column on any height
     │   │                        change). Local `open` state only, never touches settings, so it's a
     │   │                        per-alert view-only peek.
-    │   ├── ViewToggle.tsx     → ⊞ / ☰ toggle
-    │   └── EmptyState.tsx     → large empty-state icon (no alerts)
+    │   └── ViewToggle.tsx     → ⊞ / ☰ toggle
     ├── comments/
     │   ├── CommentsPanel.tsx  → list (paginated, newest first) + Write/Preview editor; the sole
     │   │                        content of AlertDetailPanel's "Comments" tab (full panel width, no
