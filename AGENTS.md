@@ -28,6 +28,7 @@ Repository layout:
 - `frontend/` — React app (`src/components`, `src/hooks`, `src/lib`, `src/store`, `e2e/`)
 - `charts/jarvis/` — Helm chart (+ helm-unittest tests under `tests/`, own `CHANGELOG.md`)
 - `docs/` — user-facing documentation (not AI context, except `docs/testing-e2e.md`, `docs/scope.md` and `docs/ai-agents.md`)
+- `website/` — VitePress documentation site; renders the repo's own markdown, deployed to GitHub Pages
 - `scripts/` — E2E runner, mock-OIDC config, manual test-alert/silence fixtures
 - `.agents/` — AI reference files (`architecture.md`, `testing.md`, `lessons.md`) and `skills/` — workflows as [Agent Skills](https://agentskills.io), one `<name>/SKILL.md` each (routed below)
 - `Makefile` — canonical entry for dev stack, tests, security scans, fixtures (`make help`)
@@ -49,6 +50,7 @@ adapters and their rules live in `docs/ai-agents.md`.
 | Triaging a GitHub feature-request issue against the scope, drafting a reply | `.agents/skills/scope-triage/SKILL.md` |
 | Writing or running tests, test matrix, test utilities, CI pipeline | `.agents/testing.md` |
 | E2E / screenshot stack: Playwright specs, fixtures, auth modes, `compose.e2e.yml` | `docs/testing-e2e.md` |
+| Documentation website (VitePress in `website/`, GitHub Pages), adding a doc page to the site | `.agents/skills/website/SKILL.md` |
 | Database backends, multi-replica HA (leader election, snapshot distribution, WS fanout, failover), Kubernetes deployment, SQLite → PostgreSQL migration | `docs/persistence.md` |
 | Cutting a release — **only when the user explicitly asks** | `.agents/skills/release/SKILL.md` |
 | Security audit, new-code security checklist, security tooling | `.agents/skills/security-check/SKILL.md` |
@@ -202,8 +204,10 @@ adapters and their rules live in `docs/ai-agents.md`.
 
    | You changed … | Update |
    |---|---|
+   | User-visible behavior: new/changed feature, UI, config surface | `docs/features.md` + the matching topic file under `docs/` — the website publishes `docs/` on every push to `main`, so this happens in the same PR |
    | Go model, DB schema/migration, API route, WS event, env var, store/state shape, component/hook/lib file, state machine | `.agents/architecture.md` |
    | Test files, test commands, CI workflows, pre-commit hook, Makefile targets | `.agents/testing.md` |
+   | Website structure, theme or sync script; **new file under `docs/`** (needs a sync entry + sidebar link) | `.agents/skills/website/SKILL.md` |
    | Security tooling, checklists, auth/origin behavior | `.agents/skills/security-check/SKILL.md` |
    | Feature-workflow conventions (validation rules, type-sync, checklists) | `.agents/skills/add-feature/SKILL.md` |
    | Branch/PR/CI/merge workflow, changelog rules for PRs | `.agents/skills/pr-workflow/SKILL.md` |

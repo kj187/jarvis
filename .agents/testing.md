@@ -62,6 +62,11 @@ make test-frontend-unit            # Vitest (lib/alertUtils.ts only, needs jarvi
 make helm-lint                     # helm lint only
 make helm-test                     # helm unittest only
 
+# ── Docs website (VitePress, website/) ───────────────────────
+make website                       # build to website/.vitepress/dist — fails on dead internal links
+make website-dev                   # hot-reload preview on http://localhost:5174/jarvis/
+                                   # .agents/skills/website/SKILL.md
+
 # ── Manual test dependencies (compose.dev-dependencies.yml) ──
 make up-alertmanager               # test Alertmanager on port 9094
 make down-alertmanager

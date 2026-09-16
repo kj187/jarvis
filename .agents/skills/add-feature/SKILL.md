@@ -103,3 +103,26 @@ clusters. Per-alert data (history, stats, comments, claims) is cluster-scoped �
 pass `clusterName` through hooks and WS payloads, and use the selection-key
 helpers in `lib/alertSelection.ts` (`<cluster>::<fingerprint>`) instead of a
 bare fingerprint when identifying an alert across UI/URL boundaries.
+
+---
+
+## Last Step — Documentation (not optional)
+
+A feature is not done until the docs describe it. Do this in the **same
+commit** as the feature, at the latest before the PR is merged — the
+documentation website publishes `docs/` on every push to `main`, so a
+missing update ships as stale documentation.
+
+1. **User-visible behavior** → update `docs/features.md` (and the matching
+   `docs/*.md` for auth, retention, metrics, persistence, security). New
+   screenshot needed? `make e2e-screenshot NAME=<test-name>`
+   (`docs/testing-e2e.md`).
+2. **New file under `docs/`** → load `.agents/skills/website/SKILL.md` and
+   register it: entry in `website/scripts/pages.mjs` **and** a sidebar link
+   in `website/.vitepress/config.mts`. Without both it is invisible on the
+   site, and links to it break the build.
+3. **AI context** → the doc-sync table in `AGENTS.md` → Workflow Rules #6
+   (new endpoint/model/env var/component → `.agents/architecture.md`, and
+   so on).
+4. `make website` must stay green — it fails on dead internal links.
+
