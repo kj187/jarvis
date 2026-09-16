@@ -17,7 +17,8 @@ FRONTEND_CONTAINER = jarvis_frontend_1
         build \
         e2e-build e2e-down e2e e2e-mode e2e-screenshots e2e-screenshot \
         fixtures-create fixtures-remove fixtures-refire fixtures-silence fixtures-unsilence \
-        diagrams
+        diagrams \
+        website website-dev
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -143,6 +144,21 @@ diagrams: ## Render all Mermaid sources (docs/diagrams/*.mmd) to docs/assets/*.s
 		out="docs/assets/$$(basename $$f .mmd).svg"; \
 		$(MERMAID) -i "/data/$$f" -o "/data/$$out" -b white && echo "rendered $$out"; \
 	done
+
+# ── Docs website (VitePress in website/, content synced from the repo docs) ────
+# git is required inside the container: the edit links and "last updated" read
+# the real source files via `git log` (.agents/skills/website/SKILL.md).
+# --user 0: rootless podman maps container root to the host user, so
+# node_modules/ and .vitepress/dist/ land with the correct ownership.
+WEBSITE_OPTS  = --rm --user 0 -v "$(CURDIR):/repo:z" -v jarvis_website_pnpmstore:/pnpm-store -w /repo/website
+WEBSITE_IMAGE = node:22-alpine
+WEBSITE_SETUP = apk add --no-cache git >/dev/null && git config --global --add safe.directory /repo && npm install -g pnpm --prefix /usr/local >/dev/null && pnpm config set store-dir /pnpm-store && pnpm install
+
+website: ## Build the docs website (output: website/.vitepress/dist)
+	podman run $(WEBSITE_OPTS) $(WEBSITE_IMAGE) sh -c "$(WEBSITE_SETUP) && pnpm run build"
+
+website-dev: ## Serve the docs website with hot reload on http://localhost:5174
+	podman run $(WEBSITE_OPTS) -it -p 5174:5174 $(WEBSITE_IMAGE) sh -c "$(WEBSITE_SETUP) && pnpm run dev"
 
 # ── E2E + Screenshots (isolated Playwright stack: compose.e2e.yml) ───────────────
 # All targets bring the stack up fresh, run, then tear it down. The auth mode

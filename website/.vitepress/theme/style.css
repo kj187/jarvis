@@ -1,0 +1,92 @@
+/**
+ * Jarvis brand palette, lifted from frontend/src/index.css's `@theme` block
+ * (dark) and `[data-theme="light"]` block (light) — kept in sync by hand
+ * since VitePress's CSS variables and Tailwind's `@theme` tokens are
+ * different systems; if the app's palette changes, update here too
+ * (.agents/skills/website/SKILL.md).
+ */
+
+:root {
+  --vp-font-family-base: Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --vp-font-family-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  --vp-c-brand-1: hsl(213 94% 60%);
+  --vp-c-brand-2: hsl(213 94% 55%);
+  --vp-c-brand-3: hsl(213 94% 50%);
+  --vp-c-brand-soft: hsla(213, 94%, 60%, 0.14);
+
+  --vp-c-bg: hsl(220 14% 94%);
+  --vp-c-bg-alt: hsl(220 12% 91%);
+  --vp-c-bg-elv: hsl(0 0% 100%);
+  --vp-c-bg-soft: hsl(220 11% 92%);
+  --vp-c-text-1: hsl(222 25% 12%);
+  --vp-c-text-2: hsl(220 9% 38%);
+  --vp-c-text-3: hsl(220 9% 55%);
+  --vp-c-border: hsl(220 13% 83%);
+  --vp-c-divider: hsl(220 13% 88%);
+  --vp-c-gutter: hsl(220 13% 88%);
+
+  --vp-home-hero-name-color: var(--vp-c-brand-1);
+  --vp-home-hero-name-background: transparent;
+}
+
+.dark {
+  --vp-c-brand-1: hsl(213 94% 68%);
+  --vp-c-brand-2: hsl(213 94% 62%);
+  --vp-c-brand-3: hsl(213 94% 56%);
+  --vp-c-brand-soft: hsla(213, 94%, 68%, 0.16);
+
+  --vp-c-bg: hsl(222 15% 9%);
+  --vp-c-bg-alt: hsl(222 14% 13%);
+  --vp-c-bg-elv: hsl(222 14% 13%);
+  --vp-c-bg-soft: hsl(222 12% 16%);
+  --vp-c-text-1: hsl(210 25% 90%);
+  --vp-c-text-2: hsl(215 13% 65%);
+  --vp-c-text-3: hsl(215 13% 45%);
+  --vp-c-border: hsl(220 12% 23%);
+  --vp-c-divider: hsl(220 12% 20%);
+  --vp-c-gutter: hsl(220 12% 12%);
+}
+
+/* Distinct from stock VitePress: rounder cards/panels, a touch more air. */
+.VPFeature {
+  border-radius: 14px !important;
+  transition: border-color 0.25s;
+}
+.VPFeature:hover {
+  border-color: var(--vp-c-brand-1);
+}
+.VPFeature .icon {
+  color: var(--vp-c-brand-1);
+  background-color: var(--vp-c-brand-soft) !important;
+}
+.VPButton.brand {
+  border-radius: 999px;
+}
+.VPButton.alt {
+  border-radius: 999px;
+}
+
+/* The home page sits on the animated mesh backdrop (Layout.vue, z-index: 0) —
+   one stacking context for all of its content keeps hero text, feature cards
+   and the showcase above the mesh; the nav has VP's own, higher z-index. */
+.VPHome {
+  position: relative;
+  z-index: 1;
+}
+
+.home-showcase {
+  max-width: 1152px;
+  margin: 0 auto;
+  padding: 16px 24px 96px;
+}
+.home-showcase h2 {
+  border-top: none;
+  margin-top: 0;
+  padding-top: 0;
+}
+.home-showcase img {
+  border: 1px solid var(--vp-c-border);
+  border-radius: 14px;
+  box-shadow: 0 18px 50px -24px rgb(0 0 0 / 55%);
+}

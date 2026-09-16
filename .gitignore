@@ -54,3 +54,10 @@ tmp/
 
 # Claude Code local settings (machine-specific permissions)
 .claude/settings.local.json
+
+# Docs website: content/ is synced from the real docs at build time (website/scripts/sync-content.mjs),
+# never hand-edited or committed; dist/cache are build output.
+website/node_modules/
+website/content/
+website/.vitepress/dist/
+website/.vitepress/cache/

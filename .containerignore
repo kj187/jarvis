@@ -9,3 +9,7 @@ playwright-report
 test-results
 .git
 tmp
+# Docs website: regenerated content + build output, never part of an image build context
+website/content
+website/.vitepress/dist
+website/.vitepress/cache
