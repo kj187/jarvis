@@ -11,7 +11,7 @@ can't see.
 |---|---|---|
 | [`AGENTS.md`](../AGENTS.md) | [AGENTS.md](https://agents.md) | Entry point: project overview, critical invariants, workflow rules, task router |
 | [`.agents/*.md`](../.agents/) | plain Markdown | Reference knowledge: `architecture.md`, `testing.md`, `lessons.md` |
-| [`.agents/skills/<name>/SKILL.md`](../.agents/skills/) | [Agent Skills](https://agentskills.io) | Step-by-step workflows: `add-feature`, `pr-workflow`, `release`, `scope-triage`, `security-check`, `website` |
+| [`.agents/skills/<name>/SKILL.md`](../.agents/skills/) | [Agent Skills](https://agentskills.io) | Step-by-step workflows: `add-feature`, `pr-workflow`, `release`, `release-video`, `scope-triage`, `security-check`, `website` |
 
 ## Tool adapters
 

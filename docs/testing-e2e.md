@@ -112,7 +112,15 @@ frontend/
       none/             # feature-*, auth-noauth-notice, screenshot
       internal/         # auth-setup, auth-login-internal, auth-user-menu, auth-admin-panel, auth-login-page
       oidc/             # oidc-authenticated, auth-login-oidc, screenshot (README hero)
+    video/              # demo videos: recorder.ts, build-video.mjs, fonts.conf, release + intro storyboard templates
+    _video/             # gitignored: <project>.video.ts, <project>.narration.json, <project>/ (frames, audio)
+  playwright.video.config.ts            # release-video config; viewport per $VIDEO_FORMAT
 ```
+
+The release demo video reuses this stack: `scripts/e2e-run.sh video none` runs
+the storyboard once per format. It is produced only on request — workflow,
+storyboard rules and hand-over in `.agents/skills/release-video/SKILL.md`
+(`make release-video VERSION=X.Y.Z [PROJECT=release|intro]`).
 
 ### Conventions
 

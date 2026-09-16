@@ -53,6 +53,7 @@ adapters and their rules live in `docs/ai-agents.md`.
 | Documentation website (VitePress in `website/`, GitHub Pages), adding a doc page to the site | `.agents/skills/website/SKILL.md` |
 | Database backends, multi-replica HA (leader election, snapshot distribution, WS fanout, failover), Kubernetes deployment, SQLite → PostgreSQL migration | `docs/persistence.md` |
 | Cutting a release — **only when the user explicitly asks** | `.agents/skills/release/SKILL.md` |
+| Release demo video (YouTube), release-notes video block — **only on request** (asked upfront in Phase 0 of the release skill) | `.agents/skills/release-video/SKILL.md` |
 | Security audit, new-code security checklist, security tooling | `.agents/skills/security-check/SKILL.md` |
 | Debugging surprising behavior — check before re-deriving a known gotcha | `.agents/lessons.md` |
 | Tool adapters, agent-context check | `docs/ai-agents.md` |

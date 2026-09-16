@@ -15,7 +15,7 @@ FRONTEND_CONTAINER = jarvis_frontend_1
         lint gosec govulncheck audit security-all check-agent-context \
         scan scan-history scan-staged scan-all \
         build \
-        e2e-build e2e-down e2e e2e-mode e2e-screenshots e2e-screenshot \
+        e2e-build e2e-down e2e e2e-mode e2e-screenshots e2e-screenshot release-video \
         fixtures-create fixtures-remove fixtures-refire fixtures-silence fixtures-unsilence \
         diagrams \
         website website-dev
@@ -192,6 +192,10 @@ e2e-screenshot: ## Regenerate ONE screenshot: make e2e-screenshot NAME=card-view
 	@test -n "$(NAME)" || { echo "usage: make e2e-screenshot NAME=<test-name> [MODE=none]"; exit 1; }
 	$(E2E_RUN) screenshot $(MODE) "$(NAME)"
 	@echo "Screenshot '$(NAME)' written to docs/assets/"
+
+release-video: ## Record + render a demo video: make release-video VERSION=1.13.0 [STEP=all|tts|record|render] [PROJECT=release|intro]
+	@test -n "$(VERSION)" || { echo "usage: make release-video VERSION=<x.y.z|name> [STEP=all|tts|record|render] [PROJECT=release]"; exit 1; }
+	VIDEO_PROJECT=$(or $(PROJECT),release) bash scripts/release-video.sh "$(VERSION)" $(or $(STEP),all)
 
 # ── Fixtures ───────────────────────────────────────────────────────────────────
 
