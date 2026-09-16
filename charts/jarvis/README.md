@@ -262,6 +262,36 @@ clusters:
     hostAlias: https://alertmanager.prod.example.com
 ```
 
+### Alertmanager behind an authentication proxy
+
+The chart has no `clusters[].auth` values yet — per-cluster upstream
+authentication (OAuth2 client credentials, bearer token, basic auth, custom
+headers) is configured through `extraEnv`, using the numbered
+`JARVIS_CLUSTER_<n>_*` variables. Cluster `n` is the position in the
+`clusters` list, starting at 1.
+
+```yaml
+clusters:
+  - name: production
+    alertmanagerUrl: https://alertmanager-internal.example.com
+
+extraEnv:
+  - name: JARVIS_CLUSTER_1_OAUTH2_CLIENT_ID
+    value: jarvis-service
+  - name: JARVIS_CLUSTER_1_OAUTH2_TOKEN_URL
+    value: https://keycloak.example.com/realms/homelab/protocol/openid-connect/token
+  - name: JARVIS_CLUSTER_1_OAUTH2_CLIENT_SECRET
+    valueFrom:
+      secretKeyRef:
+        name: jarvis-upstream-auth
+        key: oauth2-client-secret
+```
+
+Values written inline under `extraEnv` are stored in plaintext in the release
+values — always pull secrets from a Secret, as above. The full pattern,
+including the other auth methods and multi-cluster numbering, is in
+[docs/authentication-alertmanager.md](../../docs/authentication-alertmanager.md).
+
 ### Ingress with WebSocket support
 
 Jarvis uses WebSocket (`/ws`) for live alert updates. The ingress must not strip or block the `Upgrade` / `Connection` headers.

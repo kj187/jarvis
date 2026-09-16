@@ -111,7 +111,8 @@ cluster and apply to every member alike.
 
 **Priority when more than one is set:** OAuth2 → bearer token → basic auth →
 custom headers. OAuth2 is the recommended option because the token is
-refreshed for you. Provider setup, including a worked Keycloak example, is in
+refreshed for you. Provider setup, including a worked Keycloak example and the
+`extraEnv` pattern for the Helm chart, is in
 [Alertmanager authentication](authentication-alertmanager.md).
 
 ---

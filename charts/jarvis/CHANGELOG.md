@@ -12,6 +12,10 @@ Entries up to and including 1.7.6 were reconstructed from the git history when t
 
 - No breaking changes.
 
+### Changed
+
+- The chart README shows how to configure per-cluster upstream authentication (OAuth2 client credentials, bearer token, basic auth, custom headers) through `extraEnv`. The chart has no `clusters[].auth` values, so this was reachable only by guessing the numbered `JARVIS_CLUSTER_<n>_*` variable names — and nothing warned that credentials written inline under `extraEnv` sit in plaintext in the release values. Documentation only, no rendered change.
+
 ### Fixed
 
 - The values table in the chart README documents six values that existed but were listed nowhere: `podLabels`, `persistence.annotations`, `updateStrategy.type`, `autoscaling.minReplicas`, `autoscaling.maxReplicas` and `autoscaling.targetCPUUtilizationPercentage`. `updateStrategy.type` matters most — its auto-selection (`Recreate` with a PVC, `RollingUpdate` otherwise) was explained only in a `values.yaml` comment and therefore reached neither the website nor Artifact Hub. Documentation only, no rendered change.

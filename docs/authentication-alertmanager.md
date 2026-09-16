@@ -104,6 +104,122 @@ JARVIS_CLUSTER_1_OAUTH2_TOKEN_URL=https://keycloak.example.com/realms/homelab/pr
 
 ---
 
+## On Kubernetes (Helm)
+
+The Helm chart does **not** expose these settings as values yet. Its
+`clusters[]` entries render exactly four variables per cluster — `_NAME`,
+`_ALERTMANAGER_URL`, `_PROMETHEUS_URL` and `_HOST_ALIAS`. Upstream
+authentication is configured through the generic `extraEnv` escape hatch
+instead, by writing the numbered variable names by hand.
+
+**Numbering:** the chart numbers clusters in list order, starting at 1. The
+first entry under `clusters:` is `JARVIS_CLUSTER_1_*`, the second
+`JARVIS_CLUSTER_2_*`. Get this wrong and the credentials are silently attached
+to a different cluster — or to none.
+
+### Put the secrets in a Secret, not in values
+
+Anything written directly under `extraEnv` ends up in plaintext in the release
+values, and stays readable to anyone who can run `helm get values` or read the
+rendered Deployment. That is fine for a client ID or a token URL. It is not
+fine for `OAUTH2_CLIENT_SECRET`, `BEARER_TOKEN` or `BASIC_AUTH_PASSWORD`.
+
+Create the Secret first:
+
+```bash
+kubectl create secret generic jarvis-upstream-auth \
+  --from-literal=oauth2-client-secret=<client-secret>
+```
+
+Then reference it:
+
+```yaml
+clusters:
+  - name: production
+    alertmanagerUrl: https://alertmanager-internal.example.com
+
+extraEnv:
+  - name: JARVIS_CLUSTER_1_OAUTH2_CLIENT_ID
+    value: jarvis-service
+  - name: JARVIS_CLUSTER_1_OAUTH2_TOKEN_URL
+    value: https://keycloak.example.com/realms/homelab/protocol/openid-connect/token
+  - name: JARVIS_CLUSTER_1_OAUTH2_CLIENT_SECRET
+    valueFrom:
+      secretKeyRef:
+        name: jarvis-upstream-auth
+        key: oauth2-client-secret
+```
+
+### The other methods
+
+Bearer token:
+
+```yaml
+extraEnv:
+  - name: JARVIS_CLUSTER_1_BEARER_TOKEN
+    valueFrom:
+      secretKeyRef:
+        name: jarvis-upstream-auth
+        key: bearer-token
+```
+
+Basic auth:
+
+```yaml
+extraEnv:
+  - name: JARVIS_CLUSTER_1_BASIC_AUTH_USER
+    value: jarvis
+  - name: JARVIS_CLUSTER_1_BASIC_AUTH_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: jarvis-upstream-auth
+        key: basic-auth-password
+```
+
+Custom headers — the header name is taken verbatim from the part after
+`HEADER_`, hyphens included. Kubernetes accepts them: environment variable
+names may contain `-`, `_` and `.`:
+
+```yaml
+extraEnv:
+  - name: JARVIS_CLUSTER_1_HEADER_X-Scope-OrgID
+    value: tenant1
+```
+
+### Two clusters, different credentials
+
+```yaml
+clusters:
+  - name: staging
+    alertmanagerUrl: https://alertmanager-staging.example.com
+  - name: production
+    alertmanagerUrl: https://alertmanager-prod.example.com
+
+extraEnv:
+  - name: JARVIS_CLUSTER_1_BEARER_TOKEN
+    valueFrom:
+      secretKeyRef:
+        name: jarvis-upstream-auth
+        key: staging-token
+  - name: JARVIS_CLUSTER_2_BEARER_TOKEN
+    valueFrom:
+      secretKeyRef:
+        name: jarvis-upstream-auth
+        key: production-token
+```
+
+### Check what was rendered
+
+Before installing, confirm that no secret value landed in the ConfigMap and
+that the numbering matches the cluster you meant:
+
+```bash
+helm template jarvis oci://ghcr.io/kj187/charts/jarvis -f values.yaml \
+  | grep -E "JARVIS_CLUSTER_[0-9]+_"
+```
+
+---
+
 ## Environment Variables
 
 | Variable | Description |
