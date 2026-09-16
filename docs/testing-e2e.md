@@ -128,7 +128,11 @@ frontend/
   hidden so the “+N” hidden-labels chip is visible.
 - Fixtures are created **per test** via real APIs (AM for active alerts, Jarvis
   test endpoints for resolved/history). The `page` fixture auto-runs
-  `am.clearAll()` + `jarvis.reset()` before every test → clean slate.
+  `am.clearAll()` + `jarvis.reset()` before every test → clean slate, and also
+  forces `prefers-reduced-motion: reduce` (`page.emulateMedia`) so the
+  empty-state Owl mesh backdrop (`components/common/OwlMeshBackdrop.tsx`)
+  paints a single static frame instead of animating — otherwise a screenshot
+  taken on an empty alerts/silences view would be flaky.
 - Screenshots **freeze the clock** (`freezeClock`, Playwright `page.clock`) and
   pre-dismiss the NoAuthNotice (except the one screenshot that documents it) so
   output is deterministic.
