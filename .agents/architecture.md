@@ -294,9 +294,13 @@ CREATE INDEX IF NOT EXISTS idx_alert_events_fingerprint          ON alert_events
 CREATE INDEX IF NOT EXISTS idx_alert_events_starts_at            ON alert_events(starts_at DESC);
 CREATE INDEX IF NOT EXISTS idx_alert_events_fingerprint_recorded ON alert_events(fingerprint, recorded_at DESC);
 CREATE INDEX IF NOT EXISTS idx_alert_comments_fingerprint        ON alert_comments(fingerprint);
+CREATE INDEX IF NOT EXISTS idx_alert_comments_created_at         ON alert_comments(created_at);
 CREATE INDEX IF NOT EXISTS idx_alert_claims_fingerprint          ON alert_claims(fingerprint);
 CREATE INDEX IF NOT EXISTS idx_alert_claims_active               ON alert_claims(fingerprint, cluster_name) WHERE released_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_alert_claims_released_at          ON alert_claims(released_at) WHERE released_at IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_silence_events_fingerprint        ON silence_events(fingerprint, recorded_at DESC);
+CREATE INDEX IF NOT EXISTS idx_silence_events_recorded_at        ON silence_events(recorded_at);
+CREATE INDEX IF NOT EXISTS idx_alert_fingerprints_last_seen_at   ON alert_fingerprints(last_seen_at);
 CREATE INDEX IF NOT EXISTS idx_users_username                    ON users(username);
 CREATE INDEX IF NOT EXISTS idx_users_oidc_sub                    ON users(oidc_sub);
 
@@ -319,6 +323,26 @@ CREATE TABLE IF NOT EXISTS user_settings (
     updated_at DATETIME NOT NULL DEFAULT (datetime('now'))  -- TIMESTAMPTZ NOT NULL DEFAULT NOW() on PostgreSQL
 );
 ```
+
+The four `*_created_at`/`*_released_at`/`*_recorded_at`/`*_last_seen_at` indices
+back the retention sweeps in `store_retention.go`
+(`DeleteCommentsBefore`/`DeleteReleasedClaimsBefore`/`DeleteSilenceEventsBefore`/
+`DeleteOrphanFingerprintsBefore`): each of those filtered a column with no
+index, or one whose leading column didn't match the filter, forcing a full
+table scan per sweep — confirmed via `EXPLAIN (ANALYZE, BUFFERS)` against a
+seeded local PostgreSQL instance (bitmap/plain index scan afterwards). A
+composite `(fingerprint, cluster_name, id)` index was also evaluated for the
+"latest event per (fingerprint, cluster_name)" CTE in
+`GetAllResolved`/`visitResolved` (`internal/history/store.go`,
+`store_resolved.go`) but deliberately **not** added: that CTE aggregates over
+the unfiltered whole `alert_events` table, and PostgreSQL never chose an
+index for it even at 660k rows (a full-table `MAX(id) GROUP BY` has to touch
+every row regardless, and a seq scan + hash aggregate is cheaper there than a
+b-tree of the same size) — the index would be pure write overhead. The
+actual fix is pushing `fingerprint`/`cluster_name`/the `After` lower bound
+into that CTE (the `Through` upper bound must stay outer, or it breaks the
+"excludes re-fired alerts" guarantee, Critical Invariant #2/#17) — a query-
+semantics change against a tested invariant, left for a separate PR.
 
 **SQLite settings** (on open): `SetMaxOpenConns(1)`, `PRAGMA journal_mode=WAL`, `PRAGMA foreign_keys=ON`, `PRAGMA busy_timeout=5000`. PostgreSQL uses a capped pool: `JARVIS_DB_MAX_OPEN_CONNS` (default 10) sets MaxOpen **and** MaxIdle (so bursts reuse connections instead of churning them), plus `ConnMaxLifetime=30m` / `ConnMaxIdleTime=5m` — never unbounded, never `SetMaxOpenConns(1)` (Critical Invariant #8).
 

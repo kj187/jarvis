@@ -56,7 +56,7 @@ features:
 Silence straight from the card, group by any label, and open an alert for its full
 history, its claim and the team's comments.
 
-[Explore all features](/reference/features) · [Watch the 2½-minute tour](https://www.youtube.com/watch?v=gssfmws8B6o)
+[Explore all features](/reference/features) · [Watch the 2½-minute tour on YouTube](https://www.youtube.com/watch?v=gssfmws8B6o) · [All videos](/videos)
 
 ## Getting started
 

@@ -208,6 +208,21 @@ since it matches on the already-rewritten `/assets/…` paths.
   maintainer-approved font trial, not "every heading everywhere". A different
   display face swaps the two `src: url(...)` lines and the font files; it does
   not need new selectors.
+- **Documentation images open in a lightbox.** `ImageLightbox.vue` uses one
+  delegated click handler for images inside `main`; linked images keep their
+  link behavior, and `.no-lightbox` is the explicit opt-out. The homepage
+  screenshots use the same viewer.
+- **Videos use a linked 16:9 YouTube cover**, not an iframe: YouTube rejects
+  embeds without an accepted HTTP Referer (player error 153), which makes
+  local previews and privacy-hardened browsers unreliable. The homepage intro
+  lives in `HomeScreenshot.vue`; reusable documentation covers use
+  `.video-cover`.
+  `docs/videos.md` is the permanent index for the product intro and release
+  videos, while each release video also stays in its GitHub release notes.
+- **Mermaid diagrams are rendered as light/dark pairs** by `make diagrams`
+  (`<name>-light.svg`, `<name>-dark.svg`, transparent background). Source docs
+  use a `prefers-color-scheme` `<picture>` for GitHub; `convertThemePictures`
+  translates it to the site's manual `.light-only`/`.dark-only` switch.
 
 ---
 
@@ -227,10 +242,15 @@ pages).
 
 `.github/workflows/docs.yml` builds and deploys to GitHub Pages on push to
 `main` (path-filtered to the docs sources and `website/**`) and on
-`workflow_dispatch`. All actions are SHA-pinned — `ratchet check` runs in CI.
+`workflow_dispatch`. It runs the website helper tests before the build. All
+actions are SHA-pinned — `ratchet check` runs in CI.
 
 `fetch-depth: 0` on the checkout is required: without full history the
 last-updated timestamps are empty.
+
+`pnpm test` also compares the published image/chart versions in the release
+examples with `charts/jarvis/Chart.yaml`; a release cannot leave one of the
+known documentation pins stale without failing the docs workflow.
 
 **One-time repo setting:** Settings → Pages → Source: **GitHub Actions**.
 Without it the deploy job fails.

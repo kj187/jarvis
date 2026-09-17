@@ -128,7 +128,11 @@ Users are redirected to the OIDC provider on login. The login modal shows a sing
 
 ### Flow
 
-![OIDC login flow](assets/oidc-login-flow.svg)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/oidc-login-flow-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="assets/oidc-login-flow-light.svg">
+  <img src="assets/oidc-login-flow-light.svg" alt="OIDC login flow">
+</picture>
 
 (source: [`docs/diagrams/oidc-login-flow.mmd`](diagrams/oidc-login-flow.mmd), re-render via `make diagrams`)
 

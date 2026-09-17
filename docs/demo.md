@@ -9,6 +9,10 @@ configures nothing you would keep. It exists so you can see what Jarvis does
 before deciding whether to run it for real. When you get to that point, go to
 [Deploy with Compose](deploy-compose.md).
 
+<a class="video-cover" href="https://www.youtube.com/watch?v=gssfmws8B6o" target="_blank" rel="noreferrer"><img class="no-lightbox" src="https://img.youtube.com/vi/gssfmws8B6o/maxresdefault.jpg" alt="Play Jarvis in two and a half minutes on YouTube"></a>
+
+[Watch the 2½-minute Jarvis intro on YouTube](https://www.youtube.com/watch?v=gssfmws8B6o)
+
 - [What you need](#what-you-need)
 - [Start it](#start-it)
 - [Fill it with alerts](#fill-it-with-alerts)

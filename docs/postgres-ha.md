@@ -221,11 +221,19 @@ single pod would have.
 
 ### HA topology
 
-![HA topology](assets/ha-topology.svg)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/ha-topology-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="assets/ha-topology-light.svg">
+  <img src="assets/ha-topology-light.svg" alt="HA topology">
+</picture>
 
 ### Failover sequence
 
-![HA failover sequence](assets/ha-failover.svg)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/ha-failover-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="assets/ha-failover-light.svg">
+  <img src="assets/ha-failover-light.svg" alt="HA failover sequence">
+</picture>
 
 ---
 

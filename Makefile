@@ -172,10 +172,12 @@ build: ## Build production container image locally
 # user cannot write into the mounted repo).
 MERMAID = podman run --rm --user 0 -v "$(CURDIR):/data:z" docker.io/minlag/mermaid-cli:latest
 
-diagrams: ## Render all Mermaid sources (docs/diagrams/*.mmd) to docs/assets/*.svg
+diagrams: ## Render all Mermaid sources as light/dark SVG pairs in docs/assets/
 	@for f in docs/diagrams/*.mmd; do \
-		out="docs/assets/$$(basename $$f .mmd).svg"; \
-		$(MERMAID) -i "/data/$$f" -o "/data/$$out" -b white && echo "rendered $$out"; \
+		base="docs/assets/$$(basename $$f .mmd)"; \
+		$(MERMAID) -i "/data/$$f" -o "/data/$${base}-light.svg" -t neutral -b transparent && \
+		$(MERMAID) -i "/data/$$f" -o "/data/$${base}-dark.svg" -t dark -b transparent && \
+		echo "rendered $${base}-{light,dark}.svg"; \
 	done
 
 # ── Docs website (VitePress in website/, content synced from the repo docs) ────

@@ -12,6 +12,7 @@
 export const PAGES = [
   // Getting Started
   { src: 'docs/demo.md', route: 'demo' },
+  { src: 'docs/videos.md', route: 'videos' },
   { src: 'docs/first-steps.md', route: 'start/first-steps' },
 
   // Tasks (how-to)

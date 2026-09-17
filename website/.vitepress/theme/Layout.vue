@@ -3,6 +3,7 @@ import DefaultTheme from 'vitepress/theme'
 import { useData } from 'vitepress'
 import MeshCanvas from './components/MeshCanvas.vue'
 import HomeScreenshot from './components/HomeScreenshot.vue'
+import ImageLightbox from './components/ImageLightbox.vue'
 
 const { frontmatter } = useData()
 </script>
@@ -21,6 +22,7 @@ const { frontmatter } = useData()
       <HomeScreenshot />
     </template>
   </DefaultTheme.Layout>
+  <ImageLightbox />
 </template>
 
 <style scoped>

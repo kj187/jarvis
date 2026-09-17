@@ -98,6 +98,7 @@ export default defineConfig({
     logo: '/logo.png',
     nav: [
       { text: 'Demo', link: '/demo' },
+      { text: 'Videos', link: '/videos' },
       { text: 'Deploy', link: '/deploy/compose' },
       { text: 'Reference', link: '/reference/features' },
       { text: 'Concepts', link: '/concepts/architecture' },
@@ -116,6 +117,7 @@ export default defineConfig({
         text: 'Getting Started',
         items: [
           { text: 'Try it locally (demo)', link: '/demo' },
+          { text: 'Videos', link: '/videos' },
           { text: 'First steps in the UI', link: '/start/first-steps' },
         ],
       },

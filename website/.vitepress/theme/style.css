@@ -180,6 +180,78 @@ html.dark .light-only {
   box-shadow: 0 24px 64px -28px rgb(0 0 0 / 55%);
 }
 
+.home-intro-video {
+  width: 100%;
+  max-width: 1152px;
+  margin: 72px auto 0;
+}
+.home-intro-video p {
+  margin: 16px 0 0;
+  text-align: center;
+  color: var(--vp-c-text-2);
+}
+
+.video-cover {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  margin: 24px 0 12px;
+  overflow: hidden;
+  border: 1px solid var(--vp-c-border);
+  border-radius: 14px;
+  background: #000;
+  box-shadow: 0 24px 64px -28px rgb(0 0 0 / 55%);
+}
+.video-cover img,
+.home-intro-video .video-cover img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+}
+.home-intro-video .video-cover {
+  margin: 0;
+}
+.vp-doc img:not(.no-lightbox),
+.home-hero-screenshot > img:not(.no-lightbox) {
+  cursor: zoom-in;
+}
+.vp-doc a img {
+  cursor: pointer;
+}
+.image-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 56px 24px 24px;
+  background: rgb(0 0 0 / 88%);
+  cursor: zoom-out;
+}
+.image-lightbox img {
+  max-width: min(1600px, 96vw);
+  max-height: calc(100vh - 80px);
+  object-fit: contain;
+  border-radius: 8px;
+  box-shadow: 0 24px 80px rgb(0 0 0 / 65%);
+}
+.image-lightbox-close {
+  position: absolute;
+  top: 12px;
+  right: 18px;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 999px;
+  color: white;
+  background: rgb(255 255 255 / 14%);
+  font-size: 30px;
+  line-height: 1;
+}
+
 /* Unequal feature-grid weight (W11g): the two strongest differentiators
    (first two entries in index.md's `features:` list) span half the row each
    at a larger scale; the remaining four stay compact quarter-width cards.
