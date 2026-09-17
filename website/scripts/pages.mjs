@@ -12,6 +12,7 @@
 export const PAGES = [
   // Getting Started
   { src: 'docs/demo.md', route: 'demo' },
+  { src: 'docs/first-steps.md', route: 'start/first-steps' },
 
   // Tasks (how-to)
   { src: 'docs/deploy-compose.md', route: 'deploy/compose' },
@@ -39,6 +40,7 @@ export const PAGES = [
   { src: 'docs/alert-lifecycle.md', route: 'concepts/alert-lifecycle' },
   { src: 'docs/sqlite-limits.md', route: 'concepts/sqlite-limits' },
   { src: 'docs/security.md', route: 'concepts/security' },
+  { src: 'docs/glossary.md', route: 'concepts/glossary' },
   { src: 'docs/scope.md', route: 'concepts/scope' },
 
   // Help

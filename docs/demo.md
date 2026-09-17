@@ -93,7 +93,9 @@ A few things that are hard to notice unless you go looking:
   labels. The preview shows exactly which alerts the silence would cover
   before you create it.
 
-The complete tour is in [Features](features.md).
+A guided walkthrough of these four is in
+[First steps in the UI](first-steps.md); the complete tour is in
+[Features](features.md).
 
 ---
 

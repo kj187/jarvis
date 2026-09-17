@@ -114,7 +114,10 @@ export default defineConfig({
     sidebar: [
       {
         text: 'Getting Started',
-        items: [{ text: 'Try it locally (demo)', link: '/demo' }],
+        items: [
+          { text: 'Try it locally (demo)', link: '/demo' },
+          { text: 'First steps in the UI', link: '/start/first-steps' },
+        ],
       },
       {
         text: 'Tasks',
@@ -150,6 +153,7 @@ export default defineConfig({
           { text: 'Alert lifecycle', link: '/concepts/alert-lifecycle' },
           { text: 'Why SQLite is single-replica', link: '/concepts/sqlite-limits' },
           { text: 'Security model', link: '/concepts/security' },
+          { text: 'Glossary', link: '/concepts/glossary' },
           { text: 'Project scope', link: '/concepts/scope' },
         ],
       },
