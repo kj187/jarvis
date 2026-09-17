@@ -82,9 +82,9 @@ Jarvis is the part between an alert firing and a human deciding what to do about
 does not graph metrics, send notifications or manage tickets, and it is not meant to.
 [What is in scope — and what never will be](/scope)
 
-Jarvis is built entirely with AI coding assistants and held to the same bar as any other
-code: static analysis and vulnerability scans in CI, a strict Content Security Policy and
-a hardened, read-only container.
+Every line is held to the same bar as any other production code: static analysis and
+vulnerability scans in CI, a strict Content Security Policy and a hardened, read-only
+container.
 [How Jarvis is secured](/security)
 
 </div>

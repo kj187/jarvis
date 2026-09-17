@@ -55,7 +55,8 @@ Most Alertmanager UIs are read-only dashboards. Jarvis is built for teams that n
 Worried about feature creep? Jarvis has a deliberately focused scope — what it is and what it will never become is written down in **[docs/scope.md](docs/scope.md)**.
 
 ### Built with AI
-> Jarvis was developed entirely using AI coding assistants. This is an intentional workflow choice, not a shortcut: the codebase follows established Go and React best practices, enforces security standards through automated tooling (gosec, govulncheck, golangci-lint, pnpm audit) on every commit and in CI, and applies defense-in-depth measures (strict CSP, read-only container filesystem, no-new-privileges). See [SECURITY.md](SECURITY.md) for details.
+
+AI writes the code; 20 years of software engineering experience — 9 of them in DevOps/platform engineering — directs it, so this isn't vibe-coded. Every commit and CI run enforces the same bar as hand-written code: gosec, govulncheck, golangci-lint, pnpm audit, plus defense-in-depth hardening (strict CSP, read-only container filesystem, no-new-privileges). See [SECURITY.md](SECURITY.md) for details.
 
 ## Features
 

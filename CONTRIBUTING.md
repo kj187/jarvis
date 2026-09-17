@@ -2,10 +2,10 @@
 
 Thank you for your interest in contributing!
 
-Jarvis is developed 100% with AI coding agents. All project conventions —
-workflow rules, critical invariants, commit format, and the map of deeper
-reference docs — live in [AGENTS.md](AGENTS.md). That file is the single
-source of truth for humans and AI agents alike; please read it first.
+Human and AI-agent contributions alike follow one shared rulebook: workflow
+rules, critical invariants, commit format, and the map of deeper reference
+docs live in [AGENTS.md](AGENTS.md). That file is the single source of truth;
+please read it first.
 
 ## Working with AI agents
 
