@@ -5,7 +5,7 @@
 # and long-term stability, switch to PostgreSQL (database.dsn:
 # postgres://...) — replicaCount can then be any value, coordinated via
 # leader election (exactly one pod polls Alertmanager/writes history at a
-# time; every pod serves reads/API/WS equally). See docs/persistence.md.
+# time; every pod serves reads/API/WS equally). See docs/postgres-ha.md.
 replicaCount: 1
 
 image:
@@ -26,7 +26,7 @@ serviceAccount:
 leaderElection:
   podLabel:
     # Labels the current leader pod jarvis.kj187.de/role=leader (D7 in
-    # docs/persistence.md) — informational only, every pod serves all
+    # docs/postgres-ha.md) — informational only, every pod serves all
     # traffic regardless of leadership. Requires a Role+RoleBinding (pods:
     # get, patch) and automountServiceAccountToken: true on the pod, both
     # rendered only while this is true. Meaningful only with PostgreSQL

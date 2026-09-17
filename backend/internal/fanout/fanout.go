@@ -1,5 +1,5 @@
 // Package fanout implements cross-pod WebSocket mutation fanout (D4,
-// docs/persistence.md): a mutation handled by one pod (a comment,
+// docs/postgres-ha.md): a mutation handled by one pod (a comment,
 // claim, or silence write) must also reach WS clients connected to every
 // other pod. Only user-mutation broadcasts go through this — alert-state
 // broadcasts (alerts_update, the poll-driven silences_update) ride the D3
