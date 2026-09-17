@@ -31,16 +31,8 @@ faster to triage the second time.
 ## Configuration
 
 All values are in days unless noted; set in `.env` or the container's
-environment (see `.env.example`).
-
-| Variable | Default | Meaning |
-|---|---|---|
-| `JARVIS_RETENTION_DAYS` | `0` (disabled) | Global default retention window |
-| `JARVIS_RETENTION_EVENTS_DAYS` | inherits global | Override for `alert_events` |
-| `JARVIS_RETENTION_CLAIMS_DAYS` | inherits global | Override for released `alert_claims` |
-| `JARVIS_RETENTION_SILENCE_EVENTS_DAYS` | inherits global | Override for `silence_events` |
-| `JARVIS_RETENTION_COMMENTS_DAYS` | `0` (kept forever) | Comments — **never** inherits the global value; only an explicit value here enables deletion |
-| `JARVIS_RETENTION_SWEEP_INTERVAL` | `12h` | How often the background sweep runs |
+environment (see `.env.example`). Full variable reference (defaults,
+descriptions): [Configuration → Data retention](configuration.md#data-retention).
 
 An override of `0`/unset for events, claims, or silence events falls back to
 the global `JARVIS_RETENTION_DAYS`. An override greater than `0` applies

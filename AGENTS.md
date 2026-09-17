@@ -206,6 +206,7 @@ adapters and their rules live in `docs/ai-agents.md`.
    | You changed … | Update |
    |---|---|
    | User-visible behavior: new/changed feature, UI, config surface | `docs/features.md` + the matching topic file under `docs/` — the website publishes `docs/` on every push to `main`, so this happens in the same PR |
+   | New or changed environment variable | `docs/configuration.md` — the **only** place an env var gets its own table row (name / default / one-sentence meaning), with a stable per-variable anchor (`<a id="jarvis_..."></a>`). A topic page (`docs/authentication-user.md`, `docs/authentication-alertmanager.md`, `docs/retention.md`, …) links to the anchor and explains relationships/flows around it — never repeats the table |
    | Go model, DB schema/migration, API route, WS event, env var, store/state shape, component/hook/lib file, state machine | `.agents/architecture.md` |
    | Test files, test commands, CI workflows, pre-commit hook, Makefile targets | `.agents/testing.md` |
    | Website structure, theme or sync script; **new file under `docs/`** (needs a sync entry + sidebar link) | `.agents/skills/website/SKILL.md` |

@@ -79,18 +79,10 @@ When `JARVIS_AUTH_PROVIDER` is `internal` or `oidc`, `JARVIS_AUTH_MODE` determin
 
 ## Environment Variables
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `JARVIS_AUTH_PROVIDER` | no | `none` | Authentication mode: `none`, `internal`, or `oidc` |
-| `JARVIS_AUTH_MODE` | no | `write_protect` | Protection level when provider ≠ `none`: `write_protect` or `full_protect` |
-| `JARVIS_SECRET_KEY` | for `internal`/`oidc` | — | Key for signing JWT session tokens. Min 32 bytes (hex or base64). Never logged. |
-| `JARVIS_AUTH_OIDC_ISSUER` | for `oidc` | — | OIDC provider issuer URL |
-| `JARVIS_AUTH_OIDC_CLIENT_ID` | for `oidc` | — | OIDC client ID |
-| `JARVIS_AUTH_OIDC_CLIENT_SECRET` | for `oidc` | — | OIDC client secret |
-| `JARVIS_AUTH_OIDC_REDIRECT_URL` | for `oidc` | — | Callback URL (must match provider config) |
-| `JARVIS_AUTH_OIDC_SCOPES` | no | `openid,profile,email` | Comma-separated OIDC scopes |
-| `JARVIS_OIDC_ADMIN_CLAIM` | no | — | Token claim that grants the admin role, e.g. `groups`. Needs `JARVIS_OIDC_ADMIN_VALUE` — see [Role Mapping](#role-mapping) |
-| `JARVIS_OIDC_ADMIN_VALUE` | no | — | Value that claim must contain, e.g. `jarvis-admins` |
+The full reference (defaults, which are required per provider, descriptions)
+is in [Configuration → User authentication](configuration.md#user-authentication).
+`JARVIS_OIDC_ADMIN_CLAIM` / `JARVIS_OIDC_ADMIN_VALUE` are explained further
+under [Role Mapping](#role-mapping) below.
 
 ---
 

@@ -222,16 +222,11 @@ helm template jarvis oci://ghcr.io/kj187/charts/jarvis -f values.yaml \
 
 ## Environment Variables
 
-| Variable | Description |
-|---|---|
-| `JARVIS_CLUSTER_N_OAUTH2_CLIENT_ID` | OAuth2 client ID for the `client_credentials` grant. Takes priority over all other auth options when set. |
-| `JARVIS_CLUSTER_N_OAUTH2_CLIENT_SECRET` | OAuth2 client secret. Never logged. |
-| `JARVIS_CLUSTER_N_OAUTH2_TOKEN_URL` | Token endpoint URL. Required when `OAUTH2_CLIENT_ID` is set. |
-| `JARVIS_CLUSTER_N_OAUTH2_SCOPES` | Comma-separated OAuth2 scopes (optional, e.g. `openid,profile`). |
-| `JARVIS_CLUSTER_N_BEARER_TOKEN` | Static bearer token sent as `Authorization: Bearer <token>`. Never logged. |
-| `JARVIS_CLUSTER_N_BASIC_AUTH_USER` | HTTP Basic Auth username. |
-| `JARVIS_CLUSTER_N_BASIC_AUTH_PASSWORD` | HTTP Basic Auth password. Never logged. |
-| `JARVIS_CLUSTER_N_HEADER_<name>` | Custom request header `<name>`. Repeat the variable with different names for multiple headers. |
+The full reference (every `JARVIS_CLUSTER_N_*` upstream-auth variable, with
+description) is in
+[Configuration → Upstream authentication](configuration.md#upstream-authentication),
+including the priority order when more than one method is set for the same
+cluster.
 
 ---
 
