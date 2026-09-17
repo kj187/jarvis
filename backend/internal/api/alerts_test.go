@@ -22,7 +22,7 @@ import (
 	"github.com/kj187/jarvis/backend/internal/ws"
 )
 
-func newTestServer(t *testing.T) (*Server, *history.AlertStore) {
+func newTestServer(t testing.TB) (*Server, *history.AlertStore) {
 	t.Helper()
 	database, dialect, err := idb.Open(":memory:")
 	if err != nil {

@@ -23,6 +23,8 @@ go tool cover -html=coverage.out   # Open coverage in browser
 go test ./internal/history/...     # Single package
 go test ./internal/api/...
 go test -run TestGracePeriod ./internal/history/...  # Single test
+go test ./internal/history/... ./internal/api/... ./internal/ws/... -run '^$' \
+  -bench '^BenchmarkMemory' -benchmem -count=10  # Memory-allocation baselines
 
 # Fuzzing (Go native — fuzz funcs live in *_fuzz_test.go; seed corpus +
 # saved crash inputs under internal/<pkg>/testdata/fuzz/ run in normal go test)
@@ -75,6 +77,11 @@ make down-alertmanager
 make up-postgres                   # test PostgreSQL on 5432 (jarvis/jarvis/jarvis) — for JARVIS_DB_DSN=postgres://…
 make down-postgres
 
+# ── Memory load harness (loopback targets only; output is gitignored) ──
+node scripts/memory-load.mjs --base-url http://127.0.0.1:8080 \
+  --route '/api/v1/alerts?state=resolved' --concurrency 4 \
+  --duration-seconds 600 --output tmp/memory-results/legacy-30k-c4.json
+
 # ── PostgreSQL-backed backend tests (env-gated) ──────────────
 make up-postgres
 JARVIS_TEST_POSTGRES_DSN='postgres://jarvis:jarvis@localhost:5432/jarvis?sslmode=disable' \
@@ -103,6 +110,47 @@ make demo-resolve                  # resolve them — they move to the Resolved 
 make demo-reset                    # down -v + up: empty Jarvis, repeatable demo
 make demo-down                     # down -v: containers and the volume both gone
 ```
+
+## Memory performance baselines
+
+The opt-in memory benchmarks are the reusable starting point for investigations
+into allocation volume, retained alert snapshots, resolved-history reads, and
+WebSocket fanout. They live in `internal/history/memory_bench_test.go`,
+`internal/api/memory_bench_test.go`, and `internal/ws/memory_bench_test.go`.
+Normal `go test`, pre-commit, and CI runs compile but do not execute benchmarks;
+`-bench '^BenchmarkMemory'` is required to run them.
+
+The fixtures use the fixed UTC instant `2026-09-17T06:00:00Z`, deterministic
+fingerprints and label values, four clusters, and fixed annotation sizes. Keep
+setup outside the timed region and always use `b.ReportAllocs()`. Do not replace
+the discarding API writer with `httptest.ResponseRecorder`: a recorder retains
+the complete response and makes the test harness itself look like application
+memory. Do not compare benchmark results produced with `-race`.
+
+For a before/after comparison:
+
+1. Use the same commit toolchain, architecture, database, fixture size,
+   concurrency, `GOGC`, and `GOMEMLIMIT`.
+2. Run ten repetitions with `-benchmem -count=10`; keep `ns/op`, `B/op`, and
+   `allocs/op` as separate measurements. A Go benchmark reports mean time per
+   operation, not request p95.
+3. Use `scripts/memory-load.mjs` for request latency distributions and concurrent
+   load. It accepts loopback hosts only, consumes response bodies without retaining
+   them, and stores bounded one-second summaries rather than response payloads.
+4. Capture process/container memory independently at one-second resolution. The
+   load generator cannot establish the server's RSS or peak memory.
+5. Write raw results below gitignored `tmp/memory-results/` and record commit,
+   Go version, OS/CPU, database/version, fixture size, concurrency, `GOGC`, and
+   `GOMEMLIMIT` beside each run. Raw measurement output is not committed by
+   default; benchmark code and changes to this procedure are.
+
+The benchmark names are intentionally stable: `BenchmarkMemoryResolvedLegacy`,
+`BenchmarkMemorySnapshotCodec`, `BenchmarkMemoryLiveGET`, and
+`BenchmarkMemoryBroadcast`. Add the planned resolved count/page benchmarks only
+when those production read paths exist; do not create measurement-only HTTP
+endpoints. The loopback load harness never seeds or deletes data: prepare a
+disposable local/E2E database separately, and never point a destructive fixture
+at a production DSN.
 
 ---
 
