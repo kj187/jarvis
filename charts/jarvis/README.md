@@ -120,6 +120,16 @@ Tests cover four suites (`deployment`, `configmap`, `secret`, `ingress`) and run
 | `clusters[].alertmanagerUrl` | string | `http://alertmanager:9093` | Internal Alertmanager URL |
 | `clusters[].prometheusUrl` | string | `""` | Optional Prometheus URL |
 | `clusters[].hostAlias` | string | `""` | Optional browser-visible URL override |
+| `clusters[].auth.bearerToken` | string | `""` | Static bearer token sent as `Authorization: Bearer <token>`. Stored in a Secret. |
+| `clusters[].auth.basicAuth.username` | string | `""` | HTTP basic auth username |
+| `clusters[].auth.basicAuth.password` | string | `""` | HTTP basic auth password. Stored in a Secret. |
+| `clusters[].auth.oauth2.clientId` | string | `""` | OAuth2 client_credentials client ID. Enables OAuth2 for this cluster; requires `tokenUrl` |
+| `clusters[].auth.oauth2.clientSecret` | string | `""` | OAuth2 client secret. Stored in a Secret. |
+| `clusters[].auth.oauth2.tokenUrl` | string | `""` | OAuth2 token endpoint. Required when `clientId` is set — the render fails otherwise |
+| `clusters[].auth.oauth2.scopes` | string | `""` | Comma-separated OAuth2 scopes, e.g. `openid,profile` |
+| `clusters[].auth.headers` | object | `{}` | Arbitrary headers sent with every request, e.g. `{X-Scope-OrgID: tenant1}` |
+| `clusters[].auth.existingSecret` | string | `""` | Existing Secret to read `bearerToken`/`basicAuth.password`/`oauth2.clientSecret` from instead of the values above. Missing keys are treated as unset. |
+| `clusters[].auth.existingSecretKeys` | object | `{}` | Key names in `existingSecret`; unset entries fall back to `cluster-<n>-bearer-token` / `cluster-<n>-basic-auth-password` / `cluster-<n>-oauth2-client-secret` |
 | `database.dsn` | string | `/data/jarvis.db` | Database DSN (SQLite path or `postgres://` URL; PostgreSQL recommended for production) |
 | `database.existingSecret` | string | `""` | Use an existing Secret for the DSN instead |
 | `database.existingSecretKey` | string | `dsn` | Key in the existing Secret |
@@ -264,33 +274,47 @@ clusters:
 
 ### Alertmanager behind an authentication proxy
 
-The chart has no `clusters[].auth` values yet — per-cluster upstream
-authentication (OAuth2 client credentials, bearer token, basic auth, custom
-headers) is configured through `extraEnv`, using the numbered
-`JARVIS_CLUSTER_<n>_*` variables. Cluster `n` is the position in the
-`clusters` list, starting at 1.
+Per-cluster upstream authentication (OAuth2 client credentials, bearer token, basic auth,
+custom headers) is configured directly under `clusters[].auth`:
 
 ```yaml
 clusters:
   - name: production
     alertmanagerUrl: https://alertmanager-internal.example.com
-
-extraEnv:
-  - name: JARVIS_CLUSTER_1_OAUTH2_CLIENT_ID
-    value: jarvis-service
-  - name: JARVIS_CLUSTER_1_OAUTH2_TOKEN_URL
-    value: https://keycloak.example.com/realms/homelab/protocol/openid-connect/token
-  - name: JARVIS_CLUSTER_1_OAUTH2_CLIENT_SECRET
-    valueFrom:
-      secretKeyRef:
-        name: jarvis-upstream-auth
-        key: oauth2-client-secret
+    auth:
+      oauth2:
+        clientId: jarvis-service
+        tokenUrl: https://keycloak.example.com/realms/homelab/protocol/openid-connect/token
+        # clientSecret below is stored in a Secret, never the ConfigMap.
+        clientSecret: <client-secret>
 ```
 
-Values written inline under `extraEnv` are stored in plaintext in the release
-values — always pull secrets from a Secret, as above. The full pattern,
-including the other auth methods and multi-cluster numbering, is in
+Prefer an existing Secret over inline values in production — the value above ends up in
+plaintext in the release values otherwise:
+
+```bash
+kubectl create secret generic jarvis-upstream-auth \
+  --from-literal=cluster-1-oauth2-client-secret=<client-secret>
+```
+
+```yaml
+clusters:
+  - name: production
+    alertmanagerUrl: https://alertmanager-internal.example.com
+    auth:
+      oauth2:
+        clientId: jarvis-service
+        tokenUrl: https://keycloak.example.com/realms/homelab/protocol/openid-connect/token
+      existingSecret: jarvis-upstream-auth
+```
+
+The other methods (bearer token, basic auth, custom headers) and the full priority order
+when more than one is set for the same cluster are in
 [docs/authentication-alertmanager.md](../../docs/authentication-alertmanager.md).
+
+Chart versions before this one have no `clusters[].auth` values — upstream auth on those is
+configured through `extraEnv` instead, using the numbered `JARVIS_CLUSTER_<n>_*` variables
+directly; see the same doc page for that pattern.
 
 ### Ingress with WebSocket support
 

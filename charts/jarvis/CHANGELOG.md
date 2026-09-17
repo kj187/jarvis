@@ -12,9 +12,13 @@ Entries up to and including 1.7.6 were reconstructed from the git history when t
 
 - No breaking changes.
 
+### Added
+
+- `clusters[].auth.*` values for per-cluster upstream Alertmanager authentication: OAuth2 client credentials, bearer token, basic auth, and custom headers — rendered as the existing `JARVIS_CLUSTER_<n>_*` variables the backend already reads. `oauth2.clientSecret`, `bearerToken` and `basicAuth.password` are stored in the chart's Secret, never the ConfigMap; `clusters[].auth.existingSecret` sources them from an externally managed Secret instead, consistent with `database.existingSecret` and `auth.existingSecret`. Setting `oauth2.clientId` without `oauth2.tokenUrl` fails the render, mirroring the backend's own startup validation instead of failing silently at runtime.
+
 ### Changed
 
-- The chart README shows how to configure per-cluster upstream authentication (OAuth2 client credentials, bearer token, basic auth, custom headers) through `extraEnv`. The chart has no `clusters[].auth` values, so this was reachable only by guessing the numbered `JARVIS_CLUSTER_<n>_*` variable names — and nothing warned that credentials written inline under `extraEnv` sit in plaintext in the release values. Documentation only, no rendered change.
+- The Kubernetes section of [docs/authentication-alertmanager.md](../../docs/authentication-alertmanager.md) and the chart README now document `clusters[].auth.*` directly instead of the `extraEnv` workaround; `extraEnv` is kept as a documented fallback for chart versions before this one.
 - The ingress section points at the new [reverse-proxy guide](../../docs/reverse-proxy.md) and states that `config.allowedOrigins` must name the URL the browser uses — the WebSocket annotations alone are not enough. Documentation only, no rendered change.
 - `artifacthub.io/links`'s Documentation entry now points at the published docs site (`https://kj187.github.io/jarvis/`) instead of the `docs/` tree on GitHub, following the docs restructure into a reader-intent site. Metadata only, no rendered change.
 - Comments in `values.yaml` and the template files pointing at `docs/persistence.md` now point at `docs/postgres-ha.md`, following the same restructure. Comments and a test suite name only, no rendered change.

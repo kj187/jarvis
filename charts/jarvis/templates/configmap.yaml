@@ -35,4 +35,20 @@ data:
   {{- if $cluster.hostAlias }}
   JARVIS_CLUSTER_{{ $n }}_HOST_ALIAS: {{ $cluster.hostAlias | quote }}
   {{- end }}
+  {{- $auth := $cluster.auth | default dict }}
+  {{- $basicAuth := $auth.basicAuth | default dict }}
+  {{- $oauth2 := $auth.oauth2 | default dict }}
+  {{- if $basicAuth.username }}
+  JARVIS_CLUSTER_{{ $n }}_BASIC_AUTH_USER: {{ $basicAuth.username | quote }}
+  {{- end }}
+  {{- if $oauth2.clientId }}
+  JARVIS_CLUSTER_{{ $n }}_OAUTH2_CLIENT_ID: {{ $oauth2.clientId | quote }}
+  JARVIS_CLUSTER_{{ $n }}_OAUTH2_TOKEN_URL: {{ $oauth2.tokenUrl | quote }}
+  {{- if $oauth2.scopes }}
+  JARVIS_CLUSTER_{{ $n }}_OAUTH2_SCOPES: {{ $oauth2.scopes | quote }}
+  {{- end }}
+  {{- end }}
+  {{- range $key, $value := ($auth.headers | default dict) }}
+  JARVIS_CLUSTER_{{ $n }}_HEADER_{{ $key }}: {{ $value | quote }}
+  {{- end }}
   {{- end }}

@@ -152,3 +152,36 @@ tests:
       - equal:
           path: data.JARVIS_CLUSTER_2_HOST_ALIAS
           value: https://alertmanager.example.com
+
+  - it: renders non-secret cluster auth fields, omitting secrets
+    values:
+      - ./values/cluster-auth.yaml
+    asserts:
+      - equal:
+          path: data.JARVIS_CLUSTER_1_BASIC_AUTH_USER
+          value: jarvis
+      - equal:
+          path: data.JARVIS_CLUSTER_1_OAUTH2_CLIENT_ID
+          value: my-client
+      - equal:
+          path: data.JARVIS_CLUSTER_1_OAUTH2_TOKEN_URL
+          value: https://idp.example.com/token
+      - equal:
+          path: data.JARVIS_CLUSTER_1_OAUTH2_SCOPES
+          value: openid,profile
+      - equal:
+          path: data.JARVIS_CLUSTER_1_HEADER_X-Scope-OrgID
+          value: tenant1
+      - notExists:
+          path: data.JARVIS_CLUSTER_1_BEARER_TOKEN
+      - notExists:
+          path: data.JARVIS_CLUSTER_1_BASIC_AUTH_PASSWORD
+      - notExists:
+          path: data.JARVIS_CLUSTER_1_OAUTH2_CLIENT_SECRET
+
+  - it: omits cluster auth fields when no cluster sets auth
+    asserts:
+      - notExists:
+          path: data.JARVIS_CLUSTER_1_BASIC_AUTH_USER
+      - notExists:
+          path: data.JARVIS_CLUSTER_1_OAUTH2_CLIENT_ID

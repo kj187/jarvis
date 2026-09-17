@@ -1,0 +1,15 @@
+clusters:
+  - name: production
+    alertmanagerUrl: https://alertmanager-internal.example.com
+    auth:
+      bearerToken: my-bearer-token
+      basicAuth:
+        username: jarvis
+        password: my-basic-password
+      oauth2:
+        clientId: my-client
+        clientSecret: my-oauth2-secret
+        tokenUrl: https://idp.example.com/token
+        scopes: "openid,profile"
+      headers:
+        X-Scope-OrgID: tenant1
