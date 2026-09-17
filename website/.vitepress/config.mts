@@ -171,6 +171,8 @@ export default defineConfig({
           { text: 'E2E & screenshot testing', link: '/project/testing-e2e' },
           { text: 'Working with AI agents', link: '/project/ai-agents' },
           { text: 'Security policy', link: '/project/security-policy' },
+          { text: 'Maintainers', link: '/project/maintainers' },
+          { text: 'Code of Conduct', link: '/project/code-of-conduct' },
         ],
       },
     ],

@@ -52,6 +52,8 @@ export const PAGES = [
   { src: 'docs/testing-e2e.md', route: 'project/testing-e2e' },
   { src: 'docs/ai-agents.md', route: 'project/ai-agents' },
   { src: 'SECURITY.md', route: 'project/security-policy', title: 'Security Policy' },
+  { src: 'MAINTAINERS.md', route: 'project/maintainers' },
+  { src: 'CODE_OF_CONDUCT.md', route: 'project/code-of-conduct' },
 ]
 
 /** repo-relative source path -> website route (with leading slash), for link rewriting. */
