@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "sync": "node scripts/sync-content.mjs",
+    "test": "node --test scripts/*.test.mjs",
     "dev": "pnpm run sync && vitepress dev --host 0.0.0.0 --port 5174",
     "build": "pnpm run sync && vitepress build",
     "preview": "vitepress preview --host 0.0.0.0 --port 5174"

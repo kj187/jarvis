@@ -31,7 +31,11 @@ alerts — so functional tests and screenshots exercise the actual system.
 
 ## Architecture
 
-![E2E stack topology](assets/e2e-stack.svg)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/e2e-stack-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="assets/e2e-stack-light.svg">
+  <img src="assets/e2e-stack-light.svg" alt="E2E stack topology">
+</picture>
 
 (source: [`docs/diagrams/e2e-stack.mmd`](diagrams/e2e-stack.mmd), re-render via `make diagrams`)
 

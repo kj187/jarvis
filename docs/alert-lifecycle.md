@@ -11,7 +11,11 @@ deliberate approximations) that apply in failure scenarios — including
 across a PostgreSQL multi-replica leadership change (see
 [docs/postgres-ha.md](postgres-ha.md#failover)).
 
-![Alert lifecycle state machine](assets/alert-lifecycle.svg)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/alert-lifecycle-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="assets/alert-lifecycle-light.svg">
+  <img src="assets/alert-lifecycle-light.svg" alt="Alert lifecycle state machine">
+</picture>
 
 (source: [`docs/diagrams/alert-lifecycle.mmd`](diagrams/alert-lifecycle.mmd),
 re-render via `make diagrams`)

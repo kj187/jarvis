@@ -123,6 +123,11 @@ Record the decision; it drives two later steps (step 10a and step 13).
      hands back the video files, covers, and the YouTube title/description
      (also written to `youtube.txt` in `VIDEO_OUT`). Ask the user to upload
      the video to YouTube before the review gate, so its URL is ready there.
+     Once the URL is known, add the release (newest first) to
+     `docs/videos.md` with a linked 16:9 YouTube cover,
+     a direct YouTube link and the deterministic GitHub release link. This
+     keeps the documentation video index and release notes in sync in the
+     same release PR.
    - Draft the **social media posts** (see *Social media posts* below) for
      LinkedIn, X and Reddit. Use the release URL
      (`https://github.com/kj187/jarvis/releases/tag/vX.Y.Z` — deterministic,
@@ -184,7 +189,7 @@ Record the decision; it drives two later steps (step 10a and step 13).
     ```bash
     printf '%s\n' CHANGELOG.md charts/jarvis/CHANGELOG.md .github/release-notes/vX.Y.Z.md \
       | scripts/check-changelogs.sh
-    git add CHANGELOG.md README.md docs/deploy-compose.md docs/deploy-kubernetes.md docs/upgrade.md compose.demo.yml charts/jarvis/Chart.yaml charts/jarvis/CHANGELOG.md .github/release-notes/vX.Y.Z.md
+    git add CHANGELOG.md README.md docs/deploy-compose.md docs/deploy-kubernetes.md docs/upgrade.md docs/videos.md compose.demo.yml charts/jarvis/Chart.yaml charts/jarvis/CHANGELOG.md .github/release-notes/vX.Y.Z.md
     git commit -s -m "chore(release): prepare vX.Y.Z"
     ```
 
