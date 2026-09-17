@@ -1,8 +1,32 @@
 #!/usr/bin/env bash
 # Fires a diverse set of Kubernetes-themed Jarvis test alerts against Alertmanager.
 # All alerts share label test_suite=jarvis — run resolve-test-alerts.sh to clean up.
+#
+# Profiles:
+#   demo (18 alerts)  realistic Kubernetes incidents only — what a visitor should see
+#   full (27 alerts)  demo set plus the link/label/escaping edge cases the E2E and
+#                     screenshot suites depend on. Default.
 
 set -euo pipefail
+
+usage() {
+  echo "usage: $0 [--profile demo|full]"
+}
+
+PROFILE="${FIXTURE_PROFILE:-full}"
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --profile) PROFILE="${2:-}"; shift 2 ;;
+    --profile=*) PROFILE="${1#*=}"; shift ;;
+    -h|--help) usage; exit 0 ;;
+    *) echo "ERROR: unknown argument: $1" >&2; usage >&2; exit 2 ;;
+  esac
+done
+case "$PROFILE" in
+  demo) TOTAL=18 ;;
+  full) TOTAL=27 ;;
+  *) echo "ERROR: unknown profile: $PROFILE" >&2; usage >&2; exit 2 ;;
+esac
 
 command -v jq >/dev/null 2>&1 || { echo "ERROR: jq is required but not installed."; exit 1; }
 
@@ -15,6 +39,12 @@ RUNBOOKS="https://runbooks.example.com/alerts"
 # Without explicit startsAt, some Alertmanager versions copy endsAt into startsAt.
 STARTS_AT="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
 ENDS_AT="2099-12-31T23:59:59.000Z"
+
+STEP=0
+step() {
+  STEP=$(( STEP + 1 ))
+  printf "  [%2d/%2d] %s..." "$STEP" "$TOTAL" "$1"
+}
 
 post() {
   local payload
@@ -31,9 +61,9 @@ pause() {
   sleep "$s"
 }
 
-echo "==> Firing Kubernetes test alerts to ${AM} (randomized, ~2 min)"
+echo "==> Firing ${TOTAL} Kubernetes test alerts (profile: ${PROFILE}) to ${AM} (randomized, ~2 min)"
 
-printf "  [1/27] KubePodCrashLooping (critical, payment-api, prod)..."
+step "KubePodCrashLooping (critical, payment-api, prod)"
 post '[{
   "labels": {
     "alertname": "KubePodCrashLooping",
@@ -56,7 +86,7 @@ post '[{
 }]'
 
 pause
-printf "  [2/27] KubePodCrashLooping (critical, payment-api, prod) — 2nd pod (groups with #1)..."
+step "KubePodCrashLooping (critical, payment-api, prod) — 2nd pod (groups with #1)"
 post '[{
   "labels": {
     "alertname": "KubePodCrashLooping",
@@ -78,7 +108,7 @@ post '[{
 }]'
 
 pause
-printf "  [3/27] KubePodCrashLooping (critical, payment-api, prod) — 3rd pod (groups with #1)..."
+step "KubePodCrashLooping (critical, payment-api, prod) — 3rd pod (groups with #1)"
 post '[{
   "labels": {
     "alertname": "KubePodCrashLooping",
@@ -100,7 +130,7 @@ post '[{
 }]'
 
 pause
-printf "  [4/27] KubeNodeNotReady (critical, worker-node-3, prod)..."
+step "KubeNodeNotReady (critical, worker-node-3, prod)"
 post '[{
   "labels": {
     "alertname": "KubeNodeNotReady",
@@ -120,7 +150,7 @@ post '[{
 }]'
 
 pause
-printf "  [5/27] KubeAPIServerErrorsHigh (critical, kube-system, prod)..."
+step "KubeAPIServerErrorsHigh (critical, kube-system, prod)"
 post '[{
   "labels": {
     "alertname": "KubeAPIServerErrorsHigh",
@@ -140,7 +170,7 @@ post '[{
 }]'
 
 pause
-printf "  [6/27] KubeJobFailed (critical, data-pipeline, prod)..."
+step "KubeJobFailed (critical, data-pipeline, prod)"
 post '[{
   "labels": {
     "alertname": "KubeJobFailed",
@@ -162,7 +192,7 @@ post '[{
 }]'
 
 pause
-printf "  [7/27] KubeDeploymentReplicasMismatch (warning, frontend, staging)..."
+step "KubeDeploymentReplicasMismatch (warning, frontend, staging)"
 post '[{
   "labels": {
     "alertname": "KubeDeploymentReplicasMismatch",
@@ -183,7 +213,7 @@ post '[{
 }]'
 
 pause
-printf "  [8/27] KubePersistentVolumeFillingUp (warning, prometheus, prod)..."
+step "KubePersistentVolumeFillingUp (warning, prometheus, prod)"
 post '[{
   "labels": {
     "alertname": "KubePersistentVolumeFillingUp",
@@ -204,7 +234,7 @@ post '[{
 }]'
 
 pause
-printf "  [9/27] KubeHpaMaxedOut (warning, auth-service, prod)..."
+step "KubeHpaMaxedOut (warning, auth-service, prod)"
 post '[{
   "labels": {
     "alertname": "KubeHpaMaxedOut",
@@ -224,7 +254,7 @@ post '[{
 }]'
 
 pause
-printf " [10/27] KubePodOOMKilled (warning, ml-inference, prod)..."
+step "KubePodOOMKilled (warning, ml-inference, prod)"
 post '[{
   "labels": {
     "alertname": "KubePodOOMKilled",
@@ -247,7 +277,7 @@ post '[{
 }]'
 
 pause
-printf " [11/27] KubePodOOMKilled (warning, ml-inference, prod) — 2nd pod (groups with #10)..."
+step "KubePodOOMKilled (warning, ml-inference, prod) — 2nd pod (groups with #10)"
 post '[{
   "labels": {
     "alertname": "KubePodOOMKilled",
@@ -268,7 +298,7 @@ post '[{
 }]'
 
 pause
-printf " [12/27] KubePodOOMKilled (warning, ml-inference, prod) — 3rd pod (groups with #10)..."
+step "KubePodOOMKilled (warning, ml-inference, prod) — 3rd pod (groups with #10)"
 post '[{
   "labels": {
     "alertname": "KubePodOOMKilled",
@@ -289,7 +319,7 @@ post '[{
 }]'
 
 pause
-printf " [13/27] KubeContainerWaiting (info, batch-worker, prod)..."
+step "KubeContainerWaiting (info, batch-worker, prod)"
 post '[{
   "labels": {
     "alertname": "KubeContainerWaiting",
@@ -310,7 +340,7 @@ post '[{
 }]'
 
 pause
-printf " [14/27] KubeContainerWaiting (info, batch-worker, prod) — 2nd pod (groups with #13)..."
+step "KubeContainerWaiting (info, batch-worker, prod) — 2nd pod (groups with #13)"
 post '[{
   "labels": {
     "alertname": "KubeContainerWaiting",
@@ -331,7 +361,7 @@ post '[{
 }]'
 
 pause
-printf " [15/27] KubeContainerWaiting (info, batch-worker, prod) — 3rd pod (groups with #13)..."
+step "KubeContainerWaiting (info, batch-worker, prod) — 3rd pod (groups with #13)"
 post '[{
   "labels": {
     "alertname": "KubeContainerWaiting",
@@ -352,7 +382,7 @@ post '[{
 }]'
 
 pause
-printf " [16/27] KubeStatefulSetReplicasMismatch (info, kafka, prod)..."
+step "KubeStatefulSetReplicasMismatch (info, kafka, prod)"
 post '[{
   "labels": {
     "alertname": "KubeStatefulSetReplicasMismatch",
@@ -373,7 +403,7 @@ post '[{
 }]'
 
 pause
-printf " [17/27] KubeServiceEndpointError (error, checkout-api, prod)..."
+step "KubeServiceEndpointError (error, checkout-api, prod)"
 post '[{
   "labels": {
     "alertname": "KubeServiceEndpointError",
@@ -394,7 +424,7 @@ post '[{
 }]'
 
 pause
-printf " [18/27] KubeDNSErrors (error, kube-dns, prod)..."
+step "KubeDNSErrors (error, kube-dns, prod)"
 post '[{
   "labels": {
     "alertname": "KubeDNSErrors",
@@ -415,8 +445,21 @@ post '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=rate(coredns_dns_responses_total%7Brcode%3D%22SERVFAIL%22%7D%5B5m%5D)"
 }]'
 
+# Everything above is a plausible Kubernetes incident. Everything below exists to
+# exercise link extraction, label overflow and escaping — valuable for the E2E and
+# screenshot suites, wrong for a first impression. The demo profile stops here.
+if [[ "$PROFILE" == "demo" ]]; then
+  echo ""
+  echo "==> Done. 18 demo alerts active (test_suite=jarvis)."
+  echo "    KubePodCrashLooping, KubePodOOMKilled and KubeContainerWaiting each fired as"
+  echo "    3 alerts (same alertname/cluster/namespace, different pod) — Alertmanager"
+  echo "    groups them (group_by: alertname, cluster, namespace) into 3-alert groups."
+  echo "    Alerts persist until you resolve them (endsAt: ${ENDS_AT})."
+  exit 0
+fi
+
 pause
-printf " [19/27] LinkRichAlert — many link labels + annotations..."
+step "LinkRichAlert — many link labels + annotations"
 post '[{
   "labels": {
     "alertname": "LinkRichAlert",
@@ -443,7 +486,7 @@ post '[{
 }]'
 
 pause
-printf " [20/27] InlineUrlsAlert — multiple URLs embedded in description prose..."
+step "InlineUrlsAlert — multiple URLs embedded in description prose"
 post '[{
   "labels": {
     "alertname": "InlineUrlsAlert",
@@ -462,7 +505,7 @@ post '[{
 }]'
 
 pause
-printf " [21/27] LabelOnlyLinksAlert — all links in labels, no annotation links..."
+step "LabelOnlyLinksAlert — all links in labels, no annotation links"
 post '[{
   "labels": {
     "alertname": "LabelOnlyLinksAlert",
@@ -484,7 +527,7 @@ post '[{
 }]'
 
 pause
-printf " [22/27] AnnotationOnlyLinksAlert — all links in annotations, no label links..."
+step "AnnotationOnlyLinksAlert — all links in annotations, no label links"
 post '[{
   "labels": {
     "alertname": "AnnotationOnlyLinksAlert",
@@ -506,7 +549,7 @@ post '[{
 }]'
 
 pause
-printf " [23/27] SpecialCharLabelAlert — label value with dots + label value with hyphens..."
+step "SpecialCharLabelAlert — label value with dots + label value with hyphens"
 post '[{
   "labels": {
     "alertname": "SpecialCharLabelAlert",
@@ -529,7 +572,7 @@ post '[{
 }]'
 
 pause
-printf " [24/27] KubePodExcessiveLabelsAlert — pod carrying the full label surface (k8s/helm/argocd/istio/cost tags)..."
+step "KubePodExcessiveLabelsAlert — pod carrying the full label surface (k8s/helm/argocd/istio/cost tags)"
 post '[{
   "labels": {
     "alertname": "KubePodExcessiveLabelsAlert",
@@ -574,7 +617,7 @@ post '[{
 }]'
 
 pause
-printf " [25/27] CIPipelineBuildMetadataAlert — CI/CD build/git/docker metadata heavy..."
+step "CIPipelineBuildMetadataAlert — CI/CD build/git/docker metadata heavy"
 post '[{
   "labels": {
     "alertname": "CIPipelineBuildMetadataAlert",
@@ -614,7 +657,7 @@ post '[{
 }]'
 
 pause
-printf " [26/27] CloudResourceTaggingAlert — AWS/Terraform cost-allocation tags heavy..."
+step "CloudResourceTaggingAlert — AWS/Terraform cost-allocation tags heavy"
 post '[{
   "labels": {
     "alertname": "CloudResourceTaggingAlert",
@@ -656,7 +699,7 @@ post '[{
 }]'
 
 pause
-printf " [27/27] FeatureFlagRolloutAlert — many per-flag/experiment labels..."
+step "FeatureFlagRolloutAlert — many per-flag/experiment labels"
 post '[{
   "labels": {
     "alertname": "FeatureFlagRolloutAlert",
@@ -699,4 +742,4 @@ echo "    groups them (group_by: alertname, cluster, namespace) into 3-alert gro
 echo "    #24-27 (KubePodExcessiveLabelsAlert, CIPipelineBuildMetadataAlert,"
 echo "    CloudResourceTaggingAlert, FeatureFlagRolloutAlert) each carry 25-30 labels"
 echo "    to exercise label-heavy rendering (filter bar, chip wrapping, silence matchers)."
-echo "    Alerts persist until you run 'make alerts-resolve' (endsAt: ${ENDS_AT})."
+echo "    Alerts persist until you run 'make fixtures-remove' (endsAt: ${ENDS_AT})."

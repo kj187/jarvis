@@ -6,12 +6,6 @@ stack it fronts can also monitor Jarvis itself. The endpoint is **public**
 only aggregate counts and configured cluster names, never alert names,
 labels, or annotations.
 
-> **Breaking label change**: `jarvis_alertmanager_up` and
-> `jarvis_cluster_fetch_duration_seconds` gained a `member` label (HA-cluster
-> support). Existing dashboards/alerts that group only by `cluster` still
-> work with `sum by (cluster) (...)`; ones that assert on the exact label set
-> need the `member` label added.
-
 ## Scrape-time gauges
 
 Computed from the in-memory alert store, the WebSocket hub, and the poller's
@@ -48,34 +42,8 @@ sync with reality.
 Runtime metrics (`go_*`, `process_*`) are included via the standard Prometheus
 Go/process collectors.
 
-## Scrape configuration
-
-Plain `prometheus.yml` scrape config:
-
-```yaml
-scrape_configs:
-  - job_name: jarvis
-    static_configs:
-      - targets: ["jarvis:8080"]
-```
-
-## Helm
-
-Two opt-in ways to let a cluster-wide Prometheus discover the endpoint (see
-the [chart README](../charts/jarvis/README.md) for the full values reference):
-
-```yaml
-# Prometheus Operator (requires the monitoring.coreos.com/v1 CRDs)
-metrics:
-  serviceMonitor:
-    enabled: true
-    labels:
-      release: kube-prometheus-stack   # match your Prometheus's serviceMonitorSelector
-
-# Annotation-based scraping instead
-metrics:
-  podAnnotations: true
-```
+Scrape configuration and Helm `ServiceMonitor`/annotation setup are in
+[Set up monitoring](monitoring.md).
 
 ## Example PromQL
 

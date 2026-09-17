@@ -328,9 +328,13 @@ export function migratePersistedSettings(persisted: unknown, version: number): u
 
   if (version < 2) {
     // Pre-v2: full resolved blob at top level, no override/mirror bookkeeping.
-    const anonOverrides = diffFromDefaults(
-      migrateLegacyDefaultFilters(state) as Partial<UserSettings>,
-    )
+    // Route through normalizeSettings (not just migrateLegacyDefaultFilters)
+    // so every field gets the same shape validation the server-settings path
+    // already has — a malformed nested value (e.g. labelDisplay missing
+    // `order`, from a hand-edited or otherwise corrupted localStorage blob)
+    // must be dropped here, not carried into overrides where it would crash
+    // partitionLabelsForDisplay on every render.
+    const anonOverrides = diffFromDefaults(normalizeSettings(state))
     state = {
       ...resolveSettings({}, anonOverrides),
       overrides: anonOverrides,

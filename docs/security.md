@@ -38,7 +38,8 @@ All HTTP responses include security headers via Echo's `SecureWithConfig` middle
 
 CORS is configured with a strict origin allowlist (`JARVIS_ALLOWED_ORIGINS`).
 No wildcard `*` is used. WebSocket upgrades validate the `Origin` header
-against the same allowlist.
+against the same allowlist. Setting it correctly behind a proxy is described
+in [Running behind a proxy](reverse-proxy.md).
 
 Request bodies are limited to **1 MB**.
 

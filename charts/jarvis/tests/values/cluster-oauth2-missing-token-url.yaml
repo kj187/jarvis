@@ -1,0 +1,6 @@
+clusters:
+  - name: production
+    alertmanagerUrl: https://alertmanager-internal.example.com
+    auth:
+      oauth2:
+        clientId: my-client

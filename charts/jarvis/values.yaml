@@ -5,7 +5,7 @@
 # and long-term stability, switch to PostgreSQL (database.dsn:
 # postgres://...) — replicaCount can then be any value, coordinated via
 # leader election (exactly one pod polls Alertmanager/writes history at a
-# time; every pod serves reads/API/WS equally). See docs/persistence.md.
+# time; every pod serves reads/API/WS equally). See docs/postgres-ha.md.
 replicaCount: 1
 
 image:
@@ -26,7 +26,7 @@ serviceAccount:
 leaderElection:
   podLabel:
     # Labels the current leader pod jarvis.kj187.de/role=leader (D7 in
-    # docs/persistence.md) — informational only, every pod serves all
+    # docs/postgres-ha.md) — informational only, every pod serves all
     # traffic regardless of leadership. Requires a Role+RoleBinding (pods:
     # get, patch) and automountServiceAccountToken: true on the pod, both
     # rendered only while this is true. Meaningful only with PostgreSQL
@@ -135,6 +135,38 @@ clusters:
     # Optional: overrides host/scheme for browser links when the internal URL
     # differs from what the browser can reach (e.g. via ingress).
     hostAlias: ""
+    # Per-cluster upstream authentication, for an Alertmanager sitting behind
+    # oauth2-proxy, basic auth, or a similar layer. See
+    # docs/authentication-alertmanager.md for the full reference, including
+    # the priority order when more than one method is set (OAuth2 > bearer
+    # token > basic auth > headers). Secrets below (oauth2.clientSecret,
+    # bearerToken, basicAuth.password) are stored in a chart-managed Secret,
+    # never the ConfigMap.
+    auth:
+      bearerToken: ""
+      basicAuth:
+        username: ""
+        password: ""
+      oauth2:
+        clientId: ""
+        # Stored in the Secret. Required when clientId is set, unless
+        # sourced from existingSecret instead.
+        clientSecret: ""
+        # Required when clientId is set.
+        tokenUrl: ""
+        # Comma-separated, e.g. "openid,profile"
+        scopes: ""
+      # Arbitrary headers sent with every request, e.g. {X-Scope-OrgID: tenant1}
+      headers: {}
+      # Use an existing Secret instead of storing bearerToken/basicAuth.password/
+      # oauth2.clientSecret above in values. Missing keys are treated as unset,
+      # so the Secret only needs to carry the methods this cluster actually uses.
+      existingSecret: ""
+      # Key names to read from existingSecret. Unset entries fall back to
+      # cluster-<n>-bearer-token / cluster-<n>-basic-auth-password /
+      # cluster-<n>-oauth2-client-secret (<n> = this cluster's 1-based
+      # position) — set these only to match an existing Secret's own naming.
+      existingSecretKeys: {}
 
 # User authentication configuration (UI login).
 # See docs/authentication-user.md for the full reference.

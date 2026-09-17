@@ -70,7 +70,7 @@ func applyClaimSideEffect(message []byte, alertStore *history.AlertStore, lookup
 
 // HandleFanoutRef returns the callback for Fanout.Run's onRef: another pod's
 // mutation broadcast was too large to embed in a single NOTIFY payload (D4,
-// docs/persistence.md), so only a Ref arrived. Every pod shares the
+// docs/postgres-ha.md), so only a Ref arrived. Every pod shares the
 // same PostgreSQL database, so this pod refetches the authoritative row via
 // store and reconstructs the exact broadcast the originating pod would have
 // sent, then broadcasts that reconstruction to its own clients — and, for

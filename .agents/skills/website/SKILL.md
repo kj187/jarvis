@@ -52,10 +52,10 @@ does hot-reload).
 
 | Path | What it is |
 |---|---|
-| `website/scripts/pages.mjs` | The manifest: which repo file becomes which route. Imported by both the sync script and the VitePress config. |
+| `website/scripts/pages.mjs` | The manifest: which repo file becomes which route (`PAGES`), plus the old→new route map for redirect stubs (`REDIRECTS`). Imported by both the sync script and the VitePress config. |
 | `website/scripts/sync-content.mjs` | Prebuild: copies the sources into `content/`, rewrites links, copies `docs/assets/*` and the branding files. |
 | `website/index.md` | Home page (hero, feature grid, showcase). The only authored page. |
-| `website/.vitepress/config.mts` | Site config: `base`, nav, sidebar, search, edit links, dead-link policy. |
+| `website/.vitepress/config.mts` | Site config: `base`, nav, sidebar, search, edit links, dead-link policy, per-page OG/Twitter tags (`transformHead`), sitemap generation (`buildEnd`). |
 | `website/.vitepress/theme/` | Custom theme: `Layout.vue`, `style.css` (palette), `components/MeshCanvas.vue`. |
 | `website/content/`, `website/.vitepress/dist\|cache`, `website/node_modules/` | Generated — all gitignored (also in `.dockerignore`/`.containerignore`). |
 
@@ -65,15 +65,39 @@ does hot-reload).
 
 1. Write the doc where it belongs (`docs/<name>.md`).
 2. Add an entry to `PAGES` in `website/scripts/pages.mjs`
-   (`{ src: 'docs/<name>.md', route: '<name>' }`; add `title` only when the
-   file has no `# ` heading or needs a different nav title).
+   (`{ src: 'docs/<name>.md', route: '<category>/<name>' }`; add `title` only
+   when the file has no `# ` heading or needs a different nav title). `route`
+   may be nested (e.g. `howto/retention`) — the site is organised by reader
+   intent (Diátaxis: Getting Started / Tasks / Reference / Concepts / Help /
+   Project), not by source file, and `sync-content.mjs` creates whatever
+   directory depth `route` needs.
 3. Add it to the `sidebar` (and `nav` if it is a top-level entry) in
-   `website/.vitepress/config.mts`.
+   `website/.vitepress/config.mts`, under the section matching its category.
 4. `make website` — the build fails on dead internal links, so a link to the
    new page from another doc is verified automatically.
 
 Both steps are needed: `PAGES` controls what gets synced *and* how links
 between docs are rewritten; the sidebar controls navigation.
+
+A `docs/*.md` file missing from `PAGES` fails `scripts/check-agent-context.sh`
+(pre-commit hook + CI) rather than going silently unpublished.
+
+---
+
+## Redirecting an old route
+
+When a restructure renames or removes a route, add an entry to `REDIRECTS` in
+`website/scripts/pages.mjs`: `{ from: '<old-route>', to: '<new-route>' }`.
+`sync-content.mjs` turns each into a stub page at `<old-route>.md` with a
+`<meta http-equiv="refresh">` to `<new-route>` and a canonical link — the only
+option here, since `cleanUrls: true` + GitHub Pages means there is no
+server-side redirect. `to` must be a live `PAGES` route and `from` must not
+collide with one; the sync script throws otherwise. The `<meta>`/`<link>`
+targets need the full `/jarvis/<route>` path (raw HTML, not processed by
+VitePress); the stub's own markdown fallback link must **not** repeat that
+prefix — it goes through VitePress's normal link handling, which already
+adds `base`, so prefixing it there double-counts and the dead-link check
+flags it.
 
 ---
 
@@ -84,17 +108,28 @@ to its **source** file and rewrites it:
 
 | Link target | Becomes |
 |---|---|
-| another file listed in `PAGES` | the website route (`/features`) |
+| another file listed in `PAGES` | the website route (`/reference/features`) |
 | any other repo file | `https://github.com/kj187/jarvis/blob/main/<path>` |
-| an image under `docs/assets/` | `./assets/<file>` (copied into `content/assets/`) |
+| an image under `docs/assets/` | `/assets/<file>` (public dir — routes now nest to any depth, e.g. `concepts/architecture`, so a page-relative `./assets/…` no longer resolves at a fixed depth; also copied flat into `content/assets/` for `HomeScreenshot.vue`'s direct import) |
 | `frontend/public/logo.png` | `/logo.png` |
 | any other image | `https://raw.githubusercontent.com/kj187/jarvis/main/<path>` |
 | `http(s):`, `mailto:`, `#fragment` | unchanged |
 
 Passes run in this order and must stay that way: linked badges
 (`[![alt](img)](target)` — the README's shields), then images, then plain
-links, then bare `<img src="…">`. The plain-link regex stops at the first `]`,
-so without the badge pass first it mangles nested syntax.
+links, then bare `<img src="…">`, then bare `<source srcset="…">` (the
+README's theme-aware `<picture>` screenshot). The plain-link regex stops at
+the first `]`, so without the badge pass first it mangles nested syntax.
+
+After `rewriteLinks()`, `convertThemePictures()` runs once more over the
+whole file: it turns the README's GitHub-native `<picture>` +
+`prefers-color-scheme` screenshot into the `.dark-only`/`.light-only` divs
+the site already uses for the homepage's card-view shot. GitHub has no
+concept of the site's manual light/dark switch (`appearance: 'dark'` in
+`config.mts`) — it can only follow the OS/browser theme via
+`prefers-color-scheme` — so the same markup needs two different theme
+mechanisms depending on where it renders. Must run after the srcset rewrite,
+since it matches on the already-rewritten `/assets/…` paths.
 
 ---
 
@@ -118,6 +153,62 @@ so without the badge pass first it mangles nested syntax.
   renders string icons (`v-html`); an object `icon: { svg: … }` is silently
   ignored because object icons go through `VPImage` and expect `src`.
   No emoji.
+- Screenshots of the app are theme-specific, so the home page ships both and
+  toggles them with `.light-only` / `.dark-only` (defined in `theme/style.css`
+  — VitePress has no such utility of its own). A screenshot placed on the home
+  page therefore needs a light counterpart in the screenshot suite;
+  `card-view` / `card-view-light` in
+  `frontend/e2e/screenshots/none/card-view.screenshot.spec.ts` is the pattern.
+- Headings inside hand-written blocks on the home page render a visible `#`:
+  VitePress hides heading anchors via `.vp-doc .header-anchor`, and the home
+  layout is not `.vp-doc`. `theme/style.css` hides them for `.home-showcase`;
+  a new block needs the same rule. Further `##` sections of the home page go
+  inside the same `.home-showcase` wrapper; `.home-showcase h2:not(:first-child)`
+  gives them their top spacing.
+- **`theme/components/HomeScreenshot.vue`** renders the card-view screenshot
+  (same theme toggling as above) via the `home-hero-after` slot in
+  `Layout.vue`, so it appears between the hero and the feature grid. This is
+  the only way to place anything there: `VPHome` always renders the page's
+  own Content (the `<div class="home-showcase">` block) *after* the feature
+  grid, regardless of where it sits in `index.md`'s source — a screenshot
+  meant to show "before the feature grid" cannot be placed there in markdown.
+  It imports the PNGs directly (`../../../content/assets/...`), which exist
+  once `pnpm run sync` has run (both `dev` and `build` do this first).
+- The feature grid's first two entries in `index.md`'s `features:` list are
+  rendered larger and spanning two of four grid columns each — the remaining
+  four stay compact, one column each — via `.VPHomeFeatures .items` overrides
+  in `theme/style.css`, keyed on `:nth-child(-n + 2)`. This is deliberate,
+  unequal visual weight (W11g: "let the two or three strongest capabilities
+  dominate"), not a bug — **the two strongest differentiators must stay
+  first** in the YAML list, or the CSS promotes the wrong boxes. Only applies
+  at 768px and up; below that, the grid falls back to VitePress's own
+  single/two-column stack untouched.
+- **Display face:** Sora, self-hosted from `theme/fonts/sora-variable-latin.woff2`
+  (SIL OFL 1.1, license text alongside it in `theme/fonts/OFL.txt`) — decision 9
+  (W11h) approved a display face for the hero and section headings only, with
+  Inter staying the sole face everywhere else; no Google Fonts origin (strict
+  CSP, `docs/security.md`). One file backs both `@font-face` weight
+  declarations (600 and 700) in `theme/style.css` — it is the variable font
+  Google Fonts itself serves, and the browser picks the requested weight off
+  its own `wght` axis, same as Google's own generated CSS does; there is no
+  separate 700-only file to fetch. Applied via `--vp-font-family-display` to
+  `.VPHero .name`/`.text`, `.home-showcase h2`, and `.VPFeature .title` (the
+  feature-grid box titles) — deliberately the same three targets shown in the
+  maintainer-approved font trial, not "every heading everywhere". A different
+  display face swaps the two `src: url(...)` lines and the font files; it does
+  not need new selectors.
+
+---
+
+## SEO metadata
+
+`config.mts`'s `transformHead` emits per-page OG/Twitter tags (title tracks
+`pageData.title`, so it follows the same "Page | Jarvis" pattern as the
+`<title>` tag); `buildEnd` writes `dist/sitemap.xml` from `PAGES` + the home
+route. Both are hand-rolled rather than a VitePress sitemap plugin — the
+route set is fully known upfront, so a dependency buys nothing. `REDIRECTS`
+stubs are intentionally left out of the sitemap (they are not canonical
+pages).
 
 ---
 
@@ -148,6 +239,7 @@ in the docs workflow.
 | `ERR_PNPM_IGNORED_BUILDS` | `website/pnpm-workspace.yaml` must allow the `esbuild` build script (`allowBuilds` + `onlyBuiltDependencies`), same as `frontend/`. |
 | `The language 'x' is not loaded` | Shiki has no grammar for that fence language. Map it in `markdown.languageAlias` to a real grammar — an alias to `txt` **breaks** the build. `promql` has no grammar and warns harmlessly. |
 | Images 404 in production | Only `docs/assets/*` is copied. Anything else becomes a raw.githubusercontent link; move the image to `docs/assets/` if it belongs to the docs. |
+| `Could not resolve "./assets/…"` at build | A page linked its image with a relative `./assets/…` path instead of letting `rewriteLinks()` produce `/assets/…`. Relative paths only resolve from a flat `content/*.md` — any nested route (`concepts/…`, `howto/…`) breaks. Fix the source doc's image markdown, don't hand-edit the rewriter's output. |
 | Assets 404 under a different host | `base: '/jarvis/'` is hardcoded for the Pages path. Absolute paths in `head`/frontmatter must include it. |
 | `dist/` owned by root | The `--user 0` flag is missing from the podman invocation. |
 

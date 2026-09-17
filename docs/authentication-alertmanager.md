@@ -104,18 +104,155 @@ JARVIS_CLUSTER_1_OAUTH2_TOKEN_URL=https://keycloak.example.com/realms/homelab/pr
 
 ---
 
+## On Kubernetes (Helm)
+
+The Helm chart exposes all of the above as `clusters[].auth` values — no
+`extraEnv` needed. **Numbering:** the chart numbers clusters in list order,
+starting at 1; the first entry under `clusters:` is `JARVIS_CLUSTER_1_*`, the
+second `JARVIS_CLUSTER_2_*`.
+
+```yaml
+clusters:
+  - name: production
+    alertmanagerUrl: https://alertmanager-internal.example.com
+    auth:
+      oauth2:
+        clientId: jarvis-service
+        clientSecret: <client-secret>
+        tokenUrl: https://keycloak.example.com/realms/homelab/protocol/openid-connect/token
+        # Optional — only set if your provider requires specific scopes:
+        scopes: "openid,profile"
+```
+
+`oauth2.clientSecret`, `bearerToken`, and `basicAuth.password` are the only
+secret-shaped fields — the chart renders them into a Secret (`stringData`),
+never the ConfigMap, regardless of whether they are set. `oauth2.clientId`
+without `oauth2.tokenUrl` fails the Helm render, the same validation the
+backend applies at startup, just earlier.
+
+### Use an existing Secret instead of storing secrets in values
+
+Any value written directly under `clusters[].auth` ends up in plaintext in
+the release values and stays readable to anyone who can run
+`helm get values`. Point `clusters[].auth.existingSecret` at a Secret you
+manage instead — the chart-managed defaults still apply to whichever methods
+that Secret doesn't carry a key for (Kubernetes treats a missing key as
+absent, not as an error):
+
+```bash
+kubectl create secret generic jarvis-upstream-auth \
+  --from-literal=cluster-1-oauth2-client-secret=<client-secret>
+```
+
+```yaml
+clusters:
+  - name: production
+    alertmanagerUrl: https://alertmanager-internal.example.com
+    auth:
+      oauth2:
+        clientId: jarvis-service
+        tokenUrl: https://keycloak.example.com/realms/homelab/protocol/openid-connect/token
+      existingSecret: jarvis-upstream-auth
+```
+
+The default key names the chart looks for are `cluster-<n>-bearer-token`,
+`cluster-<n>-basic-auth-password` and `cluster-<n>-oauth2-client-secret` (`<n>`
+= this cluster's 1-based position). Override them with
+`clusters[].auth.existingSecretKeys` to match a Secret with different key
+names:
+
+```yaml
+    auth:
+      existingSecret: jarvis-upstream-auth
+      existingSecretKeys:
+        oauth2ClientSecret: production-oauth2-secret
+```
+
+### The other methods
+
+Bearer token:
+
+```yaml
+clusters:
+  - name: production
+    alertmanagerUrl: https://alertmanager-internal.example.com
+    auth:
+      bearerToken: eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+Basic auth:
+
+```yaml
+    auth:
+      basicAuth:
+        username: jarvis
+        password: secret
+```
+
+Custom headers — the map key is used as the header name verbatim:
+
+```yaml
+    auth:
+      headers:
+        X-Scope-OrgID: tenant1
+```
+
+### Two clusters, different credentials
+
+```yaml
+clusters:
+  - name: staging
+    alertmanagerUrl: https://alertmanager-staging.example.com
+    auth:
+      bearerToken: staging-token
+  - name: production
+    alertmanagerUrl: https://alertmanager-prod.example.com
+    auth:
+      bearerToken: production-token
+```
+
+### Check what was rendered
+
+Before installing, confirm that no secret value landed in the ConfigMap and
+that the numbering matches the cluster you meant:
+
+```bash
+helm template jarvis oci://ghcr.io/kj187/charts/jarvis -f values.yaml \
+  | grep -E "JARVIS_CLUSTER_[0-9]+_"
+```
+
+### Chart versions before this feature
+
+Chart versions without `clusters[].auth` values (before this feature) still
+work — configure the same variables through the generic `extraEnv` escape
+hatch by hand, using the numbered `JARVIS_CLUSTER_<n>_*` names from
+[Methods](#methods) above:
+
+```yaml
+extraEnv:
+  - name: JARVIS_CLUSTER_1_OAUTH2_CLIENT_ID
+    value: jarvis-service
+  - name: JARVIS_CLUSTER_1_OAUTH2_TOKEN_URL
+    value: https://keycloak.example.com/realms/homelab/protocol/openid-connect/token
+  - name: JARVIS_CLUSTER_1_OAUTH2_CLIENT_SECRET
+    valueFrom:
+      secretKeyRef:
+        name: jarvis-upstream-auth
+        key: oauth2-client-secret
+```
+
+Values written inline under `extraEnv` are stored in plaintext in the release
+values — always pull secrets from a Secret, as above.
+
+---
+
 ## Environment Variables
 
-| Variable | Description |
-|---|---|
-| `JARVIS_CLUSTER_N_OAUTH2_CLIENT_ID` | OAuth2 client ID for the `client_credentials` grant. Takes priority over all other auth options when set. |
-| `JARVIS_CLUSTER_N_OAUTH2_CLIENT_SECRET` | OAuth2 client secret. Never logged. |
-| `JARVIS_CLUSTER_N_OAUTH2_TOKEN_URL` | Token endpoint URL. Required when `OAUTH2_CLIENT_ID` is set. |
-| `JARVIS_CLUSTER_N_OAUTH2_SCOPES` | Comma-separated OAuth2 scopes (optional, e.g. `openid,profile`). |
-| `JARVIS_CLUSTER_N_BEARER_TOKEN` | Static bearer token sent as `Authorization: Bearer <token>`. Never logged. |
-| `JARVIS_CLUSTER_N_BASIC_AUTH_USER` | HTTP Basic Auth username. |
-| `JARVIS_CLUSTER_N_BASIC_AUTH_PASSWORD` | HTTP Basic Auth password. Never logged. |
-| `JARVIS_CLUSTER_N_HEADER_<name>` | Custom request header `<name>`. Repeat the variable with different names for multiple headers. |
+The full reference (every `JARVIS_CLUSTER_N_*` upstream-auth variable, with
+description) is in
+[Configuration → Upstream authentication](configuration.md#upstream-authentication),
+including the priority order when more than one method is set for the same
+cluster.
 
 ---
 

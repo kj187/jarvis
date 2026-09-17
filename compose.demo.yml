@@ -1,0 +1,65 @@
+# Self-contained demo stack: a throwaway Alertmanager plus Jarvis from the
+# published image. Nothing here touches the dev stack (compose.dev.yml), which
+# is why `make demo-reset` can wipe this volume without destroying your own
+# development database.
+#
+# Usage (via Makefile):
+#   make demo-up      start both containers
+#   make demo-seed    fire 18 realistic Kubernetes alerts into the Alertmanager
+#   make demo-resolve resolve them — they move to Jarvis's Resolved view
+#   make demo-reset   wipe everything (alerts + Jarvis history) and start over
+#   make demo-down    stop the stack, keep the data
+#
+# Jarvis:       http://localhost:8080
+# Alertmanager: http://localhost:9093
+#
+# Ports 8080 and 9093 are the defaults used throughout the docs. The dev stack
+# also binds 8080, so when both run at once, move the demo:
+#   make demo-up DEMO_PORT=8081 DEMO_AM_PORT=9096
+
+# Own project name, and not optional: compose derives it from the directory
+# otherwise, which puts the demo and the dev stack in the same project — and
+# `demo-reset` (down -v) would then delete the dev stack's volumes too.
+name: jarvis-demo
+
+services:
+  demo-alertmanager:
+    image: docker.io/prom/alertmanager:latest
+    container_name: jarvis_demo_alertmanager
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+      - '--web.listen-address=0.0.0.0:9093'
+    ports:
+      - "${JARVIS_DEMO_AM_PORT:-9093}:9093"
+    volumes:
+      - ./scripts/test-alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro,z
+    restart: unless-stopped
+
+  demo-jarvis:
+    image: ghcr.io/kj187/jarvis:1.12.0
+    container_name: jarvis_demo
+    depends_on:
+      - demo-alertmanager
+    ports:
+      - "${JARVIS_DEMO_PORT:-8080}:8080"
+    environment:
+      JARVIS_CLUSTER_1_NAME: demo
+      JARVIS_CLUSTER_1_ALERTMANAGER_URL: http://demo-alertmanager:9093
+      # Makes the "open in Alertmanager" links work from your browser, which
+      # cannot resolve the compose-internal hostname.
+      JARVIS_CLUSTER_1_HOST_ALIAS: http://localhost:${JARVIS_DEMO_AM_PORT:-9093}
+      JARVIS_POLL_INTERVAL: 15s
+    volumes:
+      - demo_data:/data
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+volumes:
+  demo_data:

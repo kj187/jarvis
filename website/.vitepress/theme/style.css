@@ -6,8 +6,31 @@
  * (.agents/skills/website/SKILL.md).
  */
 
+/* Self-hosted display face for the hero and section headings only (decision 9,
+   W11h) — Sora, SIL OFL 1.1 (license text: theme/fonts/OFL.txt). The single
+   local file is the variable font Google Fonts itself serves for this family;
+   both weight declarations below point at it and the browser picks 600/700
+   off its own wght axis, exactly like Google's own generated CSS does. Inter
+   stays the only face for tagline, body copy and UI chrome — never swap it
+   in here. */
+@font-face {
+  font-family: 'Sora';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('./fonts/sora-variable-latin.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Sora';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('./fonts/sora-variable-latin.woff2') format('woff2');
+}
+
 :root {
   --vp-font-family-base: Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --vp-font-family-display: Sora, var(--vp-font-family-base);
   --vp-font-family-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
 
   --vp-c-brand-1: hsl(213 94% 60%);
@@ -60,6 +83,9 @@
   color: var(--vp-c-brand-1);
   background-color: var(--vp-c-brand-soft) !important;
 }
+.VPFeature .title {
+  font-family: var(--vp-font-family-display);
+}
 .VPButton.brand {
   border-radius: 999px;
 }
@@ -74,19 +100,112 @@
   position: relative;
   z-index: 1;
 }
+.VPHero .name,
+.VPHero .text {
+  font-family: var(--vp-font-family-display);
+}
 
 .home-showcase {
   max-width: 1152px;
   margin: 0 auto;
-  padding: 16px 24px 96px;
+  padding: 48px 24px 96px;
+}
+@media (min-width: 640px) {
+  .home-showcase {
+    padding: 80px 48px 96px;
+  }
+}
+@media (min-width: 960px) {
+  .home-showcase {
+    padding: 96px 64px 96px;
+  }
+}
+/* VitePress hides heading anchors with `.vp-doc .header-anchor`, and the home
+   layout is not `.vp-doc` — so this heading's anchor rendered as a stray "#". */
+.home-showcase .header-anchor {
+  display: none;
 }
 .home-showcase h2 {
   border-top: none;
   margin-top: 0;
   padding-top: 0;
+  font-family: var(--vp-font-family-display);
 }
-.home-showcase img {
+.home-showcase h2:not(:first-child) {
+  margin-top: 72px;
+}
+/* The app's own screenshots are theme-specific; show the one that matches the
+   site theme. VitePress ships no such utility of its own. */
+html:not(.dark) .dark-only,
+html.dark .light-only {
+  display: none;
+}
+
+/* Rendered via the home-hero-after slot (Layout.vue) so it lands between the
+   hero and the feature grid — VPHome always renders the page's own Content
+   (the showcase below) after the feature grid, so this is the only place a
+   screenshot can appear "before the feature grid" (W11g). Shares the image
+   framing that the showcase further down used before its screenshot moved
+   here. */
+.home-hero-screenshot {
+  position: relative;
+  max-width: 1152px;
+  margin: 0 auto;
+  padding: 0 24px 64px;
+}
+@media (min-width: 640px) {
+  .home-hero-screenshot {
+    padding: 0 48px 64px;
+  }
+}
+@media (min-width: 960px) {
+  .home-hero-screenshot {
+    padding: 0 64px 80px;
+  }
+}
+.home-hero-screenshot img {
+  display: block;
+  width: 100%;
   border: 1px solid var(--vp-c-border);
   border-radius: 14px;
-  box-shadow: 0 18px 50px -24px rgb(0 0 0 / 55%);
+  box-shadow: 0 24px 64px -28px rgb(0 0 0 / 55%);
+}
+
+/* Unequal feature-grid weight (W11g): the two strongest differentiators
+   (first two entries in index.md's `features:` list) span half the row each
+   at a larger scale; the remaining four stay compact quarter-width cards.
+   Selector count (4) beats VPFeatures.vue's scoped `.item.grid-6[data-v-*]`
+   (3) at the same breakpoint, so this needs no !important for the layout
+   itself — kept on size overrides only, for resilience against upstream
+   VitePress style-order changes. Below 768px the default single/two-column
+   stack from VPFeatures.vue is untouched. */
+@media (min-width: 768px) {
+  .VPHomeFeatures .items {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin: 0;
+  }
+  .VPHomeFeatures .items .item {
+    width: auto !important;
+    padding: 0 !important;
+  }
+  .VPHomeFeatures .items .item:nth-child(-n + 2) {
+    grid-column: span 2;
+  }
+  .VPHomeFeatures .items .item:nth-child(-n + 2) .box {
+    padding: 32px;
+  }
+  .VPHomeFeatures .items .item:nth-child(-n + 2) .icon {
+    width: 56px;
+    height: 56px;
+    font-size: 28px;
+  }
+  .VPHomeFeatures .items .item:nth-child(-n + 2) .title {
+    font-size: 20px;
+    line-height: 28px;
+  }
+  .VPHomeFeatures .items .item:nth-child(-n + 2) .details {
+    font-size: 15px;
+  }
 }

@@ -2,7 +2,7 @@
 
 Web frontend for Prometheus Alertmanager with persistent alert history, claims, comments, and silence management.
 
-> Database backends, multi-replica HA (leader election, snapshot distribution, failover), and Kubernetes deployment guidance (incl. a CloudNativePG example) are covered in the canonical guide: **[docs/persistence.md](../../docs/persistence.md)**. This README covers only the chart's values and install/upgrade mechanics.
+> Database backends and multi-replica HA (leader election, snapshot distribution, failover) are covered in **[docs/postgres-ha.md](../../docs/postgres-ha.md)**; Kubernetes deployment guidance (incl. a CloudNativePG example) is in **[docs/deploy-kubernetes.md](../../docs/deploy-kubernetes.md)**. This README covers only the chart's values and install/upgrade mechanics.
 
 ## Install
 
@@ -92,6 +92,7 @@ Tests cover four suites (`deployment`, `configmap`, `secret`, `ingress`) and run
 | `serviceAccount.name` | string | `""` | ServiceAccount name (auto-generated when empty) |
 | `leaderElection.podLabel.enabled` | bool | `true` | Label the current leader pod `jarvis.kj187.de/role=leader` (informational only — every pod serves all traffic). Renders a `Role`+`RoleBinding` (`pods`: `get`, `patch`) and sets `automountServiceAccountToken: true` on the pod; meaningful only with PostgreSQL and `replicaCount`/HPA `> 1`, harmless to leave on otherwise |
 | `podAnnotations` | object | `{}` | Pod annotations |
+| `podLabels` | object | `{}` | Extra pod labels, merged into the pod template's labels |
 | `podSecurityContext` | object | `{runAsNonRoot: true, runAsUser: 65532, ...}` | Pod-level security context |
 | `securityContext` | object | `{allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, ...}` | Container-level security context |
 | `service.type` | string | `ClusterIP` | Kubernetes Service type |
@@ -119,6 +120,16 @@ Tests cover four suites (`deployment`, `configmap`, `secret`, `ingress`) and run
 | `clusters[].alertmanagerUrl` | string | `http://alertmanager:9093` | Internal Alertmanager URL |
 | `clusters[].prometheusUrl` | string | `""` | Optional Prometheus URL |
 | `clusters[].hostAlias` | string | `""` | Optional browser-visible URL override |
+| `clusters[].auth.bearerToken` | string | `""` | Static bearer token sent as `Authorization: Bearer <token>`. Stored in a Secret. |
+| `clusters[].auth.basicAuth.username` | string | `""` | HTTP basic auth username |
+| `clusters[].auth.basicAuth.password` | string | `""` | HTTP basic auth password. Stored in a Secret. |
+| `clusters[].auth.oauth2.clientId` | string | `""` | OAuth2 client_credentials client ID. Enables OAuth2 for this cluster; requires `tokenUrl` |
+| `clusters[].auth.oauth2.clientSecret` | string | `""` | OAuth2 client secret. Stored in a Secret. |
+| `clusters[].auth.oauth2.tokenUrl` | string | `""` | OAuth2 token endpoint. Required when `clientId` is set — the render fails otherwise |
+| `clusters[].auth.oauth2.scopes` | string | `""` | Comma-separated OAuth2 scopes, e.g. `openid,profile` |
+| `clusters[].auth.headers` | object | `{}` | Arbitrary headers sent with every request, e.g. `{X-Scope-OrgID: tenant1}` |
+| `clusters[].auth.existingSecret` | string | `""` | Existing Secret to read `bearerToken`/`basicAuth.password`/`oauth2.clientSecret` from instead of the values above. Missing keys are treated as unset. |
+| `clusters[].auth.existingSecretKeys` | object | `{}` | Key names in `existingSecret`; unset entries fall back to `cluster-<n>-bearer-token` / `cluster-<n>-basic-auth-password` / `cluster-<n>-oauth2-client-secret` |
 | `database.dsn` | string | `/data/jarvis.db` | Database DSN (SQLite path or `postgres://` URL; PostgreSQL recommended for production) |
 | `database.existingSecret` | string | `""` | Use an existing Secret for the DSN instead |
 | `database.existingSecretKey` | string | `dsn` | Key in the existing Secret |
@@ -138,8 +149,13 @@ Tests cover four suites (`deployment`, `configmap`, `secret`, `ingress`) and run
 | `persistence.storageClass` | string | `""` | StorageClass name |
 | `persistence.accessMode` | string | `ReadWriteOnce` | PVC access mode |
 | `persistence.size` | string | `1Gi` | PVC size |
+| `persistence.annotations` | object | `{}` | PVC annotations (e.g. `helm.sh/resource-policy: keep`) |
 | `resources` | object | `{}` | Resource requests/limits |
+| `updateStrategy.type` | string | `""` | Deployment update strategy. Empty auto-selects: `Recreate` when `persistence.enabled` — an RWO volume (EBS and friends) cannot be mounted by two pods at once, so a rolling update forces a detachment and the old pod hits disk I/O errors — and `RollingUpdate` otherwise. Set it explicitly to override (e.g. `RollingUpdate` on PostgreSQL) |
 | `autoscaling.enabled` | bool | `false` | Enable HPA (requires PostgreSQL — same reasoning as `replicaCount` above) |
+| `autoscaling.minReplicas` | int | `1` | Lower bound for the HPA |
+| `autoscaling.maxReplicas` | int | `3` | Upper bound for the HPA |
+| `autoscaling.targetCPUUtilizationPercentage` | int | `80` | Target average CPU utilization that drives scaling |
 | `podDisruptionBudget.enabled` | bool | `false` | Create a `PodDisruptionBudget` — prevents voluntary disruptions (node drains, upgrades) from taking down every replica at once. Meaningful only with `replicaCount`/HPA `> 1` (PostgreSQL) |
 | `podDisruptionBudget.minAvailable` | int | `1` | Minimum pods that must stay available during a voluntary disruption |
 | `nodeSelector` | object | `{}` | Node selector |
@@ -256,9 +272,53 @@ clusters:
     hostAlias: https://alertmanager.prod.example.com
 ```
 
+### Alertmanager behind an authentication proxy
+
+Per-cluster upstream authentication (OAuth2 client credentials, bearer token, basic auth,
+custom headers) is configured directly under `clusters[].auth`:
+
+```yaml
+clusters:
+  - name: production
+    alertmanagerUrl: https://alertmanager-internal.example.com
+    auth:
+      oauth2:
+        clientId: jarvis-service
+        tokenUrl: https://keycloak.example.com/realms/homelab/protocol/openid-connect/token
+        # clientSecret below is stored in a Secret, never the ConfigMap.
+        clientSecret: <client-secret>
+```
+
+Prefer an existing Secret over inline values in production — the value above ends up in
+plaintext in the release values otherwise:
+
+```bash
+kubectl create secret generic jarvis-upstream-auth \
+  --from-literal=cluster-1-oauth2-client-secret=<client-secret>
+```
+
+```yaml
+clusters:
+  - name: production
+    alertmanagerUrl: https://alertmanager-internal.example.com
+    auth:
+      oauth2:
+        clientId: jarvis-service
+        tokenUrl: https://keycloak.example.com/realms/homelab/protocol/openid-connect/token
+      existingSecret: jarvis-upstream-auth
+```
+
+The other methods (bearer token, basic auth, custom headers) and the full priority order
+when more than one is set for the same cluster are in
+[docs/authentication-alertmanager.md](../../docs/authentication-alertmanager.md).
+
+Chart versions before this one have no `clusters[].auth` values — upstream auth on those is
+configured through `extraEnv` instead, using the numbered `JARVIS_CLUSTER_<n>_*` variables
+directly; see the same doc page for that pattern.
+
 ### Ingress with WebSocket support
 
-Jarvis uses WebSocket (`/ws`) for live alert updates. The ingress must not strip or block the `Upgrade` / `Connection` headers.
+Jarvis uses WebSocket (`/ws`) for live alert updates. The ingress must not strip or block the `Upgrade` / `Connection` headers, and `config.allowedOrigins` must name the URL the browser uses — see [docs/reverse-proxy.md](../../docs/reverse-proxy.md).
 
 #### ingress-nginx
 

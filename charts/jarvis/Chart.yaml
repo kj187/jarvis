@@ -28,7 +28,7 @@ annotations:
   artifacthub.io/license: Apache-2.0
   artifacthub.io/links: |
     - name: Documentation
-      url: https://github.com/kj187/jarvis/tree/main/docs
+      url: https://kj187.github.io/jarvis/
     - name: Chart changelog
       url: https://github.com/kj187/jarvis/blob/main/charts/jarvis/CHANGELOG.md
     - name: App changelog

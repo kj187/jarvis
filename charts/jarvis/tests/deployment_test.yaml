@@ -182,6 +182,87 @@ tests:
       - isKind:
           of: Deployment
 
+  - it: reads per-cluster auth secrets from the chart secret by default
+    values:
+      - ./values/cluster-auth.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: JARVIS_CLUSTER_1_BEARER_TOKEN
+            valueFrom:
+              secretKeyRef:
+                name: RELEASE-NAME-jarvis
+                key: cluster-1-bearer-token
+                optional: false
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: JARVIS_CLUSTER_1_BASIC_AUTH_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: RELEASE-NAME-jarvis
+                key: cluster-1-basic-auth-password
+                optional: false
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: JARVIS_CLUSTER_1_OAUTH2_CLIENT_SECRET
+            valueFrom:
+              secretKeyRef:
+                name: RELEASE-NAME-jarvis
+                key: cluster-1-oauth2-client-secret
+                optional: false
+
+  - it: reads per-cluster auth secrets from an existing secret when configured
+    values:
+      - ./values/cluster-auth-existing-secret.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: JARVIS_CLUSTER_1_BEARER_TOKEN
+            valueFrom:
+              secretKeyRef:
+                name: jarvis-upstream-auth
+                key: cluster-1-bearer-token
+                optional: true
+
+  - it: uses custom existing-secret key names for per-cluster auth
+    values:
+      - ./values/cluster-auth-existing-secret-custom-keys.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: JARVIS_CLUSTER_1_BEARER_TOKEN
+            valueFrom:
+              secretKeyRef:
+                name: jarvis-upstream-auth
+                key: my-token-key
+                optional: true
+
+  - it: omits per-cluster auth env vars when no cluster sets auth
+    asserts:
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: JARVIS_CLUSTER_1_BEARER_TOKEN
+
+  - it: fails when a cluster sets oauth2.clientId without oauth2.tokenUrl
+    values:
+      - ./values/cluster-oauth2-missing-token-url.yaml
+    asserts:
+      - failedTemplate:
+          errorMessage: 'Invalid configuration: clusters[0].auth.oauth2.clientId is set without clusters[0].auth.oauth2.tokenUrl (cluster 1, "production").'
+
+  - it: allows a cluster with oauth2.clientId and oauth2.tokenUrl both set
+    values:
+      - ./values/cluster-auth.yaml
+    asserts:
+      - isKind:
+          of: Deployment
+
   - it: allows replicaCount > 1 with PostgreSQL even when persistence enabled
     set:
       persistence.enabled: true

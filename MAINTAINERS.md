@@ -29,3 +29,21 @@ Anyone may contribute via pull requests (see
 [CONTRIBUTING.md](CONTRIBUTING.md)). Contributors have no direct access to
 sensitive resources — all changes go through pull requests with required CI
 status checks; direct commits to `main` are blocked by a repository ruleset.
+
+## Support Expectations
+
+Jarvis is maintained by a single person, in whatever time is available
+outside a day job. There is no SLA.
+
+- **Pull requests**: normally a first response within a few days (see
+  [Contributing](CONTRIBUTING.md)).
+- **Security reports**: best-effort, not a guarantee — we aim to acknowledge
+  within 14 days, with a fix targeted within 90 days depending on severity
+  (see [Security Policy](SECURITY.md)).
+- **Issues** without a pull request attached get triaged as time allows —
+  there is no guaranteed turnaround.
+
+If a response is time-critical, GitHub Private Vulnerability Reporting
+(linked from [Security Policy](SECURITY.md)) is tracked more reliably than a
+public issue or a plain email.
+

@@ -14,6 +14,8 @@ on:
       - 'CHANGELOG.md'
       - 'CONTRIBUTING.md'
       - 'SECURITY.md'
+      - 'MAINTAINERS.md'
+      - 'CODE_OF_CONDUCT.md'
       - 'charts/jarvis/README.md'
       - 'charts/jarvis/CHANGELOG.md'
       - '.github/workflows/docs.yml'

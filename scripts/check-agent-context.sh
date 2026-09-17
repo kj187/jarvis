@@ -18,6 +18,8 @@
 #   4. Every doc/script path mentioned in AGENTS.md exists.
 #   5. AGENTS.md and everything under .agents/ never mention a specific tool
 #      or tool-only syntax — tool details belong in docs/ai-agents.md.
+#   6. Every docs/*.md file is registered in website/scripts/pages.mjs, so a
+#      new doc can't go silently unpublished (.agents/skills/website/SKILL.md).
 
 set -euo pipefail
 
@@ -124,6 +126,13 @@ check_neutral() { # file, content
 while IFS= read -r file; do
   check_neutral "$file" "$(cat "$file")"
 done <<< "$(printf 'AGENTS.md\n'; find .agents -name '*.md' -type f | sort)"
+
+# ── 6. Every docs/*.md file is registered on the website ─────────────────────
+while IFS= read -r doc; do
+  [ -n "$doc" ] || continue
+  grep -q "src: '$doc'" website/scripts/pages.mjs \
+    || fail "$doc is not registered in website/scripts/pages.mjs (PAGES) — it would be silently unpublished"
+done <<< "$(find docs -maxdepth 1 -name '*.md' | sort)"
 
 if [ "$errors" -gt 0 ]; then
   exit 1

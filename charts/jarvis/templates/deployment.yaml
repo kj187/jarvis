@@ -1,5 +1,6 @@
 {{- include "jarvis.validateReplicas" . }}
 {{- include "jarvis.validateAuth" . }}
+{{- include "jarvis.validateClusterAuth" . }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -47,7 +48,7 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       serviceAccountName: {{ include "jarvis.serviceAccountName" . }}
-      {{- /* Only needed for the leader pod label PATCH (D7 in docs/persistence.md) — the
+      {{- /* Only needed for the leader pod label PATCH (D7 in docs/postgres-ha.md) — the
              ServiceAccount itself sets automountServiceAccountToken: false, so this must be
              explicit at the pod level whenever the feature is on. */}}
       automountServiceAccountToken: {{ .Values.leaderElection.podLabel.enabled }}
@@ -110,6 +111,39 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.auth.existingSecret | default (include "jarvis.fullname" .) }}
                   key: {{ .Values.auth.existingSecretKeys.oidcClientSecret }}
+            {{- end }}
+            {{- range $i, $cluster := .Values.clusters }}
+            {{- $n := add $i 1 }}
+            {{- $auth := $cluster.auth | default dict }}
+            {{- $basicAuth := $auth.basicAuth | default dict }}
+            {{- $oauth2 := $auth.oauth2 | default dict }}
+            {{- $keys := $auth.existingSecretKeys | default dict }}
+            {{- $secretName := $auth.existingSecret | default (include "jarvis.fullname" $) }}
+            {{- $usingExisting := ne ($auth.existingSecret | default "") "" }}
+            {{- if or $auth.bearerToken $usingExisting }}
+            - name: JARVIS_CLUSTER_{{ $n }}_BEARER_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretName }}
+                  key: {{ $keys.bearerToken | default (printf "cluster-%d-bearer-token" $n) }}
+                  optional: {{ $usingExisting }}
+            {{- end }}
+            {{- if or $basicAuth.password $usingExisting }}
+            - name: JARVIS_CLUSTER_{{ $n }}_BASIC_AUTH_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretName }}
+                  key: {{ $keys.basicAuthPassword | default (printf "cluster-%d-basic-auth-password" $n) }}
+                  optional: {{ $usingExisting }}
+            {{- end }}
+            {{- if or $oauth2.clientSecret $usingExisting }}
+            - name: JARVIS_CLUSTER_{{ $n }}_OAUTH2_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretName }}
+                  key: {{ $keys.oauth2ClientSecret | default (printf "cluster-%d-oauth2-client-secret" $n) }}
+                  optional: {{ $usingExisting }}
+            {{- end }}
             {{- end }}
             {{- with .Values.extraEnv }}
             {{- toYaml . | nindent 12 }}

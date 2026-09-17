@@ -81,13 +81,27 @@ JARVIS_TEST_POSTGRES_DSN='postgres://jarvis:jarvis@localhost:5432/jarvis?sslmode
   go test ./internal/history/...   # unset → these tests t.Skip; CI always sets it (postgres:17 service container)
 
 # ── Manual test fixtures against the dev stack ───────────────
-make fixtures-create               # fire 27 Kubernetes-themed test alerts (label test_suite=jarvis)
+make fixtures-create               # fire all 27 Kubernetes-themed test alerts (label test_suite=jarvis)
 make fixtures-remove               # resolve those alerts
 make fixtures-refire               # resolve + wait 70s (must clear the 60s grace period,
                                     # Critical Invariant #1) + re-fire — guarantees a new
                                     # occurrence. Takes ~3-4 minutes. See .agents/lessons.md
 make fixtures-silence              # create escaped-regex silence (recreate-bug repro)
 make fixtures-unsilence            # expire test silences
+
+# fire-test-alerts.sh / resolve-test-alerts.sh take --profile demo|full (default: full).
+# demo = alerts 1-18 (realistic incidents), full = + 19-27 (link/label/escaping edge
+# cases the screenshot suite needs). The fixtures-* targets always use full.
+
+# ── Demo stack (compose.demo.yml, project jarvis-demo) ───────
+# Published image + throwaway Alertmanager, own volume — independent of the dev
+# stack, which is why demo-reset may wipe it. Docs: docs/demo.md
+make demo-up                       # Jarvis :8080 + Alertmanager :9093
+                                   # DEMO_PORT / DEMO_AM_PORT override both (dev stack also binds 8080)
+make demo-seed                     # fire the 18 demo alerts (--profile demo)
+make demo-resolve                  # resolve them — they move to the Resolved view, history stays
+make demo-reset                    # down -v + up: empty Jarvis, repeatable demo
+make demo-down                     # down -v: containers and the volume both gone
 ```
 
 ---
@@ -422,7 +436,7 @@ troubleshooting are documented in **`docs/testing-e2e.md`**.
 | `frontend/**` | `pnpm audit --audit-level=high` + `pnpm lint` (eslint) + `pnpm test:unit:coverage` (Vitest + 100% coverage gate, `lib/alertUtils.ts`) + `pnpm duplication` (jscpd) — executed **inside the running dev container** (`jarvis_frontend_1`); hook fails if the container is not running |
 | `charts/**` | `helm lint` + `helm unittest` |
 | always | `scripts/check-changelogs.sh` — chart changes (outside `tests/`) must update `charts/jarvis/CHANGELOG.md`; every chart-changelog version section starts with a non-empty `### Breaking Changes`; changed `.github/release-notes/*.md` contain a Breaking Changes heading (a no-op when none of those paths are staged) |
-| always | `scripts/check-agent-context.sh` (also `make check-agent-context`) — the AI agent context stays tool-agnostic: every `.agents/skills/*/` passes the Agent Skills reference validator (`skills-ref`, pinned, run via `agentskills` / `uvx` / `pipx`) and `SKILL.md` ≤ 500 lines; tool adapters match the lists in the script (`docs/ai-agents.md`); `AGENTS.md` ≤ 30,000 bytes (the smallest project-instruction limit among the supported tools is 32 KiB, including the user's global file); every doc/script path in `AGENTS.md` exists; no tool names or tool-only syntax in `AGENTS.md` or any `.agents/**/*.md` |
+| always | `scripts/check-agent-context.sh` (also `make check-agent-context`) — the AI agent context stays tool-agnostic: every `.agents/skills/*/` passes the Agent Skills reference validator (`skills-ref`, pinned, run via `agentskills` / `uvx` / `pipx`) and `SKILL.md` ≤ 500 lines; tool adapters match the lists in the script (`docs/ai-agents.md`); `AGENTS.md` ≤ 30,000 bytes (the smallest project-instruction limit among the supported tools is 32 KiB, including the user's global file); every doc/script path in `AGENTS.md` exists; no tool names or tool-only syntax in `AGENTS.md` or any `.agents/**/*.md`; every `docs/*.md` file is registered in `website/scripts/pages.mjs` (`.agents/skills/website/SKILL.md`) |
 | always | **gitleaks** secret scan of the staged diff (via podman, config `.gitleaks.toml`) |
 
 ```bash

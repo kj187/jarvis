@@ -1,9 +1,8 @@
-# Persistence & High Availability
+# PostgreSQL & HA
 
-This is the canonical guide to Jarvis's database backends, from a single
-SQLite file to a horizontally-scaled PostgreSQL deployment on Kubernetes.
-Every other doc that touches this topic ([README.md](../README.md),
-[charts/jarvis/README.md](../charts/jarvis/README.md),
+This is the canonical guide to running Jarvis against PostgreSQL and scaling
+it to several replicas. Every other doc that touches this topic
+([README.md](../README.md), [charts/jarvis/README.md](../charts/jarvis/README.md),
 [docs/features.md](features.md), [docs/retention.md](retention.md),
 [docs/alert-lifecycle.md](alert-lifecycle.md)) links here instead of
 restating it.
@@ -11,7 +10,8 @@ restating it.
 **SQLite is the default and requires zero setup — use it for testing,
 evaluation, and homelab-scale single-replica deployments. For production,
 high availability, horizontal scaling, and long-term stability, use
-PostgreSQL.**
+PostgreSQL.** See [Why SQLite stays single-replica](sqlite-limits.md) for the
+reasoning.
 
 ---
 
@@ -187,8 +187,21 @@ single pod would have.
   notifications and the periodic resync have both been missed for a
   while — check the leader's health). Always `0` while leader or on
   SQLite.
-- Leader-transition log lines and the `leader` field in the `/api/v1/status`
-  response.
+- Leader-transition log lines and the `leader` field in the `GET
+  /api/v1/status` response:
+  ```json
+  {
+    "status": "ok",
+    "clusters": 2,
+    "alerts": 143,
+    "ws_clients": 4,
+    "leader": true,
+    "poll_interval_seconds": 30
+  }
+  ```
+  `leader` is always `true` on SQLite (single replica by design). Unlike
+  `/health` and `/metrics`, this endpoint is not public — it follows
+  `JARVIS_AUTH_MODE` like any other `/api/v1/*` route.
 - **Pod label**: on Kubernetes, the current leader's pod is labeled
   `jarvis.kj187.de/role=leader` and the label moves automatically on
   failover:
@@ -197,8 +210,7 @@ single pod would have.
   ```
   This is informational only — every pod serves all traffic regardless of
   leadership, there is no leader-only routing. See
-  [Kubernetes deployment](#kubernetes-deployment) below for the RBAC this
-  needs.
+  [Deploy on Kubernetes](deploy-kubernetes.md) for the RBAC this needs.
 
 ### HA topology
 
@@ -210,119 +222,8 @@ single pod would have.
 
 ---
 
-## Kubernetes deployment
+## Where to go next
 
-The [Helm chart](../charts/jarvis/README.md) supports any `replicaCount` or
-HPA configuration against PostgreSQL out of the box — no separate chart
-mode, just point `database.dsn` at PostgreSQL and set `replicaCount` (or
-enable `autoscaling`) to whatever the workload needs.
-
-Relevant values (full reference: [charts/jarvis/README.md](../charts/jarvis/README.md)):
-
-| Value | Default | Purpose |
-|---|---|---|
-| `replicaCount` | `1` | Pod count. `> 1` requires PostgreSQL. |
-| `autoscaling.enabled` | `false` | HPA. Requires PostgreSQL, same as `replicaCount > 1`. |
-| `podDisruptionBudget.enabled` | `false` | Keep at least `minAvailable` pods up during voluntary disruptions (node drains, upgrades). Meaningful only with `replicaCount`/HPA `> 1`. |
-| `topologySpreadConstraints` | `[]` | Passed through verbatim — spread replicas across nodes/zones for real HA. |
-| `leaderElection.podLabel.enabled` | `true` | The `jarvis.kj187.de/role=leader` pod label (see above). Renders a `Role`+`RoleBinding` (`pods`: `get`, `patch` only) and sets `automountServiceAccountToken: true` on the pod. Harmless to leave on with SQLite or a single replica — it just labels the one pod. |
-
-### The SQLite guard
-
-The chart fails fast rather than deploying a broken configuration:
-
-```
-Invalid configuration: persistence.enabled=true with SQLite requires replicaCount=1.
-RWO volumes (e.g. EBS) support only one node mount and SQLite is single-writer.
-Use PostgreSQL (database.dsn=postgres://...) for multi-replica deployments.
-```
-
-(and the equivalent for `autoscaling.enabled=true`). This is not a
-limitation slated for removal — see [Why SQLite stays single-replica](#why-sqlite-stays-single-replica)
-below.
-
-### Example: CloudNativePG
-
-[CloudNativePG](https://cloudnative-pg.io/) is a common, low-friction way to
-run the PostgreSQL side of this on the same cluster:
-
-```yaml
-apiVersion: postgresql.cnpg.io/v1
-kind: Cluster
-metadata:
-  name: jarvis-postgres
-spec:
-  instances: 3
-  storage:
-    size: 5Gi
-  bootstrap:
-    initdb:
-      database: jarvis
-      owner: jarvis
-```
-
-CloudNativePG creates a Secret named `jarvis-postgres-app` with `username`,
-`password`, `host`, `port`, `dbname` keys (and a ready-made `uri` connection
-string). Wire it into the chart via `database.existingSecret` — the chart
-reads `dsn` from that secret's key named by `database.existingSecretKey`,
-so either project the CNPG secret's `uri` key under that name, or set
-`database.existingSecretKey: uri` directly if your CNPG version already
-names it that way:
-
-```yaml
-replicaCount: 3
-database:
-  existingSecret: jarvis-postgres-app
-  existingSecretKey: uri
-podDisruptionBudget:
-  enabled: true
-topologySpreadConstraints:
-  - maxSkew: 1
-    topologyKey: kubernetes.io/hostname
-    whenUnsatisfiable: DoNotSchedule
-    labelSelector:
-      matchLabels:
-        app.kubernetes.io/name: jarvis
-```
-
----
-
-## Migration path: SQLite → PostgreSQL
-
-There is no built-in data migration tool, and none is planned — the
-recommended path is a **fresh start on PostgreSQL**: history does not
-transfer. This is a deliberate, stated trade-off, not an oversight:
-
-- Alert history is derived from Alertmanager's own state on every poll;
-  within one grace-period window after cutover, the full current alert set
-  reappears exactly as if Jarvis had just been (re)installed.
-- Claims, comments, and silence templates are the only truly hand-entered
-  data, and in practice these don't accumulate to a volume worth building
-  an export/import tool for.
-- Keeping the migration path deliberately absent avoids maintaining a
-  second, rarely-exercised code path (see
-  [docs/scope.md](scope.md) — this mirrors the project's general bias
-  against speculative tooling).
-
-Practically: stop Jarvis, set `JARVIS_DB_DSN` to the new PostgreSQL
-connection string, start it again. Migrations create the schema on first
-connection; Jarvis starts recording fresh history from that point on.
-
----
-
-## Why SQLite stays single-replica
-
-Every path to SQLite multi-replica was evaluated and rejected:
-
-| Approach | Why not |
-|---|---|
-| Litestream | Streaming backup/restore only — no multi-writer, no live read replicas. |
-| LiteFS | Leader + read replicas via FUSE; needs write forwarding and FUSE privileges in containers — operationally worse than just running PostgreSQL. |
-| dqlite | Requires CGO — breaks the pure-Go, no-CGO build (`CGO_ENABLED=0`, distroless final image). |
-| rqlite | A separate Raft-replicated server process — anyone able to operate that can operate PostgreSQL directly. |
-| Embedded replication (build Raft into Jarvis) | Massive effort building consensus/snapshotting/membership into an Alertmanager UI — far outside [docs/scope.md](scope.md). |
-
-This is the same shape most comparable projects settle on — Grafana,
-Gitea, Authentik, Miniflux all treat SQLite as the zero-config/small-setup
-mode and PostgreSQL/MySQL as the HA/production mode. It is an established
-pattern, not a weakness signal.
+- [Deploy on Kubernetes](deploy-kubernetes.md) — chart values, the SQLite guard, a CloudNativePG example
+- [Migrate from SQLite](migrate-postgres.md)
+- [Why SQLite stays single-replica](sqlite-limits.md)

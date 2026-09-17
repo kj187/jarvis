@@ -17,7 +17,7 @@ import (
 )
 
 // pollTriggerer allows the HTTP layer to request an immediate poll and to
-// read this pod's current leader-election state (docs/persistence.md)
+// read this pod's current leader-election state (docs/postgres-ha.md)
 // for the /api/v1/status payload.
 type pollTriggerer interface {
 	Trigger()
@@ -70,7 +70,7 @@ func NewServer(
 
 // broadcastAndFanout builds a WS event once, broadcasts it to this pod's own
 // clients, and publishes it to every other pod via fanout (D4,
-// docs/persistence.md) — the single call site every user-mutation
+// docs/postgres-ha.md) — the single call site every user-mutation
 // handler (comments, claims, silences) uses instead of hub.BroadcastJSON
 // directly, so cross-pod delivery is never forgotten when a new mutation
 // broadcast is added. Snapshot-driven broadcasts (alerts_update, the

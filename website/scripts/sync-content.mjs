@@ -7,20 +7,28 @@
 // stays navigable:
 //   - a link to another copied file  -> the website route (/features, ...)
 //   - a link to any other repo file  -> https://github.com/kj187/jarvis/blob/main/<path>
-//   - an image under docs/assets/    -> ./assets/<file> (copied alongside)
+//   - an image under docs/assets/    -> /assets/<file> (public dir, copied alongside)
 //
 // Run: node scripts/sync-content.mjs (from website/), or `pnpm run sync`.
 
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { PAGES, ROUTE_BY_SOURCE } from './pages.mjs'
+import { PAGES, REDIRECTS, ROUTE_BY_SOURCE } from './pages.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = path.resolve(__dirname, '..', '..')
 const WEBSITE_ROOT = path.resolve(__dirname, '..')
 const CONTENT_DIR = path.join(WEBSITE_ROOT, 'content')
 const PUBLIC_DIR = path.join(CONTENT_DIR, 'public')
+// Public-dir copy: routes now nest (e.g. concepts/architecture), so a
+// markdown-relative `./assets/x.svg` no longer resolves at a fixed depth.
+// Absolute `/assets/x.svg` (served from the public dir, base-prefixed by
+// VitePress at runtime) works from any route depth.
+const PUBLIC_ASSETS_DIR = path.join(PUBLIC_DIR, 'assets')
+// Flat copy: theme/components/HomeScreenshot.vue bundles two of these PNGs
+// via a direct relative import (`../../../content/assets/...`), which Vite
+// must resolve at build time — it needs the flat copy to keep existing.
 const ASSETS_DIR = path.join(CONTENT_DIR, 'assets')
 const GITHUB_BLOB = 'https://github.com/kj187/jarvis/blob/main'
 
@@ -58,7 +66,7 @@ function rewriteLinks(body, sourceFile) {
 
     if (IMAGE_EXT.has(ext)) {
       if (repoRel === 'frontend/public/logo.png') return '/logo.png'
-      if (repoRel.startsWith('docs/assets/')) return `./assets/${path.basename(repoRel)}`
+      if (repoRel.startsWith('docs/assets/')) return `/assets/${path.basename(repoRel)}`
       // Unrecognized image source: link to the raw file on GitHub instead of a 404.
       return `https://raw.githubusercontent.com/kj187/jarvis/main/${repoRel}`
     }
@@ -87,7 +95,29 @@ function rewriteLinks(body, sourceFile) {
   body = body.replace(/<img([^>]*?)\ssrc="([^"]+)"/g, (m, attrs, target) => {
     return `<img${attrs} src="${rewriteTarget(target, true)}"`
   })
+  // <source srcset="docs/assets/...">, used by theme-aware <picture> blocks.
+  body = body.replace(/<source([^>]*?)\ssrcset="([^"]+)"/g, (m, attrs, target) => {
+    return `<source${attrs} srcset="${rewriteTarget(target, true)}"`
+  })
   return body
+}
+
+/**
+ * Rewrites a theme-aware `<picture>` (the README's `prefers-color-scheme`
+ * sources) into the `.dark-only`/`.light-only` divs used elsewhere on the
+ * site. GitHub picks a `<picture>` source from the OS/browser theme, which is
+ * the right call for a README rendered there — but the website's light/dark
+ * switch is a manual toggle independent of that preference (`appearance:
+ * 'dark'` default in config.mts), so following the OS theme there shows the
+ * wrong image whenever it doesn't match the page's actual toggle state. Must
+ * run after `rewriteLinks` so the captured `srcset`s are already `/assets/…`.
+ */
+function convertThemePictures(body) {
+  const PICTURE_RE =
+    /<picture>\s*<source media="\(prefers-color-scheme: dark\)" srcset="([^"]+)">\s*<source media="\(prefers-color-scheme: light\)" srcset="([^"]+)">\s*<img[^>]*\salt="([^"]*)"[^>]*>\s*<\/picture>/g
+  return body.replace(PICTURE_RE, (m, darkSrc, lightSrc, alt) => {
+    return `<div class="dark-only">\n\n![${alt}](${darkSrc})\n\n</div>\n<div class="light-only">\n\n![${alt}](${lightSrc})\n\n</div>`
+  })
 }
 
 /** True if `body` already starts (after optional blank lines) with a Markdown `# ` heading. */
@@ -95,26 +125,73 @@ function hasMarkdownH1(body) {
   return /^\s*#\s+\S/.test(body)
 }
 
+/** A meta-refresh + canonical-link stub for an old route, per the REDIRECTS map in pages.mjs. */
+function redirectStub(to) {
+  // The <meta>/<link> tags are raw HTML, so they need the full base-prefixed
+  // path; the markdown body link goes through VitePress's own link handling,
+  // which already prepends `base` — prefixing it here would double it and
+  // trip the dead-link check (it resolves against the unprefixed route).
+  const absoluteTarget = `/jarvis/${to}`
+  return `---
+title: Redirecting…
+head:
+  - - meta
+    - http-equiv: refresh
+      content: '0; url=${absoluteTarget}'
+  - - link
+    - rel: canonical
+      href: 'https://kj187.github.io${absoluteTarget}'
+---
+
+This page has moved. Redirecting to [${to}](/${to})…
+`
+}
+
 function main() {
   fs.rmSync(CONTENT_DIR, { recursive: true, force: true })
   fs.mkdirSync(CONTENT_DIR, { recursive: true })
   fs.mkdirSync(PUBLIC_DIR, { recursive: true })
+  fs.mkdirSync(PUBLIC_ASSETS_DIR, { recursive: true })
   fs.mkdirSync(ASSETS_DIR, { recursive: true })
+
+  // route may be nested (e.g. 'deploy/compose'), so the target directory
+  // isn't guaranteed to exist yet.
+  const writeContentFile = (route, text) => {
+    const dest = path.join(CONTENT_DIR, `${route}.md`)
+    fs.mkdirSync(path.dirname(dest), { recursive: true })
+    fs.writeFileSync(dest, text)
+  }
 
   for (const page of PAGES) {
     let body = readSource(page.src)
     body = rewriteLinks(body, page.src)
+    body = convertThemePictures(body)
     const needsTitle = page.title || !hasMarkdownH1(body)
     const frontmatter = needsTitle ? `---\ntitle: ${page.title ?? page.route}\n---\n\n` : ''
-    fs.writeFileSync(path.join(CONTENT_DIR, `${page.route}.md`), frontmatter + body)
+    writeContentFile(page.route, frontmatter + body)
   }
 
-  // docs/assets/*.{png,svg,...} referenced by relative image links above.
+  const liveRoutes = new Set(PAGES.map((p) => p.route))
+  for (const { from, to } of REDIRECTS) {
+    if (liveRoutes.has(from)) {
+      throw new Error(`sync-content: redirect source '${from}' collides with a live PAGES route`)
+    }
+    if (!liveRoutes.has(to)) {
+      throw new Error(`sync-content: redirect target '${to}' for '${from}' is not a live PAGES route`)
+    }
+    writeContentFile(from, redirectStub(to))
+  }
+
+  // docs/assets/*.{png,svg,...} referenced by the image links rewritten above.
+  // Copied to both the public dir (served at /assets/..., what markdown links
+  // now point to) and the flat content/assets/ dir (what HomeScreenshot.vue
+  // bundles two of these via a direct relative import).
   const assetsSrc = path.join(REPO_ROOT, 'docs', 'assets')
   if (fs.existsSync(assetsSrc)) {
     for (const file of fs.readdirSync(assetsSrc)) {
       const ext = path.extname(file).toLowerCase()
       if (IMAGE_EXT.has(ext)) {
+        fs.copyFileSync(path.join(assetsSrc, file), path.join(PUBLIC_ASSETS_DIR, file))
         fs.copyFileSync(path.join(assetsSrc, file), path.join(ASSETS_DIR, file))
       }
     }
@@ -134,7 +211,9 @@ function main() {
     fs.copyFileSync(path.join(WEBSITE_ROOT, file), path.join(CONTENT_DIR, file))
   }
 
-  console.log(`sync-content: wrote ${PAGES.length} pages + assets to ${path.relative(WEBSITE_ROOT, CONTENT_DIR)}/`)
+  console.log(
+    `sync-content: wrote ${PAGES.length} pages + ${REDIRECTS.length} redirects + assets to ${path.relative(WEBSITE_ROOT, CONTENT_DIR)}/`,
+  )
 }
 
 main()

@@ -1,8 +1,35 @@
 #!/usr/bin/env bash
 # Resolves all Kubernetes-themed test alerts created by fire-test-alerts.sh.
 # Posts each alert with endsAt in the past — Alertmanager marks them resolved immediately.
+#
+# Takes the same --profile flag as fire-test-alerts.sh, so a demo run is torn down
+# with exactly the alerts it created:
+#   demo (18 alerts)  the realistic Kubernetes incidents
+#   full (27 alerts)  demo set plus the edge cases. Default.
+#
+# Resolving is not removing: Alertmanager drops the alerts from its active list,
+# but Jarvis keeps the lifecycle events it already recorded. See docs/demo.md.
 
 set -euo pipefail
+
+usage() {
+  echo "usage: $0 [--profile demo|full]"
+}
+
+PROFILE="${FIXTURE_PROFILE:-full}"
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --profile) PROFILE="${2:-}"; shift 2 ;;
+    --profile=*) PROFILE="${1#*=}"; shift ;;
+    -h|--help) usage; exit 0 ;;
+    *) echo "ERROR: unknown argument: $1" >&2; usage >&2; exit 2 ;;
+  esac
+done
+case "$PROFILE" in
+  demo) TOTAL=18 ;;
+  full) TOTAL=27 ;;
+  *) echo "ERROR: unknown profile: $PROFILE" >&2; usage >&2; exit 2 ;;
+esac
 
 AM="${ALERTMANAGER_URL:-http://localhost:9094}"
 GRAFANA="https://grafana.example.com"
@@ -11,6 +38,12 @@ RUNBOOKS="https://runbooks.example.com/alerts"
 
 ENDS_AT="$(date -u -d '1 minute ago' '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null \
   || date -u -v-1M '+%Y-%m-%dT%H:%M:%SZ')"
+
+STEP=0
+step() {
+  STEP=$(( STEP + 1 ))
+  printf "  [%2d/%2d] %s..." "$STEP" "$TOTAL" "$1"
+}
 
 resolve() {
   local payload="$1"
@@ -22,11 +55,11 @@ resolve() {
   echo " resolved"
 }
 
-echo "==> Resolving Kubernetes test alerts (test_suite=jarvis) via ${AM}"
+echo "==> Resolving ${TOTAL} Kubernetes test alerts (profile: ${PROFILE}, test_suite=jarvis) via ${AM}"
 echo "    endsAt: ${ENDS_AT}"
 echo ""
 
-printf "  [1/27] KubePodCrashLooping..."
+step "KubePodCrashLooping"
 resolve '[{
   "labels": {
     "alertname": "KubePodCrashLooping",
@@ -43,7 +76,7 @@ resolve '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=kube_pod_container_status_restarts_total"
 }]'
 
-printf "  [2/27] KubePodCrashLooping (2nd pod)..."
+step "KubePodCrashLooping (2nd pod)"
 resolve '[{
   "labels": {
     "alertname": "KubePodCrashLooping",
@@ -60,7 +93,7 @@ resolve '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=kube_pod_container_status_restarts_total"
 }]'
 
-printf "  [3/27] KubePodCrashLooping (3rd pod)..."
+step "KubePodCrashLooping (3rd pod)"
 resolve '[{
   "labels": {
     "alertname": "KubePodCrashLooping",
@@ -77,7 +110,7 @@ resolve '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=kube_pod_container_status_restarts_total"
 }]'
 
-printf "  [4/27] KubeNodeNotReady..."
+step "KubeNodeNotReady"
 resolve '[{
   "labels": {
     "alertname": "KubeNodeNotReady",
@@ -95,7 +128,7 @@ resolve '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=kube_node_status_condition"
 }]'
 
-printf "  [5/27] KubeAPIServerErrorsHigh..."
+step "KubeAPIServerErrorsHigh"
 resolve '[{
   "labels": {
     "alertname": "KubeAPIServerErrorsHigh",
@@ -113,7 +146,7 @@ resolve '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=rate(apiserver_request_total%7Bcode%3D~%225..%22%7D%5B5m%5D)"
 }]'
 
-printf "  [6/27] KubeJobFailed..."
+step "KubeJobFailed"
 resolve '[{
   "labels": {
     "alertname": "KubeJobFailed",
@@ -129,7 +162,7 @@ resolve '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=kube_job_status_failed"
 }]'
 
-printf "  [7/27] KubeDeploymentReplicasMismatch..."
+step "KubeDeploymentReplicasMismatch"
 resolve '[{
   "labels": {
     "alertname": "KubeDeploymentReplicasMismatch",
@@ -148,7 +181,7 @@ resolve '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=kube_deployment_status_replicas_available"
 }]'
 
-printf "  [8/27] KubePersistentVolumeFillingUp..."
+step "KubePersistentVolumeFillingUp"
 resolve '[{
   "labels": {
     "alertname": "KubePersistentVolumeFillingUp",
@@ -167,7 +200,7 @@ resolve '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=kubelet_volume_stats_used_bytes"
 }]'
 
-printf "  [9/27] KubeHpaMaxedOut..."
+step "KubeHpaMaxedOut"
 resolve '[{
   "labels": {
     "alertname": "KubeHpaMaxedOut",
@@ -185,7 +218,7 @@ resolve '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=kube_horizontalpodautoscaler_status_current_replicas"
 }]'
 
-printf " [10/27] KubePodOOMKilled..."
+step "KubePodOOMKilled"
 resolve '[{
   "labels": {
     "alertname": "KubePodOOMKilled",
@@ -202,7 +235,7 @@ resolve '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=kube_pod_container_status_last_terminated_reason"
 }]'
 
-printf " [11/27] KubePodOOMKilled (2nd pod)..."
+step "KubePodOOMKilled (2nd pod)"
 resolve '[{
   "labels": {
     "alertname": "KubePodOOMKilled",
@@ -219,7 +252,7 @@ resolve '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=kube_pod_container_status_last_terminated_reason"
 }]'
 
-printf " [12/27] KubePodOOMKilled (3rd pod)..."
+step "KubePodOOMKilled (3rd pod)"
 resolve '[{
   "labels": {
     "alertname": "KubePodOOMKilled",
@@ -236,7 +269,7 @@ resolve '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=kube_pod_container_status_last_terminated_reason"
 }]'
 
-printf " [13/27] KubeContainerWaiting..."
+step "KubeContainerWaiting"
 resolve '[{
   "labels": {
     "alertname": "KubeContainerWaiting",
@@ -253,7 +286,7 @@ resolve '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=kube_pod_container_status_waiting_reason"
 }]'
 
-printf " [14/27] KubeContainerWaiting (2nd pod)..."
+step "KubeContainerWaiting (2nd pod)"
 resolve '[{
   "labels": {
     "alertname": "KubeContainerWaiting",
@@ -270,7 +303,7 @@ resolve '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=kube_pod_container_status_waiting_reason"
 }]'
 
-printf " [15/27] KubeContainerWaiting (3rd pod)..."
+step "KubeContainerWaiting (3rd pod)"
 resolve '[{
   "labels": {
     "alertname": "KubeContainerWaiting",
@@ -287,7 +320,7 @@ resolve '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=kube_pod_container_status_waiting_reason"
 }]'
 
-printf " [16/27] KubeStatefulSetReplicasMismatch..."
+step "KubeStatefulSetReplicasMismatch"
 resolve '[{
   "labels": {
     "alertname": "KubeStatefulSetReplicasMismatch",
@@ -306,7 +339,7 @@ resolve '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=kube_statefulset_status_replicas_ready"
 }]'
 
-printf " [17/27] KubeServiceEndpointError..."
+step "KubeServiceEndpointError"
 resolve '[{
   "labels": {
     "alertname": "KubeServiceEndpointError",
@@ -322,7 +355,7 @@ resolve '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=kube_endpoint_address_available"
 }]'
 
-printf " [18/27] KubeDNSErrors..."
+step "KubeDNSErrors"
 resolve '[{
   "labels": {
     "alertname": "KubeDNSErrors",
@@ -338,7 +371,16 @@ resolve '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=rate(coredns_dns_responses_total%7Brcode%3D%22SERVFAIL%22%7D%5B5m%5D)"
 }]'
 
-printf " [19/27] LinkRichAlert..."
+# Mirrors the profile split in fire-test-alerts.sh — the demo set ends here.
+if [[ "$PROFILE" == "demo" ]]; then
+  echo ""
+  echo "==> All 18 demo alerts resolved in Alertmanager."
+  echo "    Jarvis keeps their history: the alerts move to the Resolved view and stay"
+  echo "    in the database. Only deleting the database removes them."
+  exit 0
+fi
+
+step "LinkRichAlert"
 resolve '[{
   "labels": {
     "alertname": "LinkRichAlert",
@@ -357,7 +399,7 @@ resolve '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=up%7Bjob%3D%22platform%22%7D"
 }]'
 
-printf " [20/27] InlineUrlsAlert..."
+step "InlineUrlsAlert"
 resolve '[{
   "labels": {
     "alertname": "InlineUrlsAlert",
@@ -371,7 +413,7 @@ resolve '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=up%7Bjob%3D%22prometheus%22%7D"
 }]'
 
-printf " [21/27] LabelOnlyLinksAlert..."
+step "LabelOnlyLinksAlert"
 resolve '[{
   "labels": {
     "alertname": "LabelOnlyLinksAlert",
@@ -389,7 +431,7 @@ resolve '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=http_requests_total%7Benv%3D%22staging%22%7D"
 }]'
 
-printf " [22/27] AnnotationOnlyLinksAlert..."
+step "AnnotationOnlyLinksAlert"
 resolve '[{
   "labels": {
     "alertname": "AnnotationOnlyLinksAlert",
@@ -403,7 +445,7 @@ resolve '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=job_duration_seconds%7Bjob%3D%22s3-export%22%7D"
 }]'
 
-printf " [23/27] SpecialCharLabelAlert..."
+step "SpecialCharLabelAlert"
 resolve '[{
   "labels": {
     "alertname": "SpecialCharLabelAlert",
@@ -421,7 +463,7 @@ resolve '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=up%7Bjob%3D%22platform%22%7D"
 }]'
 
-printf " [24/27] KubePodExcessiveLabelsAlert..."
+step "KubePodExcessiveLabelsAlert"
 resolve '[{
   "labels": {
     "alertname": "KubePodExcessiveLabelsAlert",
@@ -462,7 +504,7 @@ resolve '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=up%7Bnamespace%3D%22prod%22%2Cpod%3D%22recommendation-engine%22%7D"
 }]'
 
-printf " [25/27] CIPipelineBuildMetadataAlert..."
+step "CIPipelineBuildMetadataAlert"
 resolve '[{
   "labels": {
     "alertname": "CIPipelineBuildMetadataAlert",
@@ -498,7 +540,7 @@ resolve '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=ci_pipeline_status%7Bpipeline%3D%22recommendation-engine-deploy%22%7D"
 }]'
 
-printf " [26/27] CloudResourceTaggingAlert..."
+step "CloudResourceTaggingAlert"
 resolve '[{
   "labels": {
     "alertname": "CloudResourceTaggingAlert",
@@ -536,7 +578,7 @@ resolve '[{
   "generatorURL": "'"${PROM}"'/graph?g0.expr=aws_rds_free_storage_space_average%7Bresource_id%3D%22prod-orders-db-primary%22%7D"
 }]'
 
-printf " [27/27] FeatureFlagRolloutAlert..."
+step "FeatureFlagRolloutAlert"
 resolve '[{
   "labels": {
     "alertname": "FeatureFlagRolloutAlert",
@@ -569,4 +611,6 @@ resolve '[{
 }]'
 
 echo ""
-echo "==> All 27 Kubernetes test alerts resolved."
+echo "==> All 27 Kubernetes test alerts resolved in Alertmanager."
+echo "    Jarvis keeps their history: the alerts move to the Resolved view and stay"
+echo "    in the database. Only deleting the database removes them."

@@ -31,7 +31,7 @@ Repository layout:
 - `website/` — VitePress documentation site; renders the repo's own markdown, deployed to GitHub Pages
 - `scripts/` — E2E runner, mock-OIDC config, manual test-alert/silence fixtures
 - `.agents/` — AI reference files (`architecture.md`, `testing.md`, `lessons.md`) and `skills/` — workflows as [Agent Skills](https://agentskills.io), one `<name>/SKILL.md` each (routed below)
-- `Makefile` — canonical entry for dev stack, tests, security scans, fixtures (`make help`)
+- `Makefile` — canonical entry for dev stack, demo stack, tests, security scans, fixtures (`make help`)
 
 ## Task Router — load on demand
 
@@ -51,7 +51,8 @@ adapters and their rules live in `docs/ai-agents.md`.
 | Writing or running tests, test matrix, test utilities, CI pipeline | `.agents/testing.md` |
 | E2E / screenshot stack: Playwright specs, fixtures, auth modes, `compose.e2e.yml` | `docs/testing-e2e.md` |
 | Documentation website (VitePress in `website/`, GitHub Pages), adding a doc page to the site | `.agents/skills/website/SKILL.md` |
-| Database backends, multi-replica HA (leader election, snapshot distribution, WS fanout, failover), Kubernetes deployment, SQLite → PostgreSQL migration | `docs/persistence.md` |
+| Database backends, multi-replica HA (leader election, snapshot distribution, WS fanout, failover) | `docs/postgres-ha.md` |
+| Kubernetes deployment, SQLite → PostgreSQL migration | `docs/deploy-kubernetes.md`, `docs/migrate-postgres.md`, `docs/sqlite-limits.md` |
 | Cutting a release — **only when the user explicitly asks** | `.agents/skills/release/SKILL.md` |
 | Release demo video (YouTube), release-notes video block — **only on request** (asked upfront in Phase 0 of the release skill) | `.agents/skills/release-video/SKILL.md` |
 | Security audit, new-code security checklist, security tooling | `.agents/skills/security-check/SKILL.md` |
@@ -120,7 +121,7 @@ adapters and their rules live in `docs/ai-agents.md`.
     resolves: phantom `resolved` events, wrong `occurrence_count`, premature
     claim releases (`.agents/lessons.md`).
 15. **History side effects and Alertmanager polling are leader-only on
-    PostgreSQL** (`docs/persistence.md`). Exactly one pod (advisory lock,
+    PostgreSQL** (`docs/postgres-ha.md`). Exactly one pod (advisory lock,
     `internal/leader`) polls and writes history:
     `RecordStatusChange`/`RecordResolvedForCluster`, occurrence counts, delayed claim releases, `reconcileStartupResolves`,
     external-silence events, retention sweeps (`history.Recorder.IsLeader()`,
@@ -168,12 +169,19 @@ adapters and their rules live in `docs/ai-agents.md`.
     hidden label is invisible, not absent (same bug class as #12).
 20. **Settings migrations run before normalization drops unknown keys, and
     stay.** `normalizeSettings` (`lib/settingsUtils.ts`) keeps only known
-    keys, so a removed or renamed setting is silently deleted unless its
+    keys and validates the shape of every nested value (a `labelDisplay`
+    missing `order`, for example, is dropped rather than kept partial), so a
+    removed/renamed setting or a malformed value is silently gone unless its
     migration runs first: `migrateLegacyDefaultFilters` at the top of
-    `normalizeSettings` (server read path) and inside
-    `migratePersistedSettings` (zustand `persist` migrate — the localStorage
-    path, never normalized); in the pre-v2 branch also before
-    `diffFromDefaults`, which only walks `DEFAULT_SETTINGS` keys. Server rows are never rewritten, so a legacy-key
+    `normalizeSettings` itself, which both the server read path and
+    `migratePersistedSettings`'s pre-v2 branch (zustand `persist` migrate —
+    the localStorage path) call before `diffFromDefaults`, which only walks
+    `DEFAULT_SETTINGS` keys and does no shape validation of its own. Never
+    diff a raw persisted blob directly — always through `normalizeSettings`
+    first, or a malformed nested field survives into `overrides` and crashes
+    whatever reads it unconditionally (`partitionLabelsForDisplay`'s
+    `config.order.indexOf(...)` on a `labelDisplay` without `order`,
+    `.agents/lessons.md`). Server rows are never rewritten, so a legacy-key
     migration stays while rows from older releases may exist.
 
 ## Workflow Rules — always follow
@@ -206,6 +214,7 @@ adapters and their rules live in `docs/ai-agents.md`.
    | You changed … | Update |
    |---|---|
    | User-visible behavior: new/changed feature, UI, config surface | `docs/features.md` + the matching topic file under `docs/` — the website publishes `docs/` on every push to `main`, so this happens in the same PR |
+   | New or changed environment variable | `docs/configuration.md` — the **only** place an env var gets its own table row (name / default / one-sentence meaning), with a stable per-variable anchor (`<a id="jarvis_..."></a>`). A topic page (`docs/authentication-user.md`, `docs/authentication-alertmanager.md`, `docs/retention.md`, …) links to the anchor and explains relationships/flows around it — never repeats the table |
    | Go model, DB schema/migration, API route, WS event, env var, store/state shape, component/hook/lib file, state machine | `.agents/architecture.md` |
    | Test files, test commands, CI workflows, pre-commit hook, Makefile targets | `.agents/testing.md` |
    | Website structure, theme or sync script; **new file under `docs/`** (needs a sync entry + sidebar link) | `.agents/skills/website/SKILL.md` |
@@ -219,7 +228,8 @@ adapters and their rules live in `docs/ai-agents.md`.
    | Project description, invariants, workflow rules, commit format, repo layout, Task Router | `AGENTS.md` itself |
    | Tool adapter, `scripts/check-agent-context.sh` | `docs/ai-agents.md` |
    | E2E stack, specs, fixtures, auth modes | `docs/testing-e2e.md` |
-   | Database backend behavior, multi-replica HA (leader election, snapshot distribution, WS fanout, failover), Kubernetes HA deployment | `docs/persistence.md` |
+   | Database backend behavior, multi-replica HA (leader election, snapshot distribution, WS fanout, failover) | `docs/postgres-ha.md` |
+   | Kubernetes HA deployment | `docs/deploy-kubernetes.md` |
    | Hard-won debugging insight or non-obvious gotcha | `.agents/lessons.md` |
    | Who-talks-to-whom topology: upstream calls, stores, WS events, poll flow | `docs/diagrams/*.mmd` + re-render via `make diagrams` |
 

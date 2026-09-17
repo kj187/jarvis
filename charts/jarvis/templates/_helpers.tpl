@@ -110,3 +110,20 @@ neither `helm lint` nor `helm template` surfaces.
 {{-   end }}
 {{- end }}
 {{- end }}
+
+{{/*
+Validate per-cluster upstream OAuth2 config. Mirrors the backend's own
+check (config.go's parseClusters): OAUTH2_TOKEN_URL is required whenever
+OAUTH2_CLIENT_ID is set. Without this, the chart would render a pod that
+starts but can never fetch a token — the backend fails that only at
+runtime, per cluster, with no render-time signal.
+*/}}
+{{- define "jarvis.validateClusterAuth" -}}
+{{- range $i, $cluster := .Values.clusters }}
+{{- $n := add $i 1 }}
+{{- $oauth2 := ($cluster.auth | default dict).oauth2 | default dict }}
+{{- if and $oauth2.clientId (not $oauth2.tokenUrl) }}
+{{-   fail (printf "Invalid configuration: clusters[%d].auth.oauth2.clientId is set without clusters[%d].auth.oauth2.tokenUrl (cluster %d, %q)." $i $i $n ($cluster.name | default "unnamed")) }}
+{{- end }}
+{{- end }}
+{{- end }}
