@@ -183,6 +183,15 @@ adapters and their rules live in `docs/ai-agents.md`.
     `config.order.indexOf(...)` on a `labelDisplay` without `order`,
     `.agents/lessons.md`). Server rows are never rewritten, so a legacy-key
     migration stays while rows from older releases may exist.
+21. **Globally mounted browser hooks never load unbounded database history
+    merely to compute a count.** When needed, history counts are SQL
+    aggregates; history lists are paginated or streamed, and request
+    cancellation propagates to the database.
+22. **Every live resolved-buffer entry expires with its own episode after 20
+    minutes on leaders and followers.** Re-ingesting the same episode never
+    extends its deadline; a genuine re-fire/new resolve gets a new deadline.
+    The central sweep removes follower-cache references too, but never active
+    last-good alerts or persistent database history.
 
 ## Workflow Rules — always follow
 

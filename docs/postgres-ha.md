@@ -112,6 +112,13 @@ WebSocket pushes to its own connected browsers, from a snapshot that is
 at most one poll interval old, regardless of which pod happens to be
 leader right now.
 
+Resolved alerts in those snapshots keep the same 20-minute live-display
+deadline as on the leader. Followers normalize the resolution timestamp,
+discard already-expired rows while decoding/rebuilding, and physically remove
+expired entries from both their `AlertStore` and per-cluster snapshot cache.
+Promotion never restarts that deadline. Active last-good alerts are not subject
+to this cleanup, and database history is unchanged.
+
 When a follower rebuilds its alert store from a snapshot it also re-reads
 the active claims from the shared database and re-attaches them to the
 merged alerts (the same batched read the leader does each poll). The

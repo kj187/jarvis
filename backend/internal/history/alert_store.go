@@ -3,16 +3,32 @@ package history
 import (
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/kj187/jarvis/backend/internal/models"
 )
+
+const ResolvedBufferTTL = 20 * time.Minute
+
+type resolvedEntry struct {
+	alert     models.EnrichedAlert
+	expiresAt time.Time
+}
 
 // AlertStore is an in-memory store for the current poll snapshot.
 // All methods are safe for concurrent use.
 type AlertStore struct {
 	mu             sync.RWMutex
 	alerts         []models.EnrichedAlert
-	resolvedBuffer map[string]models.EnrichedAlert // kept for 20 min after resolve
+	resolvedBuffer map[string]resolvedEntry
+	now            func() time.Time
+}
+
+func (s *AlertStore) currentTime() time.Time {
+	if s.now != nil {
+		return s.now().UTC()
+	}
+	return time.Now().UTC()
 }
 
 func alertSnapshotKey(fingerprint, clusterName string) string {
@@ -24,10 +40,28 @@ func alertSnapshotKey(fingerprint, clusterName string) string {
 func (s *AlertStore) Set(alerts []models.EnrichedAlert) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.alerts = make([]models.EnrichedAlert, len(alerts))
-	copy(s.alerts, alerts)
+	activeKeys := make(map[string]struct{}, len(alerts))
+	active := make([]models.EnrichedAlert, 0, len(alerts))
 	for _, a := range alerts {
-		delete(s.resolvedBuffer, alertSnapshotKey(a.Fingerprint, a.ClusterName))
+		key := alertSnapshotKey(a.Fingerprint, a.ClusterName)
+		if a.Status.State != "resolved" {
+			activeKeys[key] = struct{}{}
+			active = append(active, a)
+		}
+	}
+	for key := range activeKeys {
+		delete(s.resolvedBuffer, key)
+	}
+	s.alerts = active
+	for _, a := range alerts {
+		if a.Status.State != "resolved" {
+			continue
+		}
+		key := alertSnapshotKey(a.Fingerprint, a.ClusterName)
+		if _, activeExists := activeKeys[key]; activeExists {
+			continue
+		}
+		s.seedResolvedLocked(a, s.currentTime())
 	}
 }
 
@@ -55,8 +89,8 @@ func (s *AlertStore) Get() []models.EnrichedAlert {
 	defer s.mu.RUnlock()
 	result := make([]models.EnrichedAlert, len(s.alerts))
 	copy(result, s.alerts)
-	for _, a := range s.resolvedBuffer { // nil-map range is safe in Go
-		result = append(result, a)
+	for _, entry := range s.resolvedBuffer { // nil-map range is safe in Go
+		result = append(result, entry.alert)
 	}
 	sort.Slice(result, func(i, j int) bool {
 		a, b := result[i], result[j]
@@ -99,17 +133,26 @@ func (s *AlertStore) ClearActiveClaim(fingerprint, clusterName string) {
 // 20 minutes after disappearing from Alertmanager. Clears its active claim.
 // The resolved buffer is NOT overwritten by Set, so the entry survives the next poll.
 func (s *AlertStore) MarkResolvedForCluster(fingerprint, clusterName string) {
+	s.MarkResolvedForClusterAt(fingerprint, clusterName, s.currentTime())
+}
+
+func (s *AlertStore) MarkResolvedForClusterAt(fingerprint, clusterName string, resolvedAt time.Time) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	resolvedAt = resolvedAt.UTC()
 	for i, a := range s.alerts {
 		if a.Fingerprint == fingerprint && a.ClusterName == clusterName {
 			resolved := a
 			resolved.Status.State = "resolved"
 			resolved.ActiveClaim = nil
+			resolved.EndsAt = resolvedAt
+			resolved.UpdatedAt = resolvedAt
 			if s.resolvedBuffer == nil {
-				s.resolvedBuffer = make(map[string]models.EnrichedAlert)
+				s.resolvedBuffer = make(map[string]resolvedEntry)
 			}
-			s.resolvedBuffer[alertSnapshotKey(fingerprint, clusterName)] = resolved
+			s.resolvedBuffer[alertSnapshotKey(fingerprint, clusterName)] = resolvedEntry{
+				alert: resolved, expiresAt: resolvedAt.Add(ResolvedBufferTTL),
+			}
 			s.alerts = append(s.alerts[:i], s.alerts[i+1:]...)
 			return
 		}
@@ -118,17 +161,26 @@ func (s *AlertStore) MarkResolvedForCluster(fingerprint, clusterName string) {
 
 // MarkResolved keeps backward compatibility for tests and legacy single-cluster callers.
 func (s *AlertStore) MarkResolved(fingerprint string) {
+	s.markResolvedAt(fingerprint, s.currentTime())
+}
+
+func (s *AlertStore) markResolvedAt(fingerprint string, resolvedAt time.Time) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	resolvedAt = resolvedAt.UTC()
 	for i, a := range s.alerts {
 		if a.Fingerprint == fingerprint {
 			resolved := a
 			resolved.Status.State = "resolved"
 			resolved.ActiveClaim = nil
+			resolved.EndsAt = resolvedAt
+			resolved.UpdatedAt = resolvedAt
 			if s.resolvedBuffer == nil {
-				s.resolvedBuffer = make(map[string]models.EnrichedAlert)
+				s.resolvedBuffer = make(map[string]resolvedEntry)
 			}
-			s.resolvedBuffer[alertSnapshotKey(a.Fingerprint, a.ClusterName)] = resolved
+			s.resolvedBuffer[alertSnapshotKey(a.Fingerprint, a.ClusterName)] = resolvedEntry{
+				alert: resolved, expiresAt: resolvedAt.Add(ResolvedBufferTTL),
+			}
 			s.alerts = append(s.alerts[:i], s.alerts[i+1:]...)
 			return
 		}
@@ -141,15 +193,48 @@ func (s *AlertStore) MarkResolved(fingerprint string) {
 func (s *AlertStore) SeedResolved(alerts []models.EnrichedAlert) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.resolvedBuffer == nil {
-		s.resolvedBuffer = make(map[string]models.EnrichedAlert)
-	}
+	now := s.currentTime()
 	for _, a := range alerts {
-		key := alertSnapshotKey(a.Fingerprint, a.ClusterName)
-		if _, exists := s.resolvedBuffer[key]; !exists {
-			s.resolvedBuffer[key] = a
+		s.seedResolvedLocked(a, now)
+	}
+}
+
+func (s *AlertStore) seedResolvedLocked(a models.EnrichedAlert, now time.Time) {
+	if a.Status.State != "resolved" || a.EndsAt.IsZero() {
+		return
+	}
+	key := alertSnapshotKey(a.Fingerprint, a.ClusterName)
+	for _, active := range s.alerts {
+		if alertSnapshotKey(active.Fingerprint, active.ClusterName) == key {
+			return
 		}
 	}
+	expiresAt := a.EndsAt.UTC().Add(ResolvedBufferTTL)
+	if !expiresAt.After(now) {
+		return
+	}
+	if existing, exists := s.resolvedBuffer[key]; exists && !a.EndsAt.After(existing.alert.EndsAt) {
+		return
+	}
+	if s.resolvedBuffer == nil {
+		s.resolvedBuffer = make(map[string]resolvedEntry)
+	}
+	a.EndsAt = a.EndsAt.UTC()
+	a.UpdatedAt = a.EndsAt
+	s.resolvedBuffer[key] = resolvedEntry{alert: a, expiresAt: expiresAt}
+}
+
+func (s *AlertStore) ExpireResolved(now time.Time) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	changed := false
+	for key, entry := range s.resolvedBuffer {
+		if !entry.expiresAt.After(now) {
+			delete(s.resolvedBuffer, key)
+			changed = true
+		}
+	}
+	return changed
 }
 
 // RemoveResolvedForCluster removes only the resolved-buffer entry for an
@@ -177,8 +262,8 @@ func (s *AlertStore) RemoveByFingerprint(fingerprint string) {
 		}
 	}
 	s.alerts = append([]models.EnrichedAlert(nil), filtered...)
-	for key, a := range s.resolvedBuffer {
-		if a.Fingerprint == fingerprint {
+	for key, entry := range s.resolvedBuffer {
+		if entry.alert.Fingerprint == fingerprint {
 			delete(s.resolvedBuffer, key)
 		}
 	}

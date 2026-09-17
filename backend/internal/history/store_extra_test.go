@@ -383,10 +383,11 @@ func TestGetAllResolved_MultipleAlerts(t *testing.T) {
 // ── SeedResolved (AlertStore) ─────────────────────────────────────────────────
 
 func TestAlertStore_SeedResolved(t *testing.T) {
-	s := &AlertStore{}
+	now := time.Now().UTC()
+	s := &AlertStore{now: func() time.Time { return now }}
 	s.SeedResolved([]models.EnrichedAlert{
-		makeAlert("fp1", "resolved"),
-		makeAlert("fp2", "resolved"),
+		resolvedAlertAt("fp1", "", now),
+		resolvedAlertAt("fp2", "", now),
 	})
 
 	got := s.Get()
@@ -396,8 +397,9 @@ func TestAlertStore_SeedResolved(t *testing.T) {
 }
 
 func TestAlertStore_SeedResolved_NoOverwrite(t *testing.T) {
-	s := &AlertStore{}
-	s.SeedResolved([]models.EnrichedAlert{makeAlert("fp1", "resolved")})
+	now := time.Now().UTC()
+	s := &AlertStore{now: func() time.Time { return now }}
+	s.SeedResolved([]models.EnrichedAlert{resolvedAlertAt("fp1", "", now)})
 	// Seed again — should not overwrite
 	s.SeedResolved([]models.EnrichedAlert{makeAlert("fp1", "active")})
 
@@ -408,8 +410,9 @@ func TestAlertStore_SeedResolved_NoOverwrite(t *testing.T) {
 }
 
 func TestAlertStore_SeedResolved_ClearedBySet(t *testing.T) {
-	s := &AlertStore{}
-	s.SeedResolved([]models.EnrichedAlert{makeAlert("fp1", "resolved")})
+	now := time.Now().UTC()
+	s := &AlertStore{now: func() time.Time { return now }}
+	s.SeedResolved([]models.EnrichedAlert{resolvedAlertAt("fp1", "", now)})
 	// Set with fp1 as active — should remove from resolved buffer
 	s.Set([]models.EnrichedAlert{makeAlert("fp1", "active")})
 

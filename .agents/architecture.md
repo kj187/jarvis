@@ -369,6 +369,9 @@ GET    /api/v1/alerts                            full_protect?  → []EnrichedAl
 #        ordering (upstream AM response order and resolved-buffer map iteration are
 #        not stable); prevents frontend alert-group flicker. Groups inherit it, then
 #        re-sort the group list itself by severity, then alertname.
+#        resolvedBuffer is map[fingerprint+cluster]resolvedEntry. Each entry expires
+#        exactly 20 minutes after its episode's EndsAt. Recorder owns one 1s sweeper;
+#        active alerts win duplicate keys and repeated snapshot rebuilds do not extend TTL.
 
 # ── Alert details (history store / DB) ───────────────────────────────────────
 GET    /api/v1/alerts/:fingerprint/history       full_protect?  → { events: AlertEvent[], total }  ?limit= ?offset= ?cluster=
@@ -635,7 +638,9 @@ pod still serves reads/API/WS equally regardless of leadership.
 Alertmanager load must not scale with `replicaCount`: only the leader ever
 polls; followers reconstruct their stores from PostgreSQL instead.
 
-- `Recorder.Start` seeds resolved alerts, then picks a mode. SQLite (or a
+- `Recorder.Start` streams only the latest still-resolved rows from the last
+  20 minutes through `Store.VisitRecentResolved` into `AlertStore`, starts one
+  process-context resolved-buffer sweeper, then picks a mode. SQLite (or a
   Recorder built without an elector/dsn, e.g. most unit tests) always calls
   `runPollLoop` — today's unconditional-poll behavior, unchanged. On
   PostgreSQL, a **mode supervisor** subscribes a second callback to the
@@ -678,6 +683,11 @@ polls; followers reconstruct their stores from PostgreSQL instead.
   follower's next resync and only reappear after the leader's next poll.
   Claims are authoritative from the DB, not the snapshot: a since-released
   claim still present in a stale snapshot is cleared too.
+  Resolved alerts are normalized to the earlier of their `EndsAt` and the
+  snapshot row's `takenAt`; zero/expired values are dropped. The shared sweeper
+  clears them from both `AlertStore` and the cached follower slice (including
+  its backing-array tail), so an old snapshot cannot resurrect them and a
+  promotion cannot reset their episode deadline.
 - `Recorder.ClusterUpStates()` (the metrics-collector-facing view) sources
   member up-states from `followerSnapshots` while follower instead of the
   local (never-polled) `cluster.Cluster.MemberUpStates()` — a follower still

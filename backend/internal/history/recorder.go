@@ -41,6 +41,7 @@ type Recorder struct {
 	logger       *slog.Logger
 	triggerCh    chan struct{}
 	metrics      *metrics.Metrics
+	now          func() time.Time
 
 	// prevSnapshot holds the alert instance (fingerprint+cluster) from the last poll for diff computation.
 	prevMu            sync.Mutex
@@ -117,6 +118,8 @@ type resolvedAlert struct {
 	clusterName string
 }
 
+const resolvedSweepInterval = time.Second
+
 func recorderAlertKey(fingerprint, clusterName string) string {
 	return fingerprint + "\x1f" + clusterName
 }
@@ -179,11 +182,19 @@ func NewRecorder(
 		elector:            el,
 		dsn:                dsn,
 		followerSnapshots:  make(map[string]followerSnapshotEntry),
+		now:                time.Now,
 	}
 	if el != nil {
 		el.Subscribe(r.onLeadershipChange)
 	}
 	return r
+}
+
+func (r *Recorder) currentTime() time.Time {
+	if r.now != nil {
+		return r.now().UTC()
+	}
+	return time.Now().UTC()
 }
 
 // IsLeader reports whether this pod currently holds Alertmanager-polling /
@@ -250,7 +261,7 @@ func (r *Recorder) ClusterUpStates() map[string]map[string]bool {
 // Trigger signals the recorder to run an immediate poll.
 // Non-blocking: if a trigger is already queued, this is a no-op. A follower
 // cannot poll itself (D3 item 7): it forwards the request to the leader via
-// pg_notify(jarvis_trigger, ''); the leader's own runPollLoop LISTENs on that
+// pg_notify(jarvis_trigger, ”); the leader's own runPollLoop LISTENs on that
 // channel and treats it exactly like a local Trigger() call.
 func (r *Recorder) Trigger() {
 	if !r.IsLeader() {
@@ -280,9 +291,15 @@ func (r *Recorder) triggerLocal() {
 // (follower) on every leadership transition, restarting the active loop each
 // time (D3). The loop(s) stop when ctx is cancelled.
 func (r *Recorder) Start(ctx context.Context) {
-	if resolved, err := r.store.GetRecentResolved(7 * 24 * time.Hour); err == nil {
-		r.logger.Info("seeding resolved alerts from db", "count", len(resolved))
-		r.alertStore.SeedResolved(resolved)
+	go r.runResolvedSweeper(ctx)
+	seeded := 0
+	now := r.currentTime()
+	if err := r.store.VisitRecentResolved(ctx, now, ResolvedBufferTTL, func(alert models.EnrichedAlert) error {
+		r.alertStore.SeedResolved([]models.EnrichedAlert{alert})
+		seeded++
+		return nil
+	}); err == nil {
+		r.logger.Info("seeding resolved alerts from db", "count", seeded)
 	} else {
 		r.logger.Warn("seed resolved alerts from db failed", "err", err)
 	}
@@ -312,6 +329,36 @@ func (r *Recorder) Start(ctx context.Context) {
 	modeMu.Lock()
 	cancelMode()
 	modeMu.Unlock()
+}
+
+func (r *Recorder) runResolvedSweeper(ctx context.Context) {
+	ticker := time.NewTicker(resolvedSweepInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if r.sweepResolved(r.currentTime()) {
+				r.broadcastAlertsIfChanged()
+			}
+		}
+	}
+}
+
+func (r *Recorder) sweepResolved(now time.Time) bool {
+	changed := r.alertStore.ExpireResolved(now)
+	r.followerMu.Lock()
+	for clusterName, entry := range r.followerSnapshots {
+		filtered, removed := filterFollowerAlerts(entry.alerts, entry.takenAt, now)
+		if removed {
+			entry.alerts = filtered
+			r.followerSnapshots[clusterName] = entry
+			changed = true
+		}
+	}
+	r.followerMu.Unlock()
+	return changed
 }
 
 // runPollLoop polls immediately and then at the configured interval, exactly
@@ -463,7 +510,7 @@ func (r *Recorder) reconcileStartupResolves(clusterName string, currentAlerts []
 	for _, a := range currentAlerts {
 		current[a.Fingerprint] = struct{}{}
 	}
-	now := time.Now().UTC()
+	now := r.currentTime()
 	for _, fp := range open {
 		if _, stillActive := current[fp]; stillActive {
 			continue
@@ -576,7 +623,7 @@ func (r *Recorder) applyPollResults(
 	// RecordResolvedForCluster) is leader-only (D3 step 4) — a follower still
 	// computed the diff above for its own in-memory AlertStore, but must not
 	// write history.
-	now := time.Now().UTC()
+	now := r.currentTime()
 	if r.IsLeader() {
 		for i := range allAlerts {
 			a := &allAlerts[i]
@@ -653,14 +700,7 @@ func (r *Recorder) applyPollResults(
 	// write involved (every pod serves reads/WS equally).
 	if len(resolvedAlerts) > 0 {
 		for _, ra := range resolvedAlerts {
-			r.alertStore.MarkResolvedForCluster(ra.fingerprint, ra.clusterName)
-			go func(ra resolvedAlert) {
-				select {
-				case <-ctx.Done():
-				case <-time.After(20 * time.Minute):
-					r.alertStore.RemoveResolvedForCluster(ra.fingerprint, ra.clusterName)
-				}
-			}(ra)
+			r.alertStore.MarkResolvedForClusterAt(ra.fingerprint, ra.clusterName, now)
 		}
 	}
 

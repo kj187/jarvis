@@ -114,13 +114,45 @@ func (r *Recorder) applySnapshotRow(clusterName string, row snapshotRow) {
 	if r.silenceStore != nil {
 		r.silenceStore.Set(clusterName, snap.Silences)
 	}
+	snap.Alerts, _ = filterFollowerAlerts(snap.Alerts, row.TakenAt, r.currentTime())
 	r.followerMu.Lock()
+	if r.followerSnapshots == nil {
+		r.followerSnapshots = make(map[string]followerSnapshotEntry)
+	}
 	r.followerSnapshots[clusterName] = followerSnapshotEntry{
 		alerts:   snap.Alerts,
 		memberUp: snap.MemberUp,
 		takenAt:  row.TakenAt,
 	}
 	r.followerMu.Unlock()
+}
+
+func filterFollowerAlerts(alerts []models.EnrichedAlert, takenAt, now time.Time) ([]models.EnrichedAlert, bool) {
+	kept := alerts[:0]
+	removed := false
+	for _, alert := range alerts {
+		if alert.Status.State != "resolved" {
+			kept = append(kept, alert)
+			continue
+		}
+		if alert.EndsAt.IsZero() {
+			removed = true
+			continue
+		}
+		resolvedAt := alert.EndsAt.UTC()
+		if !takenAt.IsZero() && takenAt.UTC().Before(resolvedAt) {
+			resolvedAt = takenAt.UTC()
+		}
+		if !resolvedAt.Add(ResolvedBufferTTL).After(now) {
+			removed = true
+			continue
+		}
+		alert.EndsAt = resolvedAt
+		alert.UpdatedAt = resolvedAt
+		kept = append(kept, alert)
+	}
+	clear(alerts[len(kept):])
+	return kept, removed
 }
 
 // rebuildFollowerAlertStore merges every cached cluster's alerts into this
@@ -132,8 +164,13 @@ func (r *Recorder) rebuildFollowerAlertStore() {
 	merged := make([]models.EnrichedAlert, 0)
 	stale := false
 	threshold := snapshotStaleFactor * r.interval
-	now := time.Now()
-	for _, entry := range r.followerSnapshots {
+	now := r.currentTime()
+	for clusterName, entry := range r.followerSnapshots {
+		var removed bool
+		entry.alerts, removed = filterFollowerAlerts(entry.alerts, entry.takenAt, now)
+		if removed {
+			r.followerSnapshots[clusterName] = entry
+		}
 		merged = append(merged, entry.alerts...)
 		if now.Sub(entry.takenAt) > threshold {
 			stale = true

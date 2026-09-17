@@ -15,6 +15,106 @@ func makeAlert(fp, state string) models.EnrichedAlert {
 	}
 }
 
+func resolvedAlertAt(fp, cluster string, resolvedAt time.Time) models.EnrichedAlert {
+	return models.EnrichedAlert{
+		Fingerprint: fp,
+		ClusterName: cluster,
+		Status:      models.AlertStatus{State: "resolved"},
+		EndsAt:      resolvedAt,
+	}
+}
+
+func TestResolvedBuffer_RuntimeTimestamp(t *testing.T) {
+	resolvedAt := time.Date(2026, 9, 17, 10, 0, 0, 0, time.UTC)
+	s := &AlertStore{}
+	s.Set([]models.EnrichedAlert{{Fingerprint: "fp1", ClusterName: "a", Status: models.AlertStatus{State: "active"}}})
+	s.MarkResolvedForClusterAt("fp1", "a", resolvedAt)
+
+	got := s.Get()
+	if len(got) != 1 || !got[0].EndsAt.Equal(resolvedAt) || !got[0].UpdatedAt.Equal(resolvedAt) {
+		t.Fatalf("resolved timestamps = %+v, want EndsAt/UpdatedAt %s", got, resolvedAt)
+	}
+	if s.ExpireResolved(resolvedAt.Add(ResolvedBufferTTL - time.Nanosecond)) {
+		t.Fatal("entry expired before deadline")
+	}
+	if !s.ExpireResolved(resolvedAt.Add(ResolvedBufferTTL)) || len(s.Get()) != 0 {
+		t.Fatal("entry did not expire exactly at deadline")
+	}
+}
+
+func TestResolvedBuffer_SeedUsesRemainingTTL(t *testing.T) {
+	now := time.Date(2026, 9, 17, 10, 0, 0, 0, time.UTC)
+	s := &AlertStore{now: func() time.Time { return now }}
+	s.SeedResolved([]models.EnrichedAlert{
+		resolvedAlertAt("alive", "a", now.Add(-ResolvedBufferTTL+time.Nanosecond)),
+		resolvedAlertAt("at-deadline", "a", now.Add(-ResolvedBufferTTL)),
+		resolvedAlertAt("old", "a", now.Add(-ResolvedBufferTTL-time.Nanosecond)),
+	})
+	got := s.Get()
+	if len(got) != 1 || got[0].Fingerprint != "alive" {
+		t.Fatalf("seeded = %v, want only alive", fingerprints(got))
+	}
+	if !s.ExpireResolved(now.Add(time.Nanosecond)) {
+		t.Fatal("seeded entry did not retain its original deadline")
+	}
+}
+
+func TestResolvedBuffer_RefireResolveDoesNotUseOldDeadline(t *testing.T) {
+	base := time.Date(2026, 9, 17, 10, 0, 0, 0, time.UTC)
+	s := &AlertStore{}
+	s.Set([]models.EnrichedAlert{{Fingerprint: "fp1", ClusterName: "a", Status: models.AlertStatus{State: "active"}}})
+	s.MarkResolvedForClusterAt("fp1", "a", base)
+	s.Set([]models.EnrichedAlert{{Fingerprint: "fp1", ClusterName: "a", Status: models.AlertStatus{State: "active"}}})
+	s.MarkResolvedForClusterAt("fp1", "a", base.Add(10*time.Minute))
+
+	if s.ExpireResolved(base.Add(ResolvedBufferTTL)) || len(s.Get()) != 1 {
+		t.Fatal("old episode deadline removed the newer resolved episode")
+	}
+	if !s.ExpireResolved(base.Add(30*time.Minute)) || len(s.Get()) != 0 {
+		t.Fatal("new resolved episode did not expire at its own deadline")
+	}
+}
+
+func TestResolvedBuffer_ActiveWinsAndDuplicateDoesNotExtendTTL(t *testing.T) {
+	now := time.Date(2026, 9, 17, 10, 10, 0, 0, time.UTC)
+	s := &AlertStore{now: func() time.Time { return now }}
+	resolved := resolvedAlertAt("fp1", "a", now.Add(-10*time.Minute))
+	active := models.EnrichedAlert{Fingerprint: "fp1", ClusterName: "a", Status: models.AlertStatus{State: "active"}}
+	s.Set([]models.EnrichedAlert{resolved, active})
+	if got := s.Get(); len(got) != 1 || got[0].Status.State != "active" {
+		t.Fatalf("active did not win duplicate key: %+v", got)
+	}
+
+	s.Set([]models.EnrichedAlert{resolved})
+	now = now.Add(5 * time.Minute)
+	s.Set([]models.EnrichedAlert{resolved})
+	if !s.ExpireResolved(resolved.EndsAt.Add(ResolvedBufferTTL)) {
+		t.Fatal("repeated Set extended the resolved episode deadline")
+	}
+}
+
+func TestResolvedBuffer_SetTransitionsActiveToResolved(t *testing.T) {
+	now := time.Date(2026, 9, 17, 10, 0, 0, 0, time.UTC)
+	s := &AlertStore{now: func() time.Time { return now }}
+	s.Set([]models.EnrichedAlert{{Fingerprint: "fp1", ClusterName: "a", Status: models.AlertStatus{State: "active"}}})
+	s.Set([]models.EnrichedAlert{resolvedAlertAt("fp1", "a", now)})
+
+	got := s.Get()
+	if len(got) != 1 || got[0].Status.State != "resolved" {
+		t.Fatalf("active-to-resolved Set transition = %+v, want resolved", got)
+	}
+}
+
+func TestResolvedBuffer_ResetClearsExpiry(t *testing.T) {
+	now := time.Date(2026, 9, 17, 10, 0, 0, 0, time.UTC)
+	s := &AlertStore{now: func() time.Time { return now }}
+	s.SeedResolved([]models.EnrichedAlert{resolvedAlertAt("fp1", "a", now)})
+	s.Reset()
+	if s.ExpireResolved(now.Add(ResolvedBufferTTL)) {
+		t.Fatal("Reset left expiry metadata behind")
+	}
+}
+
 func TestAlertStore_SetGet(t *testing.T) {
 	s := &AlertStore{}
 	alerts := []models.EnrichedAlert{makeAlert("fp1", "active"), makeAlert("fp2", "active")}
