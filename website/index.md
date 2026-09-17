@@ -12,8 +12,8 @@ hero:
     alt: Jarvis
   actions:
     - theme: brand
-      text: Try the demo
-      link: /demo
+      text: Get started
+      link: /#getting-started
     - theme: alt
       text: View on GitHub
       link: https://github.com/kj187/jarvis
