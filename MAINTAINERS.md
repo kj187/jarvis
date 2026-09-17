@@ -37,8 +37,9 @@ outside a day job. There is no SLA.
 
 - **Pull requests**: normally a first response within a few days (see
   [Contributing](CONTRIBUTING.md)).
-- **Security reports**: acknowledged within 14 days, a fix targeted within 90
-  days depending on severity (see [Security Policy](SECURITY.md)).
+- **Security reports**: best-effort, not a guarantee — we aim to acknowledge
+  within 14 days, with a fix targeted within 90 days depending on severity
+  (see [Security Policy](SECURITY.md)).
 - **Issues** without a pull request attached get triaged as time allows —
   there is no guaranteed turnaround.
 
