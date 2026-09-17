@@ -169,12 +169,19 @@ adapters and their rules live in `docs/ai-agents.md`.
     hidden label is invisible, not absent (same bug class as #12).
 20. **Settings migrations run before normalization drops unknown keys, and
     stay.** `normalizeSettings` (`lib/settingsUtils.ts`) keeps only known
-    keys, so a removed or renamed setting is silently deleted unless its
+    keys and validates the shape of every nested value (a `labelDisplay`
+    missing `order`, for example, is dropped rather than kept partial), so a
+    removed/renamed setting or a malformed value is silently gone unless its
     migration runs first: `migrateLegacyDefaultFilters` at the top of
-    `normalizeSettings` (server read path) and inside
-    `migratePersistedSettings` (zustand `persist` migrate — the localStorage
-    path, never normalized); in the pre-v2 branch also before
-    `diffFromDefaults`, which only walks `DEFAULT_SETTINGS` keys. Server rows are never rewritten, so a legacy-key
+    `normalizeSettings` itself, which both the server read path and
+    `migratePersistedSettings`'s pre-v2 branch (zustand `persist` migrate —
+    the localStorage path) call before `diffFromDefaults`, which only walks
+    `DEFAULT_SETTINGS` keys and does no shape validation of its own. Never
+    diff a raw persisted blob directly — always through `normalizeSettings`
+    first, or a malformed nested field survives into `overrides` and crashes
+    whatever reads it unconditionally (`partitionLabelsForDisplay`'s
+    `config.order.indexOf(...)` on a `labelDisplay` without `order`,
+    `.agents/lessons.md`). Server rows are never rewritten, so a legacy-key
     migration stays while rows from older releases may exist.
 
 ## Workflow Rules — always follow

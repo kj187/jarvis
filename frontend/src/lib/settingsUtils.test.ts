@@ -409,4 +409,16 @@ describe('migratePersistedSettings', () => {
     expect(result.userMirror).toBeNull()
     expect(JSON.stringify(result)).not.toContain('defaultFilters')
   })
+
+  it('drops a malformed labelDisplay in a v0 blob instead of carrying it into overrides', () => {
+    // A labelDisplay missing `order` (e.g. hand-edited localStorage, or a
+    // pre-v2 blob nobody ever validated) must not survive the migration —
+    // partitionLabelsForDisplay reads config.order.indexOf() unconditionally,
+    // so an override without `order` crashes every alert render.
+    const v0State = { ...DEFAULT_SETTINGS, labelDisplay: { hidden: ['test_suite'] } }
+    const result = migratePersistedSettings(v0State, 0) as Record<string, unknown>
+    const overrides = result.overrides as Record<string, unknown>
+    expect(overrides.labelDisplay).toBeUndefined()
+    expect(result.labelDisplay).toEqual(DEFAULT_SETTINGS.labelDisplay)
+  })
 })

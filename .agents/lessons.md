@@ -9,7 +9,31 @@ instead of duplicating.
 
 ---
 
-## A second compose file shares the first one's project — and `down -v` its volumes
+## `migratePersistedSettings`'s pre-v2 branch diffed raw localStorage data directly — a malformed `labelDisplay` crashed every render
+
+**Symptom**: A `jarvis-user-settings` localStorage blob with a `labelDisplay`
+missing `order` (hand-edited, or written by some other bug) produced a blank
+page — `partitionLabelsForDisplay` (`lib/alertUtils.ts`) calls
+`config.order.indexOf(...)` unconditionally, so `order: undefined` throws on
+the very first alert card.
+**Cause**: `migratePersistedSettings`'s `version < 2` branch called
+`diffFromDefaults(migrateLegacyDefaultFilters(state))` directly on the raw
+persisted object — `diffFromDefaults` only compares JSON against
+`DEFAULT_SETTINGS`, it does no shape validation. `normalizeSettings`, which
+*does* validate every field's shape (including `labelDisplay`), was never in
+this path at all; the code comment even said the localStorage path was
+"never normalized."
+**Rule**: Never diff or spread a raw persisted/user-supplied settings blob
+directly — always run it through `normalizeSettings` first, even in a
+migration step that predates the current schema version. Fixed by replacing
+the direct `diffFromDefaults(migrateLegacyDefaultFilters(state))` call with
+`diffFromDefaults(normalizeSettings(state))` (`normalizeSettings` already
+calls `migrateLegacyDefaultFilters` as its first step, so nothing is lost).
+See `AGENTS.md` invariant #20.
+
+---
+
+
 
 **Symptom**: `make demo-reset` (`podman compose -f compose.demo.yml down -v`)
 tried to remove `jarvis_jarvis_gomodcache` and `jarvis_jarvis_pnpmstore` — the
