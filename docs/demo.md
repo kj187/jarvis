@@ -123,16 +123,20 @@ It also means **resolving is not cleaning up**. Read on.
 ## Clean up
 
 ```bash
-make demo-reset   # wipe everything and start over with an empty Jarvis
-make demo-down    # stop the containers, keep the data
+make demo-down    # remove everything — containers and the demo's data volume
+make demo-reset   # wipe everything, then start it fresh again
 ```
 
-`make demo-reset` removes both containers and the demo's data volume, then
-starts them again. That is a genuinely empty slate: no active alerts, no
-resolved alerts, no history. Run `make demo-seed` again for a fresh demo.
+`make demo-down` is the single command promised at the top of this page: both
+containers and the demo's data volume are gone, nothing left running, nothing
+left behind. `make demo-reset` does the same wipe but immediately starts the
+stack again with an empty Jarvis — no active alerts, no resolved alerts, no
+history — so `make demo-seed` gives you a fresh demo without re-cloning
+anything.
 
 The demo stack has its own compose project (`jarvis-demo`) and its own volume,
-so a reset cannot touch the development stack's data.
+so either command is safe to run without touching the development stack's
+data.
 
 **If you run the fixtures against an instance you actually use, this is what
 you need to know:**

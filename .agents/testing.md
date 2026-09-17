@@ -101,7 +101,7 @@ make demo-up                       # Jarvis :8080 + Alertmanager :9093
 make demo-seed                     # fire the 18 demo alerts (--profile demo)
 make demo-resolve                  # resolve them — they move to the Resolved view, history stays
 make demo-reset                    # down -v + up: empty Jarvis, repeatable demo
-make demo-down                     # stop, keep the volume
+make demo-down                     # down -v: containers and the volume both gone
 ```
 
 ---

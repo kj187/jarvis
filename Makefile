@@ -96,8 +96,8 @@ demo-reset: ## Wipe the demo stack completely (alerts + Jarvis history) and star
 	$(DEMO_ENV) $(COMPOSE_DEMO) up -d
 	@echo "Demo reset. Next: make demo-seed"
 
-demo-down: ## Stop the demo stack, keep its data (use demo-reset to wipe)
-	$(DEMO_ENV) $(COMPOSE_DEMO) down
+demo-down: ## Remove the demo stack completely — containers and its data volume
+	$(DEMO_ENV) $(COMPOSE_DEMO) down -v
 
 # ── Tests ──────────────────────────────────────────────────────────────────────
 
