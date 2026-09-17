@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { ChartPie, Maximize2, Search, X, Siren, BellOff, CheckCircle2 } from 'lucide-react'
+import { useQueryClient } from '@tanstack/react-query'
+import { ChartPie, Loader2, Maximize2, Search, X, Siren, BellOff, CheckCircle2 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { ViewToggle } from './ViewToggle'
 import { AlertsOverviewModal } from './AlertsOverviewModal'
@@ -105,12 +106,6 @@ export function AlertsPage() {
   useURLState()
 
   const providerInfo = useAuthStore((s) => s.providerInfo)
-
-  const { data: liveAlerts = [], isLoading: liveLoading } = useAlerts()
-  const { data: resolvedAlerts = [], isLoading: resolvedLoading } = useAlerts({ state: 'resolved' })
-
-  const { data: silences = [] } = useSilences()
-
   const {
     viewMode,
     filters,
@@ -127,6 +122,26 @@ export function AlertsPage() {
   const isResolvedMode = filters.state === 'resolved'
   const isSuppressedMode = filters.state === 'suppressed'
   const isActiveMode = !isResolvedMode && !isSuppressedMode
+
+  const { data: liveAlerts = [], isLoading: liveLoading } = useAlerts()
+  const resolvedQuery = useAlerts({ state: 'resolved' }, { enabled: isResolvedMode })
+  const {
+    data: resolvedAlerts = [],
+    isLoading: resolvedLoading,
+    isError: resolvedError,
+    refetch: retryResolved,
+  } = resolvedQuery
+  const { data: silences = [] } = useSilences()
+  const queryClient = useQueryClient()
+  const wasResolvedMode = useRef(isResolvedMode)
+
+  useEffect(() => {
+    if (wasResolvedMode.current && !isResolvedMode) {
+      void queryClient.cancelQueries({ queryKey: ['alerts', { state: 'resolved' }], exact: true })
+    }
+    wasResolvedMode.current = isResolvedMode
+  }, [isResolvedMode, queryClient])
+
   const alerts = isResolvedMode ? resolvedAlerts : liveAlerts
   const isLoading = isResolvedMode ? resolvedLoading : liveLoading
 
@@ -339,8 +354,26 @@ export function AlertsPage() {
       )}
 
       {/* Content */}
-      {isLoading ? (
-        <div className="px-4 text-sm text-muted-foreground">Loading…</div>
+      {isResolvedMode && resolvedError && resolvedAlerts.length === 0 ? (
+        <div className="flex items-center gap-3 px-4 text-sm text-destructive" role="alert">
+          <span>Failed to load resolved alerts.</span>
+          <button
+            type="button"
+            className="cursor-pointer rounded-md border border-border px-2 py-1 text-xs text-foreground hover:bg-accent"
+            onClick={() => void retryResolved()}
+          >
+            Retry
+          </button>
+        </div>
+      ) : isLoading ? (
+        <div
+          className="flex items-center gap-2 px-4 text-sm text-muted-foreground"
+          role="status"
+          data-testid={isResolvedMode ? 'resolved-loading' : undefined}
+        >
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Loading…
+        </div>
       ) : showsCardGrid ? (
         <div className="px-4">
           <AlertCardGrid
@@ -362,6 +395,19 @@ export function AlertsPage() {
             resolvedMode={isResolvedMode}
             groupingEnabled={cardGroupingEnabled}
           />
+        </div>
+      )}
+
+      {isResolvedMode && resolvedError && resolvedAlerts.length > 0 && (
+        <div className="flex items-center gap-3 px-4 text-xs text-destructive" role="alert">
+          <span>Could not refresh resolved alerts. Showing the previous result.</span>
+          <button
+            type="button"
+            className="cursor-pointer rounded-md border border-border px-2 py-1 text-foreground hover:bg-accent"
+            onClick={() => void retryResolved()}
+          >
+            Retry
+          </button>
         </div>
       )}
 

@@ -9,11 +9,10 @@ export function useAlertCounts() {
   const setAlertCounts = useUIStore((s) => s.setAlertCounts)
 
   const { data: liveAlerts = [] } = useAlerts()
-  const { data: resolvedAlerts = [] } = useAlerts({ state: 'resolved' })
   const { data: silences = [] } = useSilences()
 
   const byState = useMemo(() => {
-    const counts = { active: 0, suppressed: 0, resolved: 0 }
+    const counts = { active: 0, suppressed: 0 }
     liveAlerts.forEach((alert) => {
       if (filters.search) {
         const needle = filters.search.toLowerCase()
@@ -24,9 +23,8 @@ export function useAlertCounts() {
       const s = getEffectiveAlertState(alert, silences)
       if (s in counts) counts[s as keyof typeof counts]++
     })
-    counts.resolved = resolvedAlerts.length
     return counts
-  }, [liveAlerts, resolvedAlerts.length, silences, filters.search, filters.labelMatchers])
+  }, [liveAlerts, silences, filters.search, filters.labelMatchers])
 
   const silenceCount = useMemo(
     () => filterSilences(
@@ -40,5 +38,5 @@ export function useAlertCounts() {
   useEffect(() => {
     setAlertCounts({ filtered: 0, total: liveAlerts.length, byState, silenceCount })
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [liveAlerts.length, byState.active, byState.suppressed, byState.resolved, silenceCount, setAlertCounts])
+  }, [liveAlerts.length, byState.active, byState.suppressed, silenceCount, setAlertCounts])
 }

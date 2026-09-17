@@ -26,7 +26,10 @@ export function AlertsOverviewModal({ open, onClose }: AlertsOverviewModalProps)
 
   const isResolvedMode = filters.state === 'resolved'
   const { data: liveAlerts = [] } = useAlerts()
-  const { data: resolvedAlerts = [] } = useAlerts({ state: 'resolved' })
+  const { data: resolvedAlerts = [] } = useAlerts(
+    { state: 'resolved' },
+    { enabled: open && isResolvedMode },
+  )
   const { data: silences = [] } = useSilences()
 
   const alerts = isResolvedMode ? resolvedAlerts : liveAlerts

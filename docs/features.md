@@ -171,6 +171,8 @@ Full alert history persisted in the database (SQLite or PostgreSQL — see [docs
 
 The resolved view is Jarvis's history log. Every alert that has ever fired is recorded in the database with its complete lifecycle, and the resolved view shows all alerts that have reached a `resolved` state. This is the core capability that separates Jarvis from in-memory-only UIs.
 
+Jarvis loads this database-backed history only when you open the **Resolved** tab (or open the Alerts Overview while that tab is active). Active and Suppressed views do not refresh the resolved list in the background. The first load shows a progress indicator; if it fails, **Retry** repeats the request, while a failed refresh keeps the last successful result visible.
+
 Alerts are displayed as a flat list sorted by resolution time (newest first). A **page browser** at the top and bottom allows navigation through large result sets. The **per-page selector** (10 / 25 / 50 / 100) is persisted in localStorage so your preference is remembered across sessions.
 
 **What is stored per alert:**

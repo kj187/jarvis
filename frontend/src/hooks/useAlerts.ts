@@ -10,11 +10,15 @@ import {
 import { FALLBACK_REFETCH_INTERVAL_MS } from '@/lib/refetch'
 import type { HeatmapRange } from '@/types'
 
-export function useAlerts(params?: { cluster?: string; severity?: string; state?: string }) {
+export function useAlerts(
+  params?: { cluster?: string; severity?: string; state?: string },
+  options: { enabled?: boolean } = {},
+) {
   return useQuery({
     queryKey: ['alerts', params],
-    queryFn: () => fetchAlerts(params),
+    queryFn: ({ signal }) => fetchAlerts(params, signal),
     refetchInterval: FALLBACK_REFETCH_INTERVAL_MS,
+    enabled: options.enabled,
   })
 }
 

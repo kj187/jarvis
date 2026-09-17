@@ -44,13 +44,13 @@ export function fetchAlerts(params?: {
   cluster?: string
   severity?: string
   state?: string
-}): Promise<EnrichedAlert[]> {
+}, signal?: AbortSignal): Promise<EnrichedAlert[]> {
   const q = new URLSearchParams()
   if (params?.cluster) q.set('cluster', params.cluster)
   if (params?.severity) q.set('severity', params.severity)
   if (params?.state) q.set('state', params.state)
   const qs = q.toString()
-  return request<EnrichedAlert[]>(`/alerts${qs ? `?${qs}` : ''}`)
+  return request<EnrichedAlert[]>(`/alerts${qs ? `?${qs}` : ''}`, { signal })
 }
 
 export function fetchAlertGroups(): Promise<AlertGroup[]> {

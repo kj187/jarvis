@@ -863,11 +863,14 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
 │                        SilenceTemplate, LabelMatcher, AuthUser, ProviderInfo, AdminUser,
 │                        SettingsResponse, HeatmapRange, AlertHeatmapResponse, ...
 ├── hooks/
-│   ├── useAlerts.ts           → useAlerts, useAlertGroups, useAlertHistory, useAlertTimeline,
+│   ├── useAlerts.ts           → useAlerts(params, {enabled}) forwards TanStack's AbortSignal through
+│   │                            api/client.ts so disabled/cancelled resolved reads abort fetch;
+│   │                            useAlertGroups, useAlertHistory, useAlertTimeline,
 │   │                            useAlertStats, useAlertHeatmap (staleTime 60s; enabled unconditionally
 │   │                            — both AlertDetailPanel and every AlertCard entry query it),
 │   │                            useRefreshAlerts
-│   ├── useAlertCounts.ts      → per-state alert counts for nav badges
+│   ├── useAlertCounts.ts      → active/suppressed counts + silence count for nav badges; deliberately
+│   │                            never loads resolved history (there is no resolved badge)
 │   ├── useAlertComments.ts    → useAlertComments(fingerprint, cluster, page), useAddComment,
 │   │                            useDeleteComment (all cluster-scoped); COMMENTS_PAGE_SIZE = 20;
 │   │                            query key `['comments', fingerprint, clusterName, page]`
@@ -1106,6 +1109,9 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │                            promoted from draft to a committed filter chip
     ├── alerts/
     │   ├── AlertsPage.tsx     → useWebSocket, filter/search, card|list + detail panel, fullscreen, pagination;
+    │   │                        resolved-history query is enabled only in resolved mode, is cancelled on
+    │   │                        mode exit, and has explicit initial-loading/error/retry states while keeping
+    │   │                        previous data visible after a failed refetch;
     │   │                        its URL-state writer replaces only alert-owned params and preserves
     │   │                        shell-owned params such as `settings=open`; on first mount, if the URL
     │   │                        has none of `state`/`q`/`matchers`/`alert` (hasAlertViewParams), applies
@@ -1320,7 +1326,8 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │   │                        (ignores the label-matcher filter bar — the point is discovering
     │   │                        what to filter *by*); clicking a value adds an unlocked `=`
     │   │                        matcher via uiStore.addLabelMatcher (no-op if an identical one
-    │   │                        already exists) and closes the modal
+    │   │                        already exists) and closes the modal; its resolved query is enabled only
+    │   │                        while both the modal is open and the resolved state tab is active
     │   ├── LabelChip.tsx      → one fixed size for every chip (`max-w-[200px]`, `text-[10px]`) so a row
     │   │                        of chips reads as one unit; `emphasized` only adds font weight, unrelated
     │   │                        to color. Neutral (`border-border bg-muted text-foreground`) unless this
@@ -1486,7 +1493,7 @@ interface UIStore {
     labelMatchers: LabelMatcher[]
   }
   wsConnected: boolean                         // NOT persisted
-  alertCounts: AlertCounts                      // { filtered, total, byState: { active, suppressed, resolved }, silenceCount }
+  alertCounts: AlertCounts                      // { filtered, total, byState: { active, suppressed }, silenceCount }
 }
 // savedFilterBase: string | null — NOT persisted in jarvis-ui; sessionStorage key
 //   'jarvis-saved-filter-base' (per tab, survives reload). Name of the saved filter the chips were
