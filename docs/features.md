@@ -2,7 +2,7 @@
 
 ## Card View
 
-Alerts grouped by your configured label (severity by default), with inline claim and silence actions.
+Alerts grouped by your configured label (severity by default), with inline silence actions; claiming happens in the detail panel.
 
 ![Card View](assets/feature-card-view.png)
 

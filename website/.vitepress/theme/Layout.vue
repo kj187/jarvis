@@ -2,6 +2,7 @@
 import DefaultTheme from 'vitepress/theme'
 import { useData } from 'vitepress'
 import MeshCanvas from './components/MeshCanvas.vue'
+import HomeScreenshot from './components/HomeScreenshot.vue'
 
 const { frontmatter } = useData()
 </script>
@@ -12,6 +13,12 @@ const { frontmatter } = useData()
       <div v-if="frontmatter.layout === 'home'" class="hero-mesh-backdrop">
         <MeshCanvas mode="owl" />
       </div>
+    </template>
+    <!-- Placed here, not in index.md's Content, because VPHome always
+         renders Content after the feature grid — this slot is the only way
+         to show the screenshot before it (W11g). -->
+    <template #home-hero-after>
+      <HomeScreenshot />
     </template>
   </DefaultTheme.Layout>
 </template>

@@ -118,16 +118,50 @@ so without the badge pass first it mangles nested syntax.
   renders string icons (`v-html`); an object `icon: { svg: … }` is silently
   ignored because object icons go through `VPImage` and expect `src`.
   No emoji.
-- Screenshots of the app are theme-specific, so the home showcase ships both
-  and toggles them with `.light-only` / `.dark-only` (defined in
-  `theme/style.css` — VitePress has no such utility of its own). A screenshot
-  placed on the home page therefore needs a light counterpart in the
-  screenshot suite; `card-view` / `card-view-light` in
+- Screenshots of the app are theme-specific, so the home page ships both and
+  toggles them with `.light-only` / `.dark-only` (defined in `theme/style.css`
+  — VitePress has no such utility of its own). A screenshot placed on the home
+  page therefore needs a light counterpart in the screenshot suite;
+  `card-view` / `card-view-light` in
   `frontend/e2e/screenshots/none/card-view.screenshot.spec.ts` is the pattern.
 - Headings inside hand-written blocks on the home page render a visible `#`:
   VitePress hides heading anchors via `.vp-doc .header-anchor`, and the home
   layout is not `.vp-doc`. `theme/style.css` hides them for `.home-showcase`;
-  a new block needs the same rule.
+  a new block needs the same rule. Further `##` sections of the home page go
+  inside the same `.home-showcase` wrapper; `.home-showcase h2:not(:first-child)`
+  gives them their top spacing.
+- **`theme/components/HomeScreenshot.vue`** renders the card-view screenshot
+  (same theme toggling as above) via the `home-hero-after` slot in
+  `Layout.vue`, so it appears between the hero and the feature grid. This is
+  the only way to place anything there: `VPHome` always renders the page's
+  own Content (the `<div class="home-showcase">` block) *after* the feature
+  grid, regardless of where it sits in `index.md`'s source — a screenshot
+  meant to show "before the feature grid" cannot be placed there in markdown.
+  It imports the PNGs directly (`../../../content/assets/...`), which exist
+  once `pnpm run sync` has run (both `dev` and `build` do this first).
+- The feature grid's first two entries in `index.md`'s `features:` list are
+  rendered larger and spanning two of four grid columns each — the remaining
+  four stay compact, one column each — via `.VPHomeFeatures .items` overrides
+  in `theme/style.css`, keyed on `:nth-child(-n + 2)`. This is deliberate,
+  unequal visual weight (W11g: "let the two or three strongest capabilities
+  dominate"), not a bug — **the two strongest differentiators must stay
+  first** in the YAML list, or the CSS promotes the wrong boxes. Only applies
+  at 768px and up; below that, the grid falls back to VitePress's own
+  single/two-column stack untouched.
+- **Display face:** Sora, self-hosted from `theme/fonts/sora-variable-latin.woff2`
+  (SIL OFL 1.1, license text alongside it in `theme/fonts/OFL.txt`) — decision 9
+  (W11h) approved a display face for the hero and section headings only, with
+  Inter staying the sole face everywhere else; no Google Fonts origin (strict
+  CSP, `docs/security.md`). One file backs both `@font-face` weight
+  declarations (600 and 700) in `theme/style.css` — it is the variable font
+  Google Fonts itself serves, and the browser picks the requested weight off
+  its own `wght` axis, same as Google's own generated CSS does; there is no
+  separate 700-only file to fetch. Applied via `--vp-font-family-display` to
+  `.VPHero .name`/`.text`, `.home-showcase h2`, and `.VPFeature .title` (the
+  feature-grid box titles) — deliberately the same three targets shown in the
+  maintainer-approved font trial, not "every heading everywhere". A different
+  display face swaps the two `src: url(...)` lines and the font files; it does
+  not need new selectors.
 
 ---
 
