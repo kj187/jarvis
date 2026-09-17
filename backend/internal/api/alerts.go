@@ -1,12 +1,19 @@
 package api
 
 import (
+	"bufio"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"regexp"
 	"sort"
 	"strconv"
 	"time"
 
+	"github.com/kj187/jarvis/backend/internal/history"
 	"github.com/kj187/jarvis/backend/internal/models"
 	"github.com/labstack/echo/v4"
 )
@@ -20,6 +27,12 @@ var heatmapRanges = map[string]time.Duration{
 
 // Alertmanager generates 16-character lowercase hex fingerprints (FNV-1a hash).
 var fingerprintRegex = regexp.MustCompile(`^[a-f0-9]{16}$`)
+
+const (
+	resolvedReadTimeout       = 10 * time.Second
+	resolvedStreamBufferSize  = 32 * 1024
+	resolvedStreamContentType = "application/json; charset=UTF-8"
+)
 
 func validateFingerprint(fp string) bool {
 	return fingerprintRegex.MatchString(fp)
@@ -50,24 +63,7 @@ func (s *Server) getAlerts(c echo.Context) error {
 	// Resolved alerts are served from the persistent DB so they survive beyond
 	// the in-memory resolved buffer's 20-minute window.
 	if stateFilter == "resolved" {
-		dbAlerts, err := s.store.GetAllResolved()
-		if err != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, "failed to get resolved alerts").SetInternal(err)
-		}
-		if clusterFilter == "" && severityFilter == "" {
-			return c.JSON(http.StatusOK, dbAlerts)
-		}
-		filtered := make([]models.EnrichedAlert, 0)
-		for _, a := range dbAlerts {
-			if clusterFilter != "" && a.ClusterName != clusterFilter {
-				continue
-			}
-			if severityFilter != "" && a.Labels["severity"] != severityFilter {
-				continue
-			}
-			filtered = append(filtered, a)
-		}
-		return c.JSON(http.StatusOK, filtered)
+		return s.streamResolvedAlerts(c, clusterFilter, severityFilter)
 	}
 
 	// Active / suppressed alerts come from the in-memory store.
@@ -89,6 +85,65 @@ func (s *Server) getAlerts(c echo.Context) error {
 		filtered = append(filtered, a)
 	}
 	return c.JSON(http.StatusOK, filtered)
+}
+
+func (s *Server) streamResolvedAlerts(c echo.Context, clusterFilter, severityFilter string) error {
+	ctx, cancel := context.WithTimeout(c.Request().Context(), resolvedReadTimeout)
+	defer cancel()
+
+	response := c.Response()
+	buffered := bufio.NewWriterSize(response, resolvedStreamBufferSize)
+	wroteAlert := false
+	err := s.store.VisitResolved(ctx, history.ResolvedReadQuery{Cluster: clusterFilter}, func(alert models.EnrichedAlert) error {
+		if severityFilter != "" && alert.Labels["severity"] != severityFilter {
+			return nil
+		}
+		data, err := json.Marshal(alert)
+		if err != nil {
+			return fmt.Errorf("marshal resolved alert: %w", err)
+		}
+		if !wroteAlert {
+			response.Header().Set(echo.HeaderContentType, resolvedStreamContentType)
+			if _, err := buffered.WriteString("["); err != nil {
+				return fmt.Errorf("write resolved stream start: %w", err)
+			}
+			wroteAlert = true
+		} else if err := buffered.WriteByte(','); err != nil {
+			return fmt.Errorf("write resolved stream separator: %w", err)
+		}
+		if _, err := buffered.Write(data); err != nil {
+			return fmt.Errorf("write resolved alert: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || response.Committed {
+			slog.Error("resolved alert stream aborted", slog.String("err", err.Error()))
+			panic(http.ErrAbortHandler)
+		}
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get resolved alerts").SetInternal(err)
+	}
+
+	response.Header().Set(echo.HeaderContentType, resolvedStreamContentType)
+	if !wroteAlert {
+		if _, err := buffered.WriteString("[]\n"); err != nil {
+			return abortResolvedStream(response, err)
+		}
+	} else if _, err := buffered.WriteString("]\n"); err != nil {
+		return abortResolvedStream(response, err)
+	}
+	if err := buffered.Flush(); err != nil {
+		return abortResolvedStream(response, err)
+	}
+	return nil
+}
+
+func abortResolvedStream(response *echo.Response, err error) error {
+	if response.Committed {
+		slog.Error("resolved alert stream write failed", slog.String("err", err.Error()))
+		panic(http.ErrAbortHandler)
+	}
+	return echo.NewHTTPError(http.StatusInternalServerError, "failed to get resolved alerts").SetInternal(err)
 }
 
 // GET /api/v1/alerts/groups

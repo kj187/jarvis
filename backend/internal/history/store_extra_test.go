@@ -2,6 +2,7 @@ package history
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -452,5 +453,82 @@ func TestGetAllResolved_NullAnnotations(t *testing.T) {
 	}
 	if alerts[0].Annotations == nil {
 		t.Error("Annotations should be non-nil empty map, got nil")
+	}
+}
+
+func TestVisitResolved_FiltersAndStopsOnCallbackError(t *testing.T) {
+	rec, _ := newTestRecorder(t)
+	now := time.Now().UTC().Truncate(time.Second)
+	for i, tc := range []struct {
+		fingerprint string
+		cluster     string
+		severity    string
+	}{
+		{"0000000000000001", "cluster-a", "critical"},
+		{"0000000000000002", "cluster-b", "warning"},
+	} {
+		if err := rec.store.UpsertFingerprint(tc.fingerprint, "VisitResolved", tc.cluster, map[string]string{
+			"alertname": "VisitResolved", "severity": tc.severity,
+		}); err != nil {
+			t.Fatalf("UpsertFingerprint: %v", err)
+		}
+		startedAt := now.Add(time.Duration(i) * time.Second)
+		if _, _, err := rec.store.RecordStatusChange(tc.fingerprint, tc.cluster, "http://am", "firing", startedAt, nil); err != nil {
+			t.Fatalf("RecordStatusChange: %v", err)
+		}
+		if err := rec.store.RecordResolvedForCluster(tc.fingerprint, tc.cluster, now.Add(time.Duration(i+1)*time.Second)); err != nil {
+			t.Fatalf("RecordResolvedForCluster: %v", err)
+		}
+	}
+
+	wantErr := errors.New("stop visiting")
+	visited := 0
+	err := rec.store.VisitResolved(context.Background(), ResolvedReadQuery{Cluster: "cluster-a"}, func(alert models.EnrichedAlert) error {
+		visited++
+		if alert.ClusterName != "cluster-a" {
+			t.Fatalf("cluster = %q, want cluster-a", alert.ClusterName)
+		}
+		return wantErr
+	})
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("VisitResolved error = %v, want %v", err, wantErr)
+	}
+	if visited != 1 {
+		t.Fatalf("visited = %d, want 1", visited)
+	}
+	reuseCtx, reuseCancel := context.WithTimeout(context.Background(), time.Second)
+	defer reuseCancel()
+	if _, err := rec.store.exec(reuseCtx, `SELECT 1`); err != nil {
+		t.Fatalf("reuse SQLite connection after cancellation: %v", err)
+	}
+}
+
+func TestVisitResolved_ContextCancellationStopsIteration(t *testing.T) {
+	rec, _ := newTestRecorder(t)
+	now := time.Now().UTC()
+	for _, fp := range []string{"0000000000000011", "0000000000000012"} {
+		if err := rec.store.UpsertFingerprint(fp, "CancelResolved", "cluster-a", map[string]string{"alertname": "CancelResolved"}); err != nil {
+			t.Fatalf("UpsertFingerprint: %v", err)
+		}
+		if _, _, err := rec.store.RecordStatusChange(fp, "cluster-a", "http://am", "firing", now, nil); err != nil {
+			t.Fatalf("RecordStatusChange: %v", err)
+		}
+		if err := rec.store.RecordResolvedForCluster(fp, "cluster-a", now); err != nil {
+			t.Fatalf("RecordResolvedForCluster: %v", err)
+		}
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	visited := 0
+	err := rec.store.VisitResolved(ctx, ResolvedReadQuery{}, func(models.EnrichedAlert) error {
+		visited++
+		cancel()
+		return nil
+	})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("VisitResolved error = %v, want context.Canceled", err)
+	}
+	if visited != 1 {
+		t.Fatalf("visited = %d, want 1", visited)
 	}
 }

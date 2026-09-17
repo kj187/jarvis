@@ -1309,42 +1309,21 @@ func (s *Store) getLastEventForClusterOn(q queryer, ctx context.Context, fingerp
 	return &e, nil
 }
 
-// scanResolvedAlerts reads all rows from a resolved-alert query into EnrichedAlert values.
-// Expected columns: fingerprint, cluster_name, alertmanager_url, starts_at, recorded_at, annotations, labels.
-func scanResolvedAlerts(rows *sql.Rows) ([]models.EnrichedAlert, error) {
-	alerts := make([]models.EnrichedAlert, 0)
-	for rows.Next() {
-		alert, err := scanResolvedAlert(rows)
-		if err != nil {
-			return nil, err
-		}
-		alerts = append(alerts, alert)
-	}
-	return alerts, rows.Err()
-}
-
 // GetAllResolved returns one EnrichedAlert per fingerprint for every alert whose
 // most recent event is 'resolved'. Alerts that have since re-fired are excluded
 // because their latest event will be 'firing' or 'suppressed'.
+// It is retained for tests and benchmarks; production HTTP reads stream through
+// VisitResolved instead of materializing the complete history.
 func (s *Store) GetAllResolved() ([]models.EnrichedAlert, error) {
-	rows, err := s.query(context.Background(), `
-		WITH latest AS (
-			SELECT fingerprint, cluster_name, MAX(id) AS max_id
-			FROM alert_events
-			GROUP BY fingerprint, cluster_name
-		)
-		SELECT e.fingerprint, e.cluster_name, e.alertmanager_url, e.starts_at, e.recorded_at, e.annotations, f.labels
-		FROM alert_events e
-		JOIN latest ON e.id = latest.max_id
-		JOIN alert_fingerprints f ON f.fingerprint = e.fingerprint
-		WHERE e.status = 'resolved'
-		ORDER BY e.recorded_at DESC
-	`)
+	alerts := make([]models.EnrichedAlert, 0)
+	err := s.VisitResolved(context.Background(), ResolvedReadQuery{}, func(alert models.EnrichedAlert) error {
+		alerts = append(alerts, alert)
+		return nil
+	})
 	if err != nil {
 		return nil, fmt.Errorf("get all resolved: %w", err)
 	}
-	defer func() { _ = rows.Close() }()
-	return scanResolvedAlerts(rows)
+	return alerts, nil
 }
 
 // GetRecentResolved returns one EnrichedAlert per fingerprint for all alerts

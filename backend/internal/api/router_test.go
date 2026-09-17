@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"database/sql"
 	"embed"
 	"io"
 	"net/http"
@@ -22,6 +23,11 @@ import (
 )
 
 func newTestRouter(t *testing.T, origins []string) *httptest.Server {
+	srv, _ := newTestRouterWithDB(t, origins)
+	return srv
+}
+
+func newTestRouterWithDB(t *testing.T, origins []string) (*httptest.Server, *sql.DB) {
 	t.Helper()
 	database, dialect, err := idb.Open(":memory:")
 	if err != nil {
@@ -41,7 +47,7 @@ func newTestRouter(t *testing.T, origins []string) *httptest.Server {
 	cfg := &config.Config{AllowedOrigins: origins}
 
 	e := NewRouter(alertStore, history.NewSilenceStore(), store, hub, registry, cfg, embed.FS{}, &fakeTriggerer{}, auth.NoneProvider{}, userStore, settings.NewStore(database, dialect), metrics.New("test"), fanout.NoopFanout{})
-	return httptest.NewServer(e)
+	return httptest.NewServer(e), database
 }
 
 // TestRoutes verifies that all registered routes return 200.

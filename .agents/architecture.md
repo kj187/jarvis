@@ -333,7 +333,7 @@ table scan per sweep — confirmed via `EXPLAIN (ANALYZE, BUFFERS)` against a
 seeded local PostgreSQL instance (bitmap/plain index scan afterwards). A
 composite `(fingerprint, cluster_name, id)` index was also evaluated for the
 "latest event per (fingerprint, cluster_name)" CTE in
-`GetAllResolved`/`visitResolved` (`internal/history/store.go`,
+`GetAllResolved`/`VisitResolved` (`internal/history/store.go`,
 `store_resolved.go`) but deliberately **not** added: that CTE aggregates over
 the unfiltered whole `alert_events` table, and PostgreSQL never chose an
 index for it even at 660k rows (a full-table `MAX(id) GROUP BY` has to touch
@@ -396,6 +396,13 @@ GET    /api/v1/alerts                            full_protect?  → []EnrichedAl
 #        resolvedBuffer is map[fingerprint+cluster]resolvedEntry. Each entry expires
 #        exactly 20 minutes after its episode's EndsAt. Recorder owns one 1s sweeper;
 #        active alerts win duplicate keys and repeated snapshot rebuilds do not extend TTL.
+#        state=resolved is the legacy persistent-history read: Store.VisitResolved scans
+#        latest resolved episodes row-by-row (recorded_at DESC, id DESC), and the handler
+#        streams one JSON array element at a time through a 32 KiB buffer under a 10s
+#        request/DB timeout. It never materializes the full DB result; cluster is pushed
+#        into SQL, severity is filtered during iteration. A failure after HTTP commit
+#        aborts the connection, so clients never receive a closed, apparently valid
+#        partial array. GetAllResolved remains only as a test/benchmark adapter.
 
 # ── Alert details (history store / DB) ───────────────────────────────────────
 GET    /api/v1/alerts/:fingerprint/history       full_protect?  → { events: AlertEvent[], total }  ?limit= ?offset= ?cluster=

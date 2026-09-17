@@ -18,12 +18,16 @@ type ResolvedReadQuery struct {
 	Through     time.Time
 }
 
-func scanResolvedAlert(rows *sql.Rows) (models.EnrichedAlert, error) {
+type resolvedAlertScanner interface {
+	Scan(...any) error
+}
+
+func scanResolvedAlert(scanner resolvedAlertScanner) (models.EnrichedAlert, error) {
 	var alert models.EnrichedAlert
 	var labelsJSON string
 	var annotationsJSON sql.NullString
 	var resolvedAt time.Time
-	if err := rows.Scan(
+	if err := scanner.Scan(
 		&alert.Fingerprint, &alert.ClusterName, &alert.AlertmanagerURL,
 		&alert.StartsAt, &resolvedAt, &annotationsJSON, &labelsJSON,
 	); err != nil {
@@ -54,7 +58,10 @@ func scanResolvedAlert(rows *sql.Rows) (models.EnrichedAlert, error) {
 	return alert, nil
 }
 
-func (s *Store) visitResolved(ctx context.Context, query ResolvedReadQuery, visit func(models.EnrichedAlert) error) error {
+// VisitResolved visits the latest resolved alert episodes one row at a time.
+// The callback must not issue another query through Store: SQLite deliberately
+// has a single database connection, which remains occupied until rows is closed.
+func (s *Store) VisitResolved(ctx context.Context, query ResolvedReadQuery, visit func(models.EnrichedAlert) error) error {
 	where := "WHERE e.status = 'resolved'"
 	args := make([]interface{}, 0, 4)
 	if query.Cluster != "" {
@@ -92,6 +99,9 @@ func (s *Store) visitResolved(ctx context.Context, query ResolvedReadQuery, visi
 	}
 	defer func() { _ = rows.Close() }()
 	for rows.Next() {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		alert, err := scanResolvedAlert(rows)
 		if err != nil {
 			return err
@@ -99,6 +109,9 @@ func (s *Store) visitResolved(ctx context.Context, query ResolvedReadQuery, visi
 		if err := visit(alert); err != nil {
 			return err
 		}
+	}
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 	return rows.Err()
 }
@@ -109,7 +122,7 @@ func (s *Store) VisitRecentResolved(
 	window time.Duration,
 	visit func(models.EnrichedAlert) error,
 ) error {
-	return s.visitResolved(ctx, ResolvedReadQuery{
+	return s.VisitResolved(ctx, ResolvedReadQuery{
 		After:   now.UTC().Add(-window),
 		Through: now.UTC(),
 	}, visit)

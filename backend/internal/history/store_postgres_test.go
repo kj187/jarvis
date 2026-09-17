@@ -2,6 +2,7 @@ package history
 
 import (
 	"context"
+	"errors"
 	"os"
 	"testing"
 	"time"
@@ -10,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 
 	idb "github.com/kj187/jarvis/backend/internal/db"
+	"github.com/kj187/jarvis/backend/internal/models"
 )
 
 // postgresTestDSN returns the PostgreSQL test DSN from JARVIS_TEST_POSTGRES_DSN,
@@ -91,4 +93,27 @@ func waitForNotification(t *testing.T, conn *pgx.Conn, timeout time.Duration) *p
 		t.Fatalf("WaitForNotification: %v", err)
 	}
 	return n
+}
+
+func TestVisitResolved_PostgresCancellationReleasesConnection(t *testing.T) {
+	store := newTestPostgresStores(t, 1)[0]
+	store.db.SetMaxOpenConns(1)
+	now := time.Now().UTC()
+	insertResolvedTestEvent(t, store, "pg-cancel-1", "cluster-a", "resolved", now)
+	insertResolvedTestEvent(t, store, "pg-cancel-2", "cluster-a", "resolved", now.Add(-time.Second))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	err := store.VisitResolved(ctx, ResolvedReadQuery{}, func(models.EnrichedAlert) error {
+		cancel()
+		return nil
+	})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("VisitResolved error = %v, want context.Canceled", err)
+	}
+
+	reuseCtx, reuseCancel := context.WithTimeout(context.Background(), time.Second)
+	defer reuseCancel()
+	if _, err := store.exec(reuseCtx, `SELECT 1`); err != nil {
+		t.Fatalf("reuse PostgreSQL connection after cancellation: %v", err)
+	}
 }

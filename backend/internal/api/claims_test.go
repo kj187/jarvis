@@ -9,16 +9,8 @@ import (
 	"testing"
 
 	"github.com/kj187/jarvis/backend/internal/auth"
-	"github.com/kj187/jarvis/backend/internal/cluster"
-	"github.com/kj187/jarvis/backend/internal/config"
-	idb "github.com/kj187/jarvis/backend/internal/db"
-	"github.com/kj187/jarvis/backend/internal/fanout"
 	"github.com/kj187/jarvis/backend/internal/history"
-	"github.com/kj187/jarvis/backend/internal/metrics"
 	"github.com/kj187/jarvis/backend/internal/models"
-	"github.com/kj187/jarvis/backend/internal/settings"
-	"github.com/kj187/jarvis/backend/internal/users"
-	"github.com/kj187/jarvis/backend/internal/ws"
 	"github.com/labstack/echo/v4"
 )
 
@@ -26,25 +18,8 @@ import (
 // that need to seed fingerprints (FK constraint for claims/comments).
 func newTestServerFull(t *testing.T) (*Server, *history.AlertStore, *history.Store) {
 	t.Helper()
-	database, dialect, err := idb.Open(":memory:")
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	if err := idb.Migrate(database, dialect); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
-	t.Cleanup(func() { _ = database.Close() })
-
-	alertStore := &history.AlertStore{}
-	store := history.NewStore(database, dialect)
-	userStore := users.NewStore(database, dialect)
-	settingsStore := settings.NewStore(database, dialect)
-	hub := ws.NewHub(nil, nil, metrics.New("test"))
-	go hub.Run()
-	registry := cluster.NewRegistry(nil)
-	cfg := &config.Config{}
-
-	return NewServer(alertStore, history.NewSilenceStore(), store, hub, registry, cfg, nil, auth.NoneProvider{}, userStore, settingsStore, fanout.NoopFanout{}), alertStore, store
+	srv, alertStore, store, _ := newTestServerFixture(t)
+	return srv, alertStore, store
 }
 
 // seedFP inserts a fingerprint row so FK constraints in claims/comments pass.
