@@ -154,6 +154,98 @@ func TestMigrate_TablesExist(t *testing.T) {
 	}
 }
 
+// TestMigrate_SQLite_IndexesExist guards four retention-sweep indices found
+// by reviewing store_retention.go against this schema: DeleteCommentsBefore,
+// DeleteReleasedClaimsBefore, DeleteSilenceEventsBefore and
+// DeleteOrphanFingerprintsBefore each filtered a column with no index at all,
+// or one whose leading column didn't match the filter — confirmed via
+// EXPLAIN (ANALYZE, BUFFERS) against a local PostgreSQL instance seeded with
+// a realistic retention-sweep shape (most rows recent, a small aged tail):
+// each went from a full sequential scan to a bitmap/plain index scan.
+//
+// The "latest event per (fingerprint, cluster_name)" CTE in
+// GetAllResolved/visitResolved was also reviewed as a candidate, but ruled
+// out: that CTE aggregates over the unfiltered whole alert_events table
+// (MAX(id) GROUP BY fingerprint, cluster_name, no WHERE), and EXPLAIN ANALYZE
+// at up to 660k rows showed PostgreSQL never chooses an index for it — a
+// full-table aggregate has to touch every row either way, and a seq scan +
+// hash aggregate reads that cheaper than a b-tree of the same size. Adding
+// one there would be pure write overhead on every alert_events insert with
+// no read benefit. The actual fix is pushing the fingerprint/cluster/After
+// predicates into the CTE itself (safe; the Through upper bound must stay
+// outer or it breaks the "excludes re-fired alerts" guarantee) — a query-
+// semantics change against a tested critical invariant, not an index, and
+// deliberately left for a separate, carefully tested change.
+func TestMigrate_SQLite_IndexesExist(t *testing.T) {
+	database, _, err := Open(":memory:")
+	if err != nil {
+		t.Fatalf("Open() error: %v", err)
+	}
+	defer func() { _ = database.Close() }()
+
+	if err := Migrate(database, DialectSQLite); err != nil {
+		t.Fatalf("Migrate() error: %v", err)
+	}
+
+	for _, idx := range []string{
+		"idx_alert_comments_created_at",
+		"idx_alert_claims_released_at",
+		"idx_silence_events_recorded_at",
+		"idx_alert_fingerprints_last_seen_at",
+	} {
+		var count int
+		err := database.QueryRowContext(
+			context.Background(),
+			`SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name=?`, idx,
+		).Scan(&count)
+		if err != nil {
+			t.Fatalf("check index %q: %v", idx, err)
+		}
+		if count != 1 {
+			t.Errorf("index %q not found after Migrate()", idx)
+		}
+	}
+}
+
+// TestMigrate_Postgres_IndexesExist is env-gated (JARVIS_TEST_POSTGRES_DSN) —
+// see TestMigrate_SQLite_IndexesExist's doc comment for why these indices
+// exist.
+func TestMigrate_Postgres_IndexesExist(t *testing.T) {
+	dsn := os.Getenv("JARVIS_TEST_POSTGRES_DSN")
+	if dsn == "" {
+		t.Skip("JARVIS_TEST_POSTGRES_DSN not set — skipping PostgreSQL-backed test")
+	}
+
+	database, dialect, err := openPostgres(dsn, defaultPoolConfig())
+	if err != nil {
+		t.Fatalf("openPostgres() error: %v", err)
+	}
+	defer func() { _ = database.Close() }()
+
+	if err := Migrate(database, dialect); err != nil {
+		t.Fatalf("Migrate() error: %v", err)
+	}
+
+	for _, idx := range []string{
+		"idx_alert_comments_created_at",
+		"idx_alert_claims_released_at",
+		"idx_silence_events_recorded_at",
+		"idx_alert_fingerprints_last_seen_at",
+	} {
+		var count int
+		err := database.QueryRowContext(
+			context.Background(),
+			`SELECT COUNT(*) FROM pg_indexes WHERE indexname = $1`, idx,
+		).Scan(&count)
+		if err != nil {
+			t.Fatalf("check index %q: %v", idx, err)
+		}
+		if count != 1 {
+			t.Errorf("index %q not found after Migrate() on PostgreSQL", idx)
+		}
+	}
+}
+
 // TestMigrate_Postgres_PollSnapshotsTableExists is env-gated (JARVIS_TEST_POSTGRES_DSN):
 // poll_snapshots is PostgreSQL-only (docs/postgres-ha.md D3) — never
 // created on SQLite.

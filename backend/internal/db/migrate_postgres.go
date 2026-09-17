@@ -83,9 +83,17 @@ func migratePostgres(database *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_alert_events_starts_at   ON alert_events(starts_at DESC)`,
 		`CREATE INDEX IF NOT EXISTS idx_alert_events_fingerprint_recorded ON alert_events(fingerprint, recorded_at DESC)`,
 		`CREATE INDEX IF NOT EXISTS idx_alert_comments_fingerprint ON alert_comments(fingerprint)`,
+		// DeleteCommentsBefore filters solely by created_at (store_retention.go).
+		`CREATE INDEX IF NOT EXISTS idx_alert_comments_created_at ON alert_comments(created_at)`,
 		`CREATE INDEX IF NOT EXISTS idx_alert_claims_fingerprint ON alert_claims(fingerprint)`,
 		`CREATE INDEX IF NOT EXISTS idx_alert_claims_active      ON alert_claims(fingerprint, cluster_name) WHERE released_at IS NULL`,
+		// DeleteReleasedClaimsBefore filters released_at IS NOT NULL AND < cutoff —
+		// the opposite condition of idx_alert_claims_active above.
+		`CREATE INDEX IF NOT EXISTS idx_alert_claims_released_at ON alert_claims(released_at) WHERE released_at IS NOT NULL`,
 		`CREATE INDEX IF NOT EXISTS idx_silence_events_fingerprint ON silence_events(fingerprint, recorded_at DESC)`,
+		// DeleteSilenceEventsBefore filters solely by recorded_at; the index
+		// above leads with fingerprint and doesn't help that scan.
+		`CREATE INDEX IF NOT EXISTS idx_silence_events_recorded_at ON silence_events(recorded_at)`,
 		`CREATE TABLE IF NOT EXISTS users (
 			id             TEXT PRIMARY KEY,
 			username       TEXT NOT NULL UNIQUE,
@@ -99,6 +107,8 @@ func migratePostgres(database *sql.DB) error {
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)`,
 		`CREATE INDEX IF NOT EXISTS idx_users_oidc_sub ON users(oidc_sub)`,
+		// DeleteOrphanFingerprintsBefore filters solely by last_seen_at.
+		`CREATE INDEX IF NOT EXISTS idx_alert_fingerprints_last_seen_at ON alert_fingerprints(last_seen_at)`,
 		// Add user_id column to alert_comments (nullable, for ownership checks by ID).
 		`ALTER TABLE alert_comments ADD COLUMN IF NOT EXISTS user_id TEXT REFERENCES users(id)`,
 		// Store originating alert cluster for each comment (legacy rows default to '').
