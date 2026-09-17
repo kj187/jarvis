@@ -94,6 +94,24 @@ function rewriteLinks(body, sourceFile) {
   return body
 }
 
+/**
+ * Rewrites a theme-aware `<picture>` (the README's `prefers-color-scheme`
+ * sources) into the `.dark-only`/`.light-only` divs used elsewhere on the
+ * site. GitHub picks a `<picture>` source from the OS/browser theme, which is
+ * the right call for a README rendered there — but the website's light/dark
+ * switch is a manual toggle independent of that preference (`appearance:
+ * 'dark'` default in config.mts), so following the OS theme there shows the
+ * wrong image whenever it doesn't match the page's actual toggle state. Must
+ * run after `rewriteLinks` so the captured `srcset`s are already `./assets/…`.
+ */
+function convertThemePictures(body) {
+  const PICTURE_RE =
+    /<picture>\s*<source media="\(prefers-color-scheme: dark\)" srcset="([^"]+)">\s*<source media="\(prefers-color-scheme: light\)" srcset="([^"]+)">\s*<img[^>]*\salt="([^"]*)"[^>]*>\s*<\/picture>/g
+  return body.replace(PICTURE_RE, (m, darkSrc, lightSrc, alt) => {
+    return `<div class="dark-only">\n\n![${alt}](${darkSrc})\n\n</div>\n<div class="light-only">\n\n![${alt}](${lightSrc})\n\n</div>`
+  })
+}
+
 /** True if `body` already starts (after optional blank lines) with a Markdown `# ` heading. */
 function hasMarkdownH1(body) {
   return /^\s*#\s+\S/.test(body)
@@ -108,6 +126,7 @@ function main() {
   for (const page of PAGES) {
     let body = readSource(page.src)
     body = rewriteLinks(body, page.src)
+    body = convertThemePictures(body)
     const needsTitle = page.title || !hasMarkdownH1(body)
     const frontmatter = needsTitle ? `---\ntitle: ${page.title ?? page.route}\n---\n\n` : ''
     fs.writeFileSync(path.join(CONTENT_DIR, `${page.route}.md`), frontmatter + body)

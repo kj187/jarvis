@@ -97,6 +97,16 @@ links, then bare `<img src="…">`, then bare `<source srcset="…">` (the
 README's theme-aware `<picture>` screenshot). The plain-link regex stops at
 the first `]`, so without the badge pass first it mangles nested syntax.
 
+After `rewriteLinks()`, `convertThemePictures()` runs once more over the
+whole file: it turns the README's GitHub-native `<picture>` +
+`prefers-color-scheme` screenshot into the `.dark-only`/`.light-only` divs
+the site already uses for the homepage's card-view shot. GitHub has no
+concept of the site's manual light/dark switch (`appearance: 'dark'` in
+`config.mts`) — it can only follow the OS/browser theme via
+`prefers-color-scheme` — so the same markup needs two different theme
+mechanisms depending on where it renders. Must run after the srcset rewrite,
+since it matches on the already-rewritten `./assets/…` paths.
+
 ---
 
 ## Look & feel
