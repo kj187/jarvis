@@ -7,6 +7,7 @@
 <p align="center"><i>Interactive, realtime, self-hosted Alertmanager UI</i></p>
 
 <p align="center">
+  <a href="https://kj187.github.io/jarvis/"><img src="https://img.shields.io/badge/docs-kj187.github.io%2Fjarvis-blue" alt="Documentation" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License" /></a>
   <a href="https://github.com/kj187/jarvis/releases/latest"><img src="https://img.shields.io/github/v/release/kj187/jarvis" alt="Release" /></a>
   <a href="https://github.com/kj187/jarvis/actions/workflows/ci.yml"><img src="https://github.com/kj187/jarvis/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
@@ -14,8 +15,6 @@
   <a href="https://www.bestpractices.dev/projects/13469"><img src="https://www.bestpractices.dev/projects/13469/baseline" alt="OpenSSF Baseline" /></a>
   <a href="https://codecov.io/gh/kj187/jarvis"><img src="https://codecov.io/gh/kj187/jarvis/graph/badge.svg" alt="Coverage" /></a>
 </p>
-
-<p align="center">Docs: <a href="https://kj187.github.io/jarvis/">kj187.github.io/jarvis</a></p>
 
 **Jarvis** is an open source web frontend for Prometheus Alertmanager — interactive, realtime, and self-hosted.
 
@@ -47,11 +46,11 @@ Most Alertmanager UIs are read-only dashboards. Jarvis is built for teams that n
 - **Single binary** — one container; SQLite needs no external service, switch to PostgreSQL to run several replicas; a Helm chart is included
 - **User authentication** — optional UI login: built-in accounts with an admin panel, or any OIDC provider
 
-Worried about feature creep? Jarvis has a deliberately focused scope — what it is and what it will never become is written down in **[docs/scope.md](docs/scope.md)**. The full feature list, with screenshots, is in **[docs/features.md](docs/features.md)**.
+Worried about feature creep? Jarvis has a deliberately focused scope — what it is and what it will never become is written down in **[Scope](https://kj187.github.io/jarvis/concepts/scope)**. The full feature list, with screenshots, is in **[Features](https://kj187.github.io/jarvis/reference/features)**. The full documentation — getting started, deployment, configuration reference, concepts — is at **[kj187.github.io/jarvis](https://kj187.github.io/jarvis/)**.
 
 ### Built with AI
 
-AI writes the code; 20 years of software engineering experience — 9 of them in DevOps/platform engineering — directs it, so this isn't vibe-coded. Every commit and CI run enforces the same bar as hand-written code: gosec, govulncheck, golangci-lint, pnpm audit, plus defense-in-depth hardening (strict CSP, read-only container filesystem, no-new-privileges). See [SECURITY.md](SECURITY.md) for details.
+AI writes the code; 20 years of software engineering experience — 9 of them in DevOps/platform engineering — directs it, so this isn't vibe-coded. Every commit and CI run enforces the same bar as hand-written code: gosec, govulncheck, golangci-lint, pnpm audit, plus defense-in-depth hardening (strict CSP, read-only container filesystem, no-new-privileges). See [Security Policy](https://kj187.github.io/jarvis/project/security-policy) for details.
 
 ## Getting Started
 
@@ -61,7 +60,7 @@ All you need is Podman or Docker, and **a reachable Alertmanager** — the
 snippet below does not start one. Replace `http://alertmanager:9093` with your
 own instance; if it runs outside this compose network, use its real address.
 
-Just looking around? [docs/demo.md](docs/demo.md) brings up Jarvis
+Just looking around? [the demo guide](https://kj187.github.io/jarvis/demo) brings up Jarvis
 *and* a throwaway Alertmanager filled with realistic alerts in five minutes.
 
 ```yaml
@@ -86,19 +85,19 @@ podman compose up -d
 ```
 
 Now open <http://localhost:8080>. Kubernetes/Helm, signature verification and
-upgrade notes are in **[docs/deploy-kubernetes.md](docs/deploy-kubernetes.md)**
-and **[docs/upgrade.md](docs/upgrade.md)**; every environment variable is
-listed in **[docs/configuration.md](docs/configuration.md)**.
+upgrade notes are in **[Kubernetes deployment](https://kj187.github.io/jarvis/deploy/kubernetes)**
+and **[Upgrading](https://kj187.github.io/jarvis/howto/upgrade)**; every environment variable is
+listed in **[Configuration reference](https://kj187.github.io/jarvis/reference/configuration)**.
 
 ## Compatibility
 
 Jarvis uses the Alertmanager HTTP API v2 exclusively — introduced in
-Alertmanager 0.16.0. See **[docs/compatibility.md](docs/compatibility.md)**
+Alertmanager 0.16.0. See **[Compatibility](https://kj187.github.io/jarvis/reference/compatibility)**
 for the tested versions.
 
 ## Contributing
 
-Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md) for details on the development workflow, pull request process, and coding standards.
+Contributions are welcome! Please read our [Contributing Guide](https://kj187.github.io/jarvis/project/contributing) for details on the development workflow, pull request process, and coding standards.
 
 ## License
 

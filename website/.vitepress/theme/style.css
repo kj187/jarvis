@@ -146,11 +146,18 @@ html.dark .light-only {
    (the showcase below) after the feature grid, so this is the only place a
    screenshot can appear "before the feature grid" (W11g). Shares the image
    framing that the showcase further down used before its screenshot moved
-   here. */
+   here.
+   The padding/max-width split mirrors VPHero.vue on purpose: VPHero puts its
+   horizontal padding on the full-bleed outer `.VPHero` element and centers a
+   `max-width: 1152px` `.container` *inside* that already-padded area, so on
+   viewports wider than 1152px + padding, `.container`'s auto margins add
+   extra inset on top of the padding. Putting the padding and the max-width
+   on the same element here (as it used to be) skips that extra inset, so
+   the screenshot's left edge sits further right than the hero text/buttons
+   above it at wide viewports. Padding on the wrapper + max-width/margin on
+   the img reproduces the same two-step centering so both edges line up. */
 .home-hero-screenshot {
   position: relative;
-  max-width: 1152px;
-  margin: 0 auto;
   padding: 0 24px 64px;
 }
 @media (min-width: 640px) {
@@ -166,6 +173,8 @@ html.dark .light-only {
 .home-hero-screenshot img {
   display: block;
   width: 100%;
+  max-width: 1152px;
+  margin: 0 auto;
   border: 1px solid var(--vp-c-border);
   border-radius: 14px;
   box-shadow: 0 24px 64px -28px rgb(0 0 0 / 55%);

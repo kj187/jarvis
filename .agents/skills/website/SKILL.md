@@ -165,6 +165,17 @@ since it matches on the already-rewritten `/assets/…` paths.
   a new block needs the same rule. Further `##` sections of the home page go
   inside the same `.home-showcase` wrapper; `.home-showcase h2:not(:first-child)`
   gives them their top spacing.
+- **`.home-hero-screenshot`'s padding/max-width split mirrors `VPHero.vue` on
+  purpose.** `VPHero` puts its horizontal padding on the full-bleed outer
+  `.VPHero` element and centers a `max-width: 1152px` `.container` *inside*
+  that already-padded area — so on viewports wider than 1152px + padding,
+  the container's own auto margins add extra inset on top of the padding.
+  Putting the padding and the `max-width` on the *same* element (as the
+  screenshot wrapper used to) skips that extra inset, so the screenshot's
+  left edge drifts right of the hero text/buttons above it at wide
+  viewports. The fix keeps padding on `.home-hero-screenshot` and moves
+  `max-width`/`margin: 0 auto` onto the `img`s inside it, reproducing the
+  same two-step centering — never collapse them back onto one element.
 - **`theme/components/HomeScreenshot.vue`** renders the card-view screenshot
   (same theme toggling as above) via the `home-hero-after` slot in
   `Layout.vue`, so it appears between the hero and the feature grid. This is
