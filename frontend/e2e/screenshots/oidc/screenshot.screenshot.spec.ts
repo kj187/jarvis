@@ -87,3 +87,70 @@ test('screenshot', async ({ page, am, jarvis }) => {
 
   await page.screenshot({ path: `${DIR}/screenshot.png`, fullPage: true })
 })
+
+/**
+ * Same shot in light theme, for the README/getting-started page's <picture>
+ * (prefers-color-scheme) — a dark screenshot on a light GitHub/OS theme is the
+ * one place the top of the README looks unfinished. Theme switch follows
+ * card-view.screenshot.spec.ts.
+ * Regenerate: make e2e-screenshot NAME=screenshot-light MODE=oidc
+ */
+test('screenshot-light', async ({ page, am, jarvis }) => {
+  await loginOIDC(page)
+
+  const settingsResponse = await page.request.put(`${JARVIS_BASE_URL}/api/v1/settings`, {
+    data: { labelDisplay: { order: ['@cluster'], hidden: ['team'] } },
+  })
+  expect(settingsResponse.ok()).toBeTruthy()
+
+  await fireWithHeatmapHistory(page, am, jarvis, JARVIS_BASE_URL, manyAlerts)
+
+  const res = await fetch(`${JARVIS_BASE_URL}/api/v1/alerts`)
+  const alerts: Array<{ fingerprint: string; labels: Record<string, string> }> = await res.json()
+
+  const byName = (name: string) => alerts.find((a) => a.labels['alertname'] === name)
+  for (const name of ['KubeDeploymentReplicasMismatch', 'HighRequestLatency', 'IngressHigh5xxRate']) {
+    const alert = byName(name)
+    if (alert) await jarvis.setClaim(alert.fingerprint, 'sre-oncall', 'Investigating')
+  }
+
+  const soonEndsAt = new Date(Date.now() + 20 * 60 * 1000)
+  await jarvis.createSilence('e2e', [
+    { name: 'alertname', value: 'KubePodCrashLooping', isRegex: false, isEqual: true },
+  ], {
+    endsAt: soonEndsAt,
+    createdBy: 'sre-team',
+    comment: 'Incident response — rolling restart in progress',
+  })
+
+  await jarvis.createSilence('e2e', [
+    { name: 'alertname', value: 'KubeNodeNotReady', isRegex: false, isEqual: true },
+  ], {
+    endsAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
+    createdBy: 'ops-team',
+    comment: 'Scheduled node maintenance window',
+  })
+
+  await jarvis.createSilence('e2e', [
+    { name: 'alertname', value: 'PostgresReplicationLag', isRegex: false, isEqual: true },
+  ], {
+    endsAt: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000),
+    createdBy: 'data-team',
+    comment: 'DB failover in progress — replica resync expected by Friday',
+  })
+
+  await jarvis.poll()
+
+  await page.clock.setFixedTime(new Date(soonEndsAt.getTime() - 4 * 60 * 1000))
+
+  await page.goto('/?state=active')
+  await expect(page.getByTestId('user-menu')).toBeVisible()
+  await expect(page.getByTestId('alert-card').first()).toBeVisible()
+  await page.getByTestId('user-menu').hover()
+  await page.getByRole('button', { name: 'Light mode' }).click()
+  await page.mouse.move(0, 0) // let the hover-close timer close the dropdown
+  await expect(page.getByRole('button', { name: /hidden label/ }).first()).toBeVisible()
+  await page.waitForTimeout(500)
+
+  await page.screenshot({ path: `${DIR}/screenshot-light.png`, fullPage: true })
+})

@@ -87,6 +87,10 @@ function rewriteLinks(body, sourceFile) {
   body = body.replace(/<img([^>]*?)\ssrc="([^"]+)"/g, (m, attrs, target) => {
     return `<img${attrs} src="${rewriteTarget(target, true)}"`
   })
+  // <source srcset="docs/assets/...">, used by theme-aware <picture> blocks.
+  body = body.replace(/<source([^>]*?)\ssrcset="([^"]+)"/g, (m, attrs, target) => {
+    return `<source${attrs} srcset="${rewriteTarget(target, true)}"`
+  })
   return body
 }
 

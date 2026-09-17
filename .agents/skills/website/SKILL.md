@@ -93,8 +93,9 @@ to its **source** file and rewrites it:
 
 Passes run in this order and must stay that way: linked badges
 (`[![alt](img)](target)` — the README's shields), then images, then plain
-links, then bare `<img src="…">`. The plain-link regex stops at the first `]`,
-so without the badge pass first it mangles nested syntax.
+links, then bare `<img src="…">`, then bare `<source srcset="…">` (the
+README's theme-aware `<picture>` screenshot). The plain-link regex stops at
+the first `]`, so without the badge pass first it mangles nested syntax.
 
 ---
 

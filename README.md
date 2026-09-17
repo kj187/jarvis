@@ -19,7 +19,11 @@
 
 It was inspired by [Karma](https://github.com/prymitive/karma), which is a great project. However, I was missing features that matter for day-to-day on-call work: full persistence across restarts, the ability to comment on individual alerts, a claiming system so the team knows who is handling what, and a solid foundation to build further operational tooling on top of. Jarvis is the result.
 
- ![Jarvis Screenshot](docs/assets/screenshot.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/screenshot.png">
+  <source media="(prefers-color-scheme: light)" srcset="docs/assets/screenshot-light.png">
+  <img src="docs/assets/screenshot.png" alt="Jarvis Screenshot">
+</picture>
 
 <p align="center">
   <a href="https://www.youtube.com/watch?v=gssfmws8B6o"><img src="https://img.youtube.com/vi/gssfmws8B6o/maxresdefault.jpg" alt="Jarvis in two and a half minutes (video)" width="720"></a>
