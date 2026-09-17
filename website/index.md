@@ -58,23 +58,39 @@ history, its claim and the team's comments.
 
 [Explore all features](/features) · [Watch the 2½-minute tour](https://www.youtube.com/watch?v=gssfmws8B6o)
 
-## Try it in five minutes
+## Getting started
 
-The local demo starts Jarvis and a throwaway Alertmanager with 18 realistic Kubernetes
-alerts. You need Podman or Docker, git, make, curl and jq.
+One container and two required environment variables — point it at a reachable
+Alertmanager.
 
-```bash
-git clone https://github.com/kj187/jarvis.git && cd jarvis
-make demo-up
-make demo-seed
+```yaml
+services:
+  jarvis:
+    image: ghcr.io/kj187/jarvis:1.12.0
+    ports:
+      - "8080:8080"
+    volumes:
+      - jarvis_data:/data
+    environment:
+      JARVIS_CLUSTER_1_NAME: dev
+      JARVIS_CLUSTER_1_ALERTMANAGER_URL: http://alertmanager:9093
+    restart: unless-stopped
+
+volumes:
+  jarvis_data:
 ```
 
-Then open `http://localhost:8080`. `make demo-down` stops it again.
-[Full demo guide](/demo)
+```bash
+podman compose up -d
+```
 
-Running it for real is one container and two required environment variables. User
-login — built-in accounts or any OIDC provider — is optional.
+Then open `http://localhost:8080`. User login — built-in accounts or any OIDC
+provider — is optional.
 [Installation guide](/installation)
+
+Just looking around, no Alertmanager at hand? [Try the local demo](/demo) instead —
+it starts Jarvis and a throwaway Alertmanager filled with realistic alerts, no
+config needed.
 
 ## Focused by design
 
