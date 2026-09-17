@@ -36,3 +36,13 @@ export const PAGES = [
 
 /** repo-relative source path -> website route (with leading slash), for link rewriting. */
 export const ROUTE_BY_SOURCE = new Map(PAGES.map((p) => [p.src, `/${p.route}`]))
+
+/**
+ * Old route -> new route. A restructure that renames or removes a route adds
+ * an entry here; `sync-content.mjs` turns each into a stub page at the old
+ * route that meta-refreshes to the new one, so external links and bookmarks
+ * still land somewhere instead of 404ing. `cleanUrls: true` + GitHub Pages
+ * means there is no server-side redirect, so this is the only mechanism.
+ * Empty until a stage actually renames or removes a route.
+ */
+export const REDIRECTS = []

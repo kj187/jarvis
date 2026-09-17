@@ -1,9 +1,13 @@
 import { execFileSync } from 'node:child_process'
+import fs from 'node:fs'
+import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vitepress'
 import { PAGES } from '../scripts/pages.mjs'
 
 const REPO_ROOT = fileURLToPath(new URL('../..', import.meta.url))
+const SITE_URL = 'https://kj187.github.io/jarvis/'
+const SITE_DESCRIPTION = 'The open-source web UI for Prometheus Alertmanager'
 
 // repo-relative source path for each synced route, so "Edit this page on
 // GitHub" and "Last updated" point at the real file (docs/features.md),
@@ -28,7 +32,7 @@ function gitLastUpdated(repoRelPath: string): number | undefined {
 
 export default defineConfig({
   title: 'Jarvis',
-  description: 'The open-source web UI for Prometheus Alertmanager',
+  description: SITE_DESCRIPTION,
   base: '/jarvis/',
   srcDir: 'content',
   appearance: 'dark',
@@ -51,9 +55,43 @@ export default defineConfig({
     return { filePath: src, lastUpdated: gitLastUpdated(src) }
   },
 
+  // Per-page OG/Twitter tags (title/description follow the page like the
+  // browser tab does; url/image are site-wide). transformHead runs at build
+  // time with pageData already resolved, unlike themeConfig which is
+  // serialized to the client and cannot see pageData.title.
+  transformHead({ pageData }) {
+    const route = pageData.relativePath.replace(/\.md$/, '').replace(/(^|\/)index$/, '')
+    const url = `${SITE_URL}${route}`
+    const title = route ? `${pageData.title} | Jarvis` : 'Jarvis'
+    const description = pageData.description || SITE_DESCRIPTION
+    const image = `${SITE_URL}logo.png`
+    return [
+      ['meta', { property: 'og:type', content: 'website' }],
+      ['meta', { property: 'og:site_name', content: 'Jarvis' }],
+      ['meta', { property: 'og:title', content: title }],
+      ['meta', { property: 'og:description', content: description }],
+      ['meta', { property: 'og:url', content: url }],
+      ['meta', { property: 'og:image', content: image }],
+      ['meta', { name: 'twitter:card', content: 'summary' }],
+      ['meta', { name: 'twitter:title', content: title }],
+      ['meta', { name: 'twitter:description', content: description }],
+      ['meta', { name: 'twitter:image', content: image }],
+    ]
+  },
+
+  // No sitemap plugin: the route set is fully known upfront (PAGES + index +
+  // REDIRECTS), so a hand-written sitemap avoids an extra dependency.
+  buildEnd(siteConfig) {
+    const routes = ['', ...PAGES.map((p) => p.route)]
+    const urls = routes.map((r) => `  <url><loc>${SITE_URL}${r}</loc></url>`).join('\n')
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`
+    fs.writeFileSync(path.join(siteConfig.outDir, 'sitemap.xml'), xml)
+  },
+
   head: [
     ['link', { rel: 'icon', href: '/jarvis/favicon.ico' }],
     ['link', { rel: 'apple-touch-icon', href: '/jarvis/apple-touch-icon.png' }],
+    ['link', { rel: 'sitemap', type: 'application/xml', href: '/jarvis/sitemap.xml' }],
   ],
 
   themeConfig: {

@@ -14,7 +14,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { PAGES, ROUTE_BY_SOURCE } from './pages.mjs'
+import { PAGES, REDIRECTS, ROUTE_BY_SOURCE } from './pages.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = path.resolve(__dirname, '..', '..')
@@ -117,6 +117,24 @@ function hasMarkdownH1(body) {
   return /^\s*#\s+\S/.test(body)
 }
 
+/** A meta-refresh + canonical-link stub for an old route, per the REDIRECTS map in pages.mjs. */
+function redirectStub(to) {
+  const target = `/jarvis/${to}`
+  return `---
+title: Redirecting…
+head:
+  - - meta
+    - http-equiv: refresh
+      content: '0; url=${target}'
+  - - link
+    - rel: canonical
+      href: 'https://kj187.github.io${target}'
+---
+
+This page has moved. Redirecting to [${to}](${target})…
+`
+}
+
 function main() {
   fs.rmSync(CONTENT_DIR, { recursive: true, force: true })
   fs.mkdirSync(CONTENT_DIR, { recursive: true })
@@ -130,6 +148,17 @@ function main() {
     const needsTitle = page.title || !hasMarkdownH1(body)
     const frontmatter = needsTitle ? `---\ntitle: ${page.title ?? page.route}\n---\n\n` : ''
     fs.writeFileSync(path.join(CONTENT_DIR, `${page.route}.md`), frontmatter + body)
+  }
+
+  const liveRoutes = new Set(PAGES.map((p) => p.route))
+  for (const { from, to } of REDIRECTS) {
+    if (liveRoutes.has(from)) {
+      throw new Error(`sync-content: redirect source '${from}' collides with a live PAGES route`)
+    }
+    if (!liveRoutes.has(to)) {
+      throw new Error(`sync-content: redirect target '${to}' for '${from}' is not a live PAGES route`)
+    }
+    fs.writeFileSync(path.join(CONTENT_DIR, `${from}.md`), redirectStub(to))
   }
 
   // docs/assets/*.{png,svg,...} referenced by relative image links above.
@@ -157,7 +186,9 @@ function main() {
     fs.copyFileSync(path.join(WEBSITE_ROOT, file), path.join(CONTENT_DIR, file))
   }
 
-  console.log(`sync-content: wrote ${PAGES.length} pages + assets to ${path.relative(WEBSITE_ROOT, CONTENT_DIR)}/`)
+  console.log(
+    `sync-content: wrote ${PAGES.length} pages + ${REDIRECTS.length} redirects + assets to ${path.relative(WEBSITE_ROOT, CONTENT_DIR)}/`,
+  )
 }
 
 main()

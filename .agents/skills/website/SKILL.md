@@ -52,10 +52,10 @@ does hot-reload).
 
 | Path | What it is |
 |---|---|
-| `website/scripts/pages.mjs` | The manifest: which repo file becomes which route. Imported by both the sync script and the VitePress config. |
+| `website/scripts/pages.mjs` | The manifest: which repo file becomes which route (`PAGES`), plus the old→new route map for redirect stubs (`REDIRECTS`). Imported by both the sync script and the VitePress config. |
 | `website/scripts/sync-content.mjs` | Prebuild: copies the sources into `content/`, rewrites links, copies `docs/assets/*` and the branding files. |
 | `website/index.md` | Home page (hero, feature grid, showcase). The only authored page. |
-| `website/.vitepress/config.mts` | Site config: `base`, nav, sidebar, search, edit links, dead-link policy. |
+| `website/.vitepress/config.mts` | Site config: `base`, nav, sidebar, search, edit links, dead-link policy, per-page OG/Twitter tags (`transformHead`), sitemap generation (`buildEnd`). |
 | `website/.vitepress/theme/` | Custom theme: `Layout.vue`, `style.css` (palette), `components/MeshCanvas.vue`. |
 | `website/content/`, `website/.vitepress/dist\|cache`, `website/node_modules/` | Generated — all gitignored (also in `.dockerignore`/`.containerignore`). |
 
@@ -74,6 +74,21 @@ does hot-reload).
 
 Both steps are needed: `PAGES` controls what gets synced *and* how links
 between docs are rewritten; the sidebar controls navigation.
+
+A `docs/*.md` file missing from `PAGES` fails `scripts/check-agent-context.sh`
+(pre-commit hook + CI) rather than going silently unpublished.
+
+---
+
+## Redirecting an old route
+
+When a restructure renames or removes a route, add an entry to `REDIRECTS` in
+`website/scripts/pages.mjs`: `{ from: '<old-route>', to: '<new-route>' }`.
+`sync-content.mjs` turns each into a stub page at `<old-route>.md` with a
+`<meta http-equiv="refresh">` to `<new-route>` and a canonical link — the only
+option here, since `cleanUrls: true` + GitHub Pages means there is no
+server-side redirect. `to` must be a live `PAGES` route and `from` must not
+collide with one; the sync script throws otherwise.
 
 ---
 
@@ -173,6 +188,18 @@ since it matches on the already-rewritten `./assets/…` paths.
   maintainer-approved font trial, not "every heading everywhere". A different
   display face swaps the two `src: url(...)` lines and the font files; it does
   not need new selectors.
+
+---
+
+## SEO metadata
+
+`config.mts`'s `transformHead` emits per-page OG/Twitter tags (title tracks
+`pageData.title`, so it follows the same "Page | Jarvis" pattern as the
+`<title>` tag); `buildEnd` writes `dist/sitemap.xml` from `PAGES` + the home
+route. Both are hand-rolled rather than a VitePress sitemap plugin — the
+route set is fully known upfront, so a dependency buys nothing. `REDIRECTS`
+stubs are intentionally left out of the sitemap (they are not canonical
+pages).
 
 ---
 
