@@ -4,7 +4,11 @@ The one picture to keep in mind: **only the backend talks to Alertmanager on
 a schedule; browsers only ever talk to Jarvis.** Client count never
 influences Alertmanager load.
 
-![Jarvis data flow](assets/architecture-data-flow.svg)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/architecture-data-flow-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="assets/architecture-data-flow-light.svg">
+  <img src="assets/architecture-data-flow-light.svg" alt="Jarvis data flow">
+</picture>
 
 ## The three traffic patterns
 
@@ -57,7 +61,7 @@ The Mermaid source lives in [`docs/diagrams/`](diagrams/); rendering runs in
 a container (no local tooling needed):
 
 ```bash
-make diagrams   # renders docs/diagrams/*.mmd → docs/assets/*.svg
+make diagrams   # renders light/dark SVG pairs from docs/diagrams/*.mmd
 ```
 
 For how alert history is recorded — state machine, grace period, episodes,

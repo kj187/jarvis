@@ -65,6 +65,7 @@ make helm-lint                     # helm lint only
 make helm-test                     # helm unittest only
 
 # ── Docs website (VitePress, website/) ───────────────────────
+cd website && pnpm test             # Media wiring/assets + release-version consistency
 make website                       # build to website/.vitepress/dist — fails on dead internal links
 make website-dev                   # hot-reload preview on http://localhost:5174/jarvis/
                                    # .agents/skills/website/SKILL.md
