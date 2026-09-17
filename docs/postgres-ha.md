@@ -187,8 +187,21 @@ single pod would have.
   notifications and the periodic resync have both been missed for a
   while — check the leader's health). Always `0` while leader or on
   SQLite.
-- Leader-transition log lines and the `leader` field in the `/api/v1/status`
-  response.
+- Leader-transition log lines and the `leader` field in the `GET
+  /api/v1/status` response:
+  ```json
+  {
+    "status": "ok",
+    "clusters": 2,
+    "alerts": 143,
+    "ws_clients": 4,
+    "leader": true,
+    "poll_interval_seconds": 30
+  }
+  ```
+  `leader` is always `true` on SQLite (single replica by design). Unlike
+  `/health` and `/metrics`, this endpoint is not public — it follows
+  `JARVIS_AUTH_MODE` like any other `/api/v1/*` route.
 - **Pod label**: on Kubernetes, the current leader's pod is labeled
   `jarvis.kj187.de/role=leader` and the label moves automatically on
   failover:

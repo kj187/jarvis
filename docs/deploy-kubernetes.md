@@ -95,6 +95,19 @@ topologySpreadConstraints:
 
 ---
 
+## Health checks
+
+The chart's liveness and readiness probes both call `GET /health`
+(`charts/jarvis/templates/deployment.yaml`) — a plain `{"status": "ok"}`
+handler with no dependency checks, so a `200` only means the process is up
+and serving HTTP. Like `/metrics` ([Set up monitoring](monitoring.md)), it is
+intentionally public and bypasses `JARVIS_AUTH_MODE=full_protect`, so probes
+never need credentials.
+
+For HA debugging beyond "is the process up" — which pod currently holds
+leadership — see `GET /api/v1/status` in
+[PostgreSQL & HA](postgres-ha.md#observability).
+
 ## Where to go next
 
 - [PostgreSQL & HA](postgres-ha.md) — leader election, snapshot distribution, failover
