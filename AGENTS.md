@@ -51,7 +51,8 @@ adapters and their rules live in `docs/ai-agents.md`.
 | Writing or running tests, test matrix, test utilities, CI pipeline | `.agents/testing.md` |
 | E2E / screenshot stack: Playwright specs, fixtures, auth modes, `compose.e2e.yml` | `docs/testing-e2e.md` |
 | Documentation website (VitePress in `website/`, GitHub Pages), adding a doc page to the site | `.agents/skills/website/SKILL.md` |
-| Database backends, multi-replica HA (leader election, snapshot distribution, WS fanout, failover), Kubernetes deployment, SQLite → PostgreSQL migration | `docs/persistence.md` |
+| Database backends, multi-replica HA (leader election, snapshot distribution, WS fanout, failover) | `docs/postgres-ha.md` |
+| Kubernetes deployment, SQLite → PostgreSQL migration | `docs/deploy-kubernetes.md`, `docs/migrate-postgres.md`, `docs/sqlite-limits.md` |
 | Cutting a release — **only when the user explicitly asks** | `.agents/skills/release/SKILL.md` |
 | Release demo video (YouTube), release-notes video block — **only on request** (asked upfront in Phase 0 of the release skill) | `.agents/skills/release-video/SKILL.md` |
 | Security audit, new-code security checklist, security tooling | `.agents/skills/security-check/SKILL.md` |
@@ -120,7 +121,7 @@ adapters and their rules live in `docs/ai-agents.md`.
     resolves: phantom `resolved` events, wrong `occurrence_count`, premature
     claim releases (`.agents/lessons.md`).
 15. **History side effects and Alertmanager polling are leader-only on
-    PostgreSQL** (`docs/persistence.md`). Exactly one pod (advisory lock,
+    PostgreSQL** (`docs/postgres-ha.md`). Exactly one pod (advisory lock,
     `internal/leader`) polls and writes history:
     `RecordStatusChange`/`RecordResolvedForCluster`, occurrence counts, delayed claim releases, `reconcileStartupResolves`,
     external-silence events, retention sweeps (`history.Recorder.IsLeader()`,
@@ -220,7 +221,8 @@ adapters and their rules live in `docs/ai-agents.md`.
    | Project description, invariants, workflow rules, commit format, repo layout, Task Router | `AGENTS.md` itself |
    | Tool adapter, `scripts/check-agent-context.sh` | `docs/ai-agents.md` |
    | E2E stack, specs, fixtures, auth modes | `docs/testing-e2e.md` |
-   | Database backend behavior, multi-replica HA (leader election, snapshot distribution, WS fanout, failover), Kubernetes HA deployment | `docs/persistence.md` |
+   | Database backend behavior, multi-replica HA (leader election, snapshot distribution, WS fanout, failover) | `docs/postgres-ha.md` |
+   | Kubernetes HA deployment | `docs/deploy-kubernetes.md` |
    | Hard-won debugging insight or non-obvious gotcha | `.agents/lessons.md` |
    | Who-talks-to-whom topology: upstream calls, stores, WS events, poll flow | `docs/diagrams/*.mmd` + re-render via `make diagrams` |
 

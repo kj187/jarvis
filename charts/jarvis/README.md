@@ -2,7 +2,7 @@
 
 Web frontend for Prometheus Alertmanager with persistent alert history, claims, comments, and silence management.
 
-> Database backends, multi-replica HA (leader election, snapshot distribution, failover), and Kubernetes deployment guidance (incl. a CloudNativePG example) are covered in the canonical guide: **[docs/persistence.md](../../docs/persistence.md)**. This README covers only the chart's values and install/upgrade mechanics.
+> Database backends and multi-replica HA (leader election, snapshot distribution, failover) are covered in **[docs/postgres-ha.md](../../docs/postgres-ha.md)**; Kubernetes deployment guidance (incl. a CloudNativePG example) is in **[docs/deploy-kubernetes.md](../../docs/deploy-kubernetes.md)**. This README covers only the chart's values and install/upgrade mechanics.
 
 ## Install
 

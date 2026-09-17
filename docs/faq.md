@@ -88,8 +88,8 @@ PostgreSQL becomes mandatory as soon as there are several pods —
 `replicaCount > 1` or an HPA. SQLite has a single writer, and several pods
 would each poll Alertmanager and keep their own diverging history, so the Helm
 chart refuses to render that combination rather than deploying it. The
-reasoning and the migration path are in
-[Persistence & high availability](persistence.md).
+reasoning is in [Why SQLite stays single-replica](sqlite-limits.md), and the
+migration path in [Migrate from SQLite](migrate-postgres.md).
 
 ---
 
@@ -130,7 +130,7 @@ Schema migrations run automatically at startup, and alert history, claims,
 comments and settings survive. Downgrading is not supported — a newer schema
 is not readable by an older binary. Back up the database before a major
 upgrade; for SQLite that is copying one file. See
-[Installation → Upgrading](installation.md#upgrading).
+[Upgrade](upgrade.md#upgrading).
 
 ---
 

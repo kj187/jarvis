@@ -136,7 +136,7 @@ production, for high availability and whenever you want more than one replica.
 
 Schema, migrations, TLS, multi-replica leader election and failover, and
 Kubernetes deployment including a CloudNativePG example are covered in
-[Persistence & high availability](persistence.md).
+[PostgreSQL & HA](postgres-ha.md).
 
 ---
 

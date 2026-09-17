@@ -121,7 +121,7 @@ messages, all starting with `Invalid configuration:`:
   every pod would poll Alertmanager on its own and keep a diverging history.
   Either set `replicaCount: 1` or move to PostgreSQL
   (`database.dsn: postgres://…`). See
-  [Persistence & high availability](persistence.md).
+  [Why SQLite stays single-replica](sqlite-limits.md#the-guard).
 - **`auth.provider` other than `none` without a key** — set `auth.secretKey`
   (`openssl rand -hex 32`) or `auth.existingSecret`.
 - **`auth.provider: oidc` without issuer, client ID or redirect URL** — all
@@ -146,7 +146,7 @@ sees `replicas × maxOpenConns`, plus leader-election and fanout connections.
 **Check.** `replicaCount × JARVIS_DB_MAX_OPEN_CONNS` must stay well below the
 server's `max_connections`, minus the slots the server reserves for
 superusers. Sizing guidance is in
-[Persistence & high availability](persistence.md#configuration).
+[PostgreSQL & HA](postgres-ha.md#configuration).
 
 ---
 

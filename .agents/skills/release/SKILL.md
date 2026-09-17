@@ -130,19 +130,20 @@ Record the decision; it drives two later steps (step 10a and step 13).
      produced, the placeholder `<YOUTUBE_URL>` (resolved at the review
      gate). Write them to `~/Downloads/jarvis-X.Y.Z-social/` in addition to
      showing them in chat.
-11. **Bump versions in README, the installation guide, the demo stack and the homepage** —
+11. **Bump versions in README, the deploy/upgrade guides, the demo stack and the homepage** —
    the image tag is the **app** version, the `helm install --version` is the **chart**
-   version (decoupled — never the app version, that chart doesn't exist). README and
-   `docs/installation.md` carry both numbers, `docs/installation.md` also names the chart
-   version in its cosign example, `compose.demo.yml` pins the app image, and
-   `website/index.md` pins the app image in its "Getting started" snippet.
+   version (decoupled — never the app version, that chart doesn't exist). README,
+   `docs/deploy-compose.md` and `docs/deploy-kubernetes.md` carry the app and chart
+   examples respectively, `docs/upgrade.md` also names both in its cosign examples,
+   `compose.demo.yml` pins the app image, and `website/index.md` pins the app image in
+   its "Getting started" snippet.
    Run before step 12 bumps `Chart.yaml`:
    ```bash
    PREV=$(git describe --tags --abbrev=0)
    PREV_CLEAN="${PREV#v}"
    PREV_CHART=$(awk '/^version:/{print $2}' charts/jarvis/Chart.yaml)
    # perl -pi instead of sed -i: identical on macOS (BSD sed) and Linux (GNU sed)
-   for f in README.md docs/installation.md compose.demo.yml website/index.md; do
+   for f in README.md docs/deploy-compose.md docs/deploy-kubernetes.md docs/upgrade.md compose.demo.yml website/index.md; do
      perl -pi -e "s|ghcr.io/kj187/jarvis:\Q${PREV_CLEAN}\E|ghcr.io/kj187/jarvis:X.Y.Z|g" "$f"
      perl -pi -e "s|--version \Q${PREV_CHART}\E |--version <chart version> |g" "$f"
      perl -pi -e "s|charts/jarvis:\Q${PREV_CHART}\E|charts/jarvis:<chart version>|g" "$f"
@@ -150,7 +151,7 @@ Record the decision; it drives two later steps (step 10a and step 13).
    ```
    Verify every occurrence changed:
    ```bash
-   grep -rn "ghcr.io/kj187/jarvis:\|--version \|charts/jarvis:" README.md docs/installation.md compose.demo.yml website/index.md
+   grep -rn "ghcr.io/kj187/jarvis:\|--version \|charts/jarvis:" README.md docs/deploy-compose.md docs/deploy-kubernetes.md docs/upgrade.md compose.demo.yml website/index.md
    ```
 12. **Bump chart versions** in `charts/jarvis/Chart.yaml` — chart version is
     **decoupled** from the app version, but an app release must ship a chart
@@ -183,7 +184,7 @@ Record the decision; it drives two later steps (step 10a and step 13).
     ```bash
     printf '%s\n' CHANGELOG.md charts/jarvis/CHANGELOG.md .github/release-notes/vX.Y.Z.md \
       | scripts/check-changelogs.sh
-    git add CHANGELOG.md README.md docs/installation.md compose.demo.yml charts/jarvis/Chart.yaml charts/jarvis/CHANGELOG.md .github/release-notes/vX.Y.Z.md
+    git add CHANGELOG.md README.md docs/deploy-compose.md docs/deploy-kubernetes.md docs/upgrade.md compose.demo.yml charts/jarvis/Chart.yaml charts/jarvis/CHANGELOG.md .github/release-notes/vX.Y.Z.md
     git commit -s -m "chore(release): prepare vX.Y.Z"
     ```
 

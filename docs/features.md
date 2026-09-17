@@ -1,6 +1,8 @@
 # Jarvis — Features
 
-## Card View
+## Alerts
+
+### Card View
 
 Alerts grouped by your configured label (severity by default), with inline silence actions; claiming happens in the detail panel.
 
@@ -28,7 +30,7 @@ Within each section, groups are sorted by recency — the group with the most re
 
 ---
 
-## Grouping
+### Grouping
 
 One toolbar control combines "group or not" with "group by which label" — no detour through Settings to change how alerts are sectioned.
 
@@ -44,7 +46,7 @@ The chosen label applies to both Card and List view immediately — no separate 
 
 ---
 
-## List View
+### List View
 
 Compact table layout with sortable columns — useful when dealing with many alerts at once.
 
@@ -70,7 +72,7 @@ Switching between card and list view is instant. The selected view mode is persi
 
 ---
 
-## Fullscreen
+### Fullscreen
 
 Hide the header and all controls — only the alert list fills the screen. Useful for wall displays or focused incident response.
 
@@ -82,7 +84,7 @@ Press **ESC** to exit fullscreen and restore the full interface.
 
 ---
 
-## Label Filters
+### Label Filters
 
 Chip-based label matchers (`=` `!=` `=~` `!~`) that compose into a filter expression and are serialized into the URL for sharing.
 
@@ -120,7 +122,7 @@ The complete filter state is encoded into the URL as query parameters. This mean
 - You can copy the URL and share it with a teammate — they land on exactly the same filtered list
 - Filters survive page reloads and view mode changes
 
-### Saved filters
+#### Saved filters
 
 ![Saved filters](assets/feature-saved-filters.png)
 
@@ -147,7 +149,7 @@ The bookmark button at the left of the filter row lets you save the current set 
 
 ---
 
-## Alerts Overview
+### Alerts Overview
 
 A Karma-style breakdown of the current alert list by label value — the fastest way to answer *"where is the fire?"* when a wall of alerts appears.
 
@@ -161,59 +163,9 @@ Labels are ordered by usefulness: `alertname` and `severity` are always pinned t
 
 ---
 
-## User Settings
+### Resolved View
 
-Per-user preferences — stored in your account when you're signed in, or in this browser when you're not. Either way, no server config is required.
-
-![Settings Panel](assets/feature-settings-panel.png)
-
-Open the Settings panel from the **user-menu** button in the top-right of the header (initials avatar when logged in, a generic account icon otherwise) → **Settings**. The same menu also holds the theme toggle and, when authenticated, login/logout and the admin panel — hover the button to open it. Settings apply immediately without a page reload. While the panel is open, `settings=open` is kept in the URL, so reloading or sharing that URL opens Settings again.
-
-**Where settings live:** if authentication is enabled and you're signed in, your settings are saved to your account and follow you across devices and browsers. If there is no login configured at all, or you simply haven't signed in yet, settings are saved to this browser only — a small status line under the Settings heading always says which is the case. You can still open Settings and change anything while signed out (a `write_protect` deployment lets anyone look around without an account); those changes just stay local to that browser instead of syncing. The first time you sign in on a device with local changes already made, those changes are copied to your account once — after that, your account's settings always win. Signing out falls back to whatever this browser had before you signed in; it does not touch or delete your account's settings.
-
-| Signed out | Signed in |
-|:---:|:---:|
-| ![User menu — signed out](assets/feature-user-menu.png) | ![User menu — signed in](assets/auth-user-menu.png) |
-
-Settings and the theme toggle are always there either way; Login only appears signed out, Logout (and Admin, for admins) only signed in. In auth mode `none` there is no Login entry at all — see [User Authentication](authentication-user.md).
-
-### Available settings
-
-| Setting | Description |
-|---|---|
-| **Time format** | Switch between *Relative* ("6 days ago") and *Absolute* ("Jun 4, 2025, 12:30 PM") timestamps. A live preview updates as you toggle. |
-| **Default view** | Choose whether the app starts in *Card* or *List* view on every page load. |
-| **Card columns** | Fixed column count (1–6) for the Card View grid, or *Auto* to let it reflow with window width (up to 4). |
-| **Claim animation** | Toggle the animated snake border on the Claim button for unclaimed alerts. |
-| **Default silence duration** | Pre-selected duration when the silence creation form opens (15 min to 3 days). |
-| **Labels** | Pin the label chips you care about to the front, hide the ones you don't, and optionally give a label a color — see below. |
-
-Which label sections Card and List view group by is no longer a Settings entry — it moved to the **Grouped** toolbar control, see [Grouping](#grouping). The resolved-view page size is set from its own per-page selector, not from this panel — see [Resolved View](#resolved-view). Reusable label filters are no longer a Settings entry either — see [Saved filters](#saved-filters) above.
-
-### Label display
-
-![Settings — Labels](assets/feature-settings-labels.png)
-
-By default every label on an alert renders as a chip. When alerts carry many labels (`customer`, `hostname`, `instance`, `dbid`, …), that gets cluttered — Settings → Labels lets you **pin** the labels you care about so they lead every card and list row (e.g. `customer` → `hostname` → `job`), and **hide** the ones you don't need. The Settings panel is two columns — Display and Silences on the left, Labels on the right.
-
-Labels is one list, every row the same: label name, how many alerts carry it and how many distinct values it has, a color swatch, a **pin** and an **eye**.
-
-- **Pin** — pinned labels move to the top of the list and render first on every alert, in that order. Drag the grip handle to reorder them; click the pin again to unpin.
-- **Hide** — the eye collapses a label into a small **+N** chip at the end of each alert's chip row. A hidden row stays in its alphabetical place, dimmed. Pinning a hidden label shows it again, and hiding a pinned label unpins it — a label is either pinned, normal or hidden.
-- **Color** — labels are neutral by default. The swatch opens a small palette (eight colors, each tuned for both light and dark theme); pick one and every chip for that label key gets it — card and list view, related alerts, the alerts overview, and silence matcher chips. Color is per label **key**, not per value.
-- **Hide all / Show all** — above the unpinned labels; hides or shows every label that isn't pinned in one click. Handy with many labels: pin the few you care about, then *Hide all* the rest. With a search active it only affects the matching labels.
-- **Filter labels…** narrows the list in real time (reordering is available again once the filter is cleared).
-- **Reset labels** — requires a second confirmation click, then resets only this section (pinned, hidden and colors). The "Reset all settings" button at the bottom of the panel resets everything.
-
-This only changes chip *display* in the Card and List views (including the shared-label strip above grouped alerts) — it never affects filtering, silence matching, or the affected-alerts preview, and the alert **detail panel always shows every label**, hidden or not. A label that isn't configured (including one from an alerting rule added after you set this up) simply sorts alphabetically behind the pinned ones and is shown until you hide it — it never changes your existing setup on its own. Every label that isn't hidden is shown. A configured label stays in the list even while no alert currently carries it.
-
-Click an alert's **+N** chip to open its hidden labels in a small floating layer (hover the chip first to see which ones, without opening it); click elsewhere or press Escape to close it again. It opens as a layer rather than growing the card in place, so it never shifts other alerts around in the card view. This is a per-alert, view-only peek — it never changes your settings.
-
----
-
-## Resolved View
-
-Full alert history persisted in the database (SQLite or PostgreSQL — see [docs/persistence.md](persistence.md)) — survives container restarts and Alertmanager reconnects.
+Full alert history persisted in the database (SQLite or PostgreSQL — see [docs/postgres-ha.md](postgres-ha.md)) — survives container restarts and Alertmanager reconnects.
 
 ![Resolved View](assets/feature-resolved.png)
 
@@ -237,7 +189,44 @@ Alerts are displayed as a flat list sorted by resolution time (newest first). A 
 
 ---
 
-## Alert Detail Panel
+### Firing Heatmap
+
+At-a-glance history of how often an alert has fired recently — a compact grid, not a full event log.
+
+![Detail panel heatmap](assets/feature-heatmap-detail.png)
+
+Every alert's stats line in the detail panel carries a box-grid heatmap: each cell is one time bucket, and darker/filled cells mean the alert fired more often in that bucket — an empty cell means it didn't fire. A **24h / 7d / 30d** range toggle switches the bucketing:
+- **24h** — one row of hourly buckets
+- **7d** — one row per day, each with 24 hourly buckets (with day labels)
+- **30d** — one row of daily buckets
+
+Hover the info icon next to the heatmap label for the same explanation inline. Hovering an individual cell shows an exact count and time range tooltip.
+
+The same box-grid rendering (`HeatmapCellsRow`) also drives a smaller, decorative **firing sparkline** on each alert card — the most recent 14 daily buckets under the timestamp row, with no tooltips (so it doesn't fight the card's own click target):
+
+![Card firing sparkline](assets/feature-heatmap-card.png)
+
+Both are read-only glance information — there's nothing to click or configure. Data comes from Jarvis's own persisted event history (`GET /api/v1/alerts/:fingerprint/heatmap`), so it reflects the full recorded lifecycle of the alert, not just what happened since Jarvis last restarted.
+
+---
+
+### Alert Search
+
+Full-text search across alert names and label values — results filter instantly as you type.
+
+The search bar is available in the header on all alert views (active, suppressed, resolved). Entering a search term narrows the visible alerts to those whose alert name or any label value contains the typed string (case-insensitive). Search composes with active label-filter chips — both conditions must be satisfied for an alert to appear.
+
+**What is matched:**
+- Alert name (`alertname` label)
+- All label values (e.g. instance, job, namespace, …)
+
+The search term is not persisted in `localStorage` or the URL — it resets on page reload, making it a lightweight triage tool rather than a shareable filter. For persistent, shareable filtering use the label-matcher chips instead (see [Label Filters](#label-filters)).
+
+---
+
+## Detail Panel
+
+### Alert Detail Panel
 
 Per-alert drawer with labels, annotations, firing history, occurrence stats, claim ownership, silence controls, comments, and an AI-analysis prompt — organized into tabs.
 
@@ -323,28 +312,9 @@ When an alert is claimed, the owner's name appears as a chip in the detail panel
 
 ---
 
-## Firing Heatmap
+## Silences
 
-At-a-glance history of how often an alert has fired recently — a compact grid, not a full event log.
-
-![Detail panel heatmap](assets/feature-heatmap-detail.png)
-
-Every alert's stats line in the detail panel carries a box-grid heatmap: each cell is one time bucket, and darker/filled cells mean the alert fired more often in that bucket — an empty cell means it didn't fire. A **24h / 7d / 30d** range toggle switches the bucketing:
-- **24h** — one row of hourly buckets
-- **7d** — one row per day, each with 24 hourly buckets (with day labels)
-- **30d** — one row of daily buckets
-
-Hover the info icon next to the heatmap label for the same explanation inline. Hovering an individual cell shows an exact count and time range tooltip.
-
-The same box-grid rendering (`HeatmapCellsRow`) also drives a smaller, decorative **firing sparkline** on each alert card — the most recent 14 daily buckets under the timestamp row, with no tooltips (so it doesn't fight the card's own click target):
-
-![Card firing sparkline](assets/feature-heatmap-card.png)
-
-Both are read-only glance information — there's nothing to click or configure. Data comes from Jarvis's own persisted event history (`GET /api/v1/alerts/:fingerprint/heatmap`), so it reflects the full recorded lifecycle of the alert, not just what happened since Jarvis last restarted.
-
----
-
-## Create Silence
+### Create Silence
 
 Matcher builder with duration picker and a live preview of which alerts the silence will affect.
 
@@ -371,7 +341,7 @@ Silences are sent directly to Alertmanager via Jarvis's API proxy and are effect
 
 ---
 
-## Silence from Alert
+### Silence from Alert
 
 One-click silence creation pre-filled from an alert's labels — no manual matcher entry.
 
@@ -394,7 +364,7 @@ The live preview updates as you modify matchers, so you always know exactly whic
 
 ---
 
-## Fast-Silence
+### Fast-Silence
 
 One-click, form-free silence on any active alert — hover the button, pick a duration.
 
@@ -413,7 +383,7 @@ The per-alert bell is only shown while that alert is active (invariant: it disap
 
 ---
 
-## Silence Templates
+### Silence Templates
 
 Reusable matcher sets that pre-fill the silence form in one click — no manual re-entry for recurring silences.
 
@@ -444,7 +414,7 @@ During an incident the last thing you want to do is look up which label combinat
 
 ---
 
-## Expiring Silence
+### Expiring Silence
 
 Alerts with a silence that expires within 15 minutes are surfaced as active so they don't catch the team off guard.
 
@@ -467,7 +437,7 @@ The 15-minute threshold is intentional: long enough to act, short enough to not 
 
 ---
 
-## Active Silence
+### Active Silence
 
 Suppressed alerts show the exact silence that covers them, including remaining duration.
 
@@ -490,21 +460,59 @@ In teams with multiple on-call engineers or frequent handoffs, it is common to f
 
 ---
 
-## Alert Search
+## Settings
 
-Full-text search across alert names and label values — results filter instantly as you type.
+### User Settings
 
-The search bar is available in the header on all alert views (active, suppressed, resolved). Entering a search term narrows the visible alerts to those whose alert name or any label value contains the typed string (case-insensitive). Search composes with active label-filter chips — both conditions must be satisfied for an alert to appear.
+Per-user preferences — stored in your account when you're signed in, or in this browser when you're not. Either way, no server config is required.
 
-**What is matched:**
-- Alert name (`alertname` label)
-- All label values (e.g. instance, job, namespace, …)
+![Settings Panel](assets/feature-settings-panel.png)
 
-The search term is not persisted in `localStorage` or the URL — it resets on page reload, making it a lightweight triage tool rather than a shareable filter. For persistent, shareable filtering use the label-matcher chips instead (see [Label Filters](#label-filters)).
+Open the Settings panel from the **user-menu** button in the top-right of the header (initials avatar when logged in, a generic account icon otherwise) → **Settings**. The same menu also holds the theme toggle and, when authenticated, login/logout and the admin panel — hover the button to open it. Settings apply immediately without a page reload. While the panel is open, `settings=open` is kept in the URL, so reloading or sharing that URL opens Settings again.
+
+**Where settings live:** if authentication is enabled and you're signed in, your settings are saved to your account and follow you across devices and browsers. If there is no login configured at all, or you simply haven't signed in yet, settings are saved to this browser only — a small status line under the Settings heading always says which is the case. You can still open Settings and change anything while signed out (a `write_protect` deployment lets anyone look around without an account); those changes just stay local to that browser instead of syncing. The first time you sign in on a device with local changes already made, those changes are copied to your account once — after that, your account's settings always win. Signing out falls back to whatever this browser had before you signed in; it does not touch or delete your account's settings.
+
+| Signed out | Signed in |
+|:---:|:---:|
+| ![User menu — signed out](assets/feature-user-menu.png) | ![User menu — signed in](assets/auth-user-menu.png) |
+
+Settings and the theme toggle are always there either way; Login only appears signed out, Logout (and Admin, for admins) only signed in. In auth mode `none` there is no Login entry at all — see [User Authentication](authentication-user.md).
+
+#### Available settings
+
+| Setting | Description |
+|---|---|
+| **Time format** | Switch between *Relative* ("6 days ago") and *Absolute* ("Jun 4, 2025, 12:30 PM") timestamps. A live preview updates as you toggle. |
+| **Default view** | Choose whether the app starts in *Card* or *List* view on every page load. |
+| **Card columns** | Fixed column count (1–6) for the Card View grid, or *Auto* to let it reflow with window width (up to 4). |
+| **Claim animation** | Toggle the animated snake border on the Claim button for unclaimed alerts. |
+| **Default silence duration** | Pre-selected duration when the silence creation form opens (15 min to 3 days). |
+| **Labels** | Pin the label chips you care about to the front, hide the ones you don't, and optionally give a label a color — see below. |
+
+Which label sections Card and List view group by is no longer a Settings entry — it moved to the **Grouped** toolbar control, see [Grouping](#grouping). The resolved-view page size is set from its own per-page selector, not from this panel — see [Resolved View](#resolved-view). Reusable label filters are no longer a Settings entry either — see [Saved filters](#saved-filters) above.
+
+#### Label display
+
+![Settings — Labels](assets/feature-settings-labels.png)
+
+By default every label on an alert renders as a chip. When alerts carry many labels (`customer`, `hostname`, `instance`, `dbid`, …), that gets cluttered — Settings → Labels lets you **pin** the labels you care about so they lead every card and list row (e.g. `customer` → `hostname` → `job`), and **hide** the ones you don't need. The Settings panel is two columns — Display and Silences on the left, Labels on the right.
+
+Labels is one list, every row the same: label name, how many alerts carry it and how many distinct values it has, a color swatch, a **pin** and an **eye**.
+
+- **Pin** — pinned labels move to the top of the list and render first on every alert, in that order. Drag the grip handle to reorder them; click the pin again to unpin.
+- **Hide** — the eye collapses a label into a small **+N** chip at the end of each alert's chip row. A hidden row stays in its alphabetical place, dimmed. Pinning a hidden label shows it again, and hiding a pinned label unpins it — a label is either pinned, normal or hidden.
+- **Color** — labels are neutral by default. The swatch opens a small palette (eight colors, each tuned for both light and dark theme); pick one and every chip for that label key gets it — card and list view, related alerts, the alerts overview, and silence matcher chips. Color is per label **key**, not per value.
+- **Hide all / Show all** — above the unpinned labels; hides or shows every label that isn't pinned in one click. Handy with many labels: pin the few you care about, then *Hide all* the rest. With a search active it only affects the matching labels.
+- **Filter labels…** narrows the list in real time (reordering is available again once the filter is cleared).
+- **Reset labels** — requires a second confirmation click, then resets only this section (pinned, hidden and colors). The "Reset all settings" button at the bottom of the panel resets everything.
+
+This only changes chip *display* in the Card and List views (including the shared-label strip above grouped alerts) — it never affects filtering, silence matching, or the affected-alerts preview, and the alert **detail panel always shows every label**, hidden or not. A label that isn't configured (including one from an alerting rule added after you set this up) simply sorts alphabetically behind the pinned ones and is shown until you hide it — it never changes your existing setup on its own. Every label that isn't hidden is shown. A configured label stays in the list even while no alert currently carries it.
+
+Click an alert's **+N** chip to open its hidden labels in a small floating layer (hover the chip first to see which ones, without opening it); click elsewhere or press Escape to close it again. It opens as a layer rather than growing the card in place, so it never shifts other alerts around in the card view. This is a per-alert, view-only peek — it never changes your settings.
 
 ---
 
-## Dark / Light Theme
+### Dark / Light Theme
 
 Switch between dark and light mode at any time; the preference is persisted in `localStorage`.
 

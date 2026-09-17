@@ -65,10 +65,14 @@ does hot-reload).
 
 1. Write the doc where it belongs (`docs/<name>.md`).
 2. Add an entry to `PAGES` in `website/scripts/pages.mjs`
-   (`{ src: 'docs/<name>.md', route: '<name>' }`; add `title` only when the
-   file has no `# ` heading or needs a different nav title).
+   (`{ src: 'docs/<name>.md', route: '<category>/<name>' }`; add `title` only
+   when the file has no `# ` heading or needs a different nav title). `route`
+   may be nested (e.g. `howto/retention`) — the site is organised by reader
+   intent (Diátaxis: Getting Started / Tasks / Reference / Concepts / Help /
+   Project), not by source file, and `sync-content.mjs` creates whatever
+   directory depth `route` needs.
 3. Add it to the `sidebar` (and `nav` if it is a top-level entry) in
-   `website/.vitepress/config.mts`.
+   `website/.vitepress/config.mts`, under the section matching its category.
 4. `make website` — the build fails on dead internal links, so a link to the
    new page from another doc is verified automatically.
 
@@ -88,7 +92,12 @@ When a restructure renames or removes a route, add an entry to `REDIRECTS` in
 `<meta http-equiv="refresh">` to `<new-route>` and a canonical link — the only
 option here, since `cleanUrls: true` + GitHub Pages means there is no
 server-side redirect. `to` must be a live `PAGES` route and `from` must not
-collide with one; the sync script throws otherwise.
+collide with one; the sync script throws otherwise. The `<meta>`/`<link>`
+targets need the full `/jarvis/<route>` path (raw HTML, not processed by
+VitePress); the stub's own markdown fallback link must **not** repeat that
+prefix — it goes through VitePress's normal link handling, which already
+adds `base`, so prefixing it there double-counts and the dead-link check
+flags it.
 
 ---
 
@@ -99,9 +108,9 @@ to its **source** file and rewrites it:
 
 | Link target | Becomes |
 |---|---|
-| another file listed in `PAGES` | the website route (`/features`) |
+| another file listed in `PAGES` | the website route (`/reference/features`) |
 | any other repo file | `https://github.com/kj187/jarvis/blob/main/<path>` |
-| an image under `docs/assets/` | `./assets/<file>` (copied into `content/assets/`) |
+| an image under `docs/assets/` | `/assets/<file>` (public dir — routes now nest to any depth, e.g. `concepts/architecture`, so a page-relative `./assets/…` no longer resolves at a fixed depth; also copied flat into `content/assets/` for `HomeScreenshot.vue`'s direct import) |
 | `frontend/public/logo.png` | `/logo.png` |
 | any other image | `https://raw.githubusercontent.com/kj187/jarvis/main/<path>` |
 | `http(s):`, `mailto:`, `#fragment` | unchanged |
@@ -120,7 +129,7 @@ concept of the site's manual light/dark switch (`appearance: 'dark'` in
 `config.mts`) — it can only follow the OS/browser theme via
 `prefers-color-scheme` — so the same markup needs two different theme
 mechanisms depending on where it renders. Must run after the srcset rewrite,
-since it matches on the already-rewritten `./assets/…` paths.
+since it matches on the already-rewritten `/assets/…` paths.
 
 ---
 
@@ -230,6 +239,7 @@ in the docs workflow.
 | `ERR_PNPM_IGNORED_BUILDS` | `website/pnpm-workspace.yaml` must allow the `esbuild` build script (`allowBuilds` + `onlyBuiltDependencies`), same as `frontend/`. |
 | `The language 'x' is not loaded` | Shiki has no grammar for that fence language. Map it in `markdown.languageAlias` to a real grammar — an alias to `txt` **breaks** the build. `promql` has no grammar and warns harmlessly. |
 | Images 404 in production | Only `docs/assets/*` is copied. Anything else becomes a raw.githubusercontent link; move the image to `docs/assets/` if it belongs to the docs. |
+| `Could not resolve "./assets/…"` at build | A page linked its image with a relative `./assets/…` path instead of letting `rewriteLinks()` produce `/assets/…`. Relative paths only resolve from a flat `content/*.md` — any nested route (`concepts/…`, `howto/…`) breaks. Fix the source doc's image markdown, don't hand-edit the rewriter's output. |
 | Assets 404 under a different host | `base: '/jarvis/'` is hardcoded for the Pages path. Absolute paths in `head`/frontmatter must include it. |
 | `dist/` owned by root | The `--user 0` flag is missing from the podman invocation. |
 

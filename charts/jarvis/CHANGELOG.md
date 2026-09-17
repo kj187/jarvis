@@ -16,6 +16,7 @@ Entries up to and including 1.7.6 were reconstructed from the git history when t
 
 - The chart README shows how to configure per-cluster upstream authentication (OAuth2 client credentials, bearer token, basic auth, custom headers) through `extraEnv`. The chart has no `clusters[].auth` values, so this was reachable only by guessing the numbered `JARVIS_CLUSTER_<n>_*` variable names — and nothing warned that credentials written inline under `extraEnv` sit in plaintext in the release values. Documentation only, no rendered change.
 - The ingress section points at the new [reverse-proxy guide](../../docs/reverse-proxy.md) and states that `config.allowedOrigins` must name the URL the browser uses — the WebSocket annotations alone are not enough. Documentation only, no rendered change.
+- `artifacthub.io/links`'s Documentation entry now points at the published docs site (`https://kj187.github.io/jarvis/`) instead of the `docs/` tree on GitHub, following the docs restructure into a reader-intent site. Metadata only, no rendered change.
 
 ### Fixed
 

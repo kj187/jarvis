@@ -7,7 +7,7 @@ whole thing is removed with a single command.
 This is not an installation guide — it installs nothing permanent and
 configures nothing you would keep. It exists so you can see what Jarvis does
 before deciding whether to run it for real. When you get to that point, go to
-[Installation](installation.md).
+[Deploy with Compose](deploy-compose.md).
 
 - [What you need](#what-you-need)
 - [Start it](#start-it)
@@ -178,7 +178,7 @@ not the demo stack — see [Contributing](../CONTRIBUTING.md).
 
 ## Next steps
 
-- [Installation](installation.md) — run Jarvis against your own Alertmanager
+- [Deploy with Compose](deploy-compose.md) — run Jarvis against your own Alertmanager
 - [Configuration](configuration.md) — every environment variable
 - [Features](features.md) — the complete feature reference
 - [Alert lifecycle](alert-lifecycle.md) — why the history can be trusted

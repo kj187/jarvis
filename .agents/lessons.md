@@ -412,7 +412,7 @@ this because invariant #8 forces `SetMaxOpenConns(1)`.
 shared PostgreSQL. Cap it (`JARVIS_DB_MAX_OPEN_CONNS`, default 10) and set
 `MaxIdleConns = MaxOpenConns` so bursts reuse connections instead of
 churning them. Full sizing guidance (leader-election + fanout connections,
-reserved slots): `docs/persistence.md → Connection-pool cap`.
+reserved slots): `docs/postgres-ha.md → Connection-pool cap`.
 
 ---
 

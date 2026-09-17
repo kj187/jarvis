@@ -300,7 +300,7 @@ CREATE INDEX IF NOT EXISTS idx_silence_events_fingerprint        ON silence_even
 CREATE INDEX IF NOT EXISTS idx_users_username                    ON users(username);
 CREATE INDEX IF NOT EXISTS idx_users_oidc_sub                    ON users(oidc_sub);
 
--- PostgreSQL only (docs/persistence.md D3) — SQLite never creates or
+-- PostgreSQL only (docs/postgres-ha.md D3) — SQLite never creates or
 -- reads this table (single replica, no followers to feed).
 CREATE TABLE IF NOT EXISTS poll_snapshots (
     cluster_name TEXT PRIMARY KEY,
@@ -566,7 +566,7 @@ Optional, env-var-only background deletion of old rows — user-facing docs:
 
 ## Leader Election (`internal/leader`)
 
-Multi-replica groundwork (full design: `docs/persistence.md`). Exactly
+Multi-replica groundwork (full design: `docs/postgres-ha.md`). Exactly
 one pod at a time may run the leader-only side effects listed below; every
 pod still serves reads/API/WS equally regardless of leadership.
 

@@ -67,7 +67,7 @@ no such lock — the batching there is purely to avoid one oversized
 transaction, not to avoid blocking other writers).
 
 **Multi-replica (PostgreSQL only)**: the sweep is a leader-only duty — see
-[docs/persistence.md](persistence.md#high-availability--multi-replica-postgresql-only).
+[docs/postgres-ha.md](postgres-ha.md#high-availability--multi-replica-postgresql-only).
 A follower never sweeps; only the current leader runs `Sweeper.Start`'s
 timer loop, so retention still runs exactly once per interval regardless of
 `replicaCount`.
