@@ -12,8 +12,8 @@ hero:
     alt: Jarvis
   actions:
     - theme: brand
-      text: Get started
-      link: /start/first-steps
+      text: Getting Started
+      link: /getting-started
     - theme: alt
       text: View on GitHub
       link: https://github.com/kj187/jarvis
@@ -27,7 +27,7 @@ features:
   - icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/></svg>'
     title: Every cluster, live
     details: All your Alertmanager clusters in one realtime view, pushed over WebSocket. Point Jarvis at every member of an HA cluster and it deduplicates the alerts.
-    link: /reference/configuration#alertmanager-ha-clusters
+    link: /deploy/alertmanager#alertmanager-ha-clusters
     linkText: Multi-cluster and HA
   - icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></svg>'
     title: Claim and comment
@@ -71,5 +71,7 @@ Every line is held to the same bar as any other production code: static analysis
 vulnerability scans in CI, a strict Content Security Policy and a hardened, read-only
 container.
 [How Jarvis is secured](/concepts/security)
+
+Current release image: `ghcr.io/kj187/jarvis:1.12.0`.
 
 </div>

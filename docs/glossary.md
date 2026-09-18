@@ -3,6 +3,13 @@
 Terms used throughout the documentation without re-explaining them each
 time. Each entry links to the page that covers it in full.
 
+## Cluster
+
+One Alertmanager service configured in Jarvis. A Jarvis cluster can point to
+one Alertmanager member or to several members of the same Alertmanager HA
+gossip group; it does not mean the Kubernetes cluster where Jarvis runs. See
+[Connect Alertmanager](deploy-alertmanager.md).
+
 ## Claim
 
 A user-visible marker that someone is actively handling an alert. Stored in
@@ -44,6 +51,38 @@ followers continue serving reads and WebSockets from distributed snapshots.
 SQLite installations always have one replica, which is therefore always the
 leader. See [PostgreSQL & HA](postgres-ha.md#high-availability--multi-replica-postgresql-only).
 
+## Follower
+
+Any non-leader Jarvis pod in a multi-replica PostgreSQL deployment. Followers
+do not poll Alertmanager or write lifecycle history; they serve reads and
+WebSockets from snapshots distributed by the leader and can take over after
+leader failure. See
+[Leader-only polling and snapshot distribution](postgres-ha.md#leader-only-polling--snapshot-distribution).
+
+## Matcher
+
+A label condition consisting of a label name, an operator (`=`, `!=`, `=~`,
+or `!~`), and a value. Matchers are used to filter alerts and define silence
+coverage. Silence regex matchers are anchored like Alertmanager's; filter-bar
+regexes deliberately use more lenient search behavior. See
+[Label filters](features.md#label-filters) and
+[Create silence](features.md#create-silence).
+
+## Member
+
+One Alertmanager process or endpoint within a configured Jarvis cluster. In an
+Alertmanager HA cluster Jarvis polls every member, deduplicates their alerts,
+and reports health per member. See
+[Alertmanager HA clusters](deploy-alertmanager.md#alertmanager-ha-clusters).
+
+## Occurrence count
+
+How many distinct alert episodes Jarvis has recorded for the same
+`(fingerprint, cluster)`. The first episode starts at one; repeated poll rows
+within that episode do not increase it, while a genuine re-fire after the
+grace period does. See
+[Occurrence count](alert-lifecycle.md#occurrence-count).
+
 ## Recorder
 
 The backend component that polls every configured cluster on a fixed
@@ -52,6 +91,14 @@ and writes every resulting state change to the database. On a single
 replica it is always active; with PostgreSQL and more than one replica,
 only the current leader runs it. See [Alert lifecycle](alert-lifecycle.md)
 and [PostgreSQL & HA](postgres-ha.md).
+
+## Resolved buffer
+
+The short-lived in-memory copy of recently resolved alerts that keeps them in
+live snapshots and WebSocket updates for 20 minutes after their episode ends.
+It is separate from persistent resolved history, which remains in the
+database. See
+[What happens on resolution](alert-lifecycle.md#what-happens-on-resolution).
 
 ## Snapshot
 

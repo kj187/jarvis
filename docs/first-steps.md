@@ -1,4 +1,4 @@
-# Getting Started
+# First steps in the UI
 
 Start here after opening Jarvis for the first time. Four things you will
 actually do in the UI are walked through once each:

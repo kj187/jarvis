@@ -1,31 +1,10 @@
-# Security
+# Security model
 
 ## Overview
 
 Jarvis ships with built-in authentication (see [authentication-user.md](authentication-user.md)).
 It assumes deployment behind a trusted reverse proxy (e.g. Traefik, nginx) for TLS termination.
 This document describes the security measures built into the application itself.
-
----
-
-## Static Analysis (Go)
-
-| Tool | Purpose | When |
-|---|---|---|
-| `gosec` | Hardcoded credentials, SQL injection, path traversal, weak crypto | Pre-Commit + CI (via `golangci-lint`) |
-| `govulncheck` | Checks dependencies against the Go Vulnerability DB (CVEs) | CI |
-| `golangci-lint` | Aggregator: `gosec`, `errcheck`, `bodyclose`, `noctx`, `staticcheck` | Pre-Commit + CI |
-
-Run manually:
-
-```bash
-cd backend
-gosec ./...
-govulncheck ./...
-golangci-lint run ./...
-```
-
----
 
 ## HTTP Security (Echo Middleware)
 
@@ -35,6 +14,13 @@ All HTTP responses include security headers via Echo's `SecureWithConfig` middle
 - `X-Content-Type-Options: nosniff`
 - `X-Frame-Options: SAMEORIGIN`
 - `Strict-Transport-Security` (when served over HTTPS)
+- `Content-Security-Policy: default-src 'self'; script-src 'self'; style-src
+  'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'`
+
+The CSP's `connect-src 'self'` means the browser API and WebSocket connection
+must be same-origin. A deployment that exposes them under another origin needs
+proxy routing that presents them as one origin; the CORS allowlist alone does
+not override CSP.
 
 CORS is configured with a strict origin allowlist (`JARVIS_ALLOWED_ORIGINS`).
 No wildcard `*` is used. WebSocket upgrades validate the `Origin` header
@@ -48,7 +34,7 @@ Request bodies are limited to **1 MB**.
 ## Input Validation
 
 - Fingerprint path params: validated against `[a-f0-9]{16}` regex
-- Pagination: `limit` capped at 100, `offset` ≥ 0
+- Pagination: `limit` accepts 10, 25, 50, or 100; `offset` ≥ 0
 - Silence fields: `comment` is required; length limits enforced
 - Outbound HTTP (Alertmanager client): 10s timeout on all requests
 - JSON decoding uses `DisallowUnknownFields` where appropriate
@@ -57,11 +43,10 @@ Request bodies are limited to **1 MB**.
 
 ## Metrics Endpoint
 
-`GET /metrics` is public by design, like `/health` — it stays reachable even
-when `JARVIS_AUTH_MODE=full_protect` is set, so external Prometheus scrapers
-never need a login. It exposes only aggregate alert counts, poll/event
-counters, and configured cluster names — never alert names, labels, or
-annotations. See [docs/metrics.md](metrics.md) for the full metric reference.
+`GET /metrics` is public by design, like `/health`, and exposes aggregate
+operational data but never alert names, labels, or annotations. See
+[Monitoring and metrics](metrics.md) for the exposure details, setup, and full
+metric reference.
 
 ---
 
@@ -83,35 +68,6 @@ security_opt:
 cap_drop:
   - ALL
 ```
-
----
-
-## Dependency Security
-
-- `go mod verify` — validates module checksums against `go.sum`
-- `govulncheck ./...` — CVE check in CI on every push and pull request
-- `pnpm audit` — frontend dependency CVE check in CI
-- Renovate / Dependabot recommended for automated dependency update PRs
-
----
-
-## Frontend Security
-
-- TypeScript `strict: true`
-- No `dangerouslySetInnerHTML` — React escapes all outputs by default
-- CSP headers set by the backend
-- `pnpm audit` in CI
-
----
-
-## Secrets Management
-
-- `.env` is listed in `.gitignore` and is never committed
-- `.env.example` contains **placeholder values only** (no real secrets)
-- No secrets in source code (gosec G-Codes enforce this)
-- All configuration via environment variables (12-Factor App)
-
----
 
 ## Reporting a Vulnerability
 

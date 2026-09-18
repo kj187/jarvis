@@ -109,7 +109,7 @@ topologySpreadConstraints:
 The chart's liveness and readiness probes both call `GET /health`
 (`charts/jarvis/templates/deployment.yaml`) — a plain `{"status": "ok"}`
 handler with no dependency checks, so a `200` only means the process is up
-and serving HTTP. Like `/metrics` ([Set up monitoring](monitoring.md)), it is
+and serving HTTP. Like `/metrics` ([Monitoring and metrics](metrics.md)), it is
 intentionally public and bypasses `JARVIS_AUTH_MODE=full_protect`, so probes
 never need credentials.
 

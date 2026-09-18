@@ -8,7 +8,6 @@ Values are read once at startup — a change means a restart.
 
 - [Core](#core)
 - [Clusters](#clusters) — the only required settings
-- [Alertmanager HA clusters](#alertmanager-ha-clusters)
 - [Upstream authentication](#upstream-authentication)
 - [Database](#database)
 - [User authentication](#user-authentication)
@@ -32,65 +31,17 @@ Values are read once at startup — a change means a restart.
 
 ## Clusters
 
-At least one cluster is required; Jarvis refuses to start without it. Repeat
-the block with `_2_`, `_3_`, … for more clusters — they are read until the
-first gap, so the numbering has to be contiguous.
+At least one cluster is required. Repeat the variables with `_2_`, `_3_`, …
+for more clusters. The numbering must be contiguous. Setup examples,
+multi-cluster behavior, Alertmanager HA deduplication, member aliases, and
+silence writes are covered in [Connect Alertmanager](deploy-alertmanager.md).
 
 | Variable | Default | Description |
 |---|---|---|
 | <a id="jarvis_cluster_n_name"></a>`JARVIS_CLUSTER_1_NAME` | — | Display name, shown in the UI and used in metrics (**required**) |
-| <a id="jarvis_cluster_n_alertmanager_url"></a>`JARVIS_CLUSTER_1_ALERTMANAGER_URL` | — | Alertmanager URL as Jarvis reaches it (**required**). A comma-separated list makes this one HA cluster — see [below](#alertmanager-ha-clusters) |
+| <a id="jarvis_cluster_n_alertmanager_url"></a>`JARVIS_CLUSTER_1_ALERTMANAGER_URL` | — | Alertmanager URL as Jarvis reaches it (**required**). A comma-separated list makes this one HA cluster — see [Connect Alertmanager](deploy-alertmanager.md#alertmanager-ha-clusters) |
 | <a id="jarvis_cluster_n_prometheus_url"></a>`JARVIS_CLUSTER_1_PROMETHEUS_URL` | — | Prometheus URL, used for the "source" links on an alert |
 | <a id="jarvis_cluster_n_host_alias"></a>`JARVIS_CLUSTER_1_HOST_ALIAS` | — | The Alertmanager URL as the *browser* reaches it, when that differs from the internal one. One value applies to every member; a comma-separated list matching the member count sets one alias per member, in the same order |
-
-```env
-JARVIS_CLUSTER_1_NAME=dev
-JARVIS_CLUSTER_1_ALERTMANAGER_URL=http://am-dev.example.com:9093
-JARVIS_CLUSTER_1_PROMETHEUS_URL=http://prom-dev.example.com:9090
-
-JARVIS_CLUSTER_2_NAME=prod
-JARVIS_CLUSTER_2_ALERTMANAGER_URL=http://am.prod.example.com:9093
-```
-
----
-
-## Alertmanager HA clusters
-
-Alertmanager's HA mode runs two or more instances in a gossip cluster:
-Prometheus sends every alert to all of them, and silences replicate between
-them. Point one Jarvis cluster at all members by listing them
-comma-separated. Jarvis polls every member, deduplicates alerts by
-fingerprint (the freshest `updatedAt` wins), and keeps the cluster healthy as
-long as at least one member answers.
-
-```env
-JARVIS_CLUSTER_2_NAME=prod
-JARVIS_CLUSTER_2_ALERTMANAGER_URL=http://am1.prod:9093,http://am2.prod:9093,http://am3.prod:9093
-JARVIS_CLUSTER_2_PROMETHEUS_URL=http://prom.prod:9090
-```
-
-What to know about it:
-
-- **Authentication is per cluster, not per member.** HA replicas share one
-  auth setup in practice: Jarvis fetches a single OAuth2 token and presents it
-  to every member, so all of them must accept tokens from that issuer.
-  Members with genuinely different credentials are not supported — align the
-  auth, or configure such a member as its own cluster (which brings back
-  duplicate alerts).
-- **`HOST_ALIAS` takes one value or exactly as many as there are members.**
-  Anything in between is a startup error. Useful when each member is reachable
-  on its own port locally:
-  ```env
-  JARVIS_CLUSTER_2_ALERTMANAGER_URL=http://test-alertmanager:9093,http://test-alertmanager-2:9093
-  JARVIS_CLUSTER_2_HOST_ALIAS=http://localhost:9094,http://localhost:9095
-  ```
-- **Silences are written to the first healthy member** in configuration order,
-  retrying once against the next one on a transport failure. Never to all of
-  them — gossip already replicates, and writing everywhere would create
-  duplicate silences.
-- A member is identified by its `host:port` in the UI, in metrics and in an
-  alert's `seenOn` list.
-- Duplicate member URLs inside one cluster are a startup error.
 
 ---
 

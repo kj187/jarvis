@@ -18,6 +18,10 @@ Entries up to and including 1.7.6 were reconstructed from the git history when t
 
 ### Changed
 
+- The chart README now keeps only chart values and chart-specific examples;
+  release verification, upgrade/rollback, and authentication procedures link
+  to their canonical guides instead of duplicating them. Documentation only,
+  no rendered change.
 - The Kubernetes section of [docs/authentication-alertmanager.md](../../docs/authentication-alertmanager.md) and the chart README now document `clusters[].auth.*` directly instead of the `extraEnv` workaround; `extraEnv` is kept as a documented fallback for chart versions before this one.
 - The ingress section points at the new [reverse-proxy guide](../../docs/reverse-proxy.md) and states that `config.allowedOrigins` must name the URL the browser uses — the WebSocket annotations alone are not enough. Documentation only, no rendered change.
 - `artifacthub.io/links`'s Documentation entry now points at the published docs site (`https://kj187.github.io/jarvis/`) instead of the `docs/` tree on GitHub, following the docs restructure into a reader-intent site. Metadata only, no rendered change.

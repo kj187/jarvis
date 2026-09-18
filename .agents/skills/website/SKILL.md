@@ -70,11 +70,11 @@ Adding a page or changing `pages.mjs`/`config.mts` still needs a restart.
 
 1. Write the doc where it belongs (`docs/<name>.md`).
 2. Add an entry to `PAGES` in `website/scripts/pages.mjs`
-   (`{ src: 'docs/<name>.md', route: '<category>/<name>' }`; add `title` only
-   when the file has no `# ` heading or needs a different nav title). `route`
-   may be nested (e.g. `howto/retention`) — the site is organised by reader
-   intent (Diátaxis: Getting Started / Tasks / Reference / Concepts / Help /
-   Project), not by source file, and `sync-content.mjs` creates whatever
+(`{ src: 'docs/<name>.md', route: '<category>/<name>' }`; add `title` only
+when the file has no `# ` heading or needs a different nav title). `route`
+may be nested (e.g. `howto/retention`) — the site is organised by reader
+intent (Diátaxis: Getting Started / Install / Operate / Reference / Concepts /
+Help / Project), not by source file, and `sync-content.mjs` creates whatever
    directory depth `route` needs.
 3. Add it to the `sidebar` (and `nav` if it is a top-level entry) in
    `website/.vitepress/config.mts`, under the section matching its category.

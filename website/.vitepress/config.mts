@@ -104,8 +104,8 @@ export default defineConfig({
   themeConfig: {
     logo: '/logo.png',
     nav: [
-      { text: 'Videos', link: '/videos' },
-      { text: 'Installation', link: '/deploy/compose' },
+      { text: 'Getting Started', link: '/getting-started' },
+      { text: 'Install', link: '/deploy/compose' },
       { text: 'Reference', link: '/reference/features' },
       { text: 'Concepts', link: '/concepts/architecture' },
       {
@@ -120,27 +120,35 @@ export default defineConfig({
 
     sidebar: [
       {
-        text: 'Getting Started',
+        text: 'Start Here',
         items: [
-          { text: 'Getting Started', link: '/start/first-steps' },
+          { text: 'Getting Started', link: '/getting-started' },
           { text: 'Local demo', link: '/demo' },
+          { text: 'First steps in the UI', link: '/start/first-steps' },
           { text: 'Videos', link: '/videos' },
         ],
       },
       {
-        text: 'Tasks',
+        text: 'Install',
         items: [
-          { text: 'Install with Compose', link: '/deploy/compose' },
-          { text: 'Install on Kubernetes', link: '/deploy/kubernetes' },
+          { text: 'With Compose', link: '/deploy/compose' },
+          { text: 'On Kubernetes', link: '/deploy/kubernetes' },
           { text: 'Behind a proxy / ingress', link: '/deploy/reverse-proxy' },
-          { text: 'Set up user login', link: '/howto/user-auth' },
-          { text: 'Connect a protected Alertmanager', link: '/howto/upstream-auth' },
+          { text: 'Connect Alertmanager', link: '/deploy/alertmanager' },
+          { text: 'Connect a protected Alertmanager', link: '/deploy/upstream-auth' },
+          { text: 'Set up user login', link: '/deploy/user-auth' },
+        ],
+      },
+      {
+        text: 'Operate',
+        items: [
           { text: 'PostgreSQL & HA', link: '/howto/postgres-ha' },
           { text: 'Migrate from SQLite', link: '/howto/migrate-postgres' },
           { text: 'Configure retention', link: '/howto/retention' },
-          { text: 'Set up monitoring', link: '/howto/monitoring' },
+          { text: 'Monitoring & metrics', link: '/reference/metrics' },
+          { text: 'Backup & restore', link: '/howto/backup' },
+          { text: 'Upgrade & rollback', link: '/howto/upgrade' },
           { text: 'Verify release artifacts', link: '/howto/verify-release' },
-          { text: 'Upgrade', link: '/howto/upgrade' },
         ],
       },
       {
@@ -148,7 +156,7 @@ export default defineConfig({
         items: [
           { text: 'Features', link: '/reference/features' },
           { text: 'Configuration', link: '/reference/configuration' },
-          { text: 'Metrics', link: '/reference/metrics' },
+          { text: 'Monitoring & metrics', link: '/reference/metrics' },
           { text: 'Helm values', link: '/reference/helm-values' },
           { text: 'Compatibility', link: '/reference/compatibility' },
           { text: 'Changelog', link: '/reference/changelog' },
@@ -158,11 +166,11 @@ export default defineConfig({
       {
         text: 'Concepts',
         items: [
+          { text: 'Glossary', link: '/concepts/glossary' },
           { text: 'Architecture', link: '/concepts/architecture' },
           { text: 'Alert lifecycle', link: '/concepts/alert-lifecycle' },
           { text: 'Why SQLite is single-replica', link: '/concepts/sqlite-limits' },
           { text: 'Security model', link: '/concepts/security' },
-          { text: 'Glossary', link: '/concepts/glossary' },
           { text: 'Project scope', link: '/concepts/scope' },
         ],
       },

@@ -129,3 +129,25 @@ automatically before each commit.
 ## Security
 
 See [SECURITY.md](SECURITY.md) to report vulnerabilities.
+
+### Development security checks
+
+Backend changes are checked with `gosec`, `govulncheck`, and
+`golangci-lint`; frontend changes use TypeScript strict mode, ESLint, and
+`pnpm audit`. CI also verifies Go module checksums and scans the repository for
+secrets. Dependabot opens regular dependency-update pull requests.
+
+Run the complete project security suite with:
+
+```bash
+make security-all
+```
+
+Keep real credentials out of `.env.example` and source files. Local `.env`
+files are ignored by Git, and production secrets should come from the
+deployment platform rather than committed values. Frontend production code
+must not use `dangerouslySetInnerHTML`; React's normal rendering keeps text
+escaped, while the backend's Content Security Policy provides another layer.
+
+The maintained tool list, commands, and new-code review checklist are in
+[the security-check skill](.agents/skills/security-check/SKILL.md).

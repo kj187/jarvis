@@ -11,22 +11,26 @@
  */
 export const PAGES = [
   // Getting Started
+  { src: 'docs/getting-started.md', route: 'getting-started' },
   { src: 'docs/demo.md', route: 'demo' },
   { src: 'docs/videos.md', route: 'videos' },
   { src: 'docs/first-steps.md', route: 'start/first-steps' },
 
-  // Tasks (how-to)
+  // Install
   { src: 'docs/deploy-compose.md', route: 'deploy/compose' },
   { src: 'docs/deploy-kubernetes.md', route: 'deploy/kubernetes' },
   { src: 'docs/reverse-proxy.md', route: 'deploy/reverse-proxy' },
-  { src: 'docs/authentication-user.md', route: 'howto/user-auth' },
-  { src: 'docs/authentication-alertmanager.md', route: 'howto/upstream-auth' },
+  { src: 'docs/deploy-alertmanager.md', route: 'deploy/alertmanager' },
+  { src: 'docs/authentication-alertmanager.md', route: 'deploy/upstream-auth' },
+  { src: 'docs/authentication-user.md', route: 'deploy/user-auth' },
+
+  // Operate
   { src: 'docs/postgres-ha.md', route: 'howto/postgres-ha' },
   { src: 'docs/migrate-postgres.md', route: 'howto/migrate-postgres' },
   { src: 'docs/retention.md', route: 'howto/retention' },
-  { src: 'docs/monitoring.md', route: 'howto/monitoring' },
-  { src: 'docs/verify-release.md', route: 'howto/verify-release' },
+  { src: 'docs/backup.md', route: 'howto/backup' },
   { src: 'docs/upgrade.md', route: 'howto/upgrade' },
+  { src: 'docs/verify-release.md', route: 'howto/verify-release' },
 
   // Reference
   { src: 'docs/features.md', route: 'reference/features' },
@@ -69,13 +73,15 @@ export const ROUTE_BY_SOURCE = new Map(PAGES.map((p) => [p.src, `/${p.route}`]))
  * means there is no server-side redirect, so this is the only mechanism.
  */
 export const REDIRECTS = [
-  { from: 'getting-started', to: 'demo' },
   { from: 'installation', to: 'deploy/compose' },
   { from: 'configuration', to: 'reference/configuration' },
   { from: 'features', to: 'reference/features' },
   { from: 'alert-lifecycle', to: 'concepts/alert-lifecycle' },
-  { from: 'authentication-user', to: 'howto/user-auth' },
-  { from: 'authentication-alertmanager', to: 'howto/upstream-auth' },
+  { from: 'authentication-user', to: 'deploy/user-auth' },
+  { from: 'authentication-alertmanager', to: 'deploy/upstream-auth' },
+  { from: 'howto/user-auth', to: 'deploy/user-auth' },
+  { from: 'howto/upstream-auth', to: 'deploy/upstream-auth' },
+  { from: 'howto/monitoring', to: 'reference/metrics' },
   { from: 'persistence', to: 'howto/postgres-ha' },
   { from: 'retention', to: 'howto/retention' },
   { from: 'metrics', to: 'reference/metrics' },

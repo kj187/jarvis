@@ -171,15 +171,10 @@ Full alert history persisted in the database (SQLite or PostgreSQL — see [docs
 
 The resolved view is Jarvis's history log. Every alert that has ever fired is recorded in the database with its complete lifecycle, and the resolved view shows all alerts that have reached a `resolved` state. This is the core capability that separates Jarvis from in-memory-only UIs.
 
-Jarvis loads this database-backed history only when you open the **Resolved** tab. Active and Suppressed views do not refresh the resolved list in the background. Search waits briefly while you type, then search, label matchers and the per-page choice are sent to the server; changing any of them returns to page 1. During ordinary page navigation the previous page remains dimmed until its replacement arrives, and the controls are temporarily disabled. The first load shows a progress indicator; if it fails, **Retry** repeats the request once requested, while a failed refresh keeps the last successful result visible.
-
-For clients that need bounded history reads, Jarvis also exposes
-`GET /api/v1/alerts/resolved`. It returns a stable event-ID-ordered page plus
-the matching total, accepts page sizes 10/25/50/100, and can filter by cluster,
-severity, search text, or label matchers. Resolved regex matchers use Go's RE2
-syntax; invalid regex indices are reported in the response rather than failing
-the whole request. Search is case-insensitive within each real label name or
-value and does not search JSON punctuation or synthesized labels.
+Jarvis loads this database-backed history only when you open the **Resolved**
+tab. Active and Suppressed views do not fetch it in the background. Search,
+label matchers, cluster and severity filters, and the per-page choice all apply
+to the complete stored history rather than only the visible page.
 
 Alerts are displayed as a flat list in stable newest-event-first order. A right-aligned, grouped **page browser** at the top and bottom allows navigation through large result sets without crowding the alert list; on narrow screens its controls wrap into stacked rows. The **per-page selector** (10 / 25 / 50 / 100) sits to the left of the page browser and is persisted in localStorage so your preference is remembered across sessions. Opening a resolved alert that is not on the current page performs one small fingerprint lookup instead of loading the full history.
 
@@ -212,7 +207,9 @@ Every alert's stats line in the detail panel carries a box-grid heatmap: each ce
 
 Hover the info icon next to the heatmap label for the same explanation inline. Hovering an individual cell shows an exact count and time range tooltip.
 
-The same box-grid rendering (`HeatmapCellsRow`) also drives a smaller, decorative **firing sparkline** on each alert card — the most recent 14 daily buckets under the timestamp row, with no tooltips (so it doesn't fight the card's own click target):
+A smaller, decorative **firing sparkline** on each alert card shows the most
+recent 14 daily buckets under the timestamp row, without competing with the
+card's own click target:
 
 ![Card firing sparkline](assets/feature-heatmap-card.png)
 
