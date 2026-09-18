@@ -177,6 +177,19 @@ export function Header() {
       {/* ── Main row ── */}
       <div className="flex items-center h-11 px-3">
 
+        {/* Brand mark — decorative (the product name lives in the About popover), so it adds
+            no accessible name that could collide with the nav buttons' names. */}
+        <img
+          src="/logo.png"
+          alt=""
+          aria-hidden="true"
+          width={28}
+          height={28}
+          data-testid="header-mark"
+          className="mr-2.5 h-7 w-7 shrink-0 select-none"
+          draggable={false}
+        />
+
         {/* Nav tabs — always left */}
         <div className="flex self-stretch shrink-0" role="group" aria-label="Navigation">
           <button

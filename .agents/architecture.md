@@ -1206,7 +1206,7 @@ index.css             → Tailwind v4 `@theme` design tokens (dark default) + `[
     │                            component — no assemble animation (that stays video-only, see
     │                            `e2e/video/backdrops.js`'s `owl()`)
     ├── layout/
-    │   ├── Header.tsx         → nav tabs, cluster status, WS indicator, polling/refresh,
+    │   ├── Header.tsx         → decorative owl mark (`/logo.png`, `data-testid="header-mark"`, `alt=""`), nav tabs, cluster status, WS indicator, polling/refresh,
     │   │                        create-silence, mobile hamburger. Settings + theme toggle +
     │   │                        login/logout/admin all live in one always-present user-menu
     │   │                        button (Grafana-style) — initials avatar when authenticated

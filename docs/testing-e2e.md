@@ -255,7 +255,7 @@ Quick reference: which spec file covers what. Use this to find the right place f
 
 | Spec file | Groups | What it covers |
 |---|---|---|
-| `app-shell.spec.ts` | A1–A10 | Nav-tabs, theme toggle, mobile hamburger, WS indicator, manual refresh, cluster status in header, info popover, keyboard operation of the cluster/user/refresh header popovers (Enter, Escape, focus-out) |
+| `app-shell.spec.ts` | A1–A11 | Nav-tabs, theme toggle, mobile hamburger, WS indicator, manual refresh, cluster status in header, info popover, keyboard operation of the cluster/user/refresh header popovers (Enter, Escape, focus-out), owl mark before the tabs (also at 375 px) |
 | `card-view.spec.ts` | B1 | Card view renders polled alerts (smoke test) |
 | `alerts-views.spec.ts` | B2–B6, B9 | List↔card toggle, severity ordering, card pagination, fullscreen, resolved view including right-aligned top/footer page navigation |
 | `resolved-fetch.spec.ts` | — | Resolved history is fetched only in resolved mode; initial spinner, error/retry and mode-exit cancellation |

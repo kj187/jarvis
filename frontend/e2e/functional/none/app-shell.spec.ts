@@ -240,3 +240,19 @@ test('A10 refresh hint is shown on keyboard focus and dismissed with Escape', as
   await page.keyboard.press('Escape')
   await expect(hint).toBeHidden()
 })
+
+test('A11 header shows the owl mark left of the navigation tabs, also on mobile', async ({ page }) => {
+  await dismissNoAuthNotice(page)
+  await page.goto('/')
+
+  const mark = page.getByTestId('header-mark')
+  const alertsTab = page.getByRole('button', { name: /^Alerts\b/ })
+  await expect(mark).toBeVisible()
+  await expect(mark).toHaveJSProperty('complete', true)
+  const [m, t] = [await mark.boundingBox(), await alertsTab.boundingBox()]
+  expect(m && t && m.x + m.width <= t.x).toBe(true)
+
+  await page.setViewportSize({ width: 375, height: 700 })
+  await expect(mark).toBeVisible()
+  await expect(alertsTab).toBeVisible()
+})
