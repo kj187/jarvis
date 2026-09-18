@@ -29,6 +29,7 @@ Repository layout:
 - `charts/jarvis/` — Helm chart (+ helm-unittest tests under `tests/`, own `CHANGELOG.md`)
 - `docs/` — user-facing documentation (not AI context, except `docs/testing-e2e.md`, `docs/scope.md` and `docs/ai-agents.md`)
 - `website/` — VitePress documentation site; renders the repo's own markdown, deployed to GitHub Pages
+- `design/` — brand assets: the vector logo master and its derived variants (`design/README.md`)
 - `scripts/` — E2E runner, mock-OIDC config, manual test-alert/silence fixtures
 - `.agents/` — AI reference files (`architecture.md`, `testing.md`, `lessons.md`) and `skills/` — workflows as [Agent Skills](https://agentskills.io), one `<name>/SKILL.md` each (routed below)
 - `Makefile` — canonical entry for dev stack, demo stack, tests, security scans, fixtures (`make help`)
@@ -238,6 +239,7 @@ adapters and their rules live in `docs/ai-agents.md`.
    | Release process, workflows in `release.yml`, versioning, changelog/release-notes format, social media post rules | `.agents/skills/release/SKILL.md` |
    | Issue-triage workflow, reply guidelines | `.agents/skills/scope-triage/SKILL.md` |
    | Anything under `charts/jarvis/` except `tests/` (templates, values, `Chart.yaml`, chart README) | `charts/jarvis/CHANGELOG.md` → `## [Unreleased]` (rule 13) |
+   | Logo or other brand asset | `design/assets/` (edit the master, then run `python3 scripts/logo-assets.py`; never edit derived files) |
    | Scope definition, in/out-of-scope boundaries, litmus test | `docs/scope.md` |
    | Project description, invariants, workflow rules, commit format, repo layout, Task Router | `AGENTS.md` itself |
    | Tool adapter, `scripts/check-agent-context.sh` | `docs/ai-agents.md` |

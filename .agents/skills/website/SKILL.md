@@ -116,7 +116,7 @@ to its **source** file and rewrites it:
 | another file listed in `PAGES` | the website route (`/reference/features`) |
 | any other repo file | `https://github.com/kj187/jarvis/blob/main/<path>` |
 | an image under `docs/assets/` | `/assets/<file>` (public dir — routes now nest to any depth, e.g. `concepts/architecture`, so a page-relative `./assets/…` no longer resolves at a fixed depth; also copied flat into `content/assets/` for `HomeScreenshot.vue`'s direct import) |
-| `frontend/public/logo.png` | `/logo.png` |
+| `frontend/public/logo.png` | `/logo.png` (derived from `design/assets/logo.svg` by `scripts/logo-assets.py`) |
 | any other image | `https://raw.githubusercontent.com/kj187/jarvis/main/<path>` |
 | `http(s):`, `mailto:`, `#fragment` | unchanged |
 
