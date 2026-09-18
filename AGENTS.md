@@ -210,7 +210,8 @@ adapters and their rules live in `docs/ai-agents.md`.
    paths: Go tests + golangci-lint incl. gosec (backend), pnpm audit + eslint +
    jscpd (frontend, needs running dev container), helm lint/unittest (charts),
    the changelog check `scripts/check-changelogs.sh`, the agent-context check
-   `scripts/check-agent-context.sh` and a gitleaks secret scan (always).
+   `scripts/check-agent-context.sh`, the design-token drift check
+   `node scripts/design-tokens.mjs --check` and a gitleaks secret scan (always).
    **Never `--no-verify`.**
 4. **Frontend checklist**: `cursor: pointer` on all clickable elements · no
    `console.log` · no `dangerouslySetInnerHTML` · import shared utils from
@@ -239,6 +240,7 @@ adapters and their rules live in `docs/ai-agents.md`.
    | Release process, workflows in `release.yml`, versioning, changelog/release-notes format, social media post rules | `.agents/skills/release/SKILL.md` |
    | Issue-triage workflow, reply guidelines | `.agents/skills/scope-triage/SKILL.md` |
    | Anything under `charts/jarvis/` except `tests/` (templates, values, `Chart.yaml`, chart README) | `charts/jarvis/CHANGELOG.md` → `## [Unreleased]` (rule 13) |
+   | A colour token (app, docs site, video) | `design/tokens.json`, then `node scripts/design-tokens.mjs` — never edit the generated files (`frontend/src/generated/tokens.css`, `website/.vitepress/theme/generated-tokens.css`, `frontend/e2e/video/generated-theme.ts`) |
    | Logo or other brand asset | `design/assets/` (edit the master, then run `python3 scripts/logo-assets.py`; never edit derived files) |
    | Scope definition, in/out-of-scope boundaries, litmus test | `docs/scope.md` |
    | Project description, invariants, workflow rules, commit format, repo layout, Task Router | `AGENTS.md` itself |

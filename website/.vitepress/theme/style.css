@@ -1,10 +1,13 @@
 /**
- * Jarvis brand palette, lifted from frontend/src/index.css's `@theme` block
- * (dark) and `[data-theme="light"]` block (light) — kept in sync by hand
- * since VitePress's CSS variables and Tailwind's `@theme` tokens are
- * different systems; if the app's palette changes, update here too
- * (.agents/skills/website/SKILL.md).
+ * Jarvis brand palette. The colour variables (--vp-c-*, --jarvis-coral) are generated from
+ * design/tokens.json by scripts/design-tokens.mjs into generated-tokens.css — the same file that
+ * feeds the app, so the site cannot drift from it. Edit values there, not here.
+ *
+ * Contrast roles: --vp-c-text-3 is decorative/large-text only (about 3.1:1 light, 3.6:1 dark);
+ * labels and body copy we style ourselves use --vp-c-text-2. Coral is a sparing accent, never a
+ * status colour; keep small coral text at 4.5:1 or better.
  */
+@import './generated-tokens.css';
 
 /* Self-hosted display face for the hero and section headings only (decision 9,
    W11h) — Sora, SIL OFL 1.1 (license text: theme/fonts/OFL.txt). The single
@@ -33,52 +36,8 @@
   --vp-font-family-display: Sora, var(--vp-font-family-base);
   --vp-font-family-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
 
-  --vp-c-brand-1: hsl(213 94% 60%);
-  --vp-c-brand-2: hsl(213 94% 55%);
-  --vp-c-brand-3: hsl(213 94% 50%);
-  --vp-c-brand-soft: hsla(213, 94%, 60%, 0.14);
-
-  --vp-c-bg: hsl(220 14% 94%);
-  --vp-c-bg-alt: hsl(220 12% 91%);
-  --vp-c-bg-elv: hsl(0 0% 100%);
-  --vp-c-bg-soft: hsl(220 11% 92%);
-  --vp-c-text-1: hsl(222 25% 12%);
-  --vp-c-text-2: hsl(220 9% 38%);
-  /* text-3 is decorative/large-text only (3.1:1 on --vp-c-bg here, 3.6:1 in dark): never for body
-     copy or labels — use text-2. The mesh lines and VitePress placeholders rely on the soft value. */
-  --vp-c-text-3: hsl(220 9% 55%);
-  --vp-c-border: hsl(220 13% 83%);
-  --vp-c-divider: hsl(220 13% 88%);
-  --vp-c-gutter: hsl(220 13% 88%);
-
-  /* Accents taken from the owl's eyes: coral = the alert / the open question,
-     teal = what Jarvis remembers. Darker in light mode for contrast. */
-  --jarvis-coral: hsl(6 65% 46%); /* 4.7:1 on --vp-c-bg (48% was 4.4:1, below AA for normal text) */
-  --jarvis-teal: hsl(168 40% 38%);
-
   --vp-home-hero-name-color: var(--vp-c-brand-1);
   --vp-home-hero-name-background: transparent;
-}
-
-.dark {
-  --jarvis-coral: hsl(6 68% 60%);
-  --jarvis-teal: hsl(168 38% 58%);
-
-  --vp-c-brand-1: hsl(213 94% 68%);
-  --vp-c-brand-2: hsl(213 94% 62%);
-  --vp-c-brand-3: hsl(213 94% 56%);
-  --vp-c-brand-soft: hsla(213, 94%, 68%, 0.16);
-
-  --vp-c-bg: hsl(222 15% 9%);
-  --vp-c-bg-alt: hsl(222 14% 13%);
-  --vp-c-bg-elv: hsl(222 14% 13%);
-  --vp-c-bg-soft: hsl(222 12% 16%);
-  --vp-c-text-1: hsl(210 25% 90%);
-  --vp-c-text-2: hsl(215 13% 65%);
-  --vp-c-text-3: hsl(215 13% 45%);
-  --vp-c-border: hsl(220 12% 23%);
-  --vp-c-divider: hsl(220 12% 20%);
-  --vp-c-gutter: hsl(220 12% 12%);
 }
 
 /* Distinct from stock VitePress: rounder cards/panels, a touch more air. */

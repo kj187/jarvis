@@ -140,11 +140,11 @@ since it matches on the already-rewritten `/assets/…` paths.
 
 ## Look & feel
 
-- The palette in `theme/style.css` is a **hand-made copy** of the app's
-  tokens (`frontend/src/index.css`, `@theme` for dark and
-  `[data-theme="light"]` for light) — VitePress CSS variables and Tailwind
-  `@theme` tokens are different systems, so changing the app palette means
-  updating this file too.
+- The palette comes from the single token source `design/tokens.json`:
+  `node scripts/design-tokens.mjs` writes `theme/generated-tokens.css`
+  (the `--vp-c-*` variables and `--jarvis-coral`), which `theme/style.css`
+  imports. Change a colour in `tokens.json`, never in the generated file;
+  the pre-commit hook and CI run the script with `--check`.
 - Contrast roles: `--vp-c-text-3` is decorative/large-text only (≈3.1:1 light,
   3.6:1 dark — the mesh lines and VitePress placeholders use it); any label or
   body copy we style ourselves uses `--vp-c-text-2`. Coral is darkened in light

@@ -73,6 +73,9 @@ jobs:
       # (docs/ai-agents.md). Same script as the pre-commit hook.
       - name: Check agent context
         run: scripts/check-agent-context.sh
+      # Generated colour tokens (app, docs site, video) must match design/tokens.json.
+      - name: Check design tokens
+        run: node scripts/design-tokens.mjs --check
 
   backend:
     name: Backend

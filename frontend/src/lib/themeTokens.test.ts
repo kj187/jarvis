@@ -2,11 +2,11 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
-const css = readFileSync(new URL('../index.css', import.meta.url), 'utf8')
+const css = readFileSync(new URL('../generated/tokens.css', import.meta.url), 'utf8')
 
 // Token blocks: the dark defaults live in @theme, overrides in [data-theme="light"].
 const darkBlock = css.slice(css.indexOf('@theme'), css.indexOf('[data-theme="light"]'))
-const lightBlock = css.slice(css.indexOf('[data-theme="light"]'), css.indexOf('/* Global: all interactive'))
+const lightBlock = css.slice(css.indexOf('[data-theme="light"]'))
 
 function token(block: string, name: string): [number, number, number] {
   const m = block.match(new RegExp(`--color-${name}:\\s*hsl\\((\\d+) (\\d+)% (\\d+)%\\)`))
