@@ -416,6 +416,9 @@ anything outside `src/lib/` stays E2E-only.
 Specs live under `frontend/e2e/`:
 
 - `e2e/functional/<mode>/*.spec.ts` — functional golden paths per auth mode (`none`, `internal`, `oidc`).
+  `functional/none/alerts-overview.spec.ts` also guards the shared modal-dialog
+  accessibility contract: accessible name, focus moved inside on open,
+  Tab/Shift+Tab containment, Escape close, and focus restoration to the trigger.
   `functional/none/settings.spec.ts` includes H12: opening Settings writes
   `settings=open`, a reload reopens the sheet, and closing it removes only
   that parameter while preserving alert-page URL state.

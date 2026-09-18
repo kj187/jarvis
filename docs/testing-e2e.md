@@ -260,6 +260,7 @@ Quick reference: which spec file covers what. Use this to find the right place f
 | `resolved-fetch.spec.ts` | — | Resolved history is fetched only in resolved mode; initial spinner, error/retry and mode-exit cancellation |
 | `resolved-pagination.spec.ts` | — | Bounded server pages, no legacy full-history fetch, visible stale-page transition and off-page navigation inputs |
 | `alerts-views-extended.spec.ts` | B7–B8, B10 | Responsive column binning, empty state, suppressed/silenced view |
+| `alerts-overview.spec.ts` | — | Alert label breakdown/filtering plus shared modal accessibility: name, focus containment, Escape and focus restoration |
 | `filters.spec.ts` | C1, C10, C10b, C11–C13 | Exact matcher + `?filter=` URL (Alertmanager matcher syntax), state restore from URL, legacy `?matchers=` JSON link restored and rewritten to `?filter=` (C10b), `?q=` search, combined search+chips |
 | `filters-extended.spec.ts` | C2–C8 (C9 removed) | `!=`/`=~`/`!~` operators, regex multi-value, label/value suggestions, label chip → filter, AND matchers, draft→promotion, remove-all |
 | `detail-panel.spec.ts` | D1–D2, D5–D11, G2 | Open/close/URL param, labels/annotations, stats & timeline, claim set/release, comments add/delete, claim note edit, AI prompt, section collapse, extend controls |

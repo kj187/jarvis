@@ -1453,6 +1453,9 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │   │                        matcher via uiStore.addLabelMatcher (no-op if an identical one
     │   │                        already exists) and closes the modal; in resolved mode it receives and
     │   │                        explicitly labels the current page from AlertsPage, with no second query
+    │   │                        Uses the shared `ui/Dialog`: the modal has an accessible name,
+    │   │                        receives focus on open, traps Tab/Shift+Tab, closes on Escape, and
+    │   │                        restores focus to the toolbar trigger on close.
     │   ├── LabelChip.tsx      → one fixed size for every chip (`max-w-[200px]`, `text-[10px]`) so a row
     │   │                        of chips reads as one unit; `emphasized` only adds font weight, unrelated
     │   │                        to color. Neutral (`border-border bg-muted text-foreground`) unless this
@@ -1525,7 +1528,8 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │   │                        value always in neutral ink — calmer than the alert views' TruncatableChip
     │   ├── silenceDisplay.ts  → URGENCY_TEXT/FILL_CLASS maps, matcherOperator, silenceRemainingText
     │   │                        (shared by the three above; kept out of the .tsx files for react-refresh)
-    │   ├── SilenceExpireModal.tsx → expire/extend confirmation (silence-ID link → AM)
+    │   ├── SilenceExpireModal.tsx → expire/extend confirmation (silence-ID link → AM); uses the
+    │   │                        shared accessible `ui/Dialog`, labelled with the visible action title
     │   ├── SilenceForm.tsx    → 3 steps: form (matchers, clusters, duration, live match count,
     │   │                        overlap/zero-match/unevaluable-regex warnings) → preview → per-cluster results
     │   │                        Regex matchers whose AM value isn't a literal-tag-OR-list

@@ -137,7 +137,7 @@ export function SilenceExpireModal({ silences, allAlerts, open, onConfirm, onCan
   const title = count === 1 ? 'Expire silence?' : `Expire ${count} silences?`
 
   return (
-    <Dialog open={open} onClose={onCancel}>
+    <Dialog open={open} onClose={onCancel} ariaLabel={title}>
       <div className="p-6 space-y-4">
         <div className="space-y-1 pr-6">
           <h2 className="text-base font-semibold flex items-center gap-2">

@@ -48,7 +48,7 @@ export function AlertsOverviewModal({ open, onClose, resolvedAlerts = [], resolv
   }
 
   return (
-    <Dialog open={open} onClose={onClose} className="sm:max-w-2xl">
+    <Dialog open={open} onClose={onClose} ariaLabel="Alerts Overview" className="sm:max-w-2xl">
       <div className="p-6 space-y-4">
         <div className="space-y-1 pr-6">
           <h2 className="text-base font-semibold">Alerts Overview</h2>
