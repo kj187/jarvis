@@ -968,7 +968,7 @@ index.css             → Tailwind v4 `@theme` design tokens (dark default) + `[
                         pointer-cursor rule, `prefers-reduced-motion` rule (transitions ≈ 0, ping/pulse/claim-snake
                         off, `animate-spin` kept). Accessibility-relevant tokens: `--color-ring` (focus ring, >= 3:1
                         vs. every surface, 2px via `focus(-visible):ring-2`) and `--color-control` (edge of text
-                        fields/selects, `border-control`, >= 3:1). `--color-border` stays the quiet edge for
+                        fields/selects, `border-control`; also the off-state track of toggles, `bg-control`; >= 3:1). `--color-border` stays the quiet edge for
                         cards/header/tables. Both pairs are guarded by `lib/themeTokens.test.ts`
 ├── api/client.ts     → All fetch wrappers (alerts, silences, templates, claims, comments, auth, admin, poll, clusters)
 ├── store/

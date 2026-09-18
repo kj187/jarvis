@@ -58,7 +58,7 @@ export function AlertHeatmap({ fingerprint, cluster, enabled }: AlertHeatmapProp
       <div className="flex items-center justify-end gap-2">
         <p className="text-[10px] text-muted-foreground">Heatmap, when and how often this alert fired</p>
         <span className="group relative inline-flex items-center">
-          <Info className="h-3 w-3 cursor-help text-muted-foreground/60 hover:text-muted-foreground" />
+          <Info className="h-3 w-3 cursor-help text-muted-foreground hover:text-foreground" />
           <span className="pointer-events-none absolute right-0 top-4 z-50 w-72 rounded-md border border-border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-lg opacity-0 group-hover:opacity-100 transition-opacity normal-case tracking-normal font-normal leading-relaxed">
             Each cell is one time bucket. Darker/filled cells mean the alert fired more often in that bucket, empty cells mean it didn't fire.
             <br /><br />

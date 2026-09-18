@@ -318,7 +318,7 @@ function LabelRow({
           onMouseDown={onGripMouseDown}
           aria-label={`Drag ${labelKey} to reorder`}
           title="Drag to reorder"
-          className="shrink-0 cursor-grab text-muted-foreground/60 hover:text-foreground active:cursor-grabbing"
+          className="shrink-0 cursor-grab text-muted-foreground hover:text-foreground active:cursor-grabbing"
         >
           <Grip className="h-3.5 w-3.5" />
         </button>
@@ -336,7 +336,7 @@ function LabelRow({
         aria-label={pinned ? `Unpin ${labelKey}` : `Pin ${labelKey}`}
         aria-pressed={pinned}
         title={pinned ? 'Unpin' : 'Pin — show first'}
-        className={cn('shrink-0', pinned ? 'text-primary' : 'text-muted-foreground/60 hover:text-foreground')}
+        className={cn('shrink-0', pinned ? 'text-primary' : 'text-muted-foreground hover:text-foreground')}
       >
         <Pin className={cn('h-3.5 w-3.5', pinned && 'fill-current')} />
       </button>
@@ -477,7 +477,7 @@ function InfoTooltip({ text, ariaLabel = 'More information' }: { text: string; a
       onMouseEnter={() => setRect(ref.current?.getBoundingClientRect() ?? null)}
       onMouseLeave={() => setRect(null)}
     >
-      <Info className="h-3.5 w-3.5 shrink-0 text-muted-foreground/40 hover:text-muted-foreground transition-colors" />
+      <Info className="h-3.5 w-3.5 shrink-0 text-muted-foreground hover:text-foreground transition-colors" />
       {rect && createPortal(
         <div
           className="fixed z-[9999] max-w-[280px] rounded-md border border-border bg-popover px-2.5 py-1.5 text-xs text-popover-foreground shadow-md pointer-events-none"
@@ -538,7 +538,7 @@ function SettingsSwitch({
       onClick={onToggle}
       className={cn(
         'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors',
-        checked ? 'bg-primary' : 'bg-input',
+        checked ? 'bg-primary' : 'bg-control',
       )}
     >
       <span

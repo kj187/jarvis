@@ -408,7 +408,7 @@ export function AlertCardGrid({
                 <button
                   type="button"
                   onMouseDown={(e) => startSectionDrag(e, groupValue)}
-                  className="inline-flex h-6 w-6 items-center justify-center rounded text-muted-foreground/45 hover:text-muted-foreground hover:bg-accent/30 cursor-grab active:cursor-grabbing"
+                  className="inline-flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-accent/30 cursor-grab active:cursor-grabbing"
                   aria-label="Drag section"
                   title="Drag section"
                 >

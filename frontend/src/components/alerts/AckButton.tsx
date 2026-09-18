@@ -286,7 +286,7 @@ export function AckButton({
                 : feedback === 'done'
                   ? 'text-emerald-600 dark:text-emerald-400'
                   : subtle
-                    ? 'text-muted-foreground/40 hover:bg-accent hover:text-foreground'
+                    ? 'text-muted-foreground/80 hover:bg-accent hover:text-foreground'
                     : 'text-muted-foreground hover:bg-accent hover:text-foreground',
             )}
           >

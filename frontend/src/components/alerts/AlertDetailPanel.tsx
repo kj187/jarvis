@@ -1002,7 +1002,7 @@ export function AlertDetailPanel({
                   className="group relative inline-flex items-center"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <Info className="h-3.5 w-3.5 cursor-help text-muted-foreground/60 hover:text-muted-foreground" />
+                  <Info className="h-3.5 w-3.5 cursor-help text-muted-foreground hover:text-foreground" />
                   <span className="pointer-events-none absolute left-0 top-5 z-50 w-72 rounded-md border border-border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-lg opacity-0 group-hover:opacity-100 transition-opacity normal-case tracking-normal font-normal leading-relaxed">
                     Links are auto-generated from labels and annotations whose value is an absolute URL (http:// or https://).
                     <br /><br />
