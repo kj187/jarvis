@@ -171,3 +171,72 @@ test('A7 info popover shows the Jarvis logo, version and copyright', async ({ pa
   await expect(page.getByText('v9.9.9')).toBeVisible()
   await expect(page.getByText('© 2026 Julian Kleinhans')).toBeVisible()
 })
+
+test('A8 cluster popover is keyboard-operable: Enter opens, Escape closes and restores focus', async ({ page }) => {
+  await dismissNoAuthNotice(page)
+  await page.goto('/')
+
+  const trigger = page.getByRole('button', { name: /^Instances \d+\/\d+/ })
+  await expect(trigger).toBeVisible({ timeout: 10_000 })
+  await expect(trigger).toHaveAttribute('aria-expanded', 'false')
+
+  await trigger.focus()
+  await page.keyboard.press('Enter')
+  await expect(trigger).toHaveAttribute('aria-expanded', 'true')
+  const panel = page.getByRole('region', { name: 'Connected instances' })
+  await expect(panel).toBeVisible()
+
+  // Focus inside the panel, then Escape: closes and returns focus to the trigger.
+  await page.keyboard.press('Tab')
+  await expect(panel.getByRole('button').first()).toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(panel).toBeHidden()
+  await expect(trigger).toBeFocused()
+  await expect(trigger).toHaveAttribute('aria-expanded', 'false')
+
+  // Enter toggles it shut again from the keyboard.
+  await page.keyboard.press('Enter')
+  await expect(panel).toBeVisible()
+  await page.keyboard.press('Enter')
+  await expect(panel).toBeHidden()
+})
+
+test('A9 user menu is keyboard-operable and closes when focus leaves it', async ({ page }) => {
+  await dismissNoAuthNotice(page)
+  await page.goto('/')
+
+  const trigger = page.getByTestId('user-menu').first()
+  const panel = page.getByTestId('user-menu-panel')
+  await expect(trigger).toHaveAttribute('aria-expanded', 'false')
+
+  await trigger.focus()
+  await page.keyboard.press('Enter')
+  await expect(trigger).toHaveAttribute('aria-expanded', 'true')
+  await expect(panel).toBeVisible()
+
+  await page.keyboard.press('Tab')
+  await expect(panel.getByRole('button', { name: 'Settings' })).toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(panel).toBeHidden()
+  await expect(trigger).toBeFocused()
+
+  // Moving focus to an unrelated control closes an open menu.
+  await page.keyboard.press('Enter')
+  await expect(panel).toBeVisible()
+  await page.getByRole('button', { name: 'Create silence' }).first().focus()
+  await expect(panel).toBeHidden()
+})
+
+test('A10 refresh hint is shown on keyboard focus and dismissed with Escape', async ({ page }) => {
+  await dismissNoAuthNotice(page)
+  await page.goto('/')
+
+  const refresh = page.getByRole('button', { name: 'Refresh now' }).first()
+  await refresh.focus()
+  const hint = page.getByRole('tooltip').filter({ hasText: 'Reloads the current snapshot' })
+  await expect(hint).toBeVisible()
+  await expect(refresh).toHaveAttribute('aria-describedby', /.+/)
+
+  await page.keyboard.press('Escape')
+  await expect(hint).toBeHidden()
+})

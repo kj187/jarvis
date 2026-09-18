@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from 'react'
+import { useId, useRef, useState, useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Wifi, WifiOff, RefreshCw, Plus, Settings, LogIn, LogOut, Shield, Sun, Moon, Menu, X, CircleUserRound, Info } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -53,7 +53,7 @@ function InfoColophon({ version }: { version: string | null }) {
         />
         <span className="text-sm font-semibold tracking-tight text-foreground/90">Jarvis</span>
       </a>
-      <div className="mt-3 space-y-0.5 text-center text-[11px] leading-relaxed text-muted-foreground/70">
+      <div className="mt-3 space-y-0.5 text-center text-[11px] leading-relaxed text-muted-foreground">
         <p className="font-mono">{version ?? 'dev'} · Apache-2.0</p>
         <p>© 2026 Julian Kleinhans</p>
       </div>
@@ -78,7 +78,11 @@ export function Header() {
   const [refreshing, setRefreshing] = useState(false)
   const [clusterHoverOpen, setClusterHoverOpen] = useState(false)
   const [clusterFilterOpen, setClusterFilterOpen] = useState<string | null>(null)
-  const clusterPopover = useHoverPopover(setClusterHoverOpen)
+  const clusterPanelId = useId()
+  const refreshPanelId = useId()
+  const infoPanelId = useId()
+  const userPanelId = useId()
+  const clusterPopover = useHoverPopover(clusterHoverOpen, setClusterHoverOpen)
 
   const [menuOpen, setMenuOpen] = useState(false)
   const [pollSpinning, setPollSpinning] = useState(false)
@@ -127,10 +131,10 @@ export function Header() {
   // crossing the gap to the panel doesn't flicker-close it. Mobile has no
   // hover, so its own panels below share the same open state but stay purely
   // click-toggled.
-  const userMenu = useHoverPopover(setUserMenuOpen)
-  const infoPopover = useHoverPopover(setInfoOpen)
+  const userMenu = useHoverPopover(userMenuOpen, setUserMenuOpen)
+  const infoPopover = useHoverPopover(infoOpen, setInfoOpen)
   const [refreshTooltipOpen, setRefreshTooltipOpen] = useState(false)
-  const refreshPopover = useHoverPopover(setRefreshTooltipOpen)
+  const refreshPopover = useHoverPopover(refreshTooltipOpen, setRefreshTooltipOpen)
 
   const healthyCount = clusters.filter((c) => c.healthy).length
 
@@ -176,6 +180,7 @@ export function Header() {
         {/* Nav tabs — always left */}
         <div className="flex self-stretch shrink-0" role="group" aria-label="Navigation">
           <button
+            aria-current={activePage === 'alerts' ? 'page' : undefined}
             onClick={() => { setActivePage('alerts'); if (!filters.state) setFilter('state', 'active') }}
             className={`cursor-pointer self-end h-9 flex items-center pb-1.5 gap-1.5 px-4 text-xs font-medium transition-colors translate-y-px border border-b-0 rounded-t-sm ${
               activePage === 'alerts'
@@ -188,6 +193,7 @@ export function Header() {
             <span className="tabular-nums opacity-75">{alertCounts.byState?.active ?? 0}</span>
           </button>
           <button
+            aria-current={activePage === 'silences' ? 'page' : undefined}
             onClick={() => setActivePage(activePage === 'silences' ? 'alerts' : 'silences')}
             className={`cursor-pointer self-end h-9 flex items-center pb-1.5 gap-1.5 px-4 text-xs font-medium transition-colors translate-y-px border border-b-0 rounded-t-sm ${
               activePage === 'silences'
@@ -207,20 +213,19 @@ export function Header() {
         {/* ── Desktop controls ── */}
         <div className="hidden md:flex items-center gap-1.5 self-stretch">
           {/* Cluster status */}
-          <div
-            className="relative shrink-0 self-stretch flex items-center"
-            onMouseEnter={clusterPopover.show}
-            onMouseLeave={clusterPopover.hide}
-          >
-            <div
-              className="flex items-center gap-1.5 px-2 py-1 text-xs cursor-pointer select-none"
+          <div className="relative shrink-0 self-stretch flex items-center" {...clusterPopover.wrapperProps}>
+            <button
+              type="button"
+              className="flex items-center gap-1.5 rounded px-2 py-1 text-xs cursor-pointer select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               aria-label={`Instances ${healthyCount}/${clusters.length}`}
+              aria-controls={clusterPanelId}
+              {...clusterPopover.triggerProps}
             >
               <div className={`h-2 w-2 rounded-full ${healthyCount === clusters.length ? 'bg-green-500' : 'bg-red-500'}`} />
               <span className="text-muted-foreground tabular-nums">{healthyCount}/{clusters.length}</span>
-            </div>
+            </button>
             {clusterHoverOpen && clusters.length > 0 && (
-              <div className="absolute right-0 top-full z-50 min-w-[26rem] rounded-b-md border border-t-0 border-border bg-header shadow-lg" role="tooltip" onMouseEnter={clusterPopover.show} onMouseLeave={clusterPopover.hide}>
+              <div id={clusterPanelId} className="absolute right-0 top-full z-50 min-w-[26rem] rounded-b-md border border-t-0 border-border bg-header shadow-lg" role="region" aria-label="Connected instances" onMouseEnter={clusterPopover.show} onMouseLeave={clusterPopover.hide}>
                 <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-border">Connected Instances</div>
                 {clusters.map((c) => (
                   <div
@@ -237,11 +242,17 @@ export function Header() {
                             <div className="absolute inset-0 rounded-full bg-red-500 animate-ping opacity-75" />
                           </div>
                         )}
-                        <div className="relative">
+                        <div
+                          className="relative"
+                          onBlur={(e) => {
+                            if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setClusterFilterOpen(null)
+                          }}
+                        >
                           <button
-                            className="text-xs font-medium text-foreground hover:text-blue-400 cursor-pointer"
+                            className="rounded text-xs font-medium text-foreground hover:text-blue-400 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                             onMouseEnter={() => setClusterFilterOpen(c.name)}
                             onMouseLeave={() => setClusterFilterOpen(null)}
+                            onFocus={() => setClusterFilterOpen(c.name)}
                             onClick={() => {
                               addLabelMatcher({ name: '@cluster', operator: '=', value: c.name })
                               setClusterHoverOpen(false)
@@ -284,12 +295,12 @@ export function Header() {
                         {c.members.map((m) => (
                           <div key={m.name} className="flex items-center gap-1.5 text-[10px]">
                             <div className={`h-1.5 w-1.5 rounded-full shrink-0 ${m.healthy ? 'bg-green-500' : 'bg-red-500'}`} />
-                            <span className="break-all text-muted-foreground/60">{m.url}</span>
+                            <span className="break-all text-muted-foreground">{m.url}</span>
                           </div>
                         ))}
                       </div>
                     ) : (
-                      <div className="mt-1 pl-[1.375rem] text-[10px] text-muted-foreground/60 break-all">{c.alertmanagerUrl}</div>
+                      <div className="mt-1 pl-[1.375rem] text-[10px] text-muted-foreground break-all">{c.alertmanagerUrl}</div>
                     )}
                   </div>
                 ))}
@@ -298,18 +309,18 @@ export function Header() {
           </div>
 
           {/* WS status */}
-          <div className="shrink-0" title={wsConnected ? 'WebSocket connected' : 'WebSocket disconnected'}>
+          <div className="shrink-0" role="img" aria-label={wsConnected ? 'WebSocket connected' : 'WebSocket disconnected'} title={wsConnected ? 'WebSocket connected' : 'WebSocket disconnected'}>
             {wsConnected ? <Wifi className="h-4 w-4 text-green-500" /> : <WifiOff className="h-4 w-4 text-red-500" />}
           </div>
 
           {/* Refresh — custom docked popover (not the generic Tooltip) so it matches
               the flush, header-colored look of the other header popovers. */}
-          <div className="relative shrink-0 self-stretch flex items-center" onMouseEnter={refreshPopover.show} onMouseLeave={refreshPopover.hide}>
-            <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={handleRefresh} aria-label="Refresh now" disabled={refreshing}>
+          <div className="relative shrink-0 self-stretch flex items-center" {...refreshPopover.wrapperProps} onFocus={refreshPopover.show}>
+            <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={handleRefresh} aria-label="Refresh now" aria-describedby={refreshTooltipOpen ? refreshPanelId : undefined} disabled={refreshing}>
               <RefreshCw className={`h-4 w-4 ${isSpinning ? 'animate-spin' : ''}`} />
             </Button>
             {refreshTooltipOpen && (
-              <div className="absolute right-0 top-full z-50 w-72 rounded-b-md border border-t-0 border-border bg-header px-3 py-2 text-xs leading-snug text-muted-foreground shadow-lg" onMouseEnter={refreshPopover.show} onMouseLeave={refreshPopover.hide}>
+              <div id={refreshPanelId} role="tooltip" className="absolute right-0 top-full z-50 w-72 rounded-b-md border border-t-0 border-border bg-header px-3 py-2 text-xs leading-snug text-muted-foreground shadow-lg" onMouseEnter={refreshPopover.show} onMouseLeave={refreshPopover.hide}>
                 {refreshTooltipText}
               </div>
             )}
@@ -317,17 +328,18 @@ export function Header() {
           <div className="w-px h-5 bg-border shrink-0 mx-0.5" />
 
           {/* Info — Jarvis logo, version, copyright. Opens on hover, like cluster status above. */}
-          <div className="relative shrink-0 self-stretch flex items-center" onMouseEnter={infoPopover.show} onMouseLeave={infoPopover.hide}>
+          <div className="relative shrink-0 self-stretch flex items-center" {...infoPopover.wrapperProps}>
             <button
-              className="flex items-center justify-center h-8 w-8 rounded cursor-pointer text-foreground hover:bg-accent/60"
-              onClick={infoPopover.show}
+              className="flex items-center justify-center h-8 w-8 rounded cursor-pointer text-foreground hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               aria-label="About Jarvis"
+              aria-controls={infoPanelId}
               data-testid="info-menu"
+              {...infoPopover.triggerProps}
             >
               <Info className="h-4 w-4" />
             </button>
             {infoOpen && (
-              <div className="absolute right-0 top-full z-50 w-56 rounded-b-md border border-t-0 border-border bg-header shadow-lg" onMouseEnter={infoPopover.show} onMouseLeave={infoPopover.hide}>
+              <div id={infoPanelId} className="absolute right-0 top-full z-50 w-56 rounded-b-md border border-t-0 border-border bg-header shadow-lg" onMouseEnter={infoPopover.show} onMouseLeave={infoPopover.hide}>
                 <InfoColophon version={version} />
               </div>
             )}
@@ -336,17 +348,18 @@ export function Header() {
           {/* User menu — always present (Grafana-style): avatar when authenticated,
               generic icon otherwise. Settings + theme live here regardless of auth
               state; Login/Logout are added on top depending on it. Opens on hover. */}
-          <div className="relative shrink-0 self-stretch flex items-center" onMouseEnter={userMenu.show} onMouseLeave={userMenu.hide}>
+          <div className="relative shrink-0 self-stretch flex items-center" {...userMenu.wrapperProps}>
             <button
-              className="flex items-center justify-center h-8 w-8 rounded cursor-pointer text-foreground hover:bg-accent/60"
-              onClick={userMenu.show}
+              className="flex items-center justify-center h-8 w-8 rounded cursor-pointer text-foreground hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               aria-label="User menu"
+              aria-controls={userPanelId}
               data-testid="user-menu"
+              {...userMenu.triggerProps}
             >
               {isAuthenticated && user ? <Avatar name={user.username} className="h-6 w-6" /> : <CircleUserRound className="h-5 w-5" />}
             </button>
             {userMenuOpen && (
-              <div data-testid="user-menu-panel" className="absolute right-0 top-full z-50 min-w-40 rounded-b-md border border-t-0 border-border bg-header shadow-lg" onMouseEnter={userMenu.show} onMouseLeave={userMenu.hide}>
+              <div id={userPanelId} data-testid="user-menu-panel" className="absolute right-0 top-full z-50 min-w-40 rounded-b-md border border-t-0 border-border bg-header shadow-lg" onMouseEnter={userMenu.show} onMouseLeave={userMenu.hide}>
                 {isAuthenticated && user && (
                   <div className="px-3 py-2 text-xs font-medium text-foreground border-b border-border">{user.username}</div>
                 )}
@@ -415,6 +428,7 @@ export function Header() {
             <button
               className="flex items-center justify-center h-8 w-8 rounded cursor-pointer text-foreground hover:bg-accent/60"
               onClick={() => setInfoOpen((v) => !v)}
+              aria-expanded={infoOpen}
               aria-label="About Jarvis"
               data-testid="info-menu"
             >
@@ -423,6 +437,7 @@ export function Header() {
             <button
               className="flex items-center justify-center h-8 w-8 rounded cursor-pointer text-foreground hover:bg-accent/60"
               onClick={() => setUserMenuOpen((v) => !v)}
+              aria-expanded={userMenuOpen}
               aria-label="User menu"
               data-testid="user-menu"
             >

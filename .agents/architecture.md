@@ -986,6 +986,12 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
 │   │                            useRefreshAlerts
 │   ├── useAlertCounts.ts      → active/suppressed counts + silence count for nav badges; deliberately
 │   │                            never loads resolved history (there is no resolved badge)
+│   ├── useHoverPopover.ts     → useHoverPopover(open, setOpen): wiring for the Header's
+│   │                            desktop popovers (cluster status, refresh hint, info, user menu).
+│   │                            Hover opens (delayed close), `wrapperProps` add Escape → close +
+│   │                            focus back to the `data-popover-trigger`, focus-out → close;
+│   │                            `triggerProps` add `aria-expanded` and Enter/Space toggle. Hover
+│   │                            is never the only way in — keep that when adding a popover
 │   ├── useAlertComments.ts    → useAlertComments(fingerprint, cluster, page), useAddComment,
 │   │                            useDeleteComment (all cluster-scoped); COMMENTS_PAGE_SIZE = 20;
 │   │                            query key `['comments', fingerprint, clusterName, page]`
