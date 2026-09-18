@@ -271,6 +271,7 @@ Quick reference: which spec file covers what. Use this to find the right place f
 | `saved-filters.spec.ts` | K1–K13 | Saved label filters (replaces "Default Filter"): save from current chips, apply replaces matchers but leaves search untouched, "modified" state (base name + unsaved dot on the closed button, "Save changes to …"), rename with live duplicate validation + Enter/Esc, delete needs a second click, default saved filter applied only with no alert-view URL params, default chips are ordinary/removable, migration of a legacy `defaultFilters` blob into a default saved filter named "Default", save-row hint text, "Reset all settings" clears saved filters, unsaved dot for a filter built from scratch, "modified" survives reload + save-as-new via Enter, two-click overwrite without a base |
 | `no-auth-notice.spec.ts` | I1 | NoAuth notice appears and dismiss persists |
 | `websocket.spec.ts` | J1–J4 | Reconnect indicator (force-close via patched WebSocket), `alerts_update` / `claim_set` / `claim_released` / `comment_added` live events |
+| `ws-reconnect.spec.ts` | — | Reconnect jitter (P7): initial connect has no delay; a real disconnect reconnects within the 3-6s jitter window (real wall-clock bounds, not exact-ms fake-clock assertions — those interact unreliably with real WebSocket events); a reconnect triggers exactly one alerts refetch; a stale (superseded) socket's late close event schedules no extra reconnect attempt |
 
 ### Mode: `internal`
 

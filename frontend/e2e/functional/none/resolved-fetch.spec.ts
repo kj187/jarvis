@@ -49,7 +49,8 @@ test('live-view refresh paths never fetch resolved history', async ({ page, am, 
     (window as typeof window & { __closeResolvedFetchSockets?: () => void }).__closeResolvedFetchSockets?.()
   })
   await expect(page.locator('[title="WebSocket disconnected"]').first()).toBeVisible()
-  await page.clock.fastForward(3_000)
+  // Reconnect delay is jittered 3000-6000ms — fast-forward past the worst case.
+  await page.clock.fastForward(6_000)
   await expect(page.locator('[title="WebSocket connected"]').first()).toBeVisible()
 
   await page.clock.fastForward(61_000)

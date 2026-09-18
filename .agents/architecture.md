@@ -996,7 +996,11 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
 │   │                            resolveCreatorName
 │   ├── useSilenceTemplates.ts → list + create/update/delete template mutations
 │   ├── useWebSocket.ts        → WS connection + cache patching via handleEvent();
-│   │                            invalidates ALL queries on every (re)connect (WS has no replay)
+│   │                            invalidates ALL queries on every (re)connect (WS has no replay);
+│   │                            reconnect delay jittered 3000-6000ms (P7, getReconnectDelay,
+│   │                            3000 + floor(random()*3001)) — avoids many tabs retrying in lockstep;
+│   │                            wsRef.current === ws guards every socket callback so a stale/
+│   │                            superseded socket's late event starts no duplicate timer/refetch
 │   ├── useProtectedAction.ts  → wraps write actions; opens LoginModal when auth required
 │   ├── useLoginGuard.ts       → login-required state for guarded UI elements
 │   ├── useFormatTime.ts       → relative/absolute timestamp formatter (from settings)
@@ -1895,7 +1899,14 @@ with its own `*alertmanager.Client`); `Cluster.AlertmanagerURL` /
 - Enrichment (`cluster/enrich.go`, `enrichMerged`) — moved here from
   `history` — builds `EnrichedAlert` (incl. `@receiver` label) from merged
   alerts; lives in `cluster` because `history` imports `cluster` (not the
-  reverse).
+  reverse). `Status.SilencedBy`/`InhibitedBy` are normalized through
+  `nonNilStrings` so the API always emits JSON `[]`, never `null` — some
+  Alertmanager responses omit these for an alert matching neither, which Go
+  unmarshals as a nil slice, and the frontend unconditionally iterates them
+  (`.agents/lessons.md`). `AlertStore.cloneEnrichedAlert`'s `cloneSlice` helper
+  (`alert_store.go`) must preserve that same non-nil-emptiness through every
+  `Set()` — `append([]T{}, s...)`, not `append([]T(nil), s...)`, which
+  collapses a non-nil-empty source back to nil.
 - History recorder keying is untouched: events stay keyed by
   `(fingerprint, cluster_name)`, since the merge happens *before* the
   recorder sees the snapshot — grace period and occurrence counting

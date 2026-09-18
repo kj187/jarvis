@@ -9,7 +9,12 @@ import type {
   CommentAddedPayload,
 } from '@/types'
 
-const RECONNECT_DELAY = 3_000
+// Reconnect delay is jittered (3000-6000ms), not a fixed 3s: many browser
+// tabs disconnected by the same event (a backend rollout, a network blip)
+// would otherwise all retry in lockstep on every subsequent attempt too.
+function getReconnectDelay(): number {
+  return 3_000 + Math.floor(Math.random() * 3_001)
+}
 
 export function useWebSocket() {
   const qc = useQueryClient()
@@ -19,7 +24,16 @@ export function useWebSocket() {
 
   useEffect(() => {
     mountedRef.current = true
-    let reconnectTimeout: ReturnType<typeof setTimeout>
+    // Single pending timer at a time — cleared by cleanup and by every
+    // successful open, never left to fire after either.
+    let reconnectTimeout: ReturnType<typeof setTimeout> | undefined
+
+    function clearReconnectTimeout() {
+      if (reconnectTimeout !== undefined) {
+        clearTimeout(reconnectTimeout)
+        reconnectTimeout = undefined
+      }
+    }
 
     function connect() {
       if (!mountedRef.current) return
@@ -28,29 +42,36 @@ export function useWebSocket() {
       const ws = new WebSocket(`${proto}://${window.location.host}/ws`)
       wsRef.current = ws
 
+      // wsRef.current === ws in every callback below: after a reconnect (or
+      // after unmount replaces/clears wsRef), a stale socket's late-firing
+      // event must never start a second timer or trigger a second refetch.
       ws.onopen = () => {
-        if (!mountedRef.current) return
+        if (!mountedRef.current || wsRef.current !== ws) return
+        clearReconnectTimeout()
         setWsConnected(true)
         // WS delivers no replay: events broadcast while disconnected are
         // gone. Refetch everything on every (re)connect so the UI recovers
-        // immediately — all list reads hit in-memory snapshots, so this is
-        // cheap and never touches Alertmanager.
+        // immediately. Active-alert/claim/silence reads are served from
+        // in-memory snapshots; resolved-history reads hit the database
+        // (paginated) instead — either way none of this touches
+        // Alertmanager, so a reconnect storm can't scale AM load.
         qc.invalidateQueries()
       }
 
       ws.onclose = () => {
-        if (mountedRef.current) {
-          setWsConnected(false)
-          reconnectTimeout = setTimeout(connect, RECONNECT_DELAY)
-        }
+        if (!mountedRef.current || wsRef.current !== ws) return
+        setWsConnected(false)
+        clearReconnectTimeout()
+        reconnectTimeout = setTimeout(connect, getReconnectDelay())
       }
 
       ws.onerror = () => {
+        if (wsRef.current !== ws) return
         ws.close()
       }
 
       ws.onmessage = (event: MessageEvent<string>) => {
-        if (!mountedRef.current) return
+        if (!mountedRef.current || wsRef.current !== ws) return
         try {
           const msg = JSON.parse(event.data) as WSEvent
           handleEvent(msg)
@@ -124,7 +145,7 @@ export function useWebSocket() {
 
     return () => {
       mountedRef.current = false
-      clearTimeout(reconnectTimeout)
+      clearReconnectTimeout()
       wsRef.current?.close()
     }
   }, [qc, setWsConnected])
