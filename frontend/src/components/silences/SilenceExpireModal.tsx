@@ -23,7 +23,7 @@ function MatcherChip({ matcher }: { matcher: Silence['matchers'][number] }) {
     ? matcher.isEqual ? '=~' : '!~'
     : matcher.isEqual ? '=' : '!='
   return (
-    <TruncatableChip className="rounded bg-accent px-1.5 py-0.5 font-mono text-xs">
+    <TruncatableChip className="rounded-compact bg-accent px-1.5 py-0.5 font-mono text-xs">
       {matcher.name}{op}{matcher.value}
     </TruncatableChip>
   )
@@ -39,9 +39,9 @@ function SilenceDetail({ silence, allAlerts, onSelectAlert }: { silence: Silence
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2 flex-wrap">
-        <span className="rounded bg-accent px-2 py-0.5 text-xs">{silence.clusterName}</span>
+        <span className="rounded-compact bg-accent px-2 py-0.5 text-xs">{silence.clusterName}</span>
         <span className={cn(
-          'rounded px-2 py-0.5 text-xs font-semibold',
+          'rounded-compact px-2 py-0.5 text-xs font-semibold',
           silence.status.state === 'active' && 'bg-success-soft text-success-fg',
           silence.status.state === 'pending' && 'bg-neutral-soft text-neutral-fg',
           silence.status.state === 'expired' && 'bg-muted text-muted-foreground',
@@ -111,7 +111,7 @@ function SilenceDetail({ silence, allAlerts, onSelectAlert }: { silence: Silence
             {affected.map((a) => (
               <div
                 key={a.fingerprint}
-                className={cn('flex items-center gap-2 text-xs rounded px-1 -mx-1 py-0.5', onSelectAlert && 'cursor-pointer hover:bg-accent')}
+                className={cn('flex items-center gap-2 text-xs rounded-compact px-1 -mx-1 py-0.5', onSelectAlert && 'cursor-pointer hover:bg-accent')}
                 onClick={() => onSelectAlert?.(a.fingerprint)}
               >
                 <span className="font-medium text-foreground shrink-0">{a.labels['alertname'] ?? a.fingerprint}</span>

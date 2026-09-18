@@ -70,7 +70,7 @@ export function AlertsOverviewModal({ open, onClose, resolvedAlerts = [], resolv
                 <div className="mb-1.5 flex items-baseline justify-between gap-2">
                   <span
                     className={cn(
-                      'rounded border px-1.5 py-0.5 text-[10px] font-medium',
+                      'rounded-compact border px-1.5 py-0.5 text-[10px] font-medium',
                       !labelColorStyle(b.name, labelColors, theme) && 'border-border bg-muted text-foreground',
                     )}
                     style={labelColorStyle(b.name, labelColors, theme)}
@@ -86,7 +86,7 @@ export function AlertsOverviewModal({ open, onClose, resolvedAlerts = [], resolv
                     <button
                       key={v.value}
                       onClick={() => handleValueClick(b.name, v.value)}
-                      className="flex w-full cursor-pointer items-center justify-between gap-2 rounded px-2 py-1 text-left text-xs hover:bg-accent/60"
+                      className="flex w-full cursor-pointer items-center justify-between gap-2 rounded-compact px-2 py-1 text-left text-xs hover:bg-accent/60"
                       aria-label={`Filter by ${b.name}=${v.value}`}
                     >
                       <span className="truncate">{v.value}</span>

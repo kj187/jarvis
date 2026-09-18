@@ -406,13 +406,13 @@ export function AlertListView({
     const pageNavButtons = (label: string) => (
       <nav
         aria-label={label}
-        className="flex items-center gap-1 rounded-lg border border-border/70 bg-muted/20 p-1 shadow-sm"
+        className="flex items-center gap-1 rounded-surface border border-border/70 bg-muted/20 p-1 shadow-sm"
       >
         <button
           type="button"
           onClick={() => onPageChange(1)}
           disabled={safePage === 1 || isFetching}
-          className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-default disabled:opacity-30 disabled:hover:bg-transparent"
+          className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-control text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-default disabled:opacity-30 disabled:hover:bg-transparent"
           aria-label="First page"
         >
           <ChevronsLeft className="h-3.5 w-3.5" />
@@ -421,7 +421,7 @@ export function AlertListView({
           type="button"
           onClick={() => onPageChange(Math.max(1, safePage - 1))}
           disabled={safePage === 1 || isFetching}
-          className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-default disabled:opacity-30 disabled:hover:bg-transparent"
+          className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-control text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-default disabled:opacity-30 disabled:hover:bg-transparent"
           aria-label="Previous page"
         >
           <ChevronLeft className="h-3.5 w-3.5" />
@@ -436,7 +436,7 @@ export function AlertListView({
               onClick={() => onPageChange(entry as number)}
               disabled={isFetching}
               className={cn(
-                'h-8 min-w-8 rounded-md px-2 text-xs tabular-nums cursor-pointer transition-colors',
+                'h-8 min-w-8 rounded-control px-2 text-xs tabular-nums cursor-pointer transition-colors',
                 safePage === entry
                   ? 'bg-accent text-foreground font-semibold shadow-sm'
                   : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
@@ -450,7 +450,7 @@ export function AlertListView({
           type="button"
           onClick={() => onPageChange(Math.min(totalPages, safePage + 1))}
           disabled={safePage === totalPages || isFetching}
-          className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-default disabled:opacity-30 disabled:hover:bg-transparent"
+          className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-control text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-default disabled:opacity-30 disabled:hover:bg-transparent"
           aria-label="Next page"
         >
           <ChevronRight className="h-3.5 w-3.5" />
@@ -459,7 +459,7 @@ export function AlertListView({
           type="button"
           onClick={() => onPageChange(totalPages)}
           disabled={safePage === totalPages || isFetching}
-          className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-default disabled:opacity-30 disabled:hover:bg-transparent"
+          className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-control text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-default disabled:opacity-30 disabled:hover:bg-transparent"
           aria-label="Last page"
         >
           <ChevronsRight className="h-3.5 w-3.5" />
@@ -481,14 +481,14 @@ export function AlertListView({
           )}
           <div data-testid="resolved-page-size" className="flex items-center gap-2">
             <span className="whitespace-nowrap text-xs text-muted-foreground">Per page:</span>
-            <div className="flex items-center gap-1 rounded-lg border border-border/70 bg-muted/20 p-1 shadow-sm">
+            <div className="flex items-center gap-1 rounded-surface border border-border/70 bg-muted/20 p-1 shadow-sm">
               {RESOLVED_PAGE_SIZE_OPTIONS.map((size) => (
                 <button
                   key={size}
                   type="button"
                   onClick={() => onPageSizeChange(size)}
                   className={cn(
-                    'h-8 min-w-8 rounded-md px-2 text-xs tabular-nums cursor-pointer transition-colors',
+                    'h-8 min-w-8 rounded-control px-2 text-xs tabular-nums cursor-pointer transition-colors',
                     resolvedPageSize === size
                       ? 'bg-accent text-foreground font-semibold shadow-sm'
                       : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
@@ -727,7 +727,7 @@ export function AlertListView({
                         <button
                           type="button"
                           onMouseDown={(e) => startSectionDrag(e, groupValue)}
-                          className="ml-auto inline-flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-accent/30 cursor-grab active:cursor-grabbing"
+                          className="ml-auto inline-flex h-6 w-6 items-center justify-center rounded-compact text-muted-foreground hover:text-foreground hover:bg-accent/30 cursor-grab active:cursor-grabbing"
                           aria-label="Drag section"
                           title="Drag section"
                         >
@@ -767,7 +767,7 @@ export function AlertListView({
                                 <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
                               )}
                               {group.alertname}
-                              <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                              <span className="rounded-pill bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
                                 {group.alerts.length}
                               </span>
                               {activeSilences.length > 0 && (
@@ -814,12 +814,12 @@ export function AlertListView({
                                 type="button"
                                 onClick={() => setExpireTargets(activeSilences.map(({ silence }) => silence))}
                                 title={activeSilences.length > 1 ? `Expire ${activeSilences.length} group silences` : 'Expire the group silence'}
-                                className="cursor-pointer flex w-fit items-center gap-1.5 rounded border border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:border-border/80 hover:text-foreground"
+                                className="cursor-pointer flex w-fit items-center gap-1.5 rounded-compact border border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:border-border/80 hover:text-foreground"
                               >
                                 <BellMinus className="h-3.5 w-3.5 shrink-0" />
                                 <span>Expire group silence</span>
                                 {activeSilences.length > 1 && (
-                                  <span className="rounded-full bg-muted px-1 text-[10px] leading-tight">{activeSilences.length}</span>
+                                  <span className="rounded-pill bg-muted px-1 text-[10px] leading-tight">{activeSilences.length}</span>
                                 )}
                               </button>
                             )}
@@ -829,7 +829,7 @@ export function AlertListView({
                                 onClick={() => openSilenceForm(group.alerts, expiringSilences[0].silence, true)}
                                 title={expiringSilences.length > 1 ? `Extend ${expiringSilences.length} group silences` : 'Extend the group silence'}
                                 className={cn(
-                                  'cursor-pointer flex w-fit items-center gap-1.5 rounded border px-2 py-1 text-xs transition-colors',
+                                  'cursor-pointer flex w-fit items-center gap-1.5 rounded-compact border px-2 py-1 text-xs transition-colors',
                                   'border-warning-edge text-warning-fg hover:border-warning-solid',
                                 )}
                               >
@@ -837,7 +837,7 @@ export function AlertListView({
                                 <span>Extend group silence</span>
                                 {expiringSilences.length > 1 && (
                                   <span className={cn(
-                                    'rounded-full px-1 text-[10px] leading-tight',
+                                    'rounded-pill px-1 text-[10px] leading-tight',
                                     'bg-warning-soft',
                                   )}>{expiringSilences.length}</span>
                                 )}
@@ -848,7 +848,7 @@ export function AlertListView({
                                 type="button"
                                 onClick={() => openSilenceForm(group.alerts, expiredSilences[0], true)}
                                 title="Recreate the expired group silence"
-                                className="cursor-pointer flex w-fit items-center gap-1.5 rounded border border-border/50 px-2 py-1 text-xs text-muted-foreground transition-colors hover:border-border hover:text-foreground"
+                                className="cursor-pointer flex w-fit items-center gap-1.5 rounded-compact border border-border/50 px-2 py-1 text-xs text-muted-foreground transition-colors hover:border-border hover:text-foreground"
                               >
                                 <RefreshCw className="h-3.5 w-3.5 shrink-0" />
                                 <span>Recreate group silence</span>
@@ -859,7 +859,7 @@ export function AlertListView({
                                 type="button"
                                 onClick={() => openSilenceForm(group.alerts)}
                                 title="Open a silence form pre-filled for every alert in this group"
-                                className="cursor-pointer flex w-fit items-center gap-1.5 rounded border border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:border-border/80 hover:text-foreground"
+                                className="cursor-pointer flex w-fit items-center gap-1.5 rounded-compact border border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:border-border/80 hover:text-foreground"
                               >
                                 <Bell className="h-3.5 w-3.5 shrink-0" />
                                 <span>Silence group</span>

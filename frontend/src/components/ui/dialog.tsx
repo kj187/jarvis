@@ -94,13 +94,13 @@ export function Dialog({ open, onClose, children, ariaLabel, className }: Dialog
         className={cn(
           'fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2',
           'w-full max-w-lg max-h-[90vh] overflow-y-auto',
-          'rounded-lg border border-border bg-card shadow-xl focus:outline-none',
+          'rounded-overlay border border-border bg-card shadow-xl focus:outline-none',
           className,
         )}
       >
         <button
           onClick={onClose}
-          className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring cursor-pointer"
+          className="absolute right-4 top-4 rounded-compact opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring cursor-pointer"
           aria-label="Close"
         >
           <X className="h-4 w-4" />

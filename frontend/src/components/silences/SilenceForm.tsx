@@ -118,13 +118,13 @@ function TagValueInput({ value, onChange, suggestions = [], placeholder, classNa
   return (
     <div className={cn('relative min-w-0', className)}>
       <div
-        className="flex min-h-8 flex-wrap items-center gap-1 overflow-hidden rounded border border-control bg-background px-2 py-1 focus-within:ring-2 focus-within:ring-ring cursor-text"
+        className="flex min-h-8 flex-wrap items-center gap-1 overflow-hidden rounded-compact border border-control bg-background px-2 py-1 focus-within:ring-2 focus-within:ring-ring cursor-text"
         onClick={() => inputRef.current?.focus()}
       >
         {tags.map((tag, i) => (
           <span
             key={i}
-            className="flex shrink-0 items-center gap-0.5 rounded bg-accent px-1.5 py-0.5 font-mono text-[10px]"
+            className="flex shrink-0 items-center gap-0.5 rounded-compact bg-accent px-1.5 py-0.5 font-mono text-[10px]"
           >
             {tag}
             <button
@@ -148,7 +148,7 @@ function TagValueInput({ value, onChange, suggestions = [], placeholder, classNa
         />
       </div>
       {open && filtered.length > 0 && (
-        <div className="combo-dropdown absolute left-0 top-full z-50 mt-0.5 max-h-48 w-full overflow-y-auto rounded border border-border bg-popover shadow-md">
+        <div className="combo-dropdown absolute left-0 top-full z-50 mt-0.5 max-h-48 w-full overflow-y-auto rounded-compact border border-border bg-popover shadow-md">
           {filtered.map((s) => (
             <button
               key={s}
@@ -209,7 +209,7 @@ function LabelNameInput({ value, onChange, suggestions, className }: LabelNameIn
           setOpen(true)
           setTimeout(() => filterRef.current?.focus(), 10)
         }}
-        className="flex h-8 w-full items-center justify-between rounded border border-control bg-background px-2 font-mono text-xs hover:border-ring focus:outline-none focus:ring-2 focus:ring-ring cursor-pointer"
+        className="flex h-8 w-full items-center justify-between rounded-compact border border-control bg-background px-2 font-mono text-xs hover:border-ring focus:outline-none focus:ring-2 focus:ring-ring cursor-pointer"
       >
         <span className={value ? 'text-foreground' : 'text-muted-foreground'}>
           {value || 'label'}
@@ -223,7 +223,7 @@ function LabelNameInput({ value, onChange, suggestions, className }: LabelNameIn
             className="fixed inset-0 z-40"
             onClick={() => { setOpen(false); setFilter('') }}
           />
-          <div className="absolute left-0 top-full z-50 mt-0.5 w-full rounded border border-border bg-popover shadow-md">
+          <div className="absolute left-0 top-full z-50 mt-0.5 w-full rounded-compact border border-border bg-popover shadow-md">
             <div className="border-b border-border px-2 py-1.5">
               <input
                 ref={filterRef}
@@ -363,7 +363,7 @@ function InlineDateTimePicker({ value, onChange }: InlineDateTimePickerProps) {
 
   return (
     <div className="space-y-1.5">
-      <div className="flex rounded border border-border bg-background">
+      <div className="flex rounded-compact border border-border bg-background">
         <DayPicker
           mode="single"
           selected={selected}
@@ -384,16 +384,16 @@ function InlineDateTimePicker({ value, onChange }: InlineDateTimePickerProps) {
             caption_label: 'text-sm font-medium text-foreground pointer-events-none select-none',
             nav: 'flex items-center justify-between absolute inset-x-0 top-0 z-10 pointer-events-none',
             button_previous:
-              'inline-flex h-7 w-7 items-center justify-center rounded-md text-foreground/80 hover:bg-accent hover:text-foreground cursor-pointer transition-colors pointer-events-auto',
+              'inline-flex h-7 w-7 items-center justify-center rounded-control text-foreground/80 hover:bg-accent hover:text-foreground cursor-pointer transition-colors pointer-events-auto',
             button_next:
-              'inline-flex h-7 w-7 items-center justify-center rounded-md text-foreground/80 hover:bg-accent hover:text-foreground cursor-pointer transition-colors pointer-events-auto',
+              'inline-flex h-7 w-7 items-center justify-center rounded-control text-foreground/80 hover:bg-accent hover:text-foreground cursor-pointer transition-colors pointer-events-auto',
             month_grid: 'w-full border-collapse',
             weekdays: 'flex',
             weekday: 'w-8 text-center text-[10px] font-medium text-muted-foreground',
             week: 'flex mt-1',
             day: 'relative flex h-8 w-8 items-center justify-center',
             day_button:
-              'h-8 w-8 rounded text-sm hover:bg-accent hover:text-foreground focus:outline-none cursor-pointer transition-colors',
+              'h-8 w-8 rounded-compact text-sm hover:bg-accent hover:text-foreground focus:outline-none cursor-pointer transition-colors',
             today: '[&>button]:bg-accent [&>button]:text-foreground [&>button]:font-semibold',
             selected:
               '[&>button]:!bg-primary [&>button]:!text-primary-foreground [&>button]:hover:!bg-primary',
@@ -422,7 +422,7 @@ function InlineDateTimePicker({ value, onChange }: InlineDateTimePickerProps) {
                   const n = parseInt(e.target.value, 10)
                   if (!isNaN(n)) set(n)
                 }}
-                className="w-10 rounded border border-control bg-background text-center text-2xl font-light tabular-nums focus:outline-none focus:ring-2 focus:ring-ring [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                className="w-10 rounded-compact border border-control bg-background text-center text-2xl font-light tabular-nums focus:outline-none focus:ring-2 focus:ring-ring [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
               />
               <button
                 type="button"
@@ -848,7 +848,7 @@ export function SilenceForm({
       <div className="space-y-5">
         {/* Existing silence warning */}
         {silenceGroups.length > 0 && (
-          <div className="flex gap-2.5 rounded-md border border-warning-edge bg-warning-soft px-3 py-2.5 text-warning-fg">
+          <div className="flex gap-2.5 rounded-control border border-warning-edge bg-warning-soft px-3 py-2.5 text-warning-fg">
             <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
             <div className="w-full space-y-2.5 text-xs">
               <p className="text-sm font-medium">
@@ -859,7 +859,7 @@ export function SilenceForm({
               {silenceGroups.map(({ silence: s, alerts }) => (
                 <div key={s.id} className="space-y-1 opacity-90">
                   <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
-                    <span className="rounded bg-warning-soft px-1 font-mono text-[10px]">{s.clusterName}</span>
+                    <span className="rounded-compact bg-warning-soft px-1 font-mono text-[10px]">{s.clusterName}</span>
                     <a
                       href={`${s.alertmanagerUrl}/#/silences/${s.id}`}
                       target="_blank"
@@ -882,7 +882,7 @@ export function SilenceForm({
                           return (
                             <span
                               key={m.name}
-                              className="inline-flex items-center gap-0.5 rounded bg-warning-soft px-1.5 py-0.5 font-mono text-[10px]"
+                              className="inline-flex items-center gap-0.5 rounded-compact bg-warning-soft px-1.5 py-0.5 font-mono text-[10px]"
                             >
                               <span className="opacity-70">{m.name}=</span>
                               <span>{val}</span>
@@ -907,7 +907,7 @@ export function SilenceForm({
             <select
               value={selectedTemplate}
               onChange={(e) => handleApplyTemplate(e.target.value)}
-              className="w-full h-8 px-2 py-1 text-xs border rounded bg-background border-control"
+              className="w-full h-8 px-2 py-1 text-xs border rounded-compact bg-background border-control"
             >
               <option value="">— None —</option>
               {templates.map((t) => (
@@ -938,7 +938,7 @@ export function SilenceForm({
                   type="button"
                   onClick={() => toggleCluster(c)}
                   className={cn(
-                    'flex items-center gap-1.5 rounded border px-2.5 py-1 text-xs font-medium transition-colors cursor-pointer',
+                    'flex items-center gap-1.5 rounded-compact border px-2.5 py-1 text-xs font-medium transition-colors cursor-pointer',
                     active
                       ? 'border-primary bg-primary/20 text-foreground'
                       : 'border-dashed border-border text-muted-foreground hover:border-primary/60 hover:text-foreground',
@@ -963,7 +963,7 @@ export function SilenceForm({
               type="button"
               onClick={() => liveMatchCount > 0 && setAffectedOpen((o) => !o)}
               className={cn(
-                'justify-self-end flex items-center gap-1 rounded px-2 py-0.5 text-xs font-bold tabular-nums transition-colors',
+                'justify-self-end flex items-center gap-1 rounded-compact px-2 py-0.5 text-xs font-bold tabular-nums transition-colors',
                 liveMatchCount > 0
                   ? 'bg-primary text-primary-foreground cursor-pointer hover:bg-primary/90'
                   : 'bg-accent text-muted-foreground cursor-default',
@@ -986,11 +986,11 @@ export function SilenceForm({
             // Pick the single most distinguishing label across matched alerts
             const idKey = pickIdentifierLabel(matchedAlerts)
             return (
-            <div className="mb-2 rounded border border-border bg-muted/30 p-2 space-y-1 max-h-60 overflow-y-auto combo-dropdown">
+            <div className="mb-2 rounded-compact border border-border bg-muted/30 p-2 space-y-1 max-h-60 overflow-y-auto combo-dropdown">
               {matchedAlerts.map((alert) => (
                 <div
                   key={alert.fingerprint}
-                  className={cn('flex items-center gap-1.5 rounded px-1 -mx-1 py-0.5', onSelectAlert && 'cursor-pointer hover:bg-accent/50')}
+                  className={cn('flex items-center gap-1.5 rounded-compact px-1 -mx-1 py-0.5', onSelectAlert && 'cursor-pointer hover:bg-accent/50')}
                   onClick={() => onSelectAlert?.(alert.fingerprint)}
                 >
                   <span className="font-mono text-xs font-medium shrink-0">
@@ -998,7 +998,7 @@ export function SilenceForm({
                   </span>
                   {alert.labels.severity && (
                     <span className={cn(
-                      'rounded px-1.5 py-0.5 text-[10px] font-medium shrink-0',
+                      'rounded-compact px-1.5 py-0.5 text-[10px] font-medium shrink-0',
                       alert.labels.severity === 'critical' && 'bg-destructive/20 text-destructive',
                       alert.labels.severity === 'warning' && 'bg-warning-soft text-warning-fg',
                       !['critical', 'warning'].includes(alert.labels.severity) && 'bg-accent text-muted-foreground',
@@ -1091,7 +1091,7 @@ export function SilenceForm({
             {/* Incomplete-matcher warning — blocks submit (see canSubmit) rather than silently
                 dropping the row, which would make the silence broader than intended. */}
             {incompleteMatchers.length > 0 && (
-              <div className="flex gap-2.5 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2.5 text-destructive">
+              <div className="flex gap-2.5 rounded-control border border-destructive/40 bg-destructive/10 px-3 py-2.5 text-destructive">
                 <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
                 <p className="text-xs">
                   {incompleteMatchers.length === 1
@@ -1105,7 +1105,7 @@ export function SilenceForm({
                 syntax like `(?i)`), so the affected-alerts count below can't be trusted: matchers
                 using it are treated as matching everything rather than silently showing 0. */}
             {hasUnevaluableRegex && (
-              <div className="flex gap-2.5 rounded-md border border-warning-edge bg-warning-soft px-3 py-2.5 text-warning-fg">
+              <div className="flex gap-2.5 rounded-control border border-warning-edge bg-warning-soft px-3 py-2.5 text-warning-fg">
                 <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
                 <div className="text-xs space-y-0.5">
                   <p>
@@ -1118,7 +1118,7 @@ export function SilenceForm({
 
             {/* Zero-match warning */}
             {hasActiveMatchers && liveMatchCount === 0 && (
-              <div className="flex gap-2.5 rounded-md border border-warning-edge bg-warning-soft px-3 py-2.5 text-warning-fg">
+              <div className="flex gap-2.5 rounded-control border border-warning-edge bg-warning-soft px-3 py-2.5 text-warning-fg">
                 <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
                 <div className="text-xs space-y-0.5">
                   <p>No current alerts match these matchers — the silence will be created but has no immediate effect.</p>
@@ -1191,7 +1191,7 @@ export function SilenceForm({
                         type="button"
                         onClick={() => updateDuration(p.days, p.hours, p.minutes)}
                         className={cn(
-                          'rounded border px-3 py-1 text-xs font-medium transition-colors cursor-pointer',
+                          'rounded-compact border px-3 py-1 text-xs font-medium transition-colors cursor-pointer',
                           active
                             ? 'border-primary bg-primary/20 text-foreground'
                             : 'border-border text-muted-foreground hover:border-primary/50 hover:text-foreground',
@@ -1244,7 +1244,7 @@ export function SilenceForm({
                           const n = parseInt(e.target.value, 10)
                           if (!isNaN(n)) set(n)
                         }}
-                        className="w-16 rounded border border-control bg-background text-center text-3xl font-light tabular-nums focus:outline-none focus:ring-2 focus:ring-ring [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                        className="w-16 rounded-compact border border-control bg-background text-center text-3xl font-light tabular-nums focus:outline-none focus:ring-2 focus:ring-ring [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                       />
                       <button
                         type="button"
@@ -1284,7 +1284,7 @@ export function SilenceForm({
           </label>
           {authMode !== 'none' ? (
             user ? (
-              <div className="h-8 text-xs text-muted-foreground flex items-center px-2 rounded border border-border bg-muted">
+              <div className="h-8 text-xs text-muted-foreground flex items-center px-2 rounded-compact border border-border bg-muted">
                 {user.username}
               </div>
             ) : (
@@ -1358,7 +1358,7 @@ export function SilenceForm({
       <>
       <div className="space-y-4">
         {/* Summary */}
-        <div className="rounded border border-border p-3 text-xs space-y-1.5">
+        <div className="rounded-compact border border-border p-3 text-xs space-y-1.5">
           <div className="grid grid-cols-[80px_1fr] gap-y-1.5">
             <span className="text-muted-foreground">Start</span>
             <span className="font-mono">{startsAt ? `${format(new Date(startsAt), 'yyyy-MM-dd HH:mm')} ${tzAbbr}` : '—'}</span>
@@ -1376,7 +1376,7 @@ export function SilenceForm({
           <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Cluster</p>
           <div className="flex flex-wrap gap-1.5">
             {selectedClusters.map((c) => (
-              <span key={c} className="rounded border border-primary/40 bg-primary/10 px-2 py-0.5 text-xs font-medium">
+              <span key={c} className="rounded-compact border border-primary/40 bg-primary/10 px-2 py-0.5 text-xs font-medium">
                 {c}
               </span>
             ))}
@@ -1390,7 +1390,7 @@ export function SilenceForm({
           </p>
           <div className="flex flex-wrap gap-1">
             {activeMatchers.map((m) => (
-              <span key={m.id} className="rounded bg-accent px-1.5 py-0.5 font-mono text-[10px]">
+              <span key={m.id} className="rounded-compact bg-accent px-1.5 py-0.5 font-mono text-[10px]">
                 {m.name} {m.operator} {m.value}
               </span>
             ))}
@@ -1412,7 +1412,7 @@ export function SilenceForm({
                 {matched.map((alert) => (
                   <div
                     key={alert.fingerprint}
-                    className={cn('flex items-center gap-2 rounded border border-border px-2 py-1.5', onSelectAlert && 'cursor-pointer hover:border-border/80 hover:bg-accent/30')}
+                    className={cn('flex items-center gap-2 rounded-compact border border-border px-2 py-1.5', onSelectAlert && 'cursor-pointer hover:border-border/80 hover:bg-accent/30')}
                     onClick={() => onSelectAlert?.(alert.fingerprint)}
                   >
                     <span className="text-xs font-medium text-foreground shrink-0">{alert.labels.alertname ?? alert.fingerprint.slice(0, 8)}</span>
@@ -1456,7 +1456,7 @@ export function SilenceForm({
         {[...results.entries()].map(([cluster, result]) => (
           <div
             key={cluster}
-            className="flex items-center gap-3 rounded border border-border px-3 py-2"
+            className="flex items-center gap-3 rounded-compact border border-border px-3 py-2"
           >
             <span className="min-w-[100px] text-xs font-medium">{cluster}</span>
 

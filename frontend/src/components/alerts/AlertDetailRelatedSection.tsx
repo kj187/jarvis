@@ -38,8 +38,8 @@ function RelatedAlertRow({
       data-testid="detail-related-row"
       className={
         onSelect
-          ? 'space-y-1 rounded border border-border/60 px-2.5 py-2 cursor-pointer hover:bg-accent'
-          : 'space-y-1 rounded border border-border/60 px-2.5 py-2'
+          ? 'space-y-1 rounded-compact border border-border/60 px-2.5 py-2 cursor-pointer hover:bg-accent'
+          : 'space-y-1 rounded-compact border border-border/60 px-2.5 py-2'
       }
       onClick={onSelect}
     >
@@ -49,7 +49,7 @@ function RelatedAlertRow({
           {alert.labels.alertname ?? alert.fingerprint}
         </span>
         {showCluster && (
-          <span className="shrink-0 rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+          <span className="shrink-0 rounded-compact border border-border bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
             {alert.clusterName}
           </span>
         )}
@@ -60,7 +60,7 @@ function RelatedAlertRow({
           <TruncatableChip
             key={key}
             className={cn(
-              'max-w-[180px] rounded border px-1.5 py-0.5 text-[10px] font-medium',
+              'max-w-[180px] rounded-compact border px-1.5 py-0.5 text-[10px] font-medium',
               !labelColorStyle(key, labelColors, theme) && 'border-border bg-muted text-foreground',
             )}
             style={labelColorStyle(key, labelColors, theme)}
@@ -111,7 +111,7 @@ export function AlertDetailRelatedSection({ alert, related, onSelectAlert }: Ale
         <button
           data-testid="detail-related-show-more"
           onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
-          className="mt-2 rounded border border-border px-2 py-1 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground cursor-pointer"
+          className="mt-2 rounded-compact border border-border px-2 py-1 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground cursor-pointer"
         >
           Show {Math.min(PAGE_SIZE, remainder)} more ({remainder} remaining)
         </button>

@@ -62,8 +62,8 @@ export function SilenceGroupCard({ group, alerts, onEditGroup, onExpireGroup, de
 
       <div className="flex flex-1 flex-col gap-2.5 p-3.5">
         <div className="flex items-center gap-2">
-          <span className={cn('h-2 w-2 shrink-0 rounded-full', URGENCY_FILL_CLASS[urgency])} />
-          <span className="inline-flex items-center gap-1 rounded bg-accent px-1.5 py-0.5 text-[11px] font-semibold">
+          <span className={cn('h-2 w-2 shrink-0 rounded-pill', URGENCY_FILL_CLASS[urgency])} />
+          <span className="inline-flex items-center gap-1 rounded-compact bg-accent px-1.5 py-0.5 text-[11px] font-semibold">
             <Layers3 className="h-3 w-3" />
             {group.silences.length} silences
           </span>
@@ -109,7 +109,7 @@ export function SilenceGroupCard({ group, alerts, onEditGroup, onExpireGroup, de
 
         <div className="flex flex-wrap gap-1">
           {uniqueClusters.map((cluster) => (
-            <span key={cluster} className="rounded bg-accent px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
+            <span key={cluster} className="rounded-compact bg-accent px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
               {cluster}
             </span>
           ))}

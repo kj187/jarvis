@@ -41,7 +41,7 @@ function InfoColophon({ version }: { version: string | null }) {
         href="https://github.com/kj187/jarvis"
         target="_blank"
         rel="noopener noreferrer"
-        className="group flex flex-col items-center gap-2 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="group flex flex-col items-center gap-2 rounded-control focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <img
           src="/logo.png"
@@ -215,26 +215,26 @@ export function Header() {
           <button
             aria-current={activePage === 'alerts' ? 'page' : undefined}
             onClick={() => { setActivePage('alerts'); if (!filters.state) setFilter('state', 'active') }}
-            className={`cursor-pointer self-end h-9 flex items-center pb-1.5 gap-1.5 px-4 text-xs font-medium transition-colors translate-y-px border border-b-0 rounded-t-sm ${
+            className={`cursor-pointer self-end h-9 flex items-center pb-1.5 gap-1.5 px-4 text-xs font-medium transition-colors translate-y-px border border-b-0 rounded-t-compact ${
               activePage === 'alerts'
                 ? 'border-border bg-background text-foreground'
                 : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-accent/20'
             }`}
           >
-            <span className={`h-1.5 w-1.5 rounded-full bg-attention-solid ${activePage === 'alerts' ? '' : 'opacity-80'}`} />
+            <span className={`h-1.5 w-1.5 rounded-pill bg-attention-solid ${activePage === 'alerts' ? '' : 'opacity-80'}`} />
             Alerts
             <span className="tabular-nums opacity-75">{alertCounts.byState?.active ?? 0}</span>
           </button>
           <button
             aria-current={activePage === 'silences' ? 'page' : undefined}
             onClick={() => setActivePage(activePage === 'silences' ? 'alerts' : 'silences')}
-            className={`cursor-pointer self-end h-9 flex items-center pb-1.5 gap-1.5 px-4 text-xs font-medium transition-colors translate-y-px border border-b-0 rounded-t-sm ${
+            className={`cursor-pointer self-end h-9 flex items-center pb-1.5 gap-1.5 px-4 text-xs font-medium transition-colors translate-y-px border border-b-0 rounded-t-compact ${
               activePage === 'silences'
                 ? 'border-border bg-background text-foreground'
                 : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-accent/20'
             }`}
           >
-            <span className={`h-1.5 w-1.5 rounded-full bg-info-solid ${activePage === 'silences' ? '' : 'opacity-80'}`} />
+            <span className={`h-1.5 w-1.5 rounded-pill bg-info-solid ${activePage === 'silences' ? '' : 'opacity-80'}`} />
             Silences
             <span className="tabular-nums opacity-75">{alertCounts.silenceCount ?? 0}</span>
           </button>
@@ -249,16 +249,16 @@ export function Header() {
           <div className="relative shrink-0 self-stretch flex items-center" {...clusterPopover.wrapperProps}>
             <button
               type="button"
-              className="flex items-center gap-1.5 rounded px-2 py-1 text-xs cursor-pointer select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="flex items-center gap-1.5 rounded-compact px-2 py-1 text-xs cursor-pointer select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               aria-label={`Instances ${healthyCount}/${clusters.length}`}
               aria-controls={clusterPanelId}
               {...clusterPopover.triggerProps}
             >
-              <div className={`h-2 w-2 rounded-full ${healthyCount === clusters.length ? 'bg-success-solid' : 'bg-critical-solid'}`} />
+              <div className={`h-2 w-2 rounded-pill ${healthyCount === clusters.length ? 'bg-success-solid' : 'bg-critical-solid'}`} />
               <span className="text-muted-foreground tabular-nums">{healthyCount}/{clusters.length}</span>
             </button>
             {clusterHoverOpen && clusters.length > 0 && (
-              <div id={clusterPanelId} className="absolute right-0 top-full z-50 min-w-[26rem] rounded-b-md border border-t-0 border-border bg-header shadow-lg" role="region" aria-label="Connected instances" onMouseEnter={clusterPopover.show} onMouseLeave={clusterPopover.hide}>
+              <div id={clusterPanelId} className="absolute right-0 top-full z-50 min-w-[26rem] rounded-b-control border border-t-0 border-border bg-header shadow-lg" role="region" aria-label="Connected instances" onMouseEnter={clusterPopover.show} onMouseLeave={clusterPopover.hide}>
                 <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-border">Connected Instances</div>
                 {clusters.map((c) => (
                   <div
@@ -268,11 +268,11 @@ export function Header() {
                     <div className="flex items-center justify-between gap-3">
                       <div className="relative flex items-center gap-2">
                         {c.healthy ? (
-                          <div className="h-2 w-2 rounded-full shrink-0 bg-success-solid" />
+                          <div className="h-2 w-2 rounded-pill shrink-0 bg-success-solid" />
                         ) : (
                           <div className="relative shrink-0">
-                            <div className="h-2.5 w-2.5 rounded-full bg-critical-solid" />
-                            <div className="absolute inset-0 rounded-full bg-critical-solid animate-ping opacity-75" />
+                            <div className="h-2.5 w-2.5 rounded-pill bg-critical-solid" />
+                            <div className="absolute inset-0 rounded-pill bg-critical-solid animate-ping opacity-75" />
                           </div>
                         )}
                         <div
@@ -282,7 +282,7 @@ export function Header() {
                           }}
                         >
                           <button
-                            className="rounded text-xs font-medium text-foreground hover:text-link cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            className="rounded-compact text-xs font-medium text-foreground hover:text-link cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                             onMouseEnter={() => setClusterFilterOpen(c.name)}
                             onMouseLeave={() => setClusterFilterOpen(null)}
                             onFocus={() => setClusterFilterOpen(c.name)}
@@ -295,7 +295,7 @@ export function Header() {
                           </button>
                           {clusterFilterOpen === c.name && (
                             <div
-                              className="absolute left-0 top-full mt-0.5 z-60 rounded border border-border bg-popover shadow-md text-[11px]"
+                              className="absolute left-0 top-full mt-0.5 z-60 rounded-compact border border-border bg-popover shadow-md text-[11px]"
                               onMouseEnter={() => setClusterFilterOpen(c.name)}
                               onMouseLeave={() => setClusterFilterOpen(null)}
                             >
@@ -318,7 +318,7 @@ export function Header() {
                           )}
                         </div>
                         {!c.healthy && (
-                          <span className="rounded bg-critical-soft px-1 py-0.5 text-[10px] font-semibold text-critical-fg uppercase tracking-wide">DOWN</span>
+                          <span className="rounded-compact bg-critical-soft px-1 py-0.5 text-[10px] font-semibold text-critical-fg uppercase tracking-wide">DOWN</span>
                         )}
                       </div>
                       <span className="text-xs text-muted-foreground whitespace-nowrap">{c.alertCount} Alerts</span>
@@ -327,7 +327,7 @@ export function Header() {
                       <div className="mt-1 pl-[1.375rem] space-y-0.5">
                         {c.members.map((m) => (
                           <div key={m.name} className="flex items-center gap-1.5 text-[10px]">
-                            <div className={`h-1.5 w-1.5 rounded-full shrink-0 ${m.healthy ? 'bg-success-solid' : 'bg-critical-solid'}`} />
+                            <div className={`h-1.5 w-1.5 rounded-pill shrink-0 ${m.healthy ? 'bg-success-solid' : 'bg-critical-solid'}`} />
                             <span className="break-all text-muted-foreground">{m.url}</span>
                           </div>
                         ))}
@@ -351,7 +351,7 @@ export function Header() {
               <RefreshCw className={`h-4 w-4 ${isSpinning ? 'animate-spin' : ''}`} />
             </Button>
             {refreshTooltipOpen && (
-              <div id={refreshPanelId} role="tooltip" className="absolute right-0 top-full z-50 w-72 rounded-b-md border border-t-0 border-border bg-header px-3 py-2 text-xs leading-snug text-muted-foreground shadow-lg" onMouseEnter={refreshPopover.show} onMouseLeave={refreshPopover.hide}>
+              <div id={refreshPanelId} role="tooltip" className="absolute right-0 top-full z-50 w-72 rounded-b-control border border-t-0 border-border bg-header px-3 py-2 text-xs leading-snug text-muted-foreground shadow-lg" onMouseEnter={refreshPopover.show} onMouseLeave={refreshPopover.hide}>
                 {refreshTooltipText}
               </div>
             )}
@@ -361,7 +361,7 @@ export function Header() {
           {/* Info — Jarvis logo, version, copyright. Opens on hover, like cluster status above. */}
           <div className="relative shrink-0 self-stretch flex items-center" {...infoPopover.wrapperProps}>
             <button
-              className="flex items-center justify-center h-8 w-8 rounded cursor-pointer text-foreground hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="flex items-center justify-center h-8 w-8 rounded-compact cursor-pointer text-foreground hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               aria-label="About Jarvis"
               aria-controls={infoPanelId}
               data-testid="info-menu"
@@ -370,7 +370,7 @@ export function Header() {
               <Info className="h-4 w-4" />
             </button>
             {infoOpen && (
-              <div id={infoPanelId} className="absolute right-0 top-full z-50 w-56 rounded-b-md border border-t-0 border-border bg-header shadow-lg" onMouseEnter={infoPopover.show} onMouseLeave={infoPopover.hide}>
+              <div id={infoPanelId} className="absolute right-0 top-full z-50 w-56 rounded-b-control border border-t-0 border-border bg-header shadow-lg" onMouseEnter={infoPopover.show} onMouseLeave={infoPopover.hide}>
                 <InfoColophon version={version} />
               </div>
             )}
@@ -381,7 +381,7 @@ export function Header() {
               state; Login/Logout are added on top depending on it. Opens on hover. */}
           <div className="relative shrink-0 self-stretch flex items-center" {...userMenu.wrapperProps}>
             <button
-              className="flex items-center justify-center h-8 w-8 rounded cursor-pointer text-foreground hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="flex items-center justify-center h-8 w-8 rounded-compact cursor-pointer text-foreground hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               aria-label="User menu"
               aria-controls={userPanelId}
               data-testid="user-menu"
@@ -390,7 +390,7 @@ export function Header() {
               {isAuthenticated && user ? <Avatar name={user.username} className="h-6 w-6" /> : <CircleUserRound className="h-5 w-5" />}
             </button>
             {userMenuOpen && (
-              <div id={userPanelId} data-testid="user-menu-panel" className="absolute right-0 top-full z-50 min-w-40 rounded-b-md border border-t-0 border-border bg-header shadow-lg" onMouseEnter={userMenu.show} onMouseLeave={userMenu.hide}>
+              <div id={userPanelId} data-testid="user-menu-panel" className="absolute right-0 top-full z-50 min-w-40 rounded-b-control border border-t-0 border-border bg-header shadow-lg" onMouseEnter={userMenu.show} onMouseLeave={userMenu.hide}>
                 {isAuthenticated && user && (
                   <div className="px-3 py-2 text-xs font-medium text-foreground border-b border-border">{user.username}</div>
                 )}
@@ -443,7 +443,7 @@ export function Header() {
           <div className="flex items-center gap-1 flex-wrap">
             <div className="flex-1" />
             <div className="flex items-center gap-1.5 px-2 text-xs cursor-pointer select-none" aria-label={`Instances ${healthyCount}/${clusters.length}`}>
-              <div className={`h-2 w-2 rounded-full ${healthyCount === clusters.length ? 'bg-success-solid' : 'bg-critical-solid'}`} />
+              <div className={`h-2 w-2 rounded-pill ${healthyCount === clusters.length ? 'bg-success-solid' : 'bg-critical-solid'}`} />
               <span className="text-muted-foreground tabular-nums">{healthyCount}/{clusters.length}</span>
             </div>
             <Tooltip content={refreshTooltipText} side="bottom">
@@ -455,7 +455,7 @@ export function Header() {
               <Plus className="mr-1 h-3.5 w-3.5" />Create silence
             </Button>
             <button
-              className="flex items-center justify-center h-8 w-8 rounded cursor-pointer text-foreground hover:bg-accent/60"
+              className="flex items-center justify-center h-8 w-8 rounded-compact cursor-pointer text-foreground hover:bg-accent/60"
               onClick={() => setInfoOpen((v) => !v)}
               aria-expanded={infoOpen}
               aria-label="About Jarvis"
@@ -464,7 +464,7 @@ export function Header() {
               <Info className="h-4 w-4" />
             </button>
             <button
-              className="flex items-center justify-center h-8 w-8 rounded cursor-pointer text-foreground hover:bg-accent/60"
+              className="flex items-center justify-center h-8 w-8 rounded-compact cursor-pointer text-foreground hover:bg-accent/60"
               onClick={() => setUserMenuOpen((v) => !v)}
               aria-expanded={userMenuOpen}
               aria-label="User menu"
@@ -476,14 +476,14 @@ export function Header() {
 
           {/* Info expanded (mobile) */}
           {infoOpen && (
-            <div className="border border-border rounded-md bg-card">
+            <div className="border border-border rounded-control bg-card">
               <InfoColophon version={version} />
             </div>
           )}
 
           {/* User menu expanded (mobile) */}
           {userMenuOpen && (
-            <div className="border border-border rounded-md bg-card">
+            <div className="border border-border rounded-control bg-card">
               {isAuthenticated && user && (
                 <div className="px-3 py-2 text-xs font-medium text-foreground border-b border-border">{user.username}</div>
               )}

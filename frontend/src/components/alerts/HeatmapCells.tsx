@@ -40,7 +40,7 @@ export function HeatmapCellsRow({
         const box = (
           <div
             className={cn(
-              cellClassName ?? 'h-4 w-full rounded-sm',
+              cellClassName ?? 'h-4 w-full rounded-compact',
               level === 0 ? (emptyClassName ?? HEATMAP_INTENSITY_CLASSES[0]) : HEATMAP_INTENSITY_CLASSES[level],
             )}
           />

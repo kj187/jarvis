@@ -40,7 +40,7 @@ function SegmentedControl<T extends string>({
   options: { value: T; label: string }[]
 }) {
   return (
-    <div className="flex overflow-hidden rounded border border-border text-xs bg-input">
+    <div className="flex overflow-hidden rounded-compact border border-border text-xs bg-input">
       {options.map((opt) => (
         <button
           key={opt.value}
@@ -229,14 +229,14 @@ function LabelColorSwatch({
         aria-label={`Choose a chip color for ${labelKey}`}
         aria-expanded={open}
         title={color ? `Chip color: ${color}` : 'No chip color — click to choose one'}
-        className="h-3.5 w-3.5 shrink-0 cursor-pointer rounded-full border-2 border-muted-foreground/50"
+        className="h-3.5 w-3.5 shrink-0 cursor-pointer rounded-pill border-2 border-muted-foreground/50"
         style={{ backgroundColor: color ? dotColor(color) : 'transparent' }}
       />
       {open && pos && createPortal(
         <div
           ref={popoverRef}
           data-testid="label-color-picker"
-          className="fixed z-50 flex items-center gap-1.5 rounded-lg border border-border bg-popover p-2 shadow-lg"
+          className="fixed z-50 flex items-center gap-1.5 rounded-surface border border-border bg-popover p-2 shadow-lg"
           style={{ top: pos.top, left: pos.left }}
         >
           {LABEL_COLORS.map((name) => (
@@ -248,7 +248,7 @@ function LabelColorSwatch({
               aria-pressed={color === name}
               title={name}
               className={cn(
-                'h-5 w-5 cursor-pointer rounded-full ring-offset-2 ring-offset-popover transition-transform hover:scale-110',
+                'h-5 w-5 cursor-pointer rounded-pill ring-offset-2 ring-offset-popover transition-transform hover:scale-110',
                 color === name && 'ring-2 ring-foreground',
               )}
               style={{ backgroundColor: dotColor(name) }}
@@ -261,7 +261,7 @@ function LabelColorSwatch({
             aria-pressed={!color}
             title="No color"
             className={cn(
-              'flex h-5 w-5 cursor-pointer items-center justify-center rounded-full border border-dashed border-muted-foreground/60 text-muted-foreground ring-offset-2 ring-offset-popover hover:text-foreground',
+              'flex h-5 w-5 cursor-pointer items-center justify-center rounded-pill border border-dashed border-muted-foreground/60 text-muted-foreground ring-offset-2 ring-offset-popover hover:text-foreground',
               !color && 'ring-2 ring-foreground',
             )}
           >
@@ -308,7 +308,7 @@ function LabelRow({
   return (
     <div
       className={cn(
-        'flex items-center gap-2 rounded border border-border bg-input px-2 py-1',
+        'flex items-center gap-2 rounded-compact border border-border bg-input px-2 py-1',
         dragging && 'opacity-50',
       )}
     >
@@ -480,7 +480,7 @@ function InfoTooltip({ text, ariaLabel = 'More information' }: { text: string; a
       <Info className="h-3.5 w-3.5 shrink-0 text-muted-foreground hover:text-foreground transition-colors" />
       {rect && createPortal(
         <div
-          className="fixed z-[9999] max-w-[280px] rounded-md border border-border bg-popover px-2.5 py-1.5 text-xs text-popover-foreground shadow-md pointer-events-none"
+          className="fixed z-[9999] max-w-[280px] rounded-control border border-border bg-popover px-2.5 py-1.5 text-xs text-popover-foreground shadow-md pointer-events-none"
           style={{
             left: rect.left + rect.width / 2,
             top: rect.bottom + 6,
@@ -537,13 +537,13 @@ function SettingsSwitch({
       aria-checked={checked}
       onClick={onToggle}
       className={cn(
-        'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors',
+        'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-pill border-2 border-transparent transition-colors',
         checked ? 'bg-primary' : 'bg-control',
       )}
     >
       <span
         className={cn(
-          'pointer-events-none inline-block h-4 w-4 rounded-full bg-background shadow-sm transition-transform',
+          'pointer-events-none inline-block h-4 w-4 rounded-pill bg-background shadow-sm transition-transform',
           checked ? 'translate-x-4' : 'translate-x-0',
         )}
       />
@@ -735,7 +735,7 @@ export function SettingsSheet({ open, onClose }: SettingsSheetProps) {
           ) : providerMode === 'none' || providerMode === undefined ? (
             <p className="text-[10px] text-muted-foreground">Stored in this browser</p>
           ) : (
-            <div className="flex items-start gap-1.5 rounded-md border border-warning-edge bg-warning-soft px-2.5 py-1.5 text-[11px] text-warning-fg">
+            <div className="flex items-start gap-1.5 rounded-control border border-warning-edge bg-warning-soft px-2.5 py-1.5 text-[11px] text-warning-fg">
               <Info className="h-3.5 w-3.5 shrink-0 mt-px" />
               <span>Stored in this browser — sign in to sync across devices</span>
             </div>
@@ -856,7 +856,7 @@ export function SettingsSheet({ open, onClose }: SettingsSheetProps) {
               type="button"
               onClick={resetLabelDisplay}
               className={cn(
-                'inline-flex shrink-0 cursor-pointer items-center gap-1 whitespace-nowrap rounded border border-transparent px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground',
+                'inline-flex shrink-0 cursor-pointer items-center gap-1 whitespace-nowrap rounded-compact border border-transparent px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground',
                 confirmLabelReset && 'border-destructive text-destructive hover:bg-destructive/10 hover:text-destructive',
               )}
               title="Reset only this Labels section (pinned, hidden and colors) — other settings are untouched"
@@ -874,7 +874,7 @@ export function SettingsSheet({ open, onClose }: SettingsSheetProps) {
                of floating above empty space — and shrinks back down (to
                `min-h-[8rem]` on the list itself) as the window gets shorter. */
             <div className="flex min-h-0 flex-1 flex-col gap-1.5">
-              <div className="flex h-7 shrink-0 items-center gap-1.5 rounded-md border border-control bg-input px-1.5">
+              <div className="flex h-7 shrink-0 items-center gap-1.5 rounded-control border border-control bg-input px-1.5">
                 <Search className="h-3 w-3 shrink-0 text-muted-foreground" />
                 <input
                   value={labelSearch}

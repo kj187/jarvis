@@ -24,7 +24,7 @@ export function SilenceListView({ groups, alerts, onEditGroup, onExpireGroup, de
   if (groups.length === 0) return null
 
   return (
-    <div className="overflow-hidden rounded-md border border-border">
+    <div className="overflow-hidden rounded-control border border-border">
       {groups.map((group) => {
         const rep = group.silences[0]
         const isDeleting = group.silences.some((s) => deletingIds.has(s.id))

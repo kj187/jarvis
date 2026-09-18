@@ -285,7 +285,7 @@ export function AlertsPage() {
             <div className="flex items-center gap-2 shrink-0 ml-auto">
               <button
                 onClick={() => setOverviewOpen(true)}
-                className="cursor-pointer flex h-7 w-7 items-center justify-center rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-accent/40"
+                className="cursor-pointer flex h-7 w-7 items-center justify-center rounded-control border border-border text-muted-foreground hover:text-foreground hover:bg-accent/40"
                 title="Alerts overview"
                 aria-label="Open alerts overview"
               >
@@ -301,7 +301,7 @@ export function AlertsPage() {
                   onToggleEnabled={toggleCardGrouping}
                 />
               )}
-              <div className="flex items-center rounded-md border border-border overflow-hidden">
+              <div className="flex items-center rounded-control border border-border overflow-hidden">
                 <button
                   onClick={() => { setFilter('state', 'active'); setViewMode(activeViewMode) }}
                   className={`cursor-pointer flex items-center gap-1.5 h-7 text-xs font-medium transition-colors ${
@@ -334,7 +334,7 @@ export function AlertsPage() {
                 </button>
               </div>
               {searchOpen ? (
-                <div className="flex items-center rounded-md border border-control overflow-hidden bg-input h-7">
+                <div className="flex items-center rounded-control border border-control overflow-hidden bg-input h-7">
                   <Search className="ml-2 h-3 w-3 text-muted-foreground shrink-0 pointer-events-none" />
                   <Input
                     ref={searchInputRef}
@@ -359,7 +359,7 @@ export function AlertsPage() {
                   </button>
                 </div>
               ) : (
-                <div className="flex items-center rounded-md border border-border overflow-hidden">
+                <div className="flex items-center rounded-control border border-border overflow-hidden">
                   <button
                     onClick={toggleSearch}
                     className="cursor-pointer h-7 w-7 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
@@ -370,7 +370,7 @@ export function AlertsPage() {
                   </button>
                 </div>
               )}
-              <div className="flex items-center rounded-md border border-border overflow-hidden">
+              <div className="flex items-center rounded-control border border-border overflow-hidden">
                 <button
                   onClick={() => setIsFullscreen(true)}
                   className="cursor-pointer h-7 w-7 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
@@ -390,9 +390,9 @@ export function AlertsPage() {
           className={`fixed inset-0 z-50 flex items-center justify-center pointer-events-none select-none transition-opacity duration-700 ${hintVisible ? 'opacity-100' : 'opacity-0'}`}
           style={{ backdropFilter: hintVisible ? 'blur(2px)' : undefined }}
         >
-          <div className="px-12 py-8 rounded-2xl shadow-2xl bg-foreground/95 text-background text-xl font-semibold flex items-center gap-4 border border-border">
+          <div className="px-12 py-8 rounded-overlay shadow-2xl bg-foreground/95 text-background text-xl font-semibold flex items-center gap-4 border border-border">
             Press
-            <kbd className="px-4 py-2 rounded-lg bg-background/25 font-mono text-lg leading-none">ESC</kbd>
+            <kbd className="px-4 py-2 rounded-surface bg-background/25 font-mono text-lg leading-none">ESC</kbd>
             to exit fullscreen
           </div>
         </div>
@@ -404,7 +404,7 @@ export function AlertsPage() {
           <span>Failed to load resolved alerts.</span>
           <button
             type="button"
-            className="cursor-pointer rounded-md border border-border px-2 py-1 text-xs text-foreground hover:bg-accent"
+            className="cursor-pointer rounded-control border border-border px-2 py-1 text-xs text-foreground hover:bg-accent"
             onClick={() => void retryResolved()}
           >
             Retry
@@ -456,7 +456,7 @@ export function AlertsPage() {
           <span>Could not refresh resolved alerts. Showing the previous result.</span>
           <button
             type="button"
-            className="cursor-pointer rounded-md border border-border px-2 py-1 text-foreground hover:bg-accent"
+            className="cursor-pointer rounded-control border border-border px-2 py-1 text-foreground hover:bg-accent"
             onClick={() => void retryResolved()}
           >
             Retry
@@ -481,7 +481,7 @@ export function AlertsPage() {
           <span>Failed to load the resolved alert.</span>
           <button
             type="button"
-            className="cursor-pointer rounded-md border border-border px-2 py-1 text-xs text-foreground hover:bg-accent"
+            className="cursor-pointer rounded-control border border-border px-2 py-1 text-xs text-foreground hover:bg-accent"
             onClick={() => void resolvedDetailQuery.refetch()}
           >
             Retry

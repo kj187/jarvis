@@ -2,7 +2,7 @@ import { cn } from '@/lib/utils'
 
 // Status roles come from the design tokens (`critical`, `warning`, …): each role carries its own
 // text/fill/edge for both themes, so no component branches on the theme for colour.
-const BADGE = 'inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-semibold'
+const BADGE = 'inline-flex items-center rounded-control border px-2 py-0.5 text-xs font-semibold'
 
 const ROLE = {
   critical: 'bg-critical-soft text-critical-fg border-critical-edge',

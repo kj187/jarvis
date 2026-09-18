@@ -398,7 +398,7 @@ export function AlertCardGrid({
                 aria-expanded={!isCollapsed}
               >
                 {isCollapsed ? <ChevronRight className="h-3.5 w-3.5 shrink-0" /> : <ChevronDown className="h-3.5 w-3.5 shrink-0" />}
-                <span className={`h-2 w-2 rounded-full shrink-0 ${SEVERITY_DOT[groupValue] ?? 'bg-neutral-solid'}`} />
+                <span className={`h-2 w-2 rounded-pill shrink-0 ${SEVERITY_DOT[groupValue] ?? 'bg-neutral-solid'}`} />
                 {groupByLabel === 'severity'
                   ? (SEVERITY_LABEL[groupValue] ?? groupValue)
                   : `${groupByLabel}: ${groupValue}`}{' '}
@@ -408,7 +408,7 @@ export function AlertCardGrid({
                 <button
                   type="button"
                   onMouseDown={(e) => startSectionDrag(e, groupValue)}
-                  className="inline-flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-accent/30 cursor-grab active:cursor-grabbing"
+                  className="inline-flex h-6 w-6 items-center justify-center rounded-compact text-muted-foreground hover:text-foreground hover:bg-accent/30 cursor-grab active:cursor-grabbing"
                   aria-label="Drag section"
                   title="Drag section"
                 >

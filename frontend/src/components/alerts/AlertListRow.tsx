@@ -202,7 +202,7 @@ export function AlertListRow({
               type="button"
               onClick={() => onExpireSilence?.(silence)}
               title="Expire silence"
-              className="cursor-pointer rounded border border-border p-1 text-muted-foreground transition-colors hover:border-border/80 hover:text-foreground"
+              className="cursor-pointer rounded-compact border border-border p-1 text-muted-foreground transition-colors hover:border-border/80 hover:text-foreground"
             >
               <BellMinus className="h-3.5 w-3.5" />
             </button>
@@ -212,7 +212,7 @@ export function AlertListRow({
               type="button"
               onClick={() => onCreateSilence?.([alert], silence, true)}
               title="Extend silence"
-              className="cursor-pointer rounded border border-warning-edge p-1 text-warning-fg transition-colors hover:border-warning-solid"
+              className="cursor-pointer rounded-compact border border-warning-edge p-1 text-warning-fg transition-colors hover:border-warning-solid"
             >
               <RefreshCw className="h-3.5 w-3.5" />
             </button>

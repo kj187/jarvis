@@ -20,7 +20,7 @@ export function SilenceLifetimeBar({ silence }: { silence: Silence }) {
 
   return (
     <div className="border-t border-border/60 bg-muted/30 px-3.5 py-2.5">
-      <div className="h-1.5 overflow-hidden rounded-full bg-border">
+      <div className="h-1.5 overflow-hidden rounded-pill bg-border">
         <div className={URGENCY_FILL_CLASS[urgency]} style={{ width: `${pct}%`, height: '100%' }} />
       </div>
       <div className="mt-1.5 flex justify-between font-mono text-[10.5px] text-muted-foreground">

@@ -105,7 +105,7 @@ export function Tooltip({
           <div
             role="tooltip"
             className={cn(
-              'pointer-events-none fixed z-[100] max-w-xs rounded-md border border-border bg-popover px-2.5 py-1.5',
+              'pointer-events-none fixed z-[100] max-w-xs rounded-control border border-border bg-popover px-2.5 py-1.5',
               'text-xs leading-snug text-popover-foreground shadow-lg',
               'whitespace-normal break-words normal-case tracking-normal',
               className,

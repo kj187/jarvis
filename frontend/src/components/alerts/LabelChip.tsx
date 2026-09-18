@@ -81,7 +81,7 @@ export function LabelChip({
           // a clickable ancestor) — the common-labels strip above a group has
           // no clickable ancestor, so without this the chip fell back to the
           // browser's default text cursor.
-          'max-w-[200px] cursor-pointer truncate rounded border px-1.5 py-0.5 text-[10px] font-medium',
+          'max-w-[200px] cursor-pointer truncate rounded-compact border px-1.5 py-0.5 text-[10px] font-medium',
           emphasized && 'font-semibold',
           neutral && 'border-border bg-muted text-foreground',
         )}
@@ -93,7 +93,7 @@ export function LabelChip({
       {open && dropdownPos && (
         <div
           ref={popoverRef}
-          className="fixed z-50 w-max max-w-[420px] rounded-lg border border-border bg-popover p-2 shadow-md"
+          className="fixed z-50 w-max max-w-[420px] rounded-surface border border-border bg-popover p-2 shadow-md"
           style={{ top: dropdownPos.top, left: dropdownPos.left }}
           onMouseEnter={show}
           onMouseLeave={hide}
@@ -109,7 +109,7 @@ export function LabelChip({
               <button
                 key={op}
                 onClick={(e) => apply(op, e)}
-                className="rounded px-2 py-0.5 font-mono text-[11px] font-bold text-foreground hover:bg-accent"
+                className="rounded-compact px-2 py-0.5 font-mono text-[11px] font-bold text-foreground hover:bg-accent"
               >
                 {op}
               </button>
@@ -197,7 +197,7 @@ export function HiddenLabelsToggle({
         onClick={toggleOpen}
         aria-label={`${hidden.length} ${noun}`}
         aria-expanded={open}
-        className="inline-flex shrink-0 cursor-pointer items-center rounded border border-dashed border-border px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground transition-colors hover:text-foreground"
+        className="inline-flex shrink-0 cursor-pointer items-center rounded-compact border border-dashed border-border px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground transition-colors hover:text-foreground"
         title={open ? `Collapse ${noun}` : `Show ${hidden.length} ${noun}: ${hidden.map(([k]) => k).join(', ')}`}
       >
         +{hidden.length}
@@ -206,7 +206,7 @@ export function HiddenLabelsToggle({
         <div
           ref={popoverRef}
           data-testid="hidden-labels-popover"
-          className="fixed z-50 flex max-w-[280px] flex-wrap gap-1 rounded-lg border border-border bg-popover p-2 shadow-lg"
+          className="fixed z-50 flex max-w-[280px] flex-wrap gap-1 rounded-surface border border-border bg-popover p-2 shadow-lg"
           style={{ top: pos.top, left: pos.left }}
           onClick={(e) => e.stopPropagation()}
         >

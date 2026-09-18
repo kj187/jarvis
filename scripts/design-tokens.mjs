@@ -47,6 +47,10 @@ const app = `/* ${BANNER} */
    * --color-border stays the quiet edge for cards/header/tables.
    */
 ${lines(tokens.app.dark, 'color-').join('\n')}
+
+  /* Radius roles: compact (dense chips/cells), control (fields, buttons), surface (cards, panels),
+   * overlay (dialogs, floating layers), pill (badges, dots). Utilities: rounded-control, … */
+${Object.entries(tokens.radius).map(([k, v]) => `  --radius-${k}: ${v};`).join('\n')}
 }
 
 [data-theme="light"] {

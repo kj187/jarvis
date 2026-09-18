@@ -60,6 +60,14 @@
   --color-claim-edge: hsl(213 94% 68%);
   --color-claim-solid: hsl(213 94% 68%);
   --color-selected: hsl(217 91% 60% / 0.1);
+
+  /* Radius roles: compact (dense chips/cells), control (fields, buttons), surface (cards, panels),
+   * overlay (dialogs, floating layers), pill (badges, dots). Utilities: rounded-control, … */
+  --radius-compact: 0.25rem;
+  --radius-control: 0.375rem;
+  --radius-surface: 0.5rem;
+  --radius-overlay: 0.75rem;
+  --radius-pill: 9999px;
 }
 
 [data-theme="light"] {

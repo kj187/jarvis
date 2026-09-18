@@ -61,7 +61,7 @@ export function UserManagement() {
   return (
     <div className="space-y-4">
       {/* User table */}
-      <div className="rounded border border-border overflow-hidden">
+      <div className="rounded-compact border border-border overflow-hidden">
         <table className="w-full text-xs">
           <thead>
             <tr className="border-b border-border bg-muted/30">

@@ -46,9 +46,9 @@ export function SilenceCard({ silence, alerts, onEdit, onExpire, isDeleting = fa
 
       <div className="flex flex-1 flex-col gap-2.5 p-3.5">
         <div className="flex items-center gap-2">
-          <span className={cn('h-2 w-2 shrink-0 rounded-full', URGENCY_FILL_CLASS[urgency])} />
+          <span className={cn('h-2 w-2 shrink-0 rounded-pill', URGENCY_FILL_CLASS[urgency])} />
           <span className="text-xs font-semibold capitalize">{silence.status.state}</span>
-          <span className="rounded bg-accent px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
+          <span className="rounded-compact bg-accent px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
             {silence.clusterName}
           </span>
           {isExpired ? (

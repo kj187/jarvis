@@ -10,7 +10,7 @@ interface ViewToggleProps {
 
 export function ViewToggle({ value, onChange }: ViewToggleProps) {
   return (
-    <div className="flex items-center rounded-md border border-border overflow-hidden">
+    <div className="flex items-center rounded-control border border-border overflow-hidden">
       <Button
         variant="ghost"
         size="icon"

@@ -119,7 +119,7 @@ function MatcherChip({ matcher }: { matcher: SilenceMatcher }) {
   return (
     <TruncatableChip
       className={cn(
-        'rounded border px-1.5 py-0.5 text-[10px] font-medium',
+        'rounded-compact border px-1.5 py-0.5 text-[10px] font-medium',
         !colorStyle && 'border-border bg-muted text-foreground',
       )}
       style={colorStyle}
@@ -145,7 +145,7 @@ function AffectedAlertRow({
   return (
     <div
       className={cn(
-        'flex items-center gap-2 text-xs rounded px-1 -mx-1 py-0.5 w-full',
+        'flex items-center gap-2 text-xs rounded-compact px-1 -mx-1 py-0.5 w-full',
         onSelect && !isCurrent && 'cursor-pointer hover:bg-accent'
       )}
       onClick={onSelect}
@@ -157,7 +157,7 @@ function AffectedAlertRow({
         </span>
       )}
       {isCurrent && (
-        <span className="ml-auto rounded bg-primary/15 px-1 py-0.5 text-[10px] font-medium text-primary shrink-0">this alert</span>
+        <span className="ml-auto rounded-compact bg-primary/15 px-1 py-0.5 text-[10px] font-medium text-primary shrink-0">this alert</span>
       )}
     </div>
   )
@@ -516,7 +516,7 @@ export function AlertDetailPanel({
           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
             <h2 id="detail-panel-title" className="min-w-0 text-lg font-bold break-words">{alertname}</h2>
             <div className="flex flex-wrap items-center gap-1.5 sm:shrink-0 sm:justify-end">
-              <span className="inline-flex items-center gap-1 rounded border border-border bg-muted px-2 py-0.5 text-xs font-medium">
+              <span className="inline-flex items-center gap-1 rounded-compact border border-border bg-muted px-2 py-0.5 text-xs font-medium">
                 <Server className="h-3 w-3 text-muted-foreground" />
                 {alert.clusterName}
               </span>
@@ -526,7 +526,7 @@ export function AlertDetailPanel({
                 data-testid="detail-panel-close"
                 onClick={onClose}
                 aria-label="Close"
-                className="ml-1 flex items-center justify-center rounded border border-border p-1 text-muted-foreground hover:bg-accent hover:text-foreground cursor-pointer"
+                className="ml-1 flex items-center justify-center rounded-compact border border-border p-1 text-muted-foreground hover:bg-accent hover:text-foreground cursor-pointer"
               >
                 <X className="h-3.5 w-3.5" />
               </button>
@@ -554,7 +554,7 @@ export function AlertDetailPanel({
           <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
             <div className="flex flex-wrap items-center gap-2">
               {activeClaim ? (
-                <div data-testid="detail-claim-badge" className={cn('flex h-8 min-w-0 max-w-[16rem] items-center gap-1.5 rounded-md border px-2', 'border-claim-edge bg-claim-soft')}>
+                <div data-testid="detail-claim-badge" className={cn('flex h-8 min-w-0 max-w-[16rem] items-center gap-1.5 rounded-control border px-2', 'border-claim-edge bg-claim-soft')}>
                   <User className="h-3 w-3 shrink-0 text-claim-solid" />
                   <span className="shrink-0 text-xs font-medium text-claim-fg">{activeClaim.claimedBy}</span>
                   {activeClaim.note && (
@@ -598,7 +598,7 @@ export function AlertDetailPanel({
                   </button>
                 </div>
               ) : alert.status.state === 'resolved' ? null : (
-                <div className="relative p-[2px] overflow-hidden rounded-md">
+                <div className="relative p-[2px] overflow-hidden rounded-control">
                   <div className="claim-snake-spinner absolute inset-[-150%]" />
                   <Button
                     data-testid="claim-button"
@@ -751,7 +751,7 @@ export function AlertDetailPanel({
                         <button
                           key={label}
                           disabled={isExtending}
-                          className="flex items-center gap-1 rounded border border-warning-edge px-2 py-0.5 text-xs text-warning-fg hover:bg-warning-soft cursor-pointer disabled:opacity-40"
+                          className="flex items-center gap-1 rounded-compact border border-warning-edge px-2 py-0.5 text-xs text-warning-fg hover:bg-warning-soft cursor-pointer disabled:opacity-40"
                           onClick={() => guard(() => upsertSilence({
                             id: s.id,
                             cluster: s.clusterName,
@@ -770,7 +770,7 @@ export function AlertDetailPanel({
                     </>
                   )}
                   <button
-                    className="flex items-center gap-1 rounded border border-border px-2 py-0.5 text-xs text-muted-foreground hover:text-foreground hover:bg-accent cursor-pointer"
+                    className="flex items-center gap-1 rounded-compact border border-border px-2 py-0.5 text-xs text-muted-foreground hover:text-foreground hover:bg-accent cursor-pointer"
                     onClick={() => setSilenceFormTarget(s)}
                   >
                     <Pencil className="h-3 w-3" />
@@ -778,7 +778,7 @@ export function AlertDetailPanel({
                   </button>
                   <button
                     disabled={isDeleting}
-                    className="flex items-center gap-1 rounded border border-border px-2 py-0.5 text-xs text-critical-fg hover:bg-critical-soft cursor-pointer disabled:opacity-40"
+                    className="flex items-center gap-1 rounded-compact border border-border px-2 py-0.5 text-xs text-critical-fg hover:bg-critical-soft cursor-pointer disabled:opacity-40"
                     onClick={() => guard(() => handleDelete(s))}
                   >
                     <Trash2 className="h-3 w-3" />
@@ -874,7 +874,7 @@ export function AlertDetailPanel({
               </button>
               <div className="flex shrink-0 items-center gap-2">
                 <button
-                  className="flex items-center gap-1 rounded border border-border px-2 py-0.5 text-xs text-muted-foreground hover:text-foreground hover:bg-accent cursor-pointer"
+                  className="flex items-center gap-1 rounded-compact border border-border px-2 py-0.5 text-xs text-muted-foreground hover:text-foreground hover:bg-accent cursor-pointer"
                   onClick={() => setSilenceFormTarget(s)}
                 >
                   Recreate
@@ -938,7 +938,7 @@ export function AlertDetailPanel({
               data-testid={`detail-tab-${tab.key}`}
               onClick={() => setActiveTab(tab.key)}
               className={cn(
-                'relative top-px flex shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-t-md border px-3 py-2 text-xs font-semibold',
+                'relative top-px flex shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-t-control border px-3 py-2 text-xs font-semibold',
                 activeTab === tab.key
                   ? '-mb-px border-border border-b-transparent bg-card text-foreground'
                   : 'border-transparent bg-transparent text-muted-foreground hover:text-foreground',
@@ -949,7 +949,7 @@ export function AlertDetailPanel({
                 <span
                   data-testid={`detail-tab-${tab.key}-count`}
                   className={cn(
-                    'inline-flex h-[15px] min-w-[15px] items-center justify-center rounded-full px-1 text-[10px] font-bold',
+                    'inline-flex h-[15px] min-w-[15px] items-center justify-center rounded-pill px-1 text-[10px] font-bold',
                     activeTab === tab.key ? 'bg-link/20 text-link' : 'bg-accent text-muted-foreground',
                   )}
                 >
@@ -1002,11 +1002,11 @@ export function AlertDetailPanel({
                   onClick={(e) => e.stopPropagation()}
                 >
                   <Info className="h-3.5 w-3.5 cursor-help text-muted-foreground hover:text-foreground" />
-                  <span className="pointer-events-none absolute left-0 top-5 z-50 w-72 rounded-md border border-border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-lg opacity-0 group-hover:opacity-100 transition-opacity normal-case tracking-normal font-normal leading-relaxed">
+                  <span className="pointer-events-none absolute left-0 top-5 z-50 w-72 rounded-control border border-border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-lg opacity-0 group-hover:opacity-100 transition-opacity normal-case tracking-normal font-normal leading-relaxed">
                     Links are auto-generated from labels and annotations whose value is an absolute URL (http:// or https://).
                     <br /><br />
-                    The <code className="rounded bg-accent px-0.5 font-mono">runbook</code> key also accepts a plain ID — set{' '}
-                    <code className="rounded bg-accent px-0.5 font-mono">JARVIS_RUNBOOK_BASE_URL</code> to build the full URL automatically.
+                    The <code className="rounded-compact bg-accent px-0.5 font-mono">runbook</code> key also accepts a plain ID — set{' '}
+                    <code className="rounded-compact bg-accent px-0.5 font-mono">JARVIS_RUNBOOK_BASE_URL</code> to build the full URL automatically.
                   </span>
                 </span>
               </>
@@ -1021,7 +1021,7 @@ export function AlertDetailPanel({
                   href={btn.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-1 rounded border border-border px-2 py-1 text-xs hover:bg-accent cursor-pointer"
+                  className="flex items-center gap-1 rounded-compact border border-border px-2 py-1 text-xs hover:bg-accent cursor-pointer"
                 >
                   {btn.isRunbook ? <BookOpen className="h-3 w-3" /> : <ExternalLink className="h-3 w-3" />}
                   <span className="first-letter:uppercase">{btn.label}</span>
@@ -1041,7 +1041,7 @@ export function AlertDetailPanel({
             <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-border pt-3" data-testid="detail-seen-on">
               <span className="text-xs text-muted-foreground">seen on:</span>
               {alert.seenOn.map((member) => (
-                <span key={member} className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
+                <span key={member} className="rounded-compact border border-border bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
                   {member}
                 </span>
               ))}
@@ -1097,17 +1097,17 @@ export function AlertDetailPanel({
           of the panel with no divider line between them. */}
       {groupNavEnabled && (
         <div
-          className="fixed top-12 z-50 rounded-l-md border border-r-0 border-border bg-card right-0 sm:right-[calc(37.8rem-1px)] lg:right-[calc(50.4rem-1px)]"
+          className="fixed top-12 z-50 rounded-l-control border border-r-0 border-border bg-card right-0 sm:right-[calc(37.8rem-1px)] lg:right-[calc(50.4rem-1px)]"
           data-testid="detail-panel-group-nav"
         >
           {/* Same two-layer background as the sheet header (bg-muted/30 over bg-card). */}
-          <div className="flex flex-col items-center rounded-l-md bg-muted/30">
+          <div className="flex flex-col items-center rounded-l-control bg-muted/30">
             <button
               type="button"
               onClick={() => navigateGroup(-1)}
               title="Previous alert in group (↑)"
               aria-label="Previous alert in group"
-              className="flex h-10 w-12 items-center justify-center rounded-tl-md text-muted-foreground hover:bg-accent hover:text-foreground cursor-pointer"
+              className="flex h-10 w-12 items-center justify-center rounded-tl-control text-muted-foreground hover:bg-accent hover:text-foreground cursor-pointer"
             >
               <ChevronUp className="h-5 w-5" />
             </button>
@@ -1119,7 +1119,7 @@ export function AlertDetailPanel({
               onClick={() => navigateGroup(1)}
               title="Next alert in group (↓)"
               aria-label="Next alert in group"
-              className="flex h-10 w-12 items-center justify-center rounded-bl-md text-muted-foreground hover:bg-accent hover:text-foreground cursor-pointer"
+              className="flex h-10 w-12 items-center justify-center rounded-bl-control text-muted-foreground hover:bg-accent hover:text-foreground cursor-pointer"
             >
               <ChevronDown className="h-5 w-5" />
             </button>

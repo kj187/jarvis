@@ -46,7 +46,7 @@ function FiringSparkline({
   const cells = bucketFiringStarts(data.firingStarts, '30d').slice(-14)
   return (
     <div className="mb-1">
-      <HeatmapCellsRow cells={cells} range="30d" cellClassName="h-2 w-full rounded-sm" gapClassName="gap-0.5" />
+      <HeatmapCellsRow cells={cells} range="30d" cellClassName="h-2 w-full rounded-compact" gapClassName="gap-0.5" />
     </div>
   )
 }
@@ -124,7 +124,7 @@ function AlertEntry({
         {claim && (
           claim.note ? (
             <div className={cn(
-              'mb-2 flex items-start gap-2 rounded border-l-2 border-claim-edge bg-claim-soft px-2 py-1.5 text-xs text-claim-fg',
+              'mb-2 flex items-start gap-2 rounded-compact border-l-2 border-claim-edge bg-claim-soft px-2 py-1.5 text-xs text-claim-fg',
             )}>
               <User className="mt-0.5 h-3 w-3 shrink-0 text-claim-solid" />
               <div className="min-w-0 flex-1">
@@ -157,7 +157,7 @@ function AlertEntry({
             so each sibling alert reads as its own unit */}
         {multi && (
           <div className="mb-1 flex items-start gap-2">
-            <span className="mt-px shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-muted-foreground">
+            <span className="mt-px shrink-0 rounded-compact bg-muted px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-muted-foreground">
               {index + 1}/{total}
             </span>
             <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
@@ -197,7 +197,7 @@ function AlertEntry({
 
         {/* Silence banner */}
         {silenceType === 'active' && silence && remaining !== undefined && (
-          <div className="mb-2 flex items-center gap-1.5 rounded bg-muted px-2 py-1.5 text-xs">
+          <div className="mb-2 flex items-center gap-1.5 rounded-compact bg-muted px-2 py-1.5 text-xs">
             <BellOff className="h-3 w-3 shrink-0 text-muted-foreground" />
             <div>
               <div className="font-semibold text-foreground">SILENCE ACTIVE</div>
@@ -207,14 +207,14 @@ function AlertEntry({
         )}
         {silenceType === 'expiring' && remaining !== undefined && (
           <div className={cn(
-            'mb-2 flex items-center gap-1.5 rounded border border-warning-edge bg-warning-soft px-2 py-1.5 text-xs text-warning-fg',
+            'mb-2 flex items-center gap-1.5 rounded-compact border border-warning-edge bg-warning-soft px-2 py-1.5 text-xs text-warning-fg',
           )}>
             <BellOff className="h-3 w-3 shrink-0" />
             <span>Silence expires in {formatSilenceDuration(remaining)}</span>
           </div>
         )}
         {silenceType === 'pending' && silence && (
-          <div className="mb-2 rounded bg-muted px-2 py-1.5 text-xs text-muted-foreground">
+          <div className="mb-2 rounded-compact bg-muted px-2 py-1.5 text-xs text-muted-foreground">
             ⏳ Silence from{' '}
             {new Date(silence.startsAt).toLocaleTimeString('en-US', {
               hour: '2-digit',
@@ -305,7 +305,7 @@ export function AlertCard({
   return (
     <div
       className={cn(
-        'overflow-hidden rounded-lg border border-border bg-card shadow-sm',
+        'overflow-hidden rounded-surface border border-border bg-card shadow-sm',
         'border-l-4',
         severityBorderColor[severity] ?? 'border-l-slate-500',
       )}
@@ -320,13 +320,13 @@ export function AlertCard({
         <div className="flex shrink-0 items-center gap-2" title="">
           {showSeverityBadge && severityRaw && <AlertBadge severity={severity} />}
           {count > 1 && (
-            <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-accent px-1.5 text-xs font-bold">
+            <span className="flex h-5 min-w-[20px] items-center justify-center rounded-pill bg-accent px-1.5 text-xs font-bold">
               ×{count}
             </span>
           )}
           {claimedCount > 0 && (
             <span
-              className="flex h-5 items-center gap-0.5 rounded-full bg-claim-soft px-1.5 text-xs font-medium text-claim-fg"
+              className="flex h-5 items-center gap-0.5 rounded-pill bg-claim-soft px-1.5 text-xs font-medium text-claim-fg"
               title={`${claimedCount} of ${count} claimed`}
             >
               <User className="h-2.5 w-2.5" />
@@ -384,7 +384,7 @@ export function AlertCard({
           <button
             onClick={() => setVisibleCount((n) => Math.max(PAGE_SIZE, n - PAGE_SIZE))}
             disabled={visibleCount <= PAGE_SIZE}
-            className="flex h-6 w-6 cursor-pointer items-center justify-center rounded border border-border font-bold hover:bg-accent disabled:cursor-default disabled:opacity-30"
+            className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-compact border border-border font-bold hover:bg-accent disabled:cursor-default disabled:opacity-30"
           >
             −
           </button>
@@ -392,7 +392,7 @@ export function AlertCard({
           <button
             onClick={() => setVisibleCount((n) => Math.min(count, n + PAGE_SIZE))}
             disabled={visibleCount >= count}
-            className="flex h-6 w-6 cursor-pointer items-center justify-center rounded border border-border font-bold hover:bg-accent disabled:cursor-default disabled:opacity-30"
+            className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-compact border border-border font-bold hover:bg-accent disabled:cursor-default disabled:opacity-30"
           >
             +
           </button>

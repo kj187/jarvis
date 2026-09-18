@@ -280,7 +280,7 @@ export function AckButton({
             onClick={openOnClick}
             disabled={isPending}
             className={cn(
-              'inline-flex h-6 w-6 items-center justify-center rounded transition-colors cursor-pointer disabled:opacity-50',
+              'inline-flex h-6 w-6 items-center justify-center rounded-compact transition-colors cursor-pointer disabled:opacity-50',
               feedback === 'error'
                 ? 'text-destructive'
                 : feedback === 'done'
@@ -302,7 +302,7 @@ export function AckButton({
             onClick={openOnClick}
             disabled={isPending}
             className={cn(
-              'inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-medium cursor-pointer disabled:opacity-50',
+              'inline-flex items-center gap-1 rounded-compact border px-1.5 py-0.5 text-[10px] font-medium cursor-pointer disabled:opacity-50',
               feedback === 'error'
                 ? 'border-destructive/40 bg-card text-destructive'
                 : feedback === 'done'
@@ -347,7 +347,7 @@ export function AckButton({
             data-testid="alert-ack-menu"
             onMouseEnter={() => clearTimeout(closeTimer.current)}
             onMouseLeave={scheduleClose}
-            className="fixed z-[100] w-60 rounded-xl border border-border bg-popover p-2 shadow-xl"
+            className="fixed z-[100] w-60 rounded-overlay border border-border bg-popover p-2 shadow-xl"
             style={{ top: coords.top, left: coords.left, right: coords.right }}
           >
             {onCreateSilence && (
@@ -361,7 +361,7 @@ export function AckButton({
                   setMenuOpen(false)
                   onCreateSilence(alerts)
                 }}
-                className="flex w-full flex-row-reverse items-center gap-2 rounded-lg bg-link/10 px-2.5 py-2 text-left text-[13px] font-semibold text-link transition-colors hover:bg-link/15 cursor-pointer"
+                className="flex w-full flex-row-reverse items-center gap-2 rounded-surface bg-link/10 px-2.5 py-2 text-left text-[13px] font-semibold text-link transition-colors hover:bg-link/15 cursor-pointer"
               >
                 <Bell ref={menuIconRef} className="h-4 w-4 shrink-0" />
                 <ChevronRight className="h-3.5 w-3.5 shrink-0 opacity-60" />
@@ -388,7 +388,7 @@ export function AckButton({
                       role="menuitem"
                       data-testid="alert-ack-option"
                       onClick={pick(d.minutes)}
-                      className="flex items-center justify-center rounded-lg border border-border bg-card px-1 py-1.5 text-xs font-semibold tabular-nums text-foreground transition-colors hover:border-link/40 hover:bg-link/10 hover:text-link cursor-pointer"
+                      className="flex items-center justify-center rounded-surface border border-border bg-card px-1 py-1.5 text-xs font-semibold tabular-nums text-foreground transition-colors hover:border-link/40 hover:bg-link/10 hover:text-link cursor-pointer"
                     >
                       {d.label}
                     </button>

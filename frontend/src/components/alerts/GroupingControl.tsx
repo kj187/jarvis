@@ -82,7 +82,7 @@ export function GroupingControl({ alerts, enabled, onToggleEnabled }: GroupingCo
         data-testid="grouping-control-button"
         onClick={() => setOpen((o) => !o)}
         className={cn(
-          'flex h-7 cursor-pointer items-center gap-1.5 rounded-md border border-border px-2 text-xs font-medium transition-colors',
+          'flex h-7 cursor-pointer items-center gap-1.5 rounded-control border border-border px-2 text-xs font-medium transition-colors',
           enabled ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-accent/40',
         )}
         aria-expanded={open}
@@ -100,7 +100,7 @@ export function GroupingControl({ alerts, enabled, onToggleEnabled }: GroupingCo
       {open && (
         <div
           data-testid="grouping-panel"
-          className="absolute right-0 top-full z-50 mt-1 flex w-72 flex-col rounded-md border border-border bg-popover p-2 shadow-lg"
+          className="absolute right-0 top-full z-50 mt-1 flex w-72 flex-col rounded-control border border-border bg-popover p-2 shadow-lg"
         >
           <div className="mb-2 flex shrink-0 items-center justify-between border-b border-border pb-2">
             <span className="text-[10.5px] font-semibold uppercase tracking-wide text-muted-foreground">
@@ -112,13 +112,13 @@ export function GroupingControl({ alerts, enabled, onToggleEnabled }: GroupingCo
               aria-checked={enabled}
               onClick={() => onToggleEnabled(!enabled)}
               className={cn(
-                'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors',
+                'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-pill border-2 border-transparent transition-colors',
                 enabled ? 'bg-primary' : 'bg-control',
               )}
             >
               <span
                 className={cn(
-                  'pointer-events-none inline-block h-4 w-4 rounded-full bg-background shadow-sm transition-transform',
+                  'pointer-events-none inline-block h-4 w-4 rounded-pill bg-background shadow-sm transition-transform',
                   enabled ? 'translate-x-4' : 'translate-x-0',
                 )}
               />
@@ -127,7 +127,7 @@ export function GroupingControl({ alerts, enabled, onToggleEnabled }: GroupingCo
 
           <div
             className={cn(
-              'mb-1.5 flex shrink-0 items-center gap-1.5 rounded-md border border-control bg-input px-1.5 h-7',
+              'mb-1.5 flex shrink-0 items-center gap-1.5 rounded-control border border-control bg-input px-1.5 h-7',
               !enabled && 'pointer-events-none opacity-40',
             )}
           >
@@ -169,17 +169,17 @@ export function GroupingControl({ alerts, enabled, onToggleEnabled }: GroupingCo
                   type="button"
                   onClick={() => update({ groupByLabel: name })}
                   className={cn(
-                    'flex w-full cursor-pointer items-center gap-2 rounded px-1.5 py-1.5 text-left text-xs hover:bg-accent/60',
+                    'flex w-full cursor-pointer items-center gap-2 rounded-compact px-1.5 py-1.5 text-left text-xs hover:bg-accent/60',
                     selected ? 'text-foreground' : 'text-muted-foreground',
                   )}
                 >
                   <span
                     className={cn(
-                      'flex h-3 w-3 shrink-0 items-center justify-center rounded-full border',
+                      'flex h-3 w-3 shrink-0 items-center justify-center rounded-pill border',
                       selected ? 'border-primary' : 'border-border',
                     )}
                   >
-                    {selected && <span className="h-1.5 w-1.5 rounded-full bg-primary" />}
+                    {selected && <span className="h-1.5 w-1.5 rounded-pill bg-primary" />}
                   </span>
                   <span className="flex-1 truncate font-mono">{name}</span>
                   {count > 0 && <span className="tabular-nums text-[10px] text-muted-foreground">{count}</span>}

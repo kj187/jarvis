@@ -86,7 +86,7 @@ export function AlertDetailHistorySection({
           key={n}
           onClick={() => { setHistoryPageSize(n); setHistoryPage(1) }}
           className={cn(
-            'rounded px-1.5 py-0.5 text-[10px] font-medium cursor-pointer',
+            'rounded-compact px-1.5 py-0.5 text-[10px] font-medium cursor-pointer',
             historyPageSize === n
               ? 'bg-accent text-foreground'
               : 'text-muted-foreground hover:text-foreground hover:bg-accent/50',
@@ -170,7 +170,7 @@ export function AlertDetailHistorySection({
                   <button
                     disabled={safePage === 1}
                     onClick={() => setHistoryPage((p) => p - 1)}
-                    className="rounded px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-30 disabled:cursor-default cursor-pointer"
+                    className="rounded-compact px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-30 disabled:cursor-default cursor-pointer"
                   >
                     ‹
                   </button>
@@ -182,7 +182,7 @@ export function AlertDetailHistorySection({
                         key={p}
                         onClick={() => setHistoryPage(p)}
                         className={cn(
-                          'rounded px-1.5 py-0.5 text-[10px] cursor-pointer',
+                          'rounded-compact px-1.5 py-0.5 text-[10px] cursor-pointer',
                           safePage === p
                             ? 'bg-accent text-foreground font-medium'
                             : 'text-muted-foreground hover:text-foreground hover:bg-accent/50',
@@ -195,7 +195,7 @@ export function AlertDetailHistorySection({
                   <button
                     disabled={safePage === totalPages}
                     onClick={() => setHistoryPage((p) => p + 1)}
-                    className="rounded px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-30 disabled:cursor-default cursor-pointer"
+                    className="rounded-compact px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-30 disabled:cursor-default cursor-pointer"
                   >
                     ›
                   </button>
