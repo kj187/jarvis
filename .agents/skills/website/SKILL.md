@@ -145,6 +145,10 @@ since it matches on the already-rewritten `/assets/…` paths.
   `[data-theme="light"]` for light) — VitePress CSS variables and Tailwind
   `@theme` tokens are different systems, so changing the app palette means
   updating this file too.
+- Contrast roles: `--vp-c-text-3` is decorative/large-text only (≈3.1:1 light,
+  3.6:1 dark — the mesh lines and VitePress placeholders use it); any label or
+  body copy we style ourselves uses `--vp-c-text-2`. Coral is darkened in light
+  mode (`hsl(6 65% 46%)`, 4.7:1 on `--vp-c-bg`) — keep small coral text ≥ 4.5:1.
 - Dark is the default (`appearance: 'dark'`).
 - `theme/components/MeshCanvas.vue` **imports the pure geometry from the app**
   (`frontend/src/lib/owlMesh.ts`) instead of re-implementing it — do not copy
