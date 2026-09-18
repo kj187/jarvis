@@ -100,6 +100,32 @@ func TestAlertStore_EncodedSnapshot_NoOpMutationsDoNotInvalidateCache(t *testing
 	}
 }
 
+// TestAlertStore_Set_PreservesNonNilEmptySlices is a regression test: Set()'s
+// clone step must never turn a non-nil empty Status.SilencedBy/InhibitedBy or
+// Receivers back into nil — encoding/json marshals nil as JSON null instead
+// of [], and the frontend unconditionally iterates these fields, crashing on
+// null. cluster.enrichMerged guarantees non-nil-empty slices; Set() must not
+// silently undo that guarantee.
+func TestAlertStore_Set_PreservesNonNilEmptySlices(t *testing.T) {
+	s := &AlertStore{}
+	s.Set([]models.EnrichedAlert{{
+		Fingerprint: "fp1",
+		Status:      models.AlertStatus{State: "active", SilencedBy: []string{}, InhibitedBy: []string{}},
+		Receivers:   []models.Receiver{},
+	}})
+
+	got := s.Get()[0]
+	if got.Status.SilencedBy == nil {
+		t.Error("SilencedBy became nil (would marshal as JSON null, not [])")
+	}
+	if got.Status.InhibitedBy == nil {
+		t.Error("InhibitedBy became nil (would marshal as JSON null, not [])")
+	}
+	if got.Receivers == nil {
+		t.Error("Receivers became nil (would marshal as JSON null, not [])")
+	}
+}
+
 // TestAlertStore_Set_ClonesInput verifies mutating the caller's slice/maps
 // after Set() never affects the store (P4 immutability contract).
 func TestAlertStore_Set_ClonesInput(t *testing.T) {

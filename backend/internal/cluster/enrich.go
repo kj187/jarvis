@@ -48,8 +48,8 @@ func enrichMerged(merged []mergedAlert, clusterName string, linkURLByMember map[
 		enriched = append(enriched, models.EnrichedAlert{
 			Fingerprint: a.Fingerprint,
 			Status: models.AlertStatus{
-				InhibitedBy: a.Status.InhibitedBy,
-				SilencedBy:  a.Status.SilencedBy,
+				InhibitedBy: nonNilStrings(a.Status.InhibitedBy),
+				SilencedBy:  nonNilStrings(a.Status.SilencedBy),
 				State:       a.Status.State,
 			},
 			Labels:          labels,
@@ -65,4 +65,15 @@ func enrichMerged(merged []mergedAlert, clusterName string, linkURLByMember map[
 		})
 	}
 	return enriched
+}
+
+// nonNilStrings guarantees a non-nil slice so JSON marshals it as [] rather
+// than null — some Alertmanager responses omit silencedBy/inhibitedBy (or
+// send it as null) for an alert matching neither, which Go unmarshals as a
+// nil slice; the frontend unconditionally iterates these fields.
+func nonNilStrings(s []string) []string {
+	if s == nil {
+		return []string{}
+	}
+	return s
 }

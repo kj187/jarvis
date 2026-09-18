@@ -381,19 +381,31 @@ func cloneEnrichedAlert(a models.EnrichedAlert) models.EnrichedAlert {
 		a.Annotations = annotations
 	}
 	if a.Receivers != nil {
-		a.Receivers = append([]models.Receiver(nil), a.Receivers...)
+		a.Receivers = cloneSlice(a.Receivers)
 	}
 	if a.SeenOn != nil {
-		a.SeenOn = append([]string(nil), a.SeenOn...)
+		a.SeenOn = cloneSlice(a.SeenOn)
 	}
 	if a.Status.InhibitedBy != nil {
-		a.Status.InhibitedBy = append([]string(nil), a.Status.InhibitedBy...)
+		a.Status.InhibitedBy = cloneSlice(a.Status.InhibitedBy)
 	}
 	if a.Status.SilencedBy != nil {
-		a.Status.SilencedBy = append([]string(nil), a.Status.SilencedBy...)
+		a.Status.SilencedBy = cloneSlice(a.Status.SilencedBy)
 	}
 	a.ActiveClaim = cloneClaim(a.ActiveClaim)
 	return a
+}
+
+// cloneSlice copies s into a fresh backing array. Unlike
+// append([]T(nil), s...), which collapses a non-nil empty s back to nil
+// (append returns its destination unchanged when there's nothing to add),
+// this preserves non-nil-emptiness — required so a non-nil empty
+// Status.SilencedBy/InhibitedBy (guaranteed by cluster.enrichMerged so the
+// API always sends JSON [] instead of null) survives Set()'s clone instead of
+// silently reverting to null and crashing frontend code that iterates it
+// unconditionally.
+func cloneSlice[T any](s []T) []T {
+	return append([]T{}, s...)
 }
 
 // cloneClaim deep-copies a Claim, including its two optional pointer fields,

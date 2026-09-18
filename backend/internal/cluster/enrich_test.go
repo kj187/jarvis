@@ -1,7 +1,9 @@
 package cluster
 
 import (
+	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -135,6 +137,41 @@ func TestEnrichAlerts_PreservesStatusAndTimes(t *testing.T) {
 	}
 	if got.Annotations["summary"] != "boom" {
 		t.Errorf("Annotations = %+v", got.Annotations)
+	}
+}
+
+// TestEnrichAlerts_NilSilencedByAndInhibitedByBecomeEmptySlices guards against
+// a real regression: some Alertmanager versions/responses omit silencedBy/
+// inhibitedBy (or send JSON null) for an alert that matches neither, which
+// Go unmarshals as a nil slice. encoding/json marshals a nil slice as JSON
+// null, not []— and the frontend unconditionally iterates
+// alert.status.silencedBy, crashing the whole page with "is not iterable" the
+// moment such an alert is rendered. Jarvis's own API contract must guarantee
+// non-null arrays regardless of what upstream Alertmanager sends.
+func TestEnrichAlerts_NilSilencedByAndInhibitedByBecomeEmptySlices(t *testing.T) {
+	raw := []alertmanager.GettableAlert{
+		{
+			Fingerprint: "abc123",
+			Status:      alertmanager.GettableAlertStatus{State: "active"}, // SilencedBy/InhibitedBy left nil
+			Labels:      map[string]string{"alertname": "TestAlert"},
+		},
+	}
+
+	merged := mergeAlerts(map[string][]alertmanager.GettableAlert{"m1": raw}, []string{"m1"})
+	got := enrichMerged(merged, "prod", map[string]string{"m1": "http://am.example"})[0]
+
+	if got.Status.SilencedBy == nil {
+		t.Error("SilencedBy is nil, want a non-nil empty slice (marshals to JSON null, not [])")
+	}
+	if got.Status.InhibitedBy == nil {
+		t.Error("InhibitedBy is nil, want a non-nil empty slice (marshals to JSON null, not [])")
+	}
+	data, err := json.Marshal(got.Status)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if strings.Contains(string(data), "null") {
+		t.Errorf("Status JSON contains null, want empty arrays: %s", data)
 	}
 }
 
