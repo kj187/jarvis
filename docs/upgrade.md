@@ -1,57 +1,37 @@
 # Upgrade
 
-## Verify what you are running
-
-Every release ships a keyless [cosign](https://docs.sigstore.dev/) signature,
-GitHub build provenance and an SPDX SBOM. Verifying is optional but cheap.
-
-**Image signature** — use the digest from the
-[release notes](https://github.com/kj187/jarvis/releases), not the tag:
-
-```bash
-cosign verify ghcr.io/kj187/jarvis@sha256:<digest> \
-  --certificate-identity-regexp="https://github.com/kj187/jarvis/.*" \
-  --certificate-oidc-issuer="https://token.actions.githubusercontent.com"
-```
-
-**Build provenance:**
-
-```bash
-gh attestation verify oci://ghcr.io/kj187/jarvis:1.12.0 --repo kj187/jarvis
-```
-
-**Helm chart signature:**
-
-```bash
-cosign verify ghcr.io/kj187/charts/jarvis:2.0.0 \
-  --certificate-identity-regexp="https://github.com/kj187/jarvis/.*" \
-  --certificate-oidc-issuer="https://token.actions.githubusercontent.com"
-```
-
-**SBOM** — attached to every release as `sbom.spdx.json` with its signature
-bundle, and embedded in the image manifest
-(`docker buildx imagetools inspect`):
-
-```bash
-cosign verify-blob sbom.spdx.json \
-  --bundle sbom.spdx.json.sigstore.json \
-  --certificate-identity-regexp="https://github.com/kj187/jarvis/.*" \
-  --certificate-oidc-issuer="https://token.actions.githubusercontent.com"
-```
+Before changing versions, [verify the release artifacts](verify-release.md).
+That page explains what signatures, provenance, and the SBOM prove, which
+risks they reduce, and provides commands for both the image and Helm chart.
 
 ---
 
 ## Upgrading
 
-Upgrading is a tag change. Pull the new image, restart, done:
+Upgrading is a version change. The app image and Helm chart have independent
+version numbers, so use the release notes to select both deliberately.
+
+### Podman or Docker Compose
+
+Change the image tag in your Compose file, then pull and recreate the service:
 
 ```bash
 podman compose pull && podman compose up -d
 ```
 
+Docker users can replace `podman` with `docker`. See
+[Install with Compose](deploy-compose.md) for the complete setup.
+
+### Kubernetes with Helm
+
+Upgrade the chart separately, using the chart version from the release notes:
+
 ```bash
 helm upgrade jarvis oci://ghcr.io/kj187/charts/jarvis --version <new-version> --reuse-values
 ```
+
+Review [Install on Kubernetes](deploy-kubernetes.md) and the
+[Helm chart changelog](../charts/jarvis/CHANGELOG.md) before rollout.
 
 **Database migrations run automatically at startup.** They are forward-only
 and additive; on PostgreSQL with several replicas they are serialized, so a
@@ -73,3 +53,6 @@ occurrence counts, claims, comments, saved silence templates, and user
 accounts and settings when authentication is enabled. Active alerts come back
 from Alertmanager on the first poll after the restart. Alerts that resolve
 *during* the downtime are reconciled on startup rather than lost.
+
+Because those records are retained **forever** by default, also review
+[Data retention](retention.md) when upgrading a long-running installation.

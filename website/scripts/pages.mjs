@@ -25,6 +25,7 @@ export const PAGES = [
   { src: 'docs/migrate-postgres.md', route: 'howto/migrate-postgres' },
   { src: 'docs/retention.md', route: 'howto/retention' },
   { src: 'docs/monitoring.md', route: 'howto/monitoring' },
+  { src: 'docs/verify-release.md', route: 'howto/verify-release' },
   { src: 'docs/upgrade.md', route: 'howto/upgrade' },
 
   // Reference

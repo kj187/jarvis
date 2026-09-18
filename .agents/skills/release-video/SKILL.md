@@ -34,6 +34,12 @@ post anything yourself.
 | `frontend/e2e/video/example.storyboard.ts` | complete storyboard of v1.12.0 — the release template |
 | `frontend/e2e/video/example.narration.json` | its voice-over script |
 | `frontend/e2e/video/intro.storyboard.ts` + `intro.narration.json` | product introduction video ("What is Jarvis?"), project `intro` — refresh it when the UI changed noticeably |
+
+The release cover's standard subtitle is **“When the alert disappears but
+the questions remain”**. Keep it in the copied release storyboard unless the
+release has a stronger, specifically approved campaign line. The product-intro
+cover additionally uses **“An Alertmanager Frontend for Day-to-Day
+Infrastructure Operations”** as its headline.
 | `frontend/playwright.video.config.ts` | viewport per `VIDEO_FORMAT` (landscape 1600×900, square 1200×1200) |
 | `scripts/release-video.sh` | orchestration: `tts` → `record` (via `scripts/e2e-run.sh video none`) → `render` |
 | `scripts/release-video/tts/` | voice container: Kokoro-82M (Apache-2.0) via kokoro-onnx, int8 model, checksum-pinned — local, free, no account |

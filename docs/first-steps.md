@@ -1,6 +1,7 @@
-# First steps in the UI
+# Getting Started
 
-Four things you will actually do in Jarvis, walked through once each:
+Start here after opening Jarvis for the first time. Four things you will
+actually do in the UI are walked through once each:
 filtering, claiming, silencing, and commenting. Five minutes, no
 infrastructure changes.
 
@@ -8,6 +9,9 @@ This assumes Jarvis is already open with some alerts in it — either the
 [Local demo](demo.md) or your own deployment. Everything here works the same
 in both. For the complete list of every feature, not just these four, see
 [Features](features.md).
+
+Need Jarvis first? Start with the zero-configuration [Local demo](demo.md),
+[install with Compose](deploy-compose.md), or [install on Kubernetes](deploy-kubernetes.md).
 
 - [Filter to what you care about](#filter-to-what-you-care-about)
 - [Claim an alert](#claim-an-alert)
@@ -41,6 +45,8 @@ can be marked as the default view Jarvis opens with.
 Full matcher syntax, every pseudo-field, and saved filters in detail:
 [Label Filters](features.md#label-filters).
 
+![Filtering alerts by labels and matcher chips](assets/feature-filter.png)
+
 ## Claim an alert
 
 Claiming says "I am handling this" to everyone else looking at the same
@@ -59,6 +65,8 @@ leaving a stale owner on an alert nobody is looking at anymore — see
 [Claim ownership](features.md#alert-detail-panel) and
 [the grace period](alert-lifecycle.md#the-grace-period--ghost-resolve-prevention)
 for why that delay exists.
+
+![A claimed alert with its owner visible in the detail panel](assets/feature-detail-claimed.png)
 
 ## Silence an alert
 
@@ -84,6 +92,8 @@ saving as a template so the matchers do not have to be re-entered next time
 Details on both paths: [Silence from Alert](features.md#silence-from-alert),
 [Fast-Silence](features.md#fast-silence), [Create Silence](features.md#create-silence).
 
+![The Fast-Silence duration menu on an alert](assets/feature-fast-silence.png)
+
 ## Comment on an alert
 
 Open the detail panel and switch to the **Comments** tab. Comments are
@@ -94,6 +104,8 @@ down an investigation step or a link to a ticket, rather than in chat, where
 the next person on-call for this alert will not think to look.
 
 More on what the tab supports: [Detail Panel — Comments](features.md#alert-detail-panel).
+
+![The Comments tab in an alert's detail panel](assets/feature-detail-tab-comments.png)
 
 ---
 

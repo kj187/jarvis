@@ -104,19 +104,27 @@
 .VPHero .text {
   font-family: var(--vp-font-family-display);
 }
+@media (min-width: 960px) {
+  .VPHero .image {
+    transform: translateX(48px);
+  }
+}
 
 .home-showcase {
-  max-width: 1152px;
+  box-sizing: border-box;
+  max-width: 1200px;
   margin: 0 auto;
   padding: 48px 24px 96px;
 }
 @media (min-width: 640px) {
   .home-showcase {
+    max-width: 1248px;
     padding: 80px 48px 96px;
   }
 }
 @media (min-width: 960px) {
   .home-showcase {
+    max-width: 1280px;
     padding: 96px 64px 96px;
   }
 }

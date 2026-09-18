@@ -7,6 +7,22 @@ only aggregate counts and configured cluster names, never alert names,
 labels, or annotations. The exported metrics themselves are documented in
 [Metrics](metrics.md).
 
+Monitoring Jarvis closes an otherwise easy blind spot: the UI can still be
+reachable while one Alertmanager cluster is no longer being polled, history
+writes are failing, a PostgreSQL follower has stopped receiving snapshots, or
+retention sweeps are failing. The endpoint provides request, WebSocket,
+upstream polling, database, leader-election, snapshot/fanout, authentication,
+and retention metrics. Together with `/health` and `GET /api/v1/status`, these
+let you distinguish “the process is up” from “Jarvis is current and recording
+the alert lifecycle correctly.”
+
+At minimum, alert on sustained cluster fetch failures and history write
+failures. PostgreSQL HA installations should additionally watch that exactly
+one leader exists and that follower snapshot age remains bounded; installations
+with retention enabled should watch failed sweeps. The concrete metric names
+and labels are in [Metrics](metrics.md), and retention-specific behavior is in
+[Data retention](retention.md#observability).
+
 ## Scrape configuration
 
 Plain `prometheus.yml` scrape config:

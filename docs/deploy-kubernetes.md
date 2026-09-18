@@ -1,7 +1,12 @@
-# Deploy on Kubernetes
+# Install on Kubernetes
 
 The Helm chart is published to GHCR as an OCI artifact next to the image, so
 no separate Helm repository has to be added.
+
+Before installing a chart or image in production, [verify its signature and
+build provenance](verify-release.md). Verification binds the artifact digest
+to Jarvis's GitHub Actions release workflow instead of trusting a mutable tag
+alone.
 
 ```bash
 helm install jarvis oci://ghcr.io/kj187/charts/jarvis \
@@ -27,6 +32,10 @@ helm install jarvis oci://ghcr.io/kj187/charts/jarvis \
 
 Leader election, snapshot distribution and failover behaviour are described in
 [PostgreSQL & HA](postgres-ha.md).
+
+Jarvis keeps recorded history, claims, comments, and silence events forever by
+default. Configure [Data retention](retention.md) deliberately for long-running
+clusters so the database does not grow without a bound.
 
 The full values reference and worked examples — SQLite with a PVC,
 PostgreSQL, multi-cluster, ingress-nginx with WebSocket support, external
@@ -113,4 +122,6 @@ leadership — see `GET /api/v1/status` in
 - [PostgreSQL & HA](postgres-ha.md) — leader election, snapshot distribution, failover
 - [Migrate from SQLite](migrate-postgres.md)
 - [Behind a proxy](reverse-proxy.md) — ingress and WebSocket passthrough
+- [Data retention](retention.md) — control long-term database growth
+- [Verify release artifacts](verify-release.md) — check the chart and image before rollout
 - [Helm values reference](../charts/jarvis/README.md)

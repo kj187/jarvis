@@ -124,7 +124,10 @@ frontend/
 The release demo video reuses this stack: `scripts/e2e-run.sh video none` runs
 the storyboard once per format. It is produced only on request — workflow,
 storyboard rules and hand-over in `.agents/skills/release-video/SKILL.md`
-(`make release-video VERSION=X.Y.Z [PROJECT=release|intro]`).
+(`make release-video VERSION=X.Y.Z [PROJECT=release|intro]`). The committed
+release storyboard template also defines the standard cover subtitle; the
+product-intro template defines the full headline and subtitle used on its
+cover.
 
 ### Conventions
 

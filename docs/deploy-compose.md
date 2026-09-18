@@ -1,4 +1,4 @@
-# Deploy with Compose
+# Install with Compose
 
 Jarvis runs as a single container: the frontend is embedded in the Go
 binary, and SQLite needs no external service. Everything below works with
@@ -10,6 +10,9 @@ and a throwaway Alertmanager with demo alerts in five minutes.
 
 The image tag used on this page is the current release. Available tags are
 listed on the [releases page](https://github.com/kj187/jarvis/releases).
+Before using an image in production, [verify its signature and build
+provenance](verify-release.md) so the digest you deploy can be traced back to
+this repository's release workflow.
 
 ---
 
@@ -55,7 +58,8 @@ seconds; alerts appear without a reload.
 **The volume matters.** `/data` holds the SQLite database with the alert
 history, claims and comments. Without it, every restart starts from an empty
 history — the alerts themselves come back from Alertmanager, but everything
-Jarvis recorded about them is gone.
+Jarvis recorded about them is gone. Jarvis keeps that data forever by default;
+review [Data retention](retention.md) before a long-running production install.
 
 **At least one cluster is required.** `JARVIS_CLUSTER_1_NAME` and
 `JARVIS_CLUSTER_1_ALERTMANAGER_URL` are the minimum; Jarvis refuses to start
@@ -86,4 +90,6 @@ configurations for nginx, Traefik, Caddy and ingress controllers are in
 - [Features](features.md) — what the UI can do
 - [Set up user login](authentication-user.md) — login via built-in accounts or OIDC
 - [Connect a protected Alertmanager](authentication-alertmanager.md) — for a protected upstream
-- [Upgrade](upgrade.md) — verifying signatures, upgrading in place
+- [Data retention](retention.md) — bound database growth on long-running installations
+- [Verify release artifacts](verify-release.md) — check signatures, provenance, and the SBOM
+- [Upgrade](upgrade.md) — upgrade Compose installations in place

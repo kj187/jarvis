@@ -1,19 +1,19 @@
 ---
 layout: home
 title: Jarvis
-titleTemplate: The open-source web UI for Prometheus Alertmanager
+titleTemplate: An Alertmanager Frontend for Day-to-Day Infrastructure Operations
 
 hero:
   name: Jarvis
-  text: The working surface for the alert lifecycle
-  tagline: A self-hosted web UI for Prometheus Alertmanager — built for teams that act on alerts, not just watch them.
+  text: When the alert disappears but the questions remain
+  tagline: An Alertmanager Frontend for Day-to-Day Infrastructure Operations.
   image:
     src: /logo.png
     alt: Jarvis
   actions:
     - theme: brand
       text: Get started
-      link: /#getting-started
+      link: /start/first-steps
     - theme: alt
       text: View on GitHub
       link: https://github.com/kj187/jarvis
@@ -53,44 +53,13 @@ features:
 
 <div class="home-showcase">
 
-Silence straight from the card, group by any label, and open an alert for its full
-history, its claim and the team's comments.
+## The context behind every alert
 
-[Explore all features](/reference/features) · [Watch the 2½-minute tour on YouTube](https://www.youtube.com/watch?v=gssfmws8B6o) · [All videos](/videos)
+Alertmanager shows what is firing now. Jarvis preserves what happened before:
+the complete lifecycle, recurring occurrences, claims, and the team's comments.
+That context remains available after a resolve, restart, or re-fire.
 
-## Getting started
-
-One container and two required environment variables — point it at a reachable
-Alertmanager.
-
-```yaml
-services:
-  jarvis:
-    image: ghcr.io/kj187/jarvis:1.12.0
-    ports:
-      - "8080:8080"
-    volumes:
-      - jarvis_data:/data
-    environment:
-      JARVIS_CLUSTER_1_NAME: dev
-      JARVIS_CLUSTER_1_ALERTMANAGER_URL: http://alertmanager:9093
-    restart: unless-stopped
-
-volumes:
-  jarvis_data:
-```
-
-```bash
-podman compose up -d
-```
-
-Then open `http://localhost:8080`. User login — built-in accounts or any OIDC
-provider — is optional.
-[Installation guide](/deploy/compose)
-
-Just looking around, no Alertmanager at hand? [Try the local demo](/demo) instead —
-it starts Jarvis and a throwaway Alertmanager filled with realistic alerts, no
-config needed.
+[See how alert history works](/concepts/alert-lifecycle) · [Explore all features](/reference/features)
 
 ## Focused by design
 

@@ -7,7 +7,7 @@ import { PAGES } from '../scripts/pages.mjs'
 
 const REPO_ROOT = fileURLToPath(new URL('../..', import.meta.url))
 const SITE_URL = 'https://kj187.github.io/jarvis/'
-const SITE_DESCRIPTION = 'The open-source web UI for Prometheus Alertmanager'
+const SITE_DESCRIPTION = 'An Alertmanager Frontend for Day-to-Day Infrastructure Operations'
 
 // repo-relative source path for each synced route, so "Edit this page on
 // GitHub" and "Last updated" point at the real file (docs/features.md),
@@ -97,9 +97,8 @@ export default defineConfig({
   themeConfig: {
     logo: '/logo.png',
     nav: [
-      { text: 'Demo', link: '/demo' },
       { text: 'Videos', link: '/videos' },
-      { text: 'Deploy', link: '/deploy/compose' },
+      { text: 'Installation', link: '/deploy/compose' },
       { text: 'Reference', link: '/reference/features' },
       { text: 'Concepts', link: '/concepts/architecture' },
       {
@@ -116,16 +115,16 @@ export default defineConfig({
       {
         text: 'Getting Started',
         items: [
-          { text: 'Try it locally (demo)', link: '/demo' },
+          { text: 'Getting Started', link: '/start/first-steps' },
+          { text: 'Local demo', link: '/demo' },
           { text: 'Videos', link: '/videos' },
-          { text: 'First steps in the UI', link: '/start/first-steps' },
         ],
       },
       {
         text: 'Tasks',
         items: [
-          { text: 'Deploy with Compose', link: '/deploy/compose' },
-          { text: 'Deploy on Kubernetes', link: '/deploy/kubernetes' },
+          { text: 'Install with Compose', link: '/deploy/compose' },
+          { text: 'Install on Kubernetes', link: '/deploy/kubernetes' },
           { text: 'Behind a proxy / ingress', link: '/deploy/reverse-proxy' },
           { text: 'Set up user login', link: '/howto/user-auth' },
           { text: 'Connect a protected Alertmanager', link: '/howto/upstream-auth' },
@@ -133,6 +132,7 @@ export default defineConfig({
           { text: 'Migrate from SQLite', link: '/howto/migrate-postgres' },
           { text: 'Configure retention', link: '/howto/retention' },
           { text: 'Set up monitoring', link: '/howto/monitoring' },
+          { text: 'Verify release artifacts', link: '/howto/verify-release' },
           { text: 'Upgrade', link: '/howto/upgrade' },
         ],
       },

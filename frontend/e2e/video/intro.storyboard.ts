@@ -16,8 +16,8 @@ import type { Page } from '@playwright/test'
  */
 
 const INTRO = {
-  title: 'The Alertmanager UI for teams that act on alerts',
-  subtitle: 'Open source · Self-hosted · One container',
+  title: 'An Alertmanager Frontend for Day-to-Day Infrastructure Operations',
+  subtitle: 'When the alert disappears but the questions remain',
   features: ['Every cluster, live', 'Full alert history', 'Claims & comments', 'Silences with a preview'],
 }
 

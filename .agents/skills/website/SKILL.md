@@ -165,6 +165,11 @@ since it matches on the already-rewritten `/assets/…` paths.
   a new block needs the same rule. Further `##` sections of the home page go
   inside the same `.home-showcase` wrapper; `.home-showcase h2:not(:first-child)`
   gives them their top spacing.
+- The homepage hero image and Owl mesh are shifted slightly right on desktop
+  (`.VPHero .image` and `.hero-mesh-backdrop`) to keep the dense visual away
+  from the copy. The hand-written `.home-showcase` adds its breakpoint padding
+  *outside* a 1152px content width (`max-width` = content + current padding),
+  so its text edges align with the hero, screenshot, and feature grid.
 - **`.home-hero-screenshot`'s padding/max-width split mirrors `VPHero.vue` on
   purpose.** `VPHero` puts its horizontal padding on the full-bleed outer
   `.VPHero` element and centers a `max-width: 1152px` `.container` *inside*

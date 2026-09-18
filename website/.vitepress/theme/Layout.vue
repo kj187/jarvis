@@ -28,7 +28,7 @@ const { frontmatter } = useData()
 <style scoped>
 .hero-mesh-backdrop {
   position: absolute;
-  inset: 0;
+  inset: 0 -6% 0 6%;
   height: 620px;
   overflow: hidden;
   pointer-events: none;
