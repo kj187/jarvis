@@ -915,8 +915,11 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
 │                        SilenceTemplate, LabelMatcher, AuthUser, ProviderInfo, AdminUser,
 │                        SettingsResponse, HeatmapRange, AlertHeatmapResponse, ...
 ├── hooks/
-│   ├── useAlerts.ts           → useAlerts(params, {enabled}) forwards TanStack's AbortSignal through
-│   │                            api/client.ts so disabled/cancelled resolved reads abort fetch;
+│   ├── useAlerts.ts           → useAlerts(params, {enabled}) plus bounded useResolvedAlertsPage and
+│   │                            useResolvedAlertDetail; both resolved hooks forward TanStack's
+│   │                            AbortSignal, use 10s staleTime + gcTime 0, retry 5xx once and never
+│   │                            retry 4xx. Page queries retain previous data only for a pure offset
+│   │                            change; their keys include the complete server filter/page input.
 │   │                            useAlertGroups, useAlertHistory, useAlertTimeline,
 │   │                            useAlertStats, useAlertHeatmap (staleTime 60s; enabled unconditionally
 │   │                            — both AlertDetailPanel and every AlertCard entry query it),
@@ -1158,12 +1161,15 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │                            operator auto-snaps to `>`/`=` when
     │                            the field switches into/out of `@age`; an @age draft with an
     │                            unparseable duration (red border, parseDurationValue) is never
-    │                            promoted from draft to a committed filter chip
+    │                            promoted from draft to a committed filter chip; resolved mode marks
+    │                            invalid server-reported matcher indices and shows the RE2 semantics hint
     ├── alerts/
     │   ├── AlertsPage.tsx     → useWebSocket, filter/search, card|list + detail panel, fullscreen, pagination;
-    │   │                        resolved-history query is enabled only in resolved mode, is cancelled on
-    │   │                        mode exit, and has explicit initial-loading/error/retry states while keeping
-    │   │                        previous data visible after a failed refetch;
+    │   │                        resolved mode owns the controlled server page, debounces search 300ms,
+    │   │                        resets to page 1 atomically on filter/page-size changes, cancels on mode
+    │   │                        exit, corrects a shrunken result to its last page at most once, and fetches
+    │   │                        selected off-page details by fingerprint+cluster; explicit loading/error/
+    │   │                        retry and stale-page states keep navigation deterministic;
     │   │                        its URL-state writer replaces only alert-owned params and preserves
     │   │                        shell-owned params such as `settings=open`; on first mount, if the URL
     │   │                        has none of `state`/`q`/`matchers`/`alert` (hasAlertViewParams), applies
@@ -1233,8 +1239,9 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │   ├── AlertListView.tsx  → sortable table, cols = Name [· State] · Actions (no Claim column —
     │   │                        claim/release lives only in the detail panel); expandable groups,
     │   │                        section reordering (persisted: 'jarvis-list-section-order:<label>');
-    │   │                        resolved mode uses right-aligned grouped top/footer pagers that
-    │   │                        stack responsively, plus the persisted per-page selector;
+    │   │                        resolved mode renders the server-supplied order without client slicing,
+    │   │                        using controlled right-aligned grouped top/footer pagers that stack
+    │   │                        responsively, plus the persisted per-page selector to their left;
     │   │                        group-header common labels = quiet LabelChip strip (PartitionedLabelChips:
     │   │                        pinned-first + "+N" chip, one partition per group); group silence
     │   │                        action is a labelled button ("Silence group" / "Extend/Recreate/Expire
@@ -1380,8 +1387,8 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │   │                        (ignores the label-matcher filter bar — the point is discovering
     │   │                        what to filter *by*); clicking a value adds an unlocked `=`
     │   │                        matcher via uiStore.addLabelMatcher (no-op if an identical one
-    │   │                        already exists) and closes the modal; its resolved query is enabled only
-    │   │                        while both the modal is open and the resolved state tab is active
+    │   │                        already exists) and closes the modal; in resolved mode it receives and
+    │   │                        explicitly labels the current page from AlertsPage, with no second query
     │   ├── LabelChip.tsx      → one fixed size for every chip (`max-w-[200px]`, `text-[10px]`) so a row
     │   │                        of chips reads as one unit; `emphasized` only adds font weight, unrelated
     │   │                        to color. Neutral (`border-border bg-muted text-foreground`) unless this

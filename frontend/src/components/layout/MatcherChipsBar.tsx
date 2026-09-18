@@ -222,6 +222,7 @@ function EditableMatcherChip({
   onChange,
   onRemove,
   autoFocus,
+  invalidRegex,
 }: {
   value: Draft
   labelValueMap: Map<string, Set<string>>
@@ -229,6 +230,7 @@ function EditableMatcherChip({
   onChange: (next: Draft) => void
   onRemove: () => void
   autoFocus?: boolean
+  invalidRegex?: boolean
 }) {
   const { name, operator, value } = matcher
   const valueTags = value ? value.split('|').filter(Boolean) : []
@@ -249,8 +251,9 @@ function EditableMatcherChip({
     <div
       className={cn(
         'flex items-center rounded border bg-input min-h-7 max-w-full',
-        ageInvalid ? 'border-destructive' : 'border-border',
+        ageInvalid || invalidRegex ? 'border-destructive' : 'border-border',
       )}
+      title={invalidRegex ? 'Invalid RE2 regular expression' : undefined}
     >
       <TagField
         values={name ? [name] : []}
@@ -310,7 +313,15 @@ function EditableMatcherChip({
 
 let draftSeq = 0
 
-export function MatcherChipsBar({ allowAdd = false }: { allowAdd?: boolean }) {
+export function MatcherChipsBar({
+  allowAdd = false,
+  invalidMatcherIndices = [],
+  showResolvedRE2Hint = false,
+}: {
+  allowAdd?: boolean
+  invalidMatcherIndices?: number[]
+  showResolvedRE2Hint?: boolean
+}) {
   const { filters, addLabelMatcher, updateLabelMatcher, removeLabelMatcher } = useUIStore()
   const { data: allAlerts = [] } = useAlerts()
   const [drafts, setDrafts] = useState<{ id: string; data: Draft }[]>([])
@@ -350,7 +361,7 @@ export function MatcherChipsBar({ allowAdd = false }: { allowAdd?: boolean }) {
 
   return (
     <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-      {filters.labelMatchers.map((m) => (
+      {filters.labelMatchers.map((m, index) => (
         <EditableMatcherChip
           key={m.id}
           value={{ name: m.name, operator: m.operator, value: m.value }}
@@ -358,6 +369,7 @@ export function MatcherChipsBar({ allowAdd = false }: { allowAdd?: boolean }) {
           labelNames={labelNames}
           onChange={(next) => updateLabelMatcher(m.id, next)}
           onRemove={() => removeLabelMatcher(m.id)}
+          invalidRegex={invalidMatcherIndices.includes(index)}
         />
       ))}
 
@@ -393,6 +405,9 @@ export function MatcherChipsBar({ allowAdd = false }: { allowAdd?: boolean }) {
           </button>
         )
       })()}
+      {showResolvedRE2Hint && (
+        <span className="whitespace-nowrap text-[10px] text-muted-foreground">Resolved regex filters use RE2</span>
+      )}
     </div>
   )
 }

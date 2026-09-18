@@ -17,6 +17,8 @@ import type {
   ProviderInfo,
   AdminUser,
   SettingsResponse,
+  ResolvedAlertsPage,
+  LabelMatcher,
 } from '@/types'
 
 const BASE = '/api/v1'
@@ -36,6 +38,33 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   }
   if (res.status === 204) return undefined as T
   return res.json() as Promise<T>
+}
+
+export interface ResolvedAlertsPageParams {
+  limit?: 10 | 25 | 50 | 100
+  offset?: number
+  cluster?: string
+  severity?: string
+  search?: string
+  matchers?: Pick<LabelMatcher, 'name' | 'operator' | 'value'>[]
+  fingerprint?: string
+}
+
+export function fetchResolvedAlertsPage(
+  params: ResolvedAlertsPageParams,
+  signal?: AbortSignal,
+): Promise<ResolvedAlertsPage> {
+  const q = new URLSearchParams()
+  if (params.fingerprint) q.set('fingerprint', params.fingerprint)
+  else {
+    if (params.limit !== undefined) q.set('limit', String(params.limit))
+    if (params.offset !== undefined) q.set('offset', String(params.offset))
+    if (params.severity) q.set('severity', params.severity)
+    if (params.search) q.set('search', params.search)
+    if (params.matchers?.length) q.set('matchers', JSON.stringify(params.matchers))
+  }
+  if (params.cluster) q.set('cluster', params.cluster)
+  return request<ResolvedAlertsPage>(`/alerts/resolved?${q.toString()}`, { signal })
 }
 
 // ── Alerts ───────────────────────────────────────────────────────────────────

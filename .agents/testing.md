@@ -128,6 +128,12 @@ the discarding API writer with `httptest.ResponseRecorder`: a recorder retains
 the complete response and makes the test harness itself look like application
 memory. Do not compare benchmark results produced with `-race`.
 
+Resolved-history UI coverage lives in the no-auth E2E suite:
+`resolved-fetch.spec.ts` verifies on-demand loading, cancellation and the
+one-retry policy; `resolved-pagination.spec.ts` seeds more than two pages and
+verifies bounded limit/offset requests, the dimmed page-transition state and
+that the legacy full-history endpoint is never used.
+
 For a before/after comparison:
 
 1. Use the same commit toolchain, architecture, database, fixture size,

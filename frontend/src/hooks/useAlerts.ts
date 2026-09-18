@@ -6,6 +6,8 @@ import {
   fetchAlertTimeline,
   fetchAlertStats,
   fetchAlertHeatmap,
+  fetchResolvedAlertsPage,
+  type ResolvedAlertsPageParams,
 } from '@/api/client'
 import { FALLBACK_REFETCH_INTERVAL_MS } from '@/lib/refetch'
 import type { HeatmapRange } from '@/types'
@@ -27,6 +29,45 @@ export function useAlertGroups() {
     queryKey: ['alerts-groups'],
     queryFn: fetchAlertGroups,
     refetchInterval: FALLBACK_REFETCH_INTERVAL_MS,
+  })
+}
+
+export function useResolvedAlertsPage(params: ResolvedAlertsPageParams, enabled: boolean) {
+  return useQuery({
+    queryKey: ['alerts-resolved-page', params],
+    queryFn: async ({ signal }) => ({
+      ...await fetchResolvedAlertsPage(params, signal),
+      requestedOffset: params.offset ?? 0,
+    }),
+    enabled,
+    staleTime: 10_000,
+    gcTime: 0,
+    refetchInterval: enabled ? FALLBACK_REFETCH_INTERVAL_MS : false,
+    retry: (failureCount, error) => !/^4\d\d:/.test(error.message) && failureCount < 1,
+    placeholderData: (previousData, previousQuery) => {
+      const previousParams = previousQuery?.queryKey[1] as ResolvedAlertsPageParams | undefined
+      if (!previousParams || previousParams.limit !== params.limit || previousParams.offset === params.offset) {
+        return undefined
+      }
+      const comparable = (value: ResolvedAlertsPageParams) => JSON.stringify({
+        cluster: value.cluster,
+        severity: value.severity,
+        search: value.search,
+        matchers: value.matchers,
+      })
+      return comparable(previousParams) === comparable(params) ? previousData : undefined
+    },
+  })
+}
+
+export function useResolvedAlertDetail(fingerprint: string, cluster: string | undefined, enabled: boolean) {
+  return useQuery({
+    queryKey: ['alerts-resolved-detail', fingerprint, cluster],
+    queryFn: ({ signal }) => fetchResolvedAlertsPage({ fingerprint, cluster }, signal),
+    enabled: enabled && Boolean(fingerprint),
+    staleTime: 10_000,
+    gcTime: 0,
+    retry: (failureCount, error) => !/^4\d\d:/.test(error.message) && failureCount < 1,
   })
 }
 
@@ -78,5 +119,7 @@ export function useRefreshAlerts() {
   return () => {
     qc.invalidateQueries({ queryKey: ['alerts'] })
     qc.invalidateQueries({ queryKey: ['alerts-groups'] })
+    qc.invalidateQueries({ queryKey: ['alerts-resolved-page'] })
+    qc.invalidateQueries({ queryKey: ['alerts-resolved-detail'] })
   }
 }

@@ -6,7 +6,7 @@ import { ViewToggle } from './ViewToggle'
 import { AlertsOverviewModal } from './AlertsOverviewModal'
 import { MatcherChipsBar } from '@/components/layout/MatcherChipsBar'
 import { SavedFiltersMenu } from './SavedFiltersMenu'
-import { useAlerts } from '@/hooks/useAlerts'
+import { useAlerts, useResolvedAlertDetail, useResolvedAlertsPage } from '@/hooks/useAlerts'
 import { useSilences } from '@/hooks/useSilences'
 import { useUIStore, isDetailTab } from '@/store/uiStore'
 import { useSettingsStore } from '@/store/useSettingsStore'
@@ -124,23 +124,66 @@ export function AlertsPage() {
   const isActiveMode = !isResolvedMode && !isSuppressedMode
 
   const { data: liveAlerts = [], isLoading: liveLoading } = useAlerts()
-  const resolvedQuery = useAlerts({ state: 'resolved' }, { enabled: isResolvedMode })
+  const resolvedPageSize = useSettingsStore((s) => s.resolvedPageSize)
+  const updateSettings = useSettingsStore((s) => s.update)
+  const [debouncedSearch, setDebouncedSearch] = useState(filters.search)
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearch(filters.search), 300)
+    return () => window.clearTimeout(timer)
+  }, [filters.search])
+  const resolvedMatchers = filters.labelMatchers.map(({ name, operator, value }) => ({ name, operator, value }))
+  const resolvedSignature = JSON.stringify({ search: debouncedSearch, matchers: resolvedMatchers, pageSize: resolvedPageSize })
+  const [resolvedNavigation, setResolvedNavigation] = useState({ page: 1, signature: resolvedSignature })
+  const resolvedPage = resolvedNavigation.signature === resolvedSignature ? resolvedNavigation.page : 1
+  const resolvedQuery = useResolvedAlertsPage({
+    limit: resolvedPageSize,
+    offset: (resolvedPage - 1) * resolvedPageSize,
+    search: debouncedSearch || undefined,
+    matchers: resolvedMatchers,
+  }, isResolvedMode)
   const {
-    data: resolvedAlerts = [],
-    isLoading: resolvedLoading,
+    data: resolvedResult,
+    isPending: resolvedLoading,
+    isFetching: resolvedFetching,
+    isPlaceholderData: resolvedPageTransition,
     isError: resolvedError,
     refetch: retryResolved,
   } = resolvedQuery
+  const resolvedAlerts = resolvedResult?.alerts ?? []
+  const resolvedTotal = resolvedResult?.total ?? 0
+  const displayedResolvedPage = resolvedResult
+    ? Math.floor(resolvedResult.requestedOffset / resolvedPageSize) + 1
+    : resolvedPage
+  const resolvedTotalPages = Math.max(1, Math.ceil(resolvedTotal / resolvedPageSize))
+  const resolvedPageInvalid = Boolean(
+    resolvedResult && !resolvedPageTransition && displayedResolvedPage > resolvedTotalPages,
+  )
+  const correctedResolvedSignature = useRef<string | null>(null)
+  const [resolvedHistoryChangedSignature, setResolvedHistoryChangedSignature] = useState<string | null>(null)
+  const resolvedHistoryChanged = resolvedPageInvalid && resolvedHistoryChangedSignature === resolvedSignature
   const { data: silences = [] } = useSilences()
   const queryClient = useQueryClient()
   const wasResolvedMode = useRef(isResolvedMode)
 
   useEffect(() => {
     if (wasResolvedMode.current && !isResolvedMode) {
-      void queryClient.cancelQueries({ queryKey: ['alerts', { state: 'resolved' }], exact: true })
+      void queryClient.cancelQueries({ queryKey: ['alerts-resolved-page'] })
     }
     wasResolvedMode.current = isResolvedMode
   }, [isResolvedMode, queryClient])
+
+  useEffect(() => {
+    if (!resolvedPageInvalid) return
+    if (correctedResolvedSignature.current === resolvedSignature) {
+      const timer = window.setTimeout(() => setResolvedHistoryChangedSignature(resolvedSignature), 0)
+      return () => window.clearTimeout(timer)
+    }
+    correctedResolvedSignature.current = resolvedSignature
+    const timer = window.setTimeout(() => {
+      setResolvedNavigation({ page: resolvedTotalPages, signature: resolvedSignature })
+    }, 0)
+    return () => window.clearTimeout(timer)
+  }, [resolvedPageInvalid, resolvedSignature, resolvedTotalPages])
 
   const alerts = isResolvedMode ? resolvedAlerts : liveAlerts
   const isLoading = isResolvedMode ? resolvedLoading : liveLoading
@@ -193,7 +236,7 @@ export function AlertsPage() {
   }, [isFullscreen, setIsFullscreen])
 
   // Filter alerts
-  const filtered: EnrichedAlert[] = alerts.filter((alert) => {
+  const filtered: EnrichedAlert[] = isResolvedMode ? alerts : alerts.filter((alert) => {
     if (!matchesAlertSearch(alert, filters.search)) return false
 
     if (filters.state && !isResolvedMode) {
@@ -206,7 +249,7 @@ export function AlertsPage() {
     return true
   })
 
-  const selectedAlert = (() => {
+  const selectedFromLoaded = (() => {
     if (!selectedFingerprint) return null
     const selected = parseAlertSelectionKey(selectedFingerprint)
     if (selected.clusterName) {
@@ -218,6 +261,12 @@ export function AlertsPage() {
       alerts.find((a) => a.fingerprint === selected.fingerprint) ??
       null
   })()
+  const selectedIdentity = selectedFingerprint ? parseAlertSelectionKey(selectedFingerprint) : null
+  const resolvedDetailQuery = useResolvedAlertDetail(
+    selectedIdentity?.fingerprint ?? '', selectedIdentity?.clusterName,
+    isResolvedMode && Boolean(selectedFingerprint) && !selectedFromLoaded,
+  )
+  const selectedAlert = selectedFromLoaded ?? resolvedDetailQuery.data?.alerts[0] ?? null
   const showsCardGrid = viewMode === 'card' && !isResolvedMode
   const canToggleGrouping = !isResolvedMode
 
@@ -230,7 +279,7 @@ export function AlertsPage() {
             <SavedFiltersMenu />
 
             {/* Active matcher chips + inline add */}
-            <MatcherChipsBar allowAdd />
+            <MatcherChipsBar allowAdd invalidMatcherIndices={isResolvedMode ? resolvedResult?.invalidMatchers : undefined} showResolvedRE2Hint={isResolvedMode} />
 
             {/* Right controls */}
             <div className="flex items-center gap-2 shrink-0 ml-auto">
@@ -390,6 +439,14 @@ export function AlertsPage() {
             stateFilter={filters.state}
             resolvedMode={isResolvedMode}
             groupingEnabled={cardGroupingEnabled}
+            resolvedPagination={isResolvedMode ? {
+              page: displayedResolvedPage,
+              pageSize: resolvedPageSize,
+              total: resolvedTotal,
+              isFetching: resolvedFetching || resolvedPageTransition,
+              onPageChange: (page) => setResolvedNavigation({ page, signature: resolvedSignature }),
+              onPageSizeChange: (size) => updateSettings({ resolvedPageSize: size }),
+            } : undefined}
           />
         </div>
       )}
@@ -407,6 +464,34 @@ export function AlertsPage() {
         </div>
       )}
 
+      {isResolvedMode && resolvedHistoryChanged && (
+        <div className="px-4 text-sm text-muted-foreground" role="status">
+          History changed while this page was loading. Choose another page or refresh.
+        </div>
+      )}
+
+      {isResolvedMode && selectedFingerprint && !selectedFromLoaded && resolvedDetailQuery.isPending && (
+        <div className="flex items-center gap-2 px-4 text-sm text-muted-foreground" role="status">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Loading resolved alert…
+        </div>
+      )}
+      {isResolvedMode && selectedFingerprint && !selectedFromLoaded && resolvedDetailQuery.isError && (
+        <div className="flex items-center gap-3 px-4 text-sm text-destructive" role="alert">
+          <span>Failed to load the resolved alert.</span>
+          <button
+            type="button"
+            className="cursor-pointer rounded-md border border-border px-2 py-1 text-xs text-foreground hover:bg-accent"
+            onClick={() => void resolvedDetailQuery.refetch()}
+          >
+            Retry
+          </button>
+        </div>
+      )}
+      {isResolvedMode && selectedFingerprint && !selectedFromLoaded && resolvedDetailQuery.isSuccess && !selectedAlert && (
+        <div className="px-4 text-sm text-muted-foreground" role="status">Alert is no longer resolved.</div>
+      )}
+
       {/* Detail panel */}
       <AlertDetailPanel
         alert={selectedAlert}
@@ -417,7 +502,12 @@ export function AlertsPage() {
         onSelectAlert={setSelectedFingerprint}
       />
 
-      <AlertsOverviewModal open={overviewOpen} onClose={() => setOverviewOpen(false)} />
+      <AlertsOverviewModal
+        open={overviewOpen}
+        onClose={() => setOverviewOpen(false)}
+        resolvedAlerts={resolvedAlerts}
+        resolvedLoading={resolvedLoading}
+      />
     </div>
   )
 }

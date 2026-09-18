@@ -2,7 +2,7 @@ import { test, expect, waitForActiveAlerts, JARVIS_BASE_URL } from '../../suppor
 import { dismissNoAuthNotice } from '../../support/auth'
 import { kubernetesAlerts } from '../../fixtures/alerts'
 
-const resolvedURL = /\/api\/v1\/alerts\?state=resolved(?:&|$)/
+const resolvedURL = /\/api\/v1\/alerts\/resolved(?:\?|$)/
 
 test('live-view refresh paths never fetch resolved history', async ({ page, am, jarvis }) => {
   await dismissNoAuthNotice(page)
@@ -67,11 +67,11 @@ test('resolved view shows loading and retry states and only fetches on demand', 
     if (attempt === 1) {
       await firstResponse
     }
-    if (attempt <= 3) {
+    if (attempt <= 2) {
       await route.fulfill({ status: 500, body: 'temporary failure' })
       return
     }
-    await route.fulfill({ json: [] })
+    await route.fulfill({ json: { alerts: [], total: 0, invalidMatchers: [] } })
   })
 
   await page.goto('/?state=active')
@@ -81,7 +81,7 @@ test('resolved view shows loading and retry states and only fetches on demand', 
   await expect(page.getByText('Failed to load resolved alerts.')).toBeVisible({ timeout: 10_000 })
   await page.getByRole('button', { name: 'Retry' }).click()
   await expect(page.getByText('No alerts')).toBeVisible()
-  expect(attempt).toBe(4)
+  expect(attempt).toBe(3)
 })
 
 test('leaving resolved mode aborts its in-flight request', async ({ page }) => {
@@ -92,7 +92,7 @@ test('leaving resolved mode aborts its in-flight request', async ({ page }) => {
   })
   await page.route(resolvedURL, async (route) => {
     await new Promise((resolve) => setTimeout(resolve, 10_000))
-    await route.fulfill({ json: [] }).catch(() => {})
+    await route.fulfill({ json: { alerts: [], total: 0, invalidMatchers: [] } }).catch(() => {})
   })
 
   await page.goto('/?state=active')
@@ -112,7 +112,7 @@ test('closing the overview does not abort the resolved query still used by the p
   })
   await page.route(resolvedURL, async (route) => {
     await responseGate
-    await route.fulfill({ json: [] })
+    await route.fulfill({ json: { alerts: [], total: 0, invalidMatchers: [] } })
   })
 
   await page.goto('/?state=resolved')

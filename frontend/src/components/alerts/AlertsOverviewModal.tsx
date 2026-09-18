@@ -10,6 +10,8 @@ import { cn } from '@/lib/utils'
 interface AlertsOverviewModalProps {
   open: boolean
   onClose: () => void
+  resolvedAlerts?: import('@/types').EnrichedAlert[]
+  resolvedLoading?: boolean
 }
 
 /**
@@ -18,7 +20,7 @@ interface AlertsOverviewModalProps {
  * point is discovering what to filter *by*, not summarizing what's already
  * filtered. Clicking a value applies it as an unlocked `=` filter chip.
  */
-export function AlertsOverviewModal({ open, onClose }: AlertsOverviewModalProps) {
+export function AlertsOverviewModal({ open, onClose, resolvedAlerts = [], resolvedLoading = false }: AlertsOverviewModalProps) {
   const filters = useUIStore((s) => s.filters)
   const addLabelMatcher = useUIStore((s) => s.addLabelMatcher)
   const labelColors = useSettingsStore((s) => s.labelColors)
@@ -26,10 +28,6 @@ export function AlertsOverviewModal({ open, onClose }: AlertsOverviewModalProps)
 
   const isResolvedMode = filters.state === 'resolved'
   const { data: liveAlerts = [] } = useAlerts()
-  const { data: resolvedAlerts = [] } = useAlerts(
-    { state: 'resolved' },
-    { enabled: open && isResolvedMode },
-  )
   const { data: silences = [] } = useSilences()
 
   const alerts = isResolvedMode ? resolvedAlerts : liveAlerts
@@ -55,11 +53,15 @@ export function AlertsOverviewModal({ open, onClose }: AlertsOverviewModalProps)
         <div className="space-y-1 pr-6">
           <h2 className="text-base font-semibold">Alerts Overview</h2>
           <p className="text-xs text-muted-foreground">
-            Top label values across {basisAlerts.length} alert{basisAlerts.length === 1 ? '' : 's'}. Click a value to filter by it.
+            {isResolvedMode
+              ? `Top label values on this page (${basisAlerts.length} alerts).`
+              : `Top label values across ${basisAlerts.length} alert${basisAlerts.length === 1 ? '' : 's'}. Click a value to filter by it.`}
           </p>
         </div>
 
-        {basisAlerts.length === 0 ? (
+        {isResolvedMode && resolvedLoading ? (
+          <p className="text-sm text-muted-foreground">Loading resolved alerts…</p>
+        ) : basisAlerts.length === 0 ? (
           <p className="text-sm text-muted-foreground">No alerts to summarize.</p>
         ) : (
           <div className="sheet-scroll max-h-[70vh] space-y-4 overflow-y-auto -mr-2 pr-2">
