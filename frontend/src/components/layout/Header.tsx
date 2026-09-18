@@ -61,6 +61,26 @@ function InfoColophon({ version }: { version: string | null }) {
   )
 }
 
+// Live-connection indicator. Green icon when connected; when the socket is down it also says
+// "Offline" in text, so the state never depends on hue or a hover-only title (the title stays for
+// pointer users and tests).
+function WsStatus({ connected, light }: { connected: boolean; light: boolean }) {
+  const title = connected ? 'WebSocket connected' : 'WebSocket disconnected'
+  return (
+    <div
+      className="flex shrink-0 items-center gap-1"
+      role="img"
+      aria-label={connected ? title : `Offline — ${title}`}
+      title={title}
+    >
+      {connected ? <Wifi className="h-4 w-4 text-green-500" /> : <WifiOff className="h-4 w-4 text-red-500" />}
+      {!connected && (
+        <span className={`text-xs font-medium ${light ? 'text-red-700' : 'text-red-400'}`}>Offline</span>
+      )}
+    </div>
+  )
+}
+
 // ── Header ────────────────────────────────────────────────────────────────────
 
 export function Header() {
@@ -322,9 +342,7 @@ export function Header() {
           </div>
 
           {/* WS status */}
-          <div className="shrink-0" role="img" aria-label={wsConnected ? 'WebSocket connected' : 'WebSocket disconnected'} title={wsConnected ? 'WebSocket connected' : 'WebSocket disconnected'}>
-            {wsConnected ? <Wifi className="h-4 w-4 text-green-500" /> : <WifiOff className="h-4 w-4 text-red-500" />}
-          </div>
+          <WsStatus connected={wsConnected} light={theme === 'light'} />
 
           {/* Refresh — custom docked popover (not the generic Tooltip) so it matches
               the flush, header-colored look of the other header popovers. */}
@@ -412,9 +430,7 @@ export function Header() {
 
         {/* ── Mobile: WS status + hamburger ── */}
         <div className="flex md:hidden items-center gap-1">
-          <div className="shrink-0" title={wsConnected ? 'WebSocket connected' : 'WebSocket disconnected'}>
-            {wsConnected ? <Wifi className="h-4 w-4 text-green-500" /> : <WifiOff className="h-4 w-4 text-red-500" />}
-          </div>
+          <WsStatus connected={wsConnected} light={theme === 'light'} />
           <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => setMenuOpen((v) => !v)} aria-label="Toggle menu" aria-expanded={menuOpen}>
             {menuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
           </Button>

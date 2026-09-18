@@ -535,6 +535,6 @@ The selected theme is saved in `localStorage` and restored on every subsequent v
 
 ### Keyboard and Accessibility
 
-The header's popovers — cluster status, refresh hint, About and the user menu — open on hover and are equally operable from the keyboard: focus the button and press **Enter** or **Space** to open or close it, **Escape** closes it and returns focus to the button, and moving focus elsewhere closes it. The refresh hint appears when the button receives focus. In the cluster popover, tabbing to a cluster name reveals its `=` / `!=` filter choices.
+The header's popovers — cluster status, refresh hint, About and the user menu — open on hover and are equally operable from the keyboard: focus the button and press **Enter** or **Space** to open or close it, **Escape** closes it and returns focus to the button, and moving focus elsewhere closes it. The refresh hint appears when the button receives focus. When the live connection drops, the header says "Offline" in text next to the icon, not only by colour. In the cluster popover, tabbing to a cluster name reveals its `=` / `!=` filter choices.
 
 Keyboard focus is shown with a 2 px blue ring that keeps at least 3:1 contrast against every surface in both themes, and text fields and selects have an edge that meets the same ratio. With the operating system's **reduce motion** setting on, transitions and decorative animations (pulsing indicators, the claim spinner) are switched off; loading spinners keep turning because they are the only progress signal.
