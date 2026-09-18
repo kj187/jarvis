@@ -101,7 +101,7 @@ export function SilenceGroupCard({ group, alerts, onEditGroup, onExpireGroup, de
           )}
         </div>
 
-        <div className="truncate text-[11px] text-muted-foreground/70">
+        <div className="truncate text-[11px] text-muted-foreground">
           by {rep.createdBy}
           <span className="mx-1 text-muted-foreground/40">·</span>
           {totalAffected} affected alert{totalAffected === 1 ? '' : 's'}
@@ -120,7 +120,7 @@ export function SilenceGroupCard({ group, alerts, onEditGroup, onExpireGroup, de
             <SilenceMatcherChip key={i} matcher={m} />
           ))}
           {hiddenMatcherCount > 0 && (
-            <span className="self-center font-mono text-[11px] text-muted-foreground/60">
+            <span className="self-center font-mono text-[11px] text-muted-foreground">
               +{hiddenMatcherCount} more
             </span>
           )}

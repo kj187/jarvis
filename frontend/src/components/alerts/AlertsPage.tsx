@@ -334,7 +334,7 @@ export function AlertsPage() {
                 </button>
               </div>
               {searchOpen ? (
-                <div className="flex items-center rounded-md border border-border overflow-hidden bg-input h-7">
+                <div className="flex items-center rounded-md border border-control overflow-hidden bg-input h-7">
                   <Search className="ml-2 h-3 w-3 text-muted-foreground shrink-0 pointer-events-none" />
                   <Input
                     ref={searchInputRef}

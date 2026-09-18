@@ -811,7 +811,7 @@ export function AlertListView({
                                 </span>
                               )}
                               {!hasSilence && expiredSilences.length > 0 && (
-                                <span className="inline-flex items-center gap-1 text-xs font-normal text-muted-foreground/40">
+                                <span className="inline-flex items-center gap-1 text-xs font-normal text-muted-foreground">
                                   <BellOff className="h-3 w-3 shrink-0" />
                                   expired
                                 </span>
@@ -878,7 +878,7 @@ export function AlertListView({
                                 type="button"
                                 onClick={() => openSilenceForm(group.alerts, expiredSilences[0], true)}
                                 title="Recreate the expired group silence"
-                                className="cursor-pointer flex w-fit items-center gap-1.5 rounded border border-border/50 px-2 py-1 text-xs text-muted-foreground/70 transition-colors hover:border-border hover:text-foreground"
+                                className="cursor-pointer flex w-fit items-center gap-1.5 rounded border border-border/50 px-2 py-1 text-xs text-muted-foreground transition-colors hover:border-border hover:text-foreground"
                               >
                                 <RefreshCw className="h-3.5 w-3.5 shrink-0" />
                                 <span>Recreate group silence</span>

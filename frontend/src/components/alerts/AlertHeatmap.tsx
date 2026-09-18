@@ -89,7 +89,7 @@ export function AlertHeatmap({ fingerprint, cluster, enabled }: AlertHeatmapProp
         hasActivity ? (
           <HeatmapGrid cells={cells} range={range} />
         ) : (
-          <p className="py-1 text-right text-[10px] text-muted-foreground/60">No activity in this window</p>
+          <p className="py-1 text-right text-[10px] text-muted-foreground">No activity in this window</p>
         )
       )}
     </div>

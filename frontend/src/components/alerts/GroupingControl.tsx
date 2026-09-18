@@ -127,7 +127,7 @@ export function GroupingControl({ alerts, enabled, onToggleEnabled }: GroupingCo
 
           <div
             className={cn(
-              'mb-1.5 flex shrink-0 items-center gap-1.5 rounded-md border border-border bg-input px-1.5 h-7',
+              'mb-1.5 flex shrink-0 items-center gap-1.5 rounded-md border border-control bg-input px-1.5 h-7',
               !enabled && 'pointer-events-none opacity-40',
             )}
           >
@@ -182,7 +182,7 @@ export function GroupingControl({ alerts, enabled, onToggleEnabled }: GroupingCo
                     {selected && <span className="h-1.5 w-1.5 rounded-full bg-primary" />}
                   </span>
                   <span className="flex-1 truncate font-mono">{name}</span>
-                  {count > 0 && <span className="tabular-nums text-[10px] text-muted-foreground/70">{count}</span>}
+                  {count > 0 && <span className="tabular-nums text-[10px] text-muted-foreground">{count}</span>}
                 </button>
               )
             })}

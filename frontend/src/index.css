@@ -13,6 +13,9 @@
   --color-card-foreground: hsl(210 25% 90%);
   --color-border: hsl(220 12% 23%);
   --color-input: hsl(222 13% 16%);
+  /* Edge of text fields/selects: >= 3:1 against every surface (WCAG 1.4.11). --color-border stays
+   * the quiet edge for cards/header/tables; use `border-control` only where the edge defines a field. */
+  --color-control: hsl(220 12% 48%);
   --color-primary: hsl(210 40% 98%);
   --color-primary-foreground: hsl(222 47% 11%);
   --color-secondary: hsl(222 13% 16%);
@@ -25,7 +28,7 @@
   --color-destructive-foreground: hsl(210 40% 98%);
   --color-popover: hsl(222 14% 13%);
   --color-popover-foreground: hsl(215 13% 60%);
-  --color-ring: hsl(220 12% 30%);
+  --color-ring: hsl(217 91% 65%);
   --color-header: hsl(222 14% 14%);
   --color-link: hsl(213 94% 68%);
 
@@ -50,6 +53,7 @@
   --color-card-foreground: hsl(222 25% 12%);
   --color-border: hsl(220 13% 83%);
   --color-input: hsl(220 12% 97%);
+  --color-control: hsl(220 13% 54%);
   --color-primary: hsl(222 40% 20%);
   --color-primary-foreground: hsl(0 0% 100%);
   --color-secondary: hsl(220 12% 91%);
@@ -62,7 +66,7 @@
   --color-destructive-foreground: hsl(0 0% 100%);
   --color-popover: hsl(0 0% 100%);
   --color-popover-foreground: hsl(220 9% 44%);
-  --color-ring: hsl(221 60% 58%);
+  --color-ring: hsl(221 83% 45%);
   --color-link: hsl(221 83% 43%);
 }
 
@@ -135,6 +139,24 @@ input::-webkit-calendar-picker-indicator {
     hsl(210 100% 72%) 355deg,
     transparent 360deg
   );
+}
+
+/* Motion: honor the OS "reduce motion" setting. Transitions and decorative loops
+   (animate-ping/pulse, claim-snake) are neutralised; animate-spin stays because a
+   spinner is the only loading signal there. OwlMeshBackdrop handles its own canvas. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .animate-ping,
+  .animate-pulse,
+  .animate-bounce,
+  .claim-snake-spinner {
+    animation: none !important;
+  }
 }
 
 body {

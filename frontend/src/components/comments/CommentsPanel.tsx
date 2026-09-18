@@ -252,7 +252,7 @@ export function CommentsPanel({ fingerprint, clusterName }: CommentsPanelProps) 
             rows={6}
           />
         ) : (
-          <div data-testid="comment-editor-preview" className="min-h-[140px] rounded-md border border-input bg-background px-3 py-2">
+          <div data-testid="comment-editor-preview" className="min-h-[140px] rounded-md border border-control bg-background px-3 py-2">
             {body.trim() ? (
               <Suspense fallback={<p className="text-sm whitespace-pre-wrap">{body}</p>}>
                 <CommentMarkdown body={body} />

@@ -50,7 +50,7 @@ export function DateTimePicker({ value, onChange, className }: DateTimePickerPro
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex h-8 w-full items-center gap-2 rounded border border-input bg-background px-2 text-xs hover:border-ring focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer"
+        className="flex h-8 w-full items-center gap-2 rounded border border-control bg-background px-2 text-xs hover:border-ring focus:outline-none focus:ring-2 focus:ring-ring cursor-pointer"
       >
         <CalendarDays className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
         <span className={cn('flex-1 text-left font-mono', !displayValue && 'text-muted-foreground')}>
@@ -113,7 +113,7 @@ export function DateTimePicker({ value, onChange, className }: DateTimePickerPro
                 max={23}
                 value={hh}
                 onChange={(e) => handleTime(e.target.value, mm)}
-                className="w-10 rounded border border-input bg-background px-1 py-0.5 text-center font-mono text-xs focus:outline-none focus:ring-1 focus:ring-ring [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                className="w-10 rounded border border-control bg-background px-1 py-0.5 text-center font-mono text-xs focus:outline-none focus:ring-2 focus:ring-ring [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
               />
               <span className="text-muted-foreground">:</span>
               <input
@@ -122,7 +122,7 @@ export function DateTimePicker({ value, onChange, className }: DateTimePickerPro
                 max={59}
                 value={mm}
                 onChange={(e) => handleTime(hh, e.target.value)}
-                className="w-10 rounded border border-input bg-background px-1 py-0.5 text-center font-mono text-xs focus:outline-none focus:ring-1 focus:ring-ring [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                className="w-10 rounded border border-control bg-background px-1 py-0.5 text-center font-mono text-xs focus:outline-none focus:ring-2 focus:ring-ring [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
               />
               <span className="ml-auto text-xs text-muted-foreground font-mono">
                 {hh}:{mm}

@@ -74,7 +74,7 @@ export function SilenceCard({ silence, alerts, onEdit, onExpire, isDeleting = fa
           )}
         </div>
 
-        <div className="truncate text-[11px] text-muted-foreground/70">
+        <div className="truncate text-[11px] text-muted-foreground">
           by {silence.createdBy}
           <span className="mx-1 text-muted-foreground/40">·</span>
           {affectedCount} affected alert{affectedCount === 1 ? '' : 's'}
@@ -85,7 +85,7 @@ export function SilenceCard({ silence, alerts, onEdit, onExpire, isDeleting = fa
             <SilenceMatcherChip key={i} matcher={m} />
           ))}
           {hiddenMatcherCount > 0 && (
-            <span className="self-center font-mono text-[11px] text-muted-foreground/60">
+            <span className="self-center font-mono text-[11px] text-muted-foreground">
               +{hiddenMatcherCount} more
             </span>
           )}

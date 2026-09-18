@@ -251,7 +251,7 @@ function EditableMatcherChip({
     <div
       className={cn(
         'flex items-center rounded border bg-input min-h-7 max-w-full',
-        ageInvalid || invalidRegex ? 'border-destructive' : 'border-border',
+        ageInvalid || invalidRegex ? 'border-destructive' : 'border-control',
       )}
       title={invalidRegex ? 'Invalid RE2 regular expression' : undefined}
     >

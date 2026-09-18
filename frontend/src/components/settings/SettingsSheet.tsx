@@ -764,7 +764,7 @@ export function SettingsSheet({ open, onClose }: SettingsSheetProps) {
               />
             </div>
             {/* Live preview */}
-            <p className="text-[11px] text-muted-foreground/60 text-right">
+            <p className="text-[11px] text-muted-foreground text-right">
               e.g. {formatTime(new Date(), settings.timeFormat)}
             </p>
           </div>
@@ -874,7 +874,7 @@ export function SettingsSheet({ open, onClose }: SettingsSheetProps) {
                of floating above empty space — and shrinks back down (to
                `min-h-[8rem]` on the list itself) as the window gets shorter. */
             <div className="flex min-h-0 flex-1 flex-col gap-1.5">
-              <div className="flex h-7 shrink-0 items-center gap-1.5 rounded-md border border-border bg-input px-1.5">
+              <div className="flex h-7 shrink-0 items-center gap-1.5 rounded-md border border-control bg-input px-1.5">
                 <Search className="h-3 w-3 shrink-0 text-muted-foreground" />
                 <input
                   value={labelSearch}

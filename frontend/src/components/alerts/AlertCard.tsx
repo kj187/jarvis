@@ -226,7 +226,7 @@ function AlertEntry({
           </div>
         )}
         {expiredSilence && (
-          <div className="mb-1 flex items-center gap-1 text-[11px] text-muted-foreground/60">
+          <div className="mb-1 flex items-center gap-1 text-[11px] text-muted-foreground">
             <BellOff className="h-3 w-3 shrink-0" />
             <span title={new Date(expiredSilence.endsAt).toLocaleString('en-US')}>
               Silence expired {formatTime(expiredSilence.endsAt)}
@@ -242,7 +242,7 @@ function AlertEntry({
           </p>
         )}
         {description && (
-          <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground/60" title={description}>
+          <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground" title={description}>
             {renderTextWithLinks(description)}
           </p>
         )}

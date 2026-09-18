@@ -260,7 +260,7 @@ export function SavedFiltersMenu() {
               Saved filters
             </span>
             {savedFilters.length > 0 && (
-              <span className="text-[10px] tabular-nums text-muted-foreground/70">
+              <span className="text-[10px] tabular-nums text-muted-foreground">
                 {savedFilters.length}/{MAX_SAVED_FILTERS}
               </span>
             )}
@@ -298,7 +298,7 @@ export function SavedFiltersMenu() {
                           aria-invalid={showError}
                           className={cn(
                             'h-7 min-w-0 flex-1 rounded border bg-input px-2 text-xs text-foreground outline-none',
-                            showError ? 'border-destructive' : 'border-border',
+                            showError ? 'border-destructive' : 'border-control',
                           )}
                         />
                         <button
@@ -503,7 +503,7 @@ export function SavedFiltersMenu() {
                       aria-invalid={newNameError !== null}
                       className={cn(
                         'h-7 min-w-0 flex-1 rounded border bg-input px-2 text-xs text-foreground outline-none placeholder:text-muted-foreground',
-                        newNameError ? 'border-destructive' : 'border-border',
+                        newNameError ? 'border-destructive' : 'border-control',
                       )}
                     />
                     <button

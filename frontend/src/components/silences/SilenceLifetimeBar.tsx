@@ -23,7 +23,7 @@ export function SilenceLifetimeBar({ silence }: { silence: Silence }) {
       <div className="h-1.5 overflow-hidden rounded-full bg-border">
         <div className={URGENCY_FILL_CLASS[urgency]} style={{ width: `${pct}%`, height: '100%' }} />
       </div>
-      <div className="mt-1.5 flex justify-between font-mono text-[10.5px] text-muted-foreground/70">
+      <div className="mt-1.5 flex justify-between font-mono text-[10.5px] text-muted-foreground">
         <span>created {cap(silence.updatedAt)} {tzAbbr}</span>
         <span>{cap(silence.endsAt)} {tzAbbr}</span>
       </div>

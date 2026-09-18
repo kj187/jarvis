@@ -197,7 +197,7 @@ export function HiddenLabelsToggle({
         onClick={toggleOpen}
         aria-label={`${hidden.length} ${noun}`}
         aria-expanded={open}
-        className="inline-flex shrink-0 cursor-pointer items-center rounded border border-dashed border-border px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground/70 transition-colors hover:text-foreground"
+        className="inline-flex shrink-0 cursor-pointer items-center rounded border border-dashed border-border px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground transition-colors hover:text-foreground"
         title={open ? `Collapse ${noun}` : `Show ${hidden.length} ${noun}: ${hidden.map(([k]) => k).join(', ')}`}
       >
         +{hidden.length}

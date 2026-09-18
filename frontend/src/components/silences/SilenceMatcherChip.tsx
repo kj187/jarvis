@@ -29,7 +29,7 @@ export function SilenceMatcherChip({ matcher, className }: SilenceMatcherChipPro
       title={full}
     >
       <span className={cn('shrink-0 font-medium', !color && 'text-foreground')} style={{ color }}>{matcher.name}</span>
-      <span className="shrink-0 text-muted-foreground/60">{op}</span>
+      <span className="shrink-0 text-muted-foreground">{op}</span>
       <span className="truncate text-muted-foreground">{matcher.value}</span>
     </span>
   )

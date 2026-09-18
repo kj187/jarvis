@@ -118,7 +118,7 @@ function TagValueInput({ value, onChange, suggestions = [], placeholder, classNa
   return (
     <div className={cn('relative min-w-0', className)}>
       <div
-        className="flex min-h-8 flex-wrap items-center gap-1 overflow-hidden rounded border border-input bg-background px-2 py-1 focus-within:ring-1 focus-within:ring-ring cursor-text"
+        className="flex min-h-8 flex-wrap items-center gap-1 overflow-hidden rounded border border-control bg-background px-2 py-1 focus-within:ring-2 focus-within:ring-ring cursor-text"
         onClick={() => inputRef.current?.focus()}
       >
         {tags.map((tag, i) => (
@@ -209,7 +209,7 @@ function LabelNameInput({ value, onChange, suggestions, className }: LabelNameIn
           setOpen(true)
           setTimeout(() => filterRef.current?.focus(), 10)
         }}
-        className="flex h-8 w-full items-center justify-between rounded border border-input bg-background px-2 font-mono text-xs hover:border-ring focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer"
+        className="flex h-8 w-full items-center justify-between rounded border border-control bg-background px-2 font-mono text-xs hover:border-ring focus:outline-none focus:ring-2 focus:ring-ring cursor-pointer"
       >
         <span className={value ? 'text-foreground' : 'text-muted-foreground'}>
           {value || 'label'}
@@ -422,7 +422,7 @@ function InlineDateTimePicker({ value, onChange }: InlineDateTimePickerProps) {
                   const n = parseInt(e.target.value, 10)
                   if (!isNaN(n)) set(n)
                 }}
-                className="w-10 rounded border border-input bg-background text-center text-2xl font-light tabular-nums focus:outline-none focus:ring-1 focus:ring-ring [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                className="w-10 rounded border border-control bg-background text-center text-2xl font-light tabular-nums focus:outline-none focus:ring-2 focus:ring-ring [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
               />
               <button
                 type="button"
@@ -907,7 +907,7 @@ export function SilenceForm({
             <select
               value={selectedTemplate}
               onChange={(e) => handleApplyTemplate(e.target.value)}
-              className="w-full h-8 px-2 py-1 text-xs border rounded bg-background border-input"
+              className="w-full h-8 px-2 py-1 text-xs border rounded bg-background border-control"
             >
               <option value="">— None —</option>
               {templates.map((t) => (
@@ -1244,7 +1244,7 @@ export function SilenceForm({
                           const n = parseInt(e.target.value, 10)
                           if (!isNaN(n)) set(n)
                         }}
-                        className="w-16 rounded border border-input bg-background text-center text-3xl font-light tabular-nums focus:outline-none focus:ring-1 focus:ring-ring [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                        className="w-16 rounded border border-control bg-background text-center text-3xl font-light tabular-nums focus:outline-none focus:ring-2 focus:ring-ring [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                       />
                       <button
                         type="button"

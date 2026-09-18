@@ -326,6 +326,12 @@ to `src/lib/**` only:
 - `frontend/vitest.config.ts` — `include: ['src/lib/**/*.test.ts']`, coverage
   restricted to `src/lib/alertUtils.ts`. No jsdom/component-testing
   dependencies, no other directory is in scope.
+- `frontend/src/lib/themeTokens.test.ts` — reads `src/index.css` and asserts
+  that `--color-ring` reaches >= 3:1 contrast against every surface token
+  (background/card/header/input/muted/accent) and `--color-control` (text-field
+  edge, `border-control`) against background/card/header/input, in dark and
+  light (WCAG 2.2 SC 1.4.11 / 2.4.11). Outside the coverage scope; extend it
+  for further token pairs.
 - `frontend/src/lib/alertUtils.test.ts` — example-based tests for every
   exported function (formatting/escaping helpers, matching/state functions),
   including the byte-mirrored Resolved-filter corpus from

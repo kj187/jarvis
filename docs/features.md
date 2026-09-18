@@ -530,3 +530,11 @@ Switch between dark and light mode at any time; the preference is persisted in `
 The theme toggle is located in the top-right corner of the header. Clicking the icon switches the entire UI between dark and light mode instantly — no page reload required.
 
 The selected theme is saved in `localStorage` and restored on every subsequent visit. Dark mode is the default when no preference has been saved.
+
+---
+
+### Keyboard and Accessibility
+
+The header's popovers — cluster status, refresh hint, About and the user menu — open on hover and are equally operable from the keyboard: focus the button and press **Enter** or **Space** to open or close it, **Escape** closes it and returns focus to the button, and moving focus elsewhere closes it. The refresh hint appears when the button receives focus. In the cluster popover, tabbing to a cluster name reveals its `=` / `!=` filter choices.
+
+Keyboard focus is shown with a 2 px blue ring that keeps at least 3:1 contrast against every surface in both themes, and text fields and selects have an edge that meets the same ratio. With the operating system's **reduce motion** setting on, transitions and decorative animations (pulsing indicators, the claim spinner) are switched off; loading spinners keep turning because they are the only progress signal.
