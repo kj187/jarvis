@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"sort"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -26,7 +28,50 @@ const (
 	// snapshotStaleFactor: a consumed snapshot older than this many poll
 	// intervals is considered stale (Binding Constant: 3 × JARVIS_POLL_INTERVAL).
 	snapshotStaleFactor = 3
+
+	// followerBurstWindow (P5, tmp/memory.md §8.3): after a follower's first
+	// jarvis_snapshot notification in an otherwise-idle stretch, wait this long
+	// before rebuilding — coalescing several clusters' notifications that
+	// arrive within milliseconds of each other (they persist their poll
+	// snapshots in the same leader poll cycle) into a single rebuild instead
+	// of one per notification. Fixed at the first signal of a burst: later
+	// signals never push the deadline back, so a continuous notification
+	// stream still rebuilds at least once per window instead of starving it.
+	followerBurstWindow = 200 * time.Millisecond
 )
+
+// followerDirtySet collects cluster names touched by jarvis_snapshot
+// notifications between batch-worker rebuilds. mark is called directly from
+// the LISTEN goroutine and must stay cheap and non-blocking — all decoding
+// and rebuilding happens later, on the batch worker's own goroutine.
+type followerDirtySet struct {
+	mu    sync.Mutex
+	names map[string]struct{}
+}
+
+func newFollowerDirtySet() *followerDirtySet {
+	return &followerDirtySet{names: make(map[string]struct{})}
+}
+
+func (d *followerDirtySet) mark(name string) {
+	d.mu.Lock()
+	d.names[name] = struct{}{}
+	d.mu.Unlock()
+}
+
+// drain atomically empties the set and returns its names, sorted so a batch
+// always processes clusters in a deterministic order.
+func (d *followerDirtySet) drain() []string {
+	d.mu.Lock()
+	names := make([]string, 0, len(d.names))
+	for name := range d.names {
+		names = append(names, name)
+	}
+	d.names = make(map[string]struct{})
+	d.mu.Unlock()
+	sort.Strings(names)
+	return names
+}
 
 // persistSnapshots writes and NOTIFYs this poll's per-cluster snapshot for
 // every cluster (D3): a follower reconstructs its stores from these rows
@@ -62,18 +107,111 @@ func (r *Recorder) persistSnapshots(ctx context.Context, clusters []*cluster.Clu
 }
 
 // runFollowerLoop consumes leader-persisted snapshots instead of polling
-// Alertmanager directly (D3) — this pod is currently a follower. Runs until
-// ctx is cancelled (promotion or shutdown).
+// Alertmanager directly (D3) — this pod is currently a follower. It runs an
+// independent LISTEN loop, batch worker, and full-resync ticker (P5, tmp/
+// memory.md §8.3) and only returns once ctx is cancelled *and* all three have
+// actually stopped — so Start's mode supervisor never begins the next mode
+// while any of this loop's goroutines might still be reading/writing.
 func (r *Recorder) runFollowerLoop(ctx context.Context) {
 	r.resyncAllSnapshots(ctx)
-	r.listenLoop(ctx, notifyChannelSnapshot, r.interval,
-		func(clusterName string) { r.resyncSnapshot(ctx, clusterName) },
-		func() { r.resyncAllSnapshots(ctx) },
-	)
+
+	dirty := newFollowerDirtySet()
+	signal := make(chan struct{}, 1)
+
+	var wg sync.WaitGroup
+	wg.Add(3)
+	go func() {
+		defer wg.Done()
+		// No onIdle fallback here: a continuous stream of notifications for
+		// other clusters must never mask one cluster's own notification
+		// being lost — runFollowerResyncTicker below covers that
+		// independently of how much notification traffic there is.
+		r.listenLoop(ctx, notifyChannelSnapshot, r.interval,
+			func(clusterName string) {
+				dirty.mark(clusterName)
+				select {
+				case signal <- struct{}{}:
+				default:
+				}
+			},
+			nil,
+		)
+	}()
+	go func() {
+		defer wg.Done()
+		r.runFollowerBatchWorker(ctx, dirty, signal)
+	}()
+	go func() {
+		defer wg.Done()
+		r.runFollowerResyncTicker(ctx)
+	}()
+	wg.Wait()
+}
+
+// runFollowerBatchWorker coalesces jarvis_snapshot notifications into at
+// most one rebuild per burst: the first signal after being idle starts a
+// fixed followerBurstWindow timer; every cluster marked dirty by the time it
+// fires is resynced once (resyncSnapshotEntry, cache-only), then the whole
+// AlertStore is rebuilt exactly once — never once per cluster or once per
+// notification.
+func (r *Recorder) runFollowerBatchWorker(ctx context.Context, dirty *followerDirtySet, signal <-chan struct{}) {
+	var timer *time.Timer
+	var timerC <-chan time.Time
+	stop := func() {
+		if timer != nil {
+			timer.Stop()
+			timer = nil
+			timerC = nil
+		}
+	}
+	defer stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-signal:
+			if timer == nil {
+				timer = time.NewTimer(followerBurstWindow)
+				timerC = timer.C
+			}
+		case <-timerC:
+			timer = nil
+			timerC = nil
+			names := dirty.drain()
+			if len(names) == 0 {
+				continue
+			}
+			for _, name := range names {
+				if ctx.Err() != nil {
+					return
+				}
+				r.resyncSnapshotEntry(ctx, name)
+			}
+			r.rebuildFollowerAlertStore()
+		}
+	}
+}
+
+// runFollowerResyncTicker performs a full resync every r.interval,
+// independent of notification traffic — a genuine fallback for a missed
+// jarvis_snapshot notification even while other clusters keep notifying
+// continuously (the old onIdle-based fallback could be starved by exactly
+// that).
+func (r *Recorder) runFollowerResyncTicker(ctx context.Context) {
+	ticker := time.NewTicker(r.interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			r.resyncAllSnapshots(ctx)
+		}
+	}
 }
 
 // resyncAllSnapshots reloads every cluster's snapshot from PostgreSQL — used
-// on follower startup/reconnect and as the periodic NOTIFY-miss fallback.
+// on follower startup/reconnect and by the periodic full-resync ticker.
 func (r *Recorder) resyncAllSnapshots(ctx context.Context) {
 	all, err := r.store.GetAllSnapshots(ctx)
 	if err != nil {
@@ -86,9 +224,10 @@ func (r *Recorder) resyncAllSnapshots(ctx context.Context) {
 	r.rebuildFollowerAlertStore()
 }
 
-// resyncSnapshot reloads one cluster's snapshot — triggered by a
-// jarvis_snapshot notification carrying that cluster's name as payload.
-func (r *Recorder) resyncSnapshot(ctx context.Context, clusterName string) {
+// resyncSnapshotEntry reloads one cluster's snapshot into followerSnapshots
+// only — the caller is responsible for calling rebuildFollowerAlertStore
+// once after processing a whole batch of clusters, never after each one.
+func (r *Recorder) resyncSnapshotEntry(ctx context.Context, clusterName string) {
 	row, found, err := r.store.GetSnapshot(ctx, clusterName)
 	if err != nil {
 		r.logger.Error("resync snapshot", "cluster", clusterName, "err", err)
@@ -98,7 +237,6 @@ func (r *Recorder) resyncSnapshot(ctx context.Context, clusterName string) {
 		return
 	}
 	r.applySnapshotRow(clusterName, row)
-	r.rebuildFollowerAlertStore()
 }
 
 // applySnapshotRow decodes one cluster's snapshot row and updates this pod's
@@ -114,13 +252,45 @@ func (r *Recorder) applySnapshotRow(clusterName string, row snapshotRow) {
 	if r.silenceStore != nil {
 		r.silenceStore.Set(clusterName, snap.Silences)
 	}
+	snap.Alerts, _ = filterFollowerAlerts(snap.Alerts, row.TakenAt, r.currentTime())
 	r.followerMu.Lock()
+	if r.followerSnapshots == nil {
+		r.followerSnapshots = make(map[string]followerSnapshotEntry)
+	}
 	r.followerSnapshots[clusterName] = followerSnapshotEntry{
 		alerts:   snap.Alerts,
 		memberUp: snap.MemberUp,
 		takenAt:  row.TakenAt,
 	}
 	r.followerMu.Unlock()
+}
+
+func filterFollowerAlerts(alerts []models.EnrichedAlert, takenAt, now time.Time) ([]models.EnrichedAlert, bool) {
+	kept := alerts[:0]
+	removed := false
+	for _, alert := range alerts {
+		if alert.Status.State != "resolved" {
+			kept = append(kept, alert)
+			continue
+		}
+		if alert.EndsAt.IsZero() {
+			removed = true
+			continue
+		}
+		resolvedAt := alert.EndsAt.UTC()
+		if !takenAt.IsZero() && takenAt.UTC().Before(resolvedAt) {
+			resolvedAt = takenAt.UTC()
+		}
+		if !resolvedAt.Add(ResolvedBufferTTL).After(now) {
+			removed = true
+			continue
+		}
+		alert.EndsAt = resolvedAt
+		alert.UpdatedAt = resolvedAt
+		kept = append(kept, alert)
+	}
+	clear(alerts[len(kept):])
+	return kept, removed
 }
 
 // rebuildFollowerAlertStore merges every cached cluster's alerts into this
@@ -132,8 +302,13 @@ func (r *Recorder) rebuildFollowerAlertStore() {
 	merged := make([]models.EnrichedAlert, 0)
 	stale := false
 	threshold := snapshotStaleFactor * r.interval
-	now := time.Now()
-	for _, entry := range r.followerSnapshots {
+	now := r.currentTime()
+	for clusterName, entry := range r.followerSnapshots {
+		var removed bool
+		entry.alerts, removed = filterFollowerAlerts(entry.alerts, entry.takenAt, now)
+		if removed {
+			r.followerSnapshots[clusterName] = entry
+		}
 		merged = append(merged, entry.alerts...)
 		if now.Sub(entry.takenAt) > threshold {
 			stale = true

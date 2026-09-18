@@ -75,9 +75,14 @@ adapters and their rules live in `docs/ai-agents.md`.
    silences (`status.silencedBy` can hold several) expire within ≤15 min →
    returns `active`; a single longer-running silence keeps it suppressed. This
    logic **only** in `lib/alertUtils.ts` — never duplicate.
-4. **Filter functions exclusively in `lib/alertUtils.ts`**:
-   `getFilterableLabels`, `matchesLabelMatchers`, `safeRegex` — no copy-paste
-   into components.
+4. **Filter functions stay centralized, never in components**: live-browser
+   filtering remains exclusively in `lib/alertUtils.ts`
+   (`getFilterableLabels`, `matchesLabelMatchers`, `matchesAlertSearch`,
+   `safeRegex`). The only separate implementation is the persistent Resolved
+   page's server-side `internal/alertfilter` package: it deliberately uses Go
+   RE2 and per-label search, and shares the committed cross-language
+   conformance fixture checked by `scripts/check-agent-context.sh` — never
+   copy either implementation into handlers or components.
 5. **Route order in Echo router**: `/api/v1/alerts/groups` must be registered
    **before** `/api/v1/alerts/:fingerprint/*`, otherwise `groups` is
    interpreted as a fingerprint. General rule: static segments before
@@ -183,6 +188,15 @@ adapters and their rules live in `docs/ai-agents.md`.
     `config.order.indexOf(...)` on a `labelDisplay` without `order`,
     `.agents/lessons.md`). Server rows are never rewritten, so a legacy-key
     migration stays while rows from older releases may exist.
+21. **Globally mounted browser hooks never load unbounded database history
+    merely to compute a count.** When needed, history counts are SQL
+    aggregates; history lists are paginated or streamed, and request
+    cancellation propagates to the database.
+22. **Every live resolved-buffer entry expires with its own episode after 20
+    minutes on leaders and followers.** Re-ingesting the same episode never
+    extends its deadline; a genuine re-fire/new resolve gets a new deadline.
+    The central sweep removes follower-cache references too, but never active
+    last-good alerts or persistent database history.
 
 ## Workflow Rules — always follow
 

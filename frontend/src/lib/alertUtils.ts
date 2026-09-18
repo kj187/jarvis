@@ -110,6 +110,14 @@ export function getFilterableLabels(alert: EnrichedAlert): Record<string, string
   return labels
 }
 
+/** Existing live-view search semantics: substring over alertname plus serialized labels. */
+export function matchesAlertSearch(alert: EnrichedAlert, search: string): boolean {
+  if (!search) return true
+  const needle = search.toLowerCase()
+  const haystack = (alert.labels['alertname'] ?? '') + JSON.stringify(alert.labels)
+  return haystack.toLowerCase().includes(needle)
+}
+
 /**
  * Parses a single-unit duration string (`30s`, `15m`, `2h`, `1d`) into
  * milliseconds. Returns null for anything else — no combined units, no

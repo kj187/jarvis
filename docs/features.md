@@ -24,7 +24,7 @@ The card view is the default landing page and the primary interface for active a
 
 Sections are grouped by a label you choose from the **Grouped** control in the toolbar (default: `severity`) — see [Grouping](#grouping) below. You can collapse/expand each section and reorder sections via drag-and-drop (drag handle on the right). The section order and collapsed state are persisted in localStorage per grouping label.
 
-Within each section, groups are sorted by recency — the group with the most recently fired alert first, not alphabetically by name — so the freshest problems surface at the top of every section instead of being scattered wherever their alert name happens to sort. The view updates in real time via WebSocket: new alerts appear, resolved alerts disappear, and claim/silence state refreshes without any page reload.
+Within each section, groups are sorted by recency — the group with the most recently fired alert first, not alphabetically by name — so the freshest problems surface at the top of every section instead of being scattered wherever their alert name happens to sort. The view updates in real time via WebSocket: new alerts appear, resolved alerts disappear, and claim/silence state refreshes without any page reload. If a browser tab falls behind (a slow network, a backgrounded tab) the server closes that stale connection rather than queuing updates indefinitely; the browser automatically reconnects and refetches the current state, so a dropped connection self-heals without user action.
 
 **Columns:** the grid lays out 1–4 columns depending on window width by default. Pin it to a fixed count (1–6) via **Card columns** in Settings if you'd rather it not reflow as you resize.
 
@@ -155,7 +155,7 @@ A Karma-style breakdown of the current alert list by label value — the fastest
 
 ![Alerts Overview](assets/feature-alerts-overview.png)
 
-Click the **pie-chart icon** next to the card/list view toggle to open the overview. It aggregates all alerts in the current state tab (Active / Suppressed / Resolved) by label, independent of any label filters already applied — the point is discovering what to filter *by*, not summarizing what's already filtered down.
+Click the **pie-chart icon** next to the card/list view toggle to open the overview. For Active and Suppressed it aggregates the current state tab independent of any label filters already applied — the point is discovering what to filter *by*, not summarizing what's already filtered down. In the Resolved tab it deliberately summarizes only the currently loaded bounded page and labels that scope in the dialog.
 
 Labels are ordered by usefulness: `alertname` and `severity` are always pinned to the top, followed by the remaining labels sorted by how many alerts carry them. Each label shows its top 8 values by count, with a "+N more" hint if there are more.
 
@@ -171,7 +171,17 @@ Full alert history persisted in the database (SQLite or PostgreSQL — see [docs
 
 The resolved view is Jarvis's history log. Every alert that has ever fired is recorded in the database with its complete lifecycle, and the resolved view shows all alerts that have reached a `resolved` state. This is the core capability that separates Jarvis from in-memory-only UIs.
 
-Alerts are displayed as a flat list sorted by resolution time (newest first). A **page browser** at the top and bottom allows navigation through large result sets. The **per-page selector** (10 / 25 / 50 / 100) is persisted in localStorage so your preference is remembered across sessions.
+Jarvis loads this database-backed history only when you open the **Resolved** tab. Active and Suppressed views do not refresh the resolved list in the background. Search waits briefly while you type, then search, label matchers and the per-page choice are sent to the server; changing any of them returns to page 1. During ordinary page navigation the previous page remains dimmed until its replacement arrives, and the controls are temporarily disabled. The first load shows a progress indicator; if it fails, **Retry** repeats the request once requested, while a failed refresh keeps the last successful result visible.
+
+For clients that need bounded history reads, Jarvis also exposes
+`GET /api/v1/alerts/resolved`. It returns a stable event-ID-ordered page plus
+the matching total, accepts page sizes 10/25/50/100, and can filter by cluster,
+severity, search text, or label matchers. Resolved regex matchers use Go's RE2
+syntax; invalid regex indices are reported in the response rather than failing
+the whole request. Search is case-insensitive within each real label name or
+value and does not search JSON punctuation or synthesized labels.
+
+Alerts are displayed as a flat list in stable newest-event-first order. A right-aligned, grouped **page browser** at the top and bottom allows navigation through large result sets without crowding the alert list; on narrow screens its controls wrap into stacked rows. The **per-page selector** (10 / 25 / 50 / 100) sits to the left of the page browser and is persisted in localStorage so your preference is remembered across sessions. Opening a resolved alert that is not on the current page performs one small fingerprint lookup instead of loading the full history.
 
 **What is stored per alert:**
 - First seen timestamp (when it first fired, ever)

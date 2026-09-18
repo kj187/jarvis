@@ -23,6 +23,8 @@ go tool cover -html=coverage.out   # Open coverage in browser
 go test ./internal/history/...     # Single package
 go test ./internal/api/...
 go test -run TestGracePeriod ./internal/history/...  # Single test
+go test ./internal/history/... ./internal/api/... ./internal/ws/... -run '^$' \
+  -bench '^BenchmarkMemory' -benchmem -count=10  # Memory-allocation baselines
 
 # Fuzzing (Go native — fuzz funcs live in *_fuzz_test.go; seed corpus +
 # saved crash inputs under internal/<pkg>/testdata/fuzz/ run in normal go test)
@@ -76,6 +78,11 @@ make down-alertmanager
 make up-postgres                   # test PostgreSQL on 5432 (jarvis/jarvis/jarvis) — for JARVIS_DB_DSN=postgres://…
 make down-postgres
 
+# ── Memory load harness (loopback targets only; output is gitignored) ──
+node scripts/memory-load.mjs --base-url http://127.0.0.1:8080 \
+  --route '/api/v1/alerts?state=resolved' --concurrency 4 \
+  --duration-seconds 600 --output tmp/memory-results/legacy-30k-c4.json
+
 # ── PostgreSQL-backed backend tests (env-gated) ──────────────
 make up-postgres
 JARVIS_TEST_POSTGRES_DSN='postgres://jarvis:jarvis@localhost:5432/jarvis?sslmode=disable' \
@@ -105,30 +112,83 @@ make demo-reset                    # down -v + up: empty Jarvis, repeatable demo
 make demo-down                     # down -v: containers and the volume both gone
 ```
 
+## Memory performance baselines
+
+The opt-in memory benchmarks are the reusable starting point for investigations
+into allocation volume, retained alert snapshots, resolved-history reads, and
+WebSocket fanout. They live in `internal/history/memory_bench_test.go`,
+`internal/api/memory_bench_test.go`, and `internal/ws/memory_bench_test.go`.
+Normal `go test`, pre-commit, and CI runs compile but do not execute benchmarks;
+`-bench '^BenchmarkMemory'` is required to run them.
+
+The fixtures use the fixed UTC instant `2026-09-17T06:00:00Z`, deterministic
+fingerprints and label values, four clusters, and fixed annotation sizes. Keep
+setup outside the timed region and always use `b.ReportAllocs()`. Do not replace
+the discarding API writer with `httptest.ResponseRecorder`: a recorder retains
+the complete response and makes the test harness itself look like application
+memory. Do not compare benchmark results produced with `-race`.
+
+Resolved-history UI coverage lives in the no-auth E2E suite:
+`resolved-fetch.spec.ts` verifies on-demand loading, cancellation and the
+one-retry policy; `resolved-pagination.spec.ts` seeds more than two pages and
+verifies bounded limit/offset requests, the dimmed page-transition state and
+that the legacy full-history endpoint is never used.
+
+For a before/after comparison:
+
+1. Use the same commit toolchain, architecture, database, fixture size,
+   concurrency, `GOGC`, and `GOMEMLIMIT`.
+2. Run ten repetitions with `-benchmem -count=10`; keep `ns/op`, `B/op`, and
+   `allocs/op` as separate measurements. A Go benchmark reports mean time per
+   operation, not request p95.
+3. Use `scripts/memory-load.mjs` for request latency distributions and concurrent
+   load. It accepts loopback hosts only, consumes response bodies without retaining
+   them, and stores bounded one-second summaries rather than response payloads.
+4. Capture process/container memory independently at one-second resolution. The
+   load generator cannot establish the server's RSS or peak memory.
+5. Write raw results below gitignored `tmp/memory-results/` and record commit,
+   Go version, OS/CPU, database/version, fixture size, concurrency, `GOGC`, and
+   `GOMEMLIMIT` beside each run. Raw measurement output is not committed by
+   default; benchmark code and changes to this procedure are.
+
+The benchmark names are intentionally stable: `BenchmarkMemoryResolvedLegacy`,
+`BenchmarkMemoryResolvedCount`, `BenchmarkMemoryResolvedPage`,
+`BenchmarkMemoryResolvedPageFiltered`,
+`BenchmarkMemorySnapshotCodec`, `BenchmarkMemoryLiveGET`, and
+`BenchmarkMemoryBroadcast`. Count/page exercise the production store queries;
+there is no measurement-only HTTP endpoint. The loopback load harness never seeds or deletes data: prepare a
+disposable local/E2E database separately, and never point a destructive fixture
+at a production DSN.
+
 ---
 
 ## Backend Test Matrix
 
 | Package | Test file | What is tested |
 |---|---|---|
-| `internal/config` | `config_test.go` | Config parsing, cluster-N iteration, HOST_ALIAS logic |
+| `internal/config` | `config_test.go` | Config parsing, cluster-N iteration, HOST_ALIAS logic, `JARVIS_PPROF_ADDR` passthrough (defaults empty, custom value round-trips — address format itself is validated by `internal/debugserver`, not here) |
 | `internal/config` | `config_retention_test.go` | Retention env vars: defaults (all disabled), global→domain inheritance, per-domain override even when global is 0, comments never inherit the global, sweep-interval parsing, negative/non-integer values → startup error |
+| `internal/debugserver` | `server_test.go` | P0b opt-in pprof server: empty addr disables (`New` returns `nil, nil`); rejects hostname/wildcard/non-loopback IP/zone ID/port 0/out-of-range/missing port; `Start` bind failure returned synchronously; heap/allocs/goroutine reachable, index/cmdline/profile/trace/unknown paths 404, non-GET 405; `seconds` (1..60)/`debug` (0/1/2)/`gc` (heap-only, 0/1) query validation rejects out-of-bounds values with 400 before touching the underlying `pprof.Handler`; a concurrent second profile request gets 429 (semaphore, not a queue); `Shutdown` (via ctx cancellation) stops accepting connections |
 | `internal/config` | `config_fuzz_test.go` | Fuzz: `parseSecretKey` never panics/errors, hex round-trip |
 | `internal/db` | `db_test.go` | `Migrate` idempotent, PRAGMA settings; `poll_snapshots` table exists after `Migrate` on PostgreSQL (`JARVIS_TEST_POSTGRES_DSN`-gated, uses `openPostgres` directly rather than dialect-dispatching `Open` — avoids a gosec G703 false-positive-in-spirit from `Open`'s SQLite branch reaching `os.MkdirAll`); the four retention-sweep indices (`idx_alert_comments_created_at`, `idx_alert_claims_released_at`, `idx_silence_events_recorded_at`, `idx_alert_fingerprints_last_seen_at`) exist on SQLite and PostgreSQL after `Migrate` — verified with `EXPLAIN (ANALYZE, BUFFERS)` against a seeded local PostgreSQL instance to confirm the planner actually picks them (`.agents/architecture.md` schema section) |
 | `internal/db` | `db_fuzz_test.go` | Fuzz: `RedactDSN` never panics, password never leaks |
 | `internal/cluster` | `registry_test.go` | `NewRegistry`, `Get`, `All` — single/multi-cluster |
+| `internal/cluster` | `enrich_test.go` | `enrichMerged`: `@receiver` label/`Receivers` from single/multiple receivers, no source mutation, status/time fields preserved; nil `Status.SilencedBy`/`InhibitedBy` become non-nil empty slices (marshal to JSON `[]`, never `null` — `.agents/lessons.md`) |
 | `internal/history` | `store_test.go` | `UpsertFingerprint`, `GetOrCreateActiveEvent`, grace period (60s), `occurrence_count` logic |
-| `internal/history` | `store_postgres_test.go` | `postgresTestDSN` (skip gate), `newTestPostgresStores(t, n)` — n independent `*sql.DB` connections against one truncated PostgreSQL test database, the multi-replica situation in miniature (reused by later multi-replica-plan slices' elector/recorder/fanout tests) |
+| `internal/history` | `store_postgres_test.go` | `postgresTestDSN` (skip gate), `newTestPostgresStores(t, n)` — n independent `*sql.DB` connections against one truncated PostgreSQL test database, the multi-replica situation in miniature (reused by later multi-replica-plan slices' elector/recorder/fanout tests); cancelled `VisitResolved` iteration releases a pool capped to one connection for immediate reuse |
 | `internal/history` | `store_concurrency_test.go` | D5 (`AGENTS.md`-pending invariant): `RecordStatusChange` raced concurrently — one Store (SQLite) and 10 Stores on one PostgreSQL database (`JARVIS_TEST_POSTGRES_DSN`-gated) — exactly one resulting event row, no duplicate from a non-atomic idempotency-check-then-insert; 2 racing Postgres connections proved too narrow a window to reproduce the bug reliably (20/20 false-negative runs in development), hence 10 |
-| `internal/history` | `store_extra_test.go` | `GetClaimHistory`, `RecordSilenceEvent`, `GetSilenceEvents`, `GetRecentResolved`, `SeedResolved`, silence templates |
+| `internal/history` | `store_extra_test.go`, `store_resolved_test.go` | `GetClaimHistory`, silence history, streaming latest-resolved selection (refire exclusion, cluster isolation, exact TTL boundaries, context/callback cancellation, JSON fallback compatibility, event-ID tie-break), `SeedResolved`, silence templates |
+| `internal/history` | `store_resolved_page_test.go` | bounded Resolved pages: stable event-ID ties across pages, total, single-pass filters, invalid regex indices, past-end offsets, fingerprint detail, refire exclusion; PostgreSQL coverage is env-gated |
 | `internal/history` | `store_retention_test.go` | Retention delete/detach methods (`store_retention.go`): `sweepableEventsCondition` — open firing/suppressed episode head survives any age, a superseded or resolved/expired row past cutoff is deleted; batching (1200 rows/batch 500); context-cancel stops the loop; detach nulls `event_id` only on rows referencing a soon-to-be-deleted event; released-claim/comment/silence-event cutoffs (active claims always survive); orphan fingerprint sweep (survives with any remaining event/claim/comment, deletes only true orphans past `last_seen_at` cutoff); re-fire after a full event sweep does not inflate `occurrence_count` |
-| `internal/history` | `alert_store_test.go` | `Set`/`Get`/`MarkResolved`/`RemoveByFingerprint` (thread safety via goroutines); `Get` deterministic total order — startsAt desc, fingerprint asc, clusterName asc — stable across repeated calls despite resolved-buffer map iteration (invariant #17) |
+| `internal/history` | `alert_store_test.go` | `Set`/`Get`/`MarkResolved`/`ExpireResolved` (thread safety via goroutines); episode timestamps and exact TTL boundary; seed remaining TTL; refire/resolve deadline replacement; active-wins and duplicate-does-not-extend rules; reset clears expiry metadata; `Get` deterministic total order (invariant #17) |
+| `internal/history` | `alert_store_cache_test.go` | P4 versioned JSON cache: `EncodedSnapshot()` matches `Get()`'s content/order and reuses its cached backing array until a mutation bumps the version; every mutator that finds nothing to change (`SetActiveClaim`/`ClearActiveClaim`/`RemoveResolvedForCluster`/`RemoveByFingerprint`/`ExpireResolved` no-ops) never bumps it; `Set`/`SetActiveClaim` clone their input (Labels/Annotations/Receivers/Status slices/Claim incl. its pointer fields) so a caller mutating its own copy afterward can't affect the store; `Set` preserves non-nil-empty `Status.SilencedBy`/`InhibitedBy`/`Receivers` through its clone step instead of collapsing them back to nil (`.agents/lessons.md`); concurrent Set/SetActiveClaim/ClearActiveClaim/Get/EncodedSnapshot under `-race` |
 | `internal/history` | `silence_store_test.go` | `SilenceStore`: Set/Get copy semantics, Upsert, MarkExpired, Reset, concurrent access |
 | `internal/history` | `lifecycle_test.go` | Integration: FiringToResolved, SuppressedExpired, GracePeriod, ReoccurrenceAfterResolution, FullCycle |
-| `internal/history` | `recorder_test.go` | Diff logic: firing/resolved/suppressed/expired transitions; poll fills `SilenceStore` per cluster, failed silence fetch keeps previous snapshot; `silences_update` broadcast only when the silence snapshot changed |
+| `internal/history` | `recorder_test.go`, `recorder_snapshot_test.go` | Diff logic and failed-fetch last-good behavior; the single resolved sweeper runs without polls and stops on cancellation; follower expiry removes store+cache entries, rejects old snapshots, and preserves episode deadlines across rebuild/promotion |
 | `internal/history` | `recorder_leader_test.go` | D3-step-4 leader gating via a `fakeElector`: a follower skips `RecordStatusChange`/`RecordResolvedForCluster` (in-memory `AlertStore` still updates); the nil-elector default and an explicit leader=true elector both still write history; `reconcileStartupResolves` only runs once promoted (`reconciledClusters` guard); the delayed claim-release goroutine re-checks leadership at fire time and skips if demoted mid-delay |
-| `internal/history` | `snapshot.go` / `snapshot_test.go` | `encodeSnapshot`/`decodeSnapshot` gzip'd-JSON round-trip; `Store.PersistSnapshot`/`GetSnapshot`/`GetAllSnapshots`/`NotifySnapshotChanged`/`NotifyTrigger` — no-op on SQLite, persist/upsert/read-back and real `pg_notify` delivery on PostgreSQL (`JARVIS_TEST_POSTGRES_DSN`-gated, via a raw `pgx.Conn` LISTEN client independent of Recorder's own listener) |
+| `internal/history` | `snapshot.go` / `snapshot_test.go` | `encodeSnapshot`/`decodeSnapshot` gzip'd-JSON round-trip; `decodeSnapshot` streams via `json.Decoder` directly over the `gzip.Reader` (no `io.ReadAll`) and forces a second `Decode` call so a truncated payload, a corrupted gzip trailer (CRC32/ISIZE), a trailing second JSON document, or trailing garbage are all rejected instead of silently accepted; `Store.PersistSnapshot`/`GetSnapshot`/`GetAllSnapshots`/`NotifySnapshotChanged`/`NotifyTrigger` — no-op on SQLite, persist/upsert/read-back and real `pg_notify` delivery on PostgreSQL (`JARVIS_TEST_POSTGRES_DSN`-gated, via a raw `pgx.Conn` LISTEN client independent of Recorder's own listener) |
 | `internal/history` | `recorder_multireplica_test.go` | Slice-2 integration: two full `Recorder`s, each with a real `leader.PGElector`, sharing one PostgreSQL database and one fake Alertmanager (`JARVIS_TEST_POSTGRES_DSN`-gated) — exactly one polls, the follower converges via snapshots without ever touching its own `cluster.Cluster` (`MemberUpStates()` stays empty on the follower's own registry while `ClusterUpStates()` is populated from the snapshot); leader kill → follower promotes, polls, and reconciles; a resolve+refire pair straddling the handoff still reopens under the grace period (Critical Invariant #1 across a leadership change); a follower's `Trigger()` reaches the leader well under the poll interval. Each test's electors share a per-test advisory-lock namespace (`testLockID`, mirrors `internal/leader`) so the two PG test binaries don't contend over one lock (`.agents/lessons.md`); `waitFor` ceilings are 20–30s |
+| `internal/history` | `recorder_snapshot_batch_test.go` | P5 follower burst-coalescing, SQLite-only (no PostgreSQL needed — exercises the goroutines directly): `followerDirtySet` dedupes/sorts/clears; four notifications within `followerBurstWindow` produce exactly one `AlertStore` rebuild, observed via its own version counter (P4); a continuous notification stream still rebuilds at least every window instead of being starved (fixed deadline, never pushed back); cancel while a burst is pending returns promptly; the independent full-resync ticker rebuilds on schedule with zero notification traffic; `runModeSupervisorWith` (instrumented fake leader/follower functions, no real elector/PostgreSQL) never starts a new mode before the previous one's slow teardown actually finished |
 | `internal/history` | `claim_cluster_test.go` | Cluster-scoped claim isolation (same fingerprint in multiple clusters) |
 | `internal/history` | `enrich_test.go` | Alert enrichment (active claim attachment) |
 | `internal/history` | `optimization_test.go` | Query/indexing optimizations |
@@ -140,7 +200,8 @@ make demo-down                     # down -v: containers and the volume both gon
 | `internal/history` | `recorder_leader_test.go` | D3-step-4 leader gating via a `fakeElector`: a follower skips `RecordStatusChange`/`RecordResolvedForCluster` (in-memory `AlertStore` still updates); the nil-elector default and an explicit leader=true elector both still write history; `reconcileStartupResolves` only runs once promoted (`reconciledClusters` guard); the delayed claim-release goroutine re-checks leadership at fire time and skips if demoted mid-delay |
 | `internal/alertmanager` | `client_test.go` | HTTP client against `httptest.NewServer` |
 | `internal/alertmanager` | `auth_test.go` `oauth2_test.go` | Per-cluster upstream auth (basic/bearer/OAuth2) |
-| `internal/api` | `alerts_test.go` | Alert list/detail handler |
+| `internal/api` | `alerts_test.go` | Alert list/detail handler; legacy resolved-history JSON streaming, bounded response writes, filters, empty result, and failures before/after response commit |
+| `internal/alertfilter` | `filter_test.go`, `testdata/conformance.json` | Resolved-only RE2 matchers, receiver/pseudo-label semantics, strict `@age`, per-label search, invalid-regex indices, and the shared frontend/backend conformance corpus |
 | `internal/api` | `claims_test.go` | Claim set/release handler |
 | `internal/api` | `comments_test.go` | Comment create/delete handler (author-gated) |
 | `internal/api` | `silences_test.go` | Silence list (snapshot-only, zero AM calls, `?cluster=` filter) + create/delete handler incl. `SilenceStore` write-through + poll trigger + silence templates CRUD + backend validation (empty/invalid matchers, endsAt checks) + AM 4xx passthrough |
@@ -157,7 +218,7 @@ make demo-down                     # down -v: containers and the volume both gon
 | `internal/users` | `store_test.go` | User CRUD, OIDC upsert, bcrypt |
 | `internal/settings` | `store_test.go` | `Get` on unknown user → `("", nil)` not an error; `Put`→`Get` round-trip; `Put` twice → upsert (one row, last write wins); `Delete` (no-op on unknown user); cascade delete when the owning user row is deleted |
 | `internal/api` | `settings_handler_test.go` | `GET /settings` anonymous → `200 {user:null,global:{}}`; `PUT` anonymous → `401`; `PUT`→`GET` round-trip for the same user; `PUT` rejects non-object JSON (`[1,2,3]`, invalid JSON, `42`, `null`, a bare string) and bodies > 16 KiB with `400`; `PUT {}` is accepted (needed for adoption's empty-blob case); `DELETE` → `204`, subsequent `GET` → `user: null`; `TestGetSettings_RealHTTPRoundTrip` drives a real cookie through a real `httptest.Server` + full router (not the `c.Set(auth.ContextKey, ...)` shortcut the other tests use) — this is the one that catches a missing `auth.OptionalAuth` on the `GET` route (see `AGENTS.md` / `.agents/architecture.md` "Authentication & Authorization") |
-| `internal/ws` | `hub_test.go` | Broadcast, client register/unregister, slow client drop, `jarvis_ws_broadcasts_total`, `BuildEventJSON`+`BroadcastRaw` produce the same metric label as `BroadcastJSON` |
+| `internal/ws` | `hub_test.go` | Broadcast, client register/unregister, `jarvis_ws_broadcasts_total`, `BuildEventJSON`+`BroadcastRaw` produce the same metric label as `BroadcastJSON`; P4: a full client queue (`clientBuffer`, now 4) gets that client disconnected (not silently dropped) while a healthy client still receives every broadcast in order; `BroadcastRaw`/`BroadcastTyped` map any event type outside the fixed known set to the `unknown` metric label instead of creating a new one |
 | `internal/fanout` | `postgres_test.go` | `PGFanout` (`JARVIS_TEST_POSTGRES_DSN`-gated): delivers to the other instance only (echo suppression via `origin`), small messages delivered inline, oversized messages (> `maxNotifyPayloadBytes`) fall back to a `Ref` instead |
 | `internal/fanout` | `noop_test.go` | `NoopFanout`: `Publish` is a no-op, `Run` blocks until `ctx` is cancelled |
 | `internal/metrics` | `collector_test.go` | `storeCollector` scrape-time output (`testutil.CollectAndCompare`), nil `clusterUp`, `jarvis_build_info`, duplicate-registration panic |
@@ -267,6 +328,9 @@ to `src/lib/**` only:
   dependencies, no other directory is in scope.
 - `frontend/src/lib/alertUtils.test.ts` — example-based tests for every
   exported function (formatting/escaping helpers, matching/state functions),
+  including the byte-mirrored Resolved-filter corpus from
+  `src/lib/testdata/resolved-filter-conformance.json` (shared expectations
+  plus explicit JavaScript-RegExp/RE2 and serialized-JSON-search differences),
   plus `fast-check` property tests (e.g. "regex built from
   `escapeRegexValue` matches only the original literal"; "every label
   `computeGroupLabelValues` returns is present on every input alert").
@@ -437,7 +501,7 @@ troubleshooting are documented in **`docs/testing-e2e.md`**.
 | `frontend/**` | `pnpm audit --audit-level=high` + `pnpm lint` (eslint) + `pnpm test:unit:coverage` (Vitest + 100% coverage gate, `lib/alertUtils.ts`) + `pnpm duplication` (jscpd) — executed **inside the running dev container** (`jarvis_frontend_1`); hook fails if the container is not running |
 | `charts/**` | `helm lint` + `helm unittest` |
 | always | `scripts/check-changelogs.sh` — chart changes (outside `tests/`) must update `charts/jarvis/CHANGELOG.md`; every chart-changelog version section starts with a non-empty `### Breaking Changes`; changed `.github/release-notes/*.md` contain a Breaking Changes heading (a no-op when none of those paths are staged) |
-| always | `scripts/check-agent-context.sh` (also `make check-agent-context`) — the AI agent context stays tool-agnostic: every `.agents/skills/*/` passes the Agent Skills reference validator (`skills-ref`, pinned, run via `agentskills` / `uvx` / `pipx`) and `SKILL.md` ≤ 500 lines; tool adapters match the lists in the script (`docs/ai-agents.md`); `AGENTS.md` ≤ 30,000 bytes (the smallest project-instruction limit among the supported tools is 32 KiB, including the user's global file); every doc/script path in `AGENTS.md` exists; no tool names or tool-only syntax in `AGENTS.md` or any `.agents/**/*.md`; every `docs/*.md` file is registered in `website/scripts/pages.mjs` (`.agents/skills/website/SKILL.md`) |
+| always | `scripts/check-agent-context.sh` (also `make check-agent-context`) — the AI agent context stays tool-agnostic: every `.agents/skills/*/` passes the Agent Skills reference validator (`skills-ref`, pinned, run via `agentskills` / `uvx` / `pipx`) and `SKILL.md` ≤ 500 lines; tool adapters match the lists in the script (`docs/ai-agents.md`); `AGENTS.md` ≤ 30,000 bytes (the smallest project-instruction limit among the supported tools is 32 KiB, including the user's global file); every doc/script path in `AGENTS.md` exists; no tool names or tool-only syntax in `AGENTS.md` or any `.agents/**/*.md`; every `docs/*.md` file is registered in `website/scripts/pages.mjs` (`.agents/skills/website/SKILL.md`); backend/frontend resolved-filter conformance fixtures are byte-identical |
 | always | **gitleaks** secret scan of the staged diff (via podman, config `.gitleaks.toml`) |
 
 ```bash

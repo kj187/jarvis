@@ -75,6 +75,14 @@ The number is independent of how many people have Jarvis open. If that is
 still too much, raise the poll interval — the grace period scales with it
 automatically.
 
+A browser tab's WebSocket connection has nothing to do with this either: it
+only carries live updates already produced by that poll, never triggers one
+itself. If it drops, the browser reconnects after a jittered 3–6 second
+delay — jittered so many tabs disconnected by the same event (a rollout, a
+network blip) don't all retry in lockstep — and refetches its current state
+on reconnect, all served from Jarvis's own snapshot, still with zero
+additional upstream load.
+
 ---
 
 ## Do I need PostgreSQL?

@@ -10,7 +10,7 @@ func TestLoad_Defaults(t *testing.T) {
 	// Ensure no JARVIS_ vars are set
 	for _, key := range []string{
 		"JARVIS_PORT", "JARVIS_LOG_LEVEL", "JARVIS_POLL_INTERVAL",
-		"JARVIS_DB_PATH", "JARVIS_ALLOWED_ORIGINS",
+		"JARVIS_DB_PATH", "JARVIS_ALLOWED_ORIGINS", "JARVIS_PPROF_ADDR",
 	} {
 		t.Setenv(key, "")
 	}
@@ -35,6 +35,9 @@ func TestLoad_Defaults(t *testing.T) {
 	if len(cfg.AllowedOrigins) != 0 {
 		t.Errorf("AllowedOrigins = %v, want empty", cfg.AllowedOrigins)
 	}
+	if cfg.PprofAddr != "" {
+		t.Errorf("PprofAddr = %q, want empty (disabled by default)", cfg.PprofAddr)
+	}
 }
 
 func TestLoad_AllowedOrigins(t *testing.T) {
@@ -52,6 +55,19 @@ func TestLoad_AllowedOrigins(t *testing.T) {
 	}
 	if cfg.AllowedOrigins[0] != "http://localhost:5173" {
 		t.Errorf("AllowedOrigins[0] = %q", cfg.AllowedOrigins[0])
+	}
+}
+
+func TestLoad_PprofAddr_Custom(t *testing.T) {
+	t.Setenv("JARVIS_PPROF_ADDR", "127.0.0.1:6060")
+	t.Setenv("JARVIS_CLUSTER_1_NAME", "") // no clusters
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	if cfg.PprofAddr != "127.0.0.1:6060" {
+		t.Errorf("PprofAddr = %q, want 127.0.0.1:6060", cfg.PprofAddr)
 	}
 }
 

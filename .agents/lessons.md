@@ -9,10 +9,56 @@ instead of duplicating.
 
 ---
 
-## `migratePersistedSettings`'s pre-v2 branch diffed raw localStorage data directly — a malformed `labelDisplay` crashed every render
+## Playwright's `page.clock.fastForward()` fired a `setTimeout` before its scheduled deadline when racing a real WebSocket close/reopen
 
-**Symptom**: A `jarvis-user-settings` localStorage blob with a `labelDisplay`
-missing `order` (hand-edited, or written by some other bug) produced a blank
+**Symptom**: An e2e test forced a WebSocket disconnect, then asserted (via
+`page.clock.install()` + a single `fastForward(delay - 1)`) that the app's
+jittered reconnect timer had *not* yet fired. It had — `connectCount` was
+already 2, not 1, even though `delay - 1` ms had supposedly not yet elapsed.
+Instrumenting `window.setTimeout` confirmed the timer itself was scheduled
+correctly for the right delay and fired at exactly the right virtual
+timestamp — but the *first* single large `fastForward` call reached that
+timestamp sooner than a manual sum of several small `fastForward` calls
+covering the identical total did.
+**Cause**: not fully root-caused — likely an interaction between Playwright's
+virtual-time fake timers and the real, asynchronous WebSocket close/open
+event dispatch (a real browser network primitive, not a JS timer) that a
+single big time jump processes differently than several small ones.
+**Rule**: Don't assert millisecond-exact fake-clock boundaries around a real
+WebSocket's real open/close events. Use real wall-clock time with generous
+bounds instead (`page.waitForTimeout` sanity floor below the minimum possible
+delay, `{ timeout }` ceiling comfortably above the maximum) — see
+`e2e/functional/none/ws-reconnect.spec.ts`. `page.clock` is still fine for
+scenarios with no real async I/O in the loop (e.g. `resolved-fetch.spec.ts`'s
+resolved-history fallback timer).
+
+## Alertmanager can return `silencedBy`/`inhibitedBy` as JSON `null` instead of `[]` — Jarvis's own API must not pass that through
+
+**Symptom**: The e2e "none" functional suite failed almost universally
+(anything needing an alert card to render) with a blank page and
+`TypeError: e.status.silencedBy is not iterable` in the browser console —
+unrelated-looking tests (responsive layout, detail panel, comments) all
+failed the same way because they all render at least one alert.
+**Cause**: `models.AlertStatus.SilencedBy`/`InhibitedBy` have no `omitempty`,
+so a nil Go slice marshals to JSON `null`. Alertmanager doesn't always
+populate these with `[]` for an alert matching neither — Go's JSON decoder
+then leaves the field nil. The frontend unconditionally iterates
+`alert.status.silencedBy` in several components (`AlertListView.tsx`,
+`SilenceForm.tsx`, `lib/alertUtils.ts`, …), assuming the backend's contract
+(`string[]`) always holds. Compounding this, `AlertStore`'s P4 clone step
+(`append([]string(nil), s...)`) collapsed an already-non-nil-empty slice back
+to nil on every `Set()` — even a correctly-enriched alert lost its `[]` the
+moment it passed through the store.
+**Rule**: `cluster.enrichMerged` now normalizes both fields via
+`nonNilStrings` so Jarvis's own API always emits `[]`, never `null`,
+regardless of what upstream Alertmanager sends. Separately, any clone helper
+that copies a slice must preserve non-nil-emptiness — use
+`append([]T{}, s...)` (starts from a non-nil empty slice) instead of
+`append([]T(nil), s...)` (`append` with zero elements to add returns its
+first argument unchanged, so a nil destination stays nil). See
+`cloneSlice` in `internal/history/alert_store.go`.
+
+
 page — `partitionLabelsForDisplay` (`lib/alertUtils.ts`) calls
 `config.order.indexOf(...)` unconditionally, so `order: undefined` throws on
 the very first alert card.
@@ -464,27 +510,23 @@ be checked against the same scaling requirement.
 
 ---
 
-## The 20-minute resolved-alert removal timer could delete an alert that had already re-fired
+## Per-alert resolved timers confused episode identity and retained stale startup/follower data
 
-**Symptom**: An alert resolved, then re-fired within the 20-minute
-"greyed-out" visibility window (correctly moved back into `AlertStore`'s
-active list by `Set()`). Up to 20 minutes later it could vanish from
-`GET /api/v1/alerts` for up to one poll interval, with nothing in the logs
-to explain it.
-**Cause**: `Recorder`'s post-resolve goroutine (`recorder.go`) scheduled a
-20-minute timer that called `AlertStore.RemoveByFingerprintForCluster` —
-which deleted the fingerprint from *both* the resolved buffer *and* the
-active list. If the alert had re-fired in the meantime, that delete from
-the active list was wrong: the alert was live again, and the timer had no
-way to know that (it only remembers the fingerprint+cluster it was
-scheduled for, not whether the underlying alert since changed state).
-**Rule**: A cleanup timer scheduled at time T for state observed at T must
-only ever undo *that* state — never blanket-delete by key, since the key
-might refer to something entirely different by the time the timer fires.
-Fixed by splitting the delete surface: `AlertStore.RemoveResolvedForCluster`
-(new) touches only the resolved buffer; `RemoveByFingerprintForCluster` was
-deleted since it had no other caller once the recorder switched to the
-narrower method.
+**Symptom**: Resolved entries loaded at startup could remain for the entire
+process lifetime, followers could retain them in cached snapshot slices, and
+resolve A → re-fire → resolve B let A's timer remove B too early because the
+timer knew only fingerprint+cluster. Large bursts also created one sleeping
+goroutine per resolved alert.
+**Cause**: The display TTL was represented by detached goroutines instead of
+episode data. The seven-day seed scheduled no timers, and follower snapshots
+formed a second owner outside `AlertStore.resolvedBuffer`.
+**Rule**: Store the absolute deadline with the resolved episode. One
+process-context sweeper expires deadlines from both `AlertStore` and follower
+caches; repeated ingestion preserves the original deadline, while a genuine
+refire/new resolve creates a new one. Seed only the still-live 20-minute
+window, and select the latest event before filtering for `resolved`, otherwise
+an older resolve can survive a later firing. TTL cleanup never touches active
+last-good alerts or persistent history.
 
 ---
 

@@ -6,6 +6,7 @@ import (
 	"hash/fnv"
 	"log/slog"
 	"maps"
+	"math"
 	"strings"
 	"sync"
 	"time"
@@ -19,6 +20,11 @@ import (
 // broadcaster is the minimal interface the Recorder needs from the WS hub.
 type broadcaster interface {
 	BroadcastJSON(eventType string, payload interface{})
+	// BroadcastTyped queues an already-encoded WS envelope, recording the
+	// metric under eventType without decoding it — used by
+	// broadcastAlertsIfChanged, which builds the envelope itself from
+	// AlertStore's cached JSON snapshot instead of a typed payload value.
+	BroadcastTyped(eventType string, envelope []byte)
 }
 
 // elector is the minimal leader-election view Recorder needs from
@@ -41,6 +47,7 @@ type Recorder struct {
 	logger       *slog.Logger
 	triggerCh    chan struct{}
 	metrics      *metrics.Metrics
+	now          func() time.Time
 
 	// prevSnapshot holds the alert instance (fingerprint+cluster) from the last poll for diff computation.
 	prevMu            sync.Mutex
@@ -117,6 +124,8 @@ type resolvedAlert struct {
 	clusterName string
 }
 
+const resolvedSweepInterval = time.Second
+
 func recorderAlertKey(fingerprint, clusterName string) string {
 	return fingerprint + "\x1f" + clusterName
 }
@@ -179,11 +188,19 @@ func NewRecorder(
 		elector:            el,
 		dsn:                dsn,
 		followerSnapshots:  make(map[string]followerSnapshotEntry),
+		now:                time.Now,
 	}
 	if el != nil {
 		el.Subscribe(r.onLeadershipChange)
 	}
 	return r
+}
+
+func (r *Recorder) currentTime() time.Time {
+	if r.now != nil {
+		return r.now().UTC()
+	}
+	return time.Now().UTC()
 }
 
 // IsLeader reports whether this pod currently holds Alertmanager-polling /
@@ -250,7 +267,7 @@ func (r *Recorder) ClusterUpStates() map[string]map[string]bool {
 // Trigger signals the recorder to run an immediate poll.
 // Non-blocking: if a trigger is already queued, this is a no-op. A follower
 // cannot poll itself (D3 item 7): it forwards the request to the leader via
-// pg_notify(jarvis_trigger, ''); the leader's own runPollLoop LISTENs on that
+// pg_notify(jarvis_trigger, ”); the leader's own runPollLoop LISTENs on that
 // channel and treats it exactly like a local Trigger() call.
 func (r *Recorder) Trigger() {
 	if !r.IsLeader() {
@@ -280,9 +297,15 @@ func (r *Recorder) triggerLocal() {
 // (follower) on every leadership transition, restarting the active loop each
 // time (D3). The loop(s) stop when ctx is cancelled.
 func (r *Recorder) Start(ctx context.Context) {
-	if resolved, err := r.store.GetRecentResolved(7 * 24 * time.Hour); err == nil {
-		r.logger.Info("seeding resolved alerts from db", "count", len(resolved))
-		r.alertStore.SeedResolved(resolved)
+	go r.runResolvedSweeper(ctx)
+	seeded := 0
+	now := r.currentTime()
+	if err := r.store.VisitRecentResolved(ctx, now, ResolvedBufferTTL, func(alert models.EnrichedAlert) error {
+		r.alertStore.SeedResolved([]models.EnrichedAlert{alert})
+		seeded++
+		return nil
+	}); err == nil {
+		r.logger.Info("seeding resolved alerts from db", "count", seeded)
 	} else {
 		r.logger.Warn("seed resolved alerts from db failed", "err", err)
 	}
@@ -292,26 +315,116 @@ func (r *Recorder) Start(ctx context.Context) {
 		return
 	}
 
-	var (
-		modeMu     sync.Mutex
-		cancelMode context.CancelFunc = func() {}
-	)
-	r.elector.Subscribe(func(isLeader bool) {
-		modeMu.Lock()
-		defer modeMu.Unlock()
-		cancelMode()
-		modeCtx, cancel := context.WithCancel(ctx)
-		cancelMode = cancel
-		if isLeader {
-			go r.runPollLoop(modeCtx)
-		} else {
-			go r.runFollowerLoop(modeCtx)
+	// requests carries at most one pending desired mode: setDesiredMode below
+	// always replaces it in place rather than blocking, so the elector's own
+	// callback (which must never block — see onLeadershipChange) can enqueue
+	// a mode change and return immediately. runModeSupervisor is the only
+	// goroutine that ever cancels a running mode and waits for it to
+	// actually return before starting the next one (P5, tmp/memory.md §8.3):
+	// without that wait, a demoted leader's still-finishing poll could still
+	// be writing while a newly started follower loop rebuilds from the same
+	// data.
+	requests := make(chan bool, 1)
+	setDesiredMode := func(isLeader bool) {
+		for {
+			select {
+			case requests <- isLeader:
+				return
+			default:
+				select {
+				case <-requests:
+				default:
+				}
+			}
 		}
-	})
+	}
+
+	supervisorDone := make(chan struct{})
+	go func() {
+		defer close(supervisorDone)
+		r.runModeSupervisor(ctx, requests)
+	}()
+
+	r.elector.Subscribe(setDesiredMode)
+
 	<-ctx.Done()
-	modeMu.Lock()
-	cancelMode()
-	modeMu.Unlock()
+	<-supervisorDone
+}
+
+// runModeSupervisor sequences leader/follower mode transitions requested via
+// requests: each one cancels the previous mode's context and waits for its
+// goroutine to actually return before starting the next one. This is the
+// only place a mode transition happens — the elector callback (setDesiredMode
+// in Start) only ever replaces the single buffered pending request and never
+// blocks here itself.
+func (r *Recorder) runModeSupervisor(ctx context.Context, requests <-chan bool) {
+	r.runModeSupervisorWith(ctx, requests, r.runPollLoop, r.runFollowerLoop)
+}
+
+// runModeSupervisorWith is runModeSupervisor with the leader/follower mode
+// functions passed in explicitly, so tests can substitute instrumented fakes
+// without needing a real PostgreSQL connection.
+func (r *Recorder) runModeSupervisorWith(ctx context.Context, requests <-chan bool, runLeader, runFollower func(context.Context)) {
+	cancel := func() {}
+	var done chan struct{}
+	stop := func() {
+		cancel()
+		if done != nil {
+			<-done
+			done = nil
+		}
+	}
+	defer stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case isLeader := <-requests:
+			stop()
+			modeCtx, c := context.WithCancel(ctx)
+			cancel = c
+			d := make(chan struct{})
+			done = d
+			go func() {
+				defer close(d)
+				if isLeader {
+					runLeader(modeCtx)
+				} else {
+					runFollower(modeCtx)
+				}
+			}()
+		}
+	}
+}
+
+func (r *Recorder) runResolvedSweeper(ctx context.Context) {
+	ticker := time.NewTicker(resolvedSweepInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if r.sweepResolved(r.currentTime()) {
+				r.broadcastAlertsIfChanged()
+			}
+		}
+	}
+}
+
+func (r *Recorder) sweepResolved(now time.Time) bool {
+	changed := r.alertStore.ExpireResolved(now)
+	r.followerMu.Lock()
+	for clusterName, entry := range r.followerSnapshots {
+		filtered, removed := filterFollowerAlerts(entry.alerts, entry.takenAt, now)
+		if removed {
+			entry.alerts = filtered
+			r.followerSnapshots[clusterName] = entry
+			changed = true
+		}
+	}
+	r.followerMu.Unlock()
+	return changed
 }
 
 // runPollLoop polls immediately and then at the configured interval, exactly
@@ -431,8 +544,10 @@ func (r *Recorder) poll(ctx context.Context) {
 
 	// Persist + notify per-cluster snapshots for followers (D3). Leader-only
 	// (this method only ever runs while leader — see runPollLoop) and
-	// PostgreSQL-only (r.dsn is empty on SQLite).
-	if r.dsn != "" {
+	// PostgreSQL-only (r.dsn is empty on SQLite). Skipped once ctx is
+	// cancelled (mode transition/shutdown) — a stale poll must not persist a
+	// snapshot after this pod may already be a follower consuming its own.
+	if r.dsn != "" && ctx.Err() == nil {
 		r.persistSnapshots(ctx, clusters)
 	}
 }
@@ -463,7 +578,7 @@ func (r *Recorder) reconcileStartupResolves(clusterName string, currentAlerts []
 	for _, a := range currentAlerts {
 		current[a.Fingerprint] = struct{}{}
 	}
-	now := time.Now().UTC()
+	now := r.currentTime()
 	for _, fp := range open {
 		if _, stillActive := current[fp]; stillActive {
 			continue
@@ -576,9 +691,12 @@ func (r *Recorder) applyPollResults(
 	// RecordResolvedForCluster) is leader-only (D3 step 4) — a follower still
 	// computed the diff above for its own in-memory AlertStore, but must not
 	// write history.
-	now := time.Now().UTC()
+	now := r.currentTime()
 	if r.IsLeader() {
 		for i := range allAlerts {
+			if ctx.Err() != nil {
+				return
+			}
 			a := &allAlerts[i]
 			alertKey := recorderAlertKey(a.Fingerprint, a.ClusterName)
 			if err := r.store.UpsertFingerprint(a.Fingerprint, a.Labels["alertname"], a.ClusterName, a.Labels); err != nil {
@@ -613,6 +731,9 @@ func (r *Recorder) applyPollResults(
 		// Resolve missing alerts.
 		if len(resolvedAlerts) > 0 {
 			for _, ra := range resolvedAlerts {
+				if ctx.Err() != nil {
+					return
+				}
 				if err := r.store.RecordResolvedForCluster(ra.fingerprint, ra.clusterName, now); err != nil {
 					r.logger.Error("record resolved", "fp", ra.fingerprint, "cluster", ra.clusterName, "err", err)
 				} else if r.metrics != nil {
@@ -653,14 +774,7 @@ func (r *Recorder) applyPollResults(
 	// write involved (every pod serves reads/WS equally).
 	if len(resolvedAlerts) > 0 {
 		for _, ra := range resolvedAlerts {
-			r.alertStore.MarkResolvedForCluster(ra.fingerprint, ra.clusterName)
-			go func(ra resolvedAlert) {
-				select {
-				case <-ctx.Done():
-				case <-time.After(20 * time.Minute):
-					r.alertStore.RemoveResolvedForCluster(ra.fingerprint, ra.clusterName)
-				}
-			}(ra)
+			r.alertStore.MarkResolvedForClusterAt(ra.fingerprint, ra.clusterName, now)
 		}
 	}
 
@@ -678,6 +792,13 @@ func (r *Recorder) applyPollResults(
 		}
 	}
 
+	// A poll cancelled by a mode transition (demotion/shutdown) must not still
+	// publish this attempt's result after the fact — the next mode (follower
+	// loop, or none on shutdown) must never race this Set/broadcast/persist.
+	if ctx.Err() != nil {
+		return
+	}
+
 	r.alertStore.Set(allAlerts)
 
 	// Broadcast via WebSocket — use Get() to include resolved buffer.
@@ -688,25 +809,59 @@ func (r *Recorder) applyPollResults(
 	}
 }
 
+// alertsUpdatePrefix/Suffix wrap AlertStore.EncodedSnapshot()'s cached alert
+// array JSON into the exact WS envelope shape
+// {"type":"alerts_update","payload":{"alerts":[...]}} via byte concatenation
+// — never a second json.Marshal of the (potentially large) alert array.
+const (
+	alertsUpdatePrefix = `{"type":"` + models.WSTypeAlertsUpdate + `","payload":{"alerts":`
+	alertsUpdateSuffix = `}}`
+)
+
+// envelopeCapacity returns a safe make() capacity for the WS envelope byte
+// slice. arrayLen is never negative or anywhere near math.MaxInt in practice
+// (it's the length of AlertStore's own JSON encoding), but computing a make()
+// size from a summed length still trips static overflow analysis (CodeQL
+// go/allocation-size-overflow) unless the addition is explicitly guarded —
+// so this falls back to the (constant, small) fixed overhead instead of an
+// unchecked sum. append() still grows the slice correctly either way; only
+// the pre-sizing optimization is skipped on the (unreachable) fallback path.
+func envelopeCapacity(arrayLen int) int {
+	overhead := len(alertsUpdatePrefix) + len(alertsUpdateSuffix)
+	if arrayLen < 0 || arrayLen > math.MaxInt-overhead {
+		return overhead
+	}
+	return overhead + arrayLen
+}
+
 // broadcastAlertsIfChanged pushes the current alert snapshot to all WebSocket
-// clients, but skips the push when the snapshot is byte-identical to the one
+// clients, but skips the push when the envelope is byte-identical to the one
 // broadcast on the previous poll. The frontend loads its initial state via REST
 // and relies on WebSocket messages only for *changes*, so suppressing redundant
-// identical broadcasts saves an envelope marshal and a fan-out write to every
-// client on idle polls — with no visible effect. AlertStore.Get() returns a
-// deterministically ordered snapshot, so an unchanged poll hashes identically
-// and is correctly suppressed; the comparison can still only ever yield a
-// false "changed" (never a false "unchanged"), so updates are never missed.
+// identical broadcasts saves a fan-out write to every client on idle polls —
+// with no visible effect. AlertStore.Get() returns a deterministically ordered
+// snapshot, so an unchanged poll hashes identically and is correctly
+// suppressed; the comparison can still only ever yield a false "changed"
+// (never a false "unchanged"), so updates are never missed.
+//
+// The array JSON itself comes from AlertStore.EncodedSnapshot()'s cache,
+// which AlertStore only rebuilds when its own version changed — Set() bumps
+// that version on every poll even for a content-identical snapshot, so this
+// function's own content hash (not the store's version) is what actually
+// decides whether to broadcast.
 func (r *Recorder) broadcastAlertsIfChanged() {
-	payload := map[string]interface{}{"alerts": r.alertStore.Get()}
-	data, err := json.Marshal(payload)
+	arrayJSON, _, err := r.alertStore.EncodedSnapshot()
 	if err != nil {
 		r.logger.Error("marshal alerts payload", "err", err)
 		return
 	}
+	envelope := make([]byte, 0, envelopeCapacity(len(arrayJSON)))
+	envelope = append(envelope, alertsUpdatePrefix...)
+	envelope = append(envelope, arrayJSON...)
+	envelope = append(envelope, alertsUpdateSuffix...)
 
 	h := fnv.New64a()
-	_, _ = h.Write(data)
+	_, _ = h.Write(envelope)
 	sum := h.Sum64()
 
 	r.broadcastMu.Lock()
@@ -718,7 +873,7 @@ func (r *Recorder) broadcastAlertsIfChanged() {
 	if unchanged {
 		return
 	}
-	r.hub.BroadcastJSON(models.WSTypeAlertsUpdate, json.RawMessage(data))
+	r.hub.BroadcastTyped(models.WSTypeAlertsUpdate, envelope)
 }
 
 // fetchCluster fetches and enriches (deduplicated, merged) alerts for a

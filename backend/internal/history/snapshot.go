@@ -53,14 +53,25 @@ func decodeSnapshot(payload []byte) (pollSnapshot, error) {
 		return s, fmt.Errorf("gunzip snapshot: %w", err)
 	}
 	defer func() { _ = gr.Close() }()
-	raw, err := io.ReadAll(gr)
-	if err != nil {
-		return s, fmt.Errorf("read snapshot: %w", err)
+	dec := json.NewDecoder(gr)
+	if err := dec.Decode(&s); err != nil {
+		return pollSnapshot{}, fmt.Errorf("unmarshal snapshot: %w", err)
 	}
-	if err := json.Unmarshal(raw, &s); err != nil {
-		return s, fmt.Errorf("unmarshal snapshot: %w", err)
+	// A second Decode forces the decoder to read past the first JSON value —
+	// which in turn forces gr.Read to reach the gzip trailer (CRC32/ISIZE),
+	// so truncation or a corrupted trailer surfaces here as an error instead
+	// of being silently ignored. A well-formed single-document payload
+	// yields io.EOF; anything else (a second document, or a decode/gzip
+	// error) is rejected.
+	var extra json.RawMessage
+	switch err := dec.Decode(&extra); err {
+	case io.EOF:
+		return s, nil
+	case nil:
+		return pollSnapshot{}, fmt.Errorf("unmarshal snapshot: unexpected trailing data")
+	default:
+		return pollSnapshot{}, fmt.Errorf("unmarshal snapshot: %w", err)
 	}
-	return s, nil
 }
 
 // snapshotRow is one poll_snapshots row, decoded down to payload + freshness.

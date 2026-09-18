@@ -253,7 +253,9 @@ Quick reference: which spec file covers what. Use this to find the right place f
 |---|---|---|
 | `app-shell.spec.ts` | A1–A6 | Nav-tabs, theme toggle, mobile hamburger, WS indicator, manual refresh, cluster status in header |
 | `card-view.spec.ts` | B1 | Card view renders polled alerts (smoke test) |
-| `alerts-views.spec.ts` | B2–B6, B9 | List↔card toggle, severity ordering, card pagination, fullscreen, resolved view |
+| `alerts-views.spec.ts` | B2–B6, B9 | List↔card toggle, severity ordering, card pagination, fullscreen, resolved view including right-aligned top/footer page navigation |
+| `resolved-fetch.spec.ts` | — | Resolved history is fetched only in resolved mode; initial spinner, error/retry and mode-exit cancellation |
+| `resolved-pagination.spec.ts` | — | Bounded server pages, no legacy full-history fetch, visible stale-page transition and off-page navigation inputs |
 | `alerts-views-extended.spec.ts` | B7–B8, B10 | Responsive column binning, empty state, suppressed/silenced view |
 | `filters.spec.ts` | C1, C10, C10b, C11–C13 | Exact matcher + `?filter=` URL (Alertmanager matcher syntax), state restore from URL, legacy `?matchers=` JSON link restored and rewritten to `?filter=` (C10b), `?q=` search, combined search+chips |
 | `filters-extended.spec.ts` | C2–C8 (C9 removed) | `!=`/`=~`/`!~` operators, regex multi-value, label/value suggestions, label chip → filter, AND matchers, draft→promotion, remove-all |
@@ -269,6 +271,7 @@ Quick reference: which spec file covers what. Use this to find the right place f
 | `saved-filters.spec.ts` | K1–K13 | Saved label filters (replaces "Default Filter"): save from current chips, apply replaces matchers but leaves search untouched, "modified" state (base name + unsaved dot on the closed button, "Save changes to …"), rename with live duplicate validation + Enter/Esc, delete needs a second click, default saved filter applied only with no alert-view URL params, default chips are ordinary/removable, migration of a legacy `defaultFilters` blob into a default saved filter named "Default", save-row hint text, "Reset all settings" clears saved filters, unsaved dot for a filter built from scratch, "modified" survives reload + save-as-new via Enter, two-click overwrite without a base |
 | `no-auth-notice.spec.ts` | I1 | NoAuth notice appears and dismiss persists |
 | `websocket.spec.ts` | J1–J4 | Reconnect indicator (force-close via patched WebSocket), `alerts_update` / `claim_set` / `claim_released` / `comment_added` live events |
+| `ws-reconnect.spec.ts` | — | Reconnect jitter (P7): initial connect has no delay; a real disconnect reconnects within the 3-6s jitter window (real wall-clock bounds, not exact-ms fake-clock assertions — those interact unreliably with real WebSocket events); a reconnect triggers exactly one alerts refetch; a stale (superseded) socket's late close event schedules no extra reconnect attempt |
 
 ### Mode: `internal`
 

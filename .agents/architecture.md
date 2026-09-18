@@ -333,7 +333,7 @@ table scan per sweep — confirmed via `EXPLAIN (ANALYZE, BUFFERS)` against a
 seeded local PostgreSQL instance (bitmap/plain index scan afterwards). A
 composite `(fingerprint, cluster_name, id)` index was also evaluated for the
 "latest event per (fingerprint, cluster_name)" CTE in
-`GetAllResolved`/`visitResolved` (`internal/history/store.go`,
+`GetAllResolved`/`VisitResolved` (`internal/history/store.go`,
 `store_resolved.go`) but deliberately **not** added: that CTE aggregates over
 the unfiltered whole `alert_events` table, and PostgreSQL never chose an
 index for it even at 660k rows (a full-table `MAX(id) GROUP BY` has to touch
@@ -393,6 +393,38 @@ GET    /api/v1/alerts                            full_protect?  → []EnrichedAl
 #        ordering (upstream AM response order and resolved-buffer map iteration are
 #        not stable); prevents frontend alert-group flicker. Groups inherit it, then
 #        re-sort the group list itself by severity, then alertname.
+#        resolvedBuffer is map[fingerprint+cluster]resolvedEntry. Each entry expires
+#        exactly 20 minutes after its episode's EndsAt. Recorder owns one 1s sweeper;
+#        active alerts win duplicate keys and repeated snapshot rebuilds do not extend TTL.
+#        AlertStore also holds a version counter (bumped by every mutation that changes
+#        what Get() would return — a no-op mutation, e.g. SetActiveClaim on a missing
+#        alert, never bumps it) and a cached JSON array encoding invalidated by a version
+#        mismatch: EncodedSnapshot() returns that cache (rebuilding at most once per
+#        change), reused for both the unfiltered GET /api/v1/alerts response
+#        (c.JSONBlob, no re-marshal) and the alerts_update WS envelope (byte
+#        concatenation around the cached array, no second json.Marshal of the alert
+#        list). Set/SetActiveClaim clone incoming Labels/Annotations/Receivers/Status
+#        slices/Claim (incl. its pointer fields) so a caller mutating its own copy
+#        afterward can never alias store-internal data — Get()'s returned alerts still
+#        share that data with the store and must be treated read-only by callers.
+#        state=resolved is the legacy persistent-history read: Store.VisitResolved scans
+#        latest resolved episodes row-by-row (recorded_at DESC, id DESC), and the handler
+#        streams one JSON array element at a time through a 32 KiB buffer under a 10s
+#        request/DB timeout. It never materializes the full DB result; cluster is pushed
+#        into SQL, severity is filtered during iteration. A failure after HTTP commit
+#        aborts the connection, so clients never receive a closed, apparently valid
+#        partial array. GetAllResolved remains only as a test/benchmark adapter.
+GET    /api/v1/alerts/resolved                   full_protect?  → { alerts: EnrichedAlert[], total, invalidMatchers: number[] }
+#        Additive bounded-history API: limit=10|25|50|100 (default 25), offset>=0,
+#        optional cluster/severity/search/matchers/fingerprint. Static route is
+#        registered before /alerts/:fingerprint/*. Fast requests page + count in
+#        one read-only transaction; filtered requests scan once in server order,
+#        retain at most one page, and decode annotations only for retained rows.
+#        PostgreSQL uses Repeatable Read so rows and total share a snapshot.
+#        internal/alertfilter owns Resolved-only RE2 matcher semantics and search
+#        over individual real label names/values; invalid regex indices are returned
+#        instead of making the request invalid. Request validation and DB work share
+#        a 10s context. Fingerprint detail mode returns total 0 or 1.
 
 # ── Alert details (history store / DB) ───────────────────────────────────────
 GET    /api/v1/alerts/:fingerprint/history       full_protect?  → { events: AlertEvent[], total }  ?limit= ?offset= ?cluster=
@@ -659,19 +691,36 @@ pod still serves reads/API/WS equally regardless of leadership.
 Alertmanager load must not scale with `replicaCount`: only the leader ever
 polls; followers reconstruct their stores from PostgreSQL instead.
 
-- `Recorder.Start` seeds resolved alerts, then picks a mode. SQLite (or a
+- `Recorder.Start` streams only the latest still-resolved rows from the last
+  20 minutes through `Store.VisitRecentResolved` into `AlertStore`, starts one
+  process-context resolved-buffer sweeper, then picks a mode. SQLite (or a
   Recorder built without an elector/dsn, e.g. most unit tests) always calls
   `runPollLoop` — today's unconditional-poll behavior, unchanged. On
-  PostgreSQL, a **mode supervisor** subscribes a second callback to the
-  elector (alongside `onLeadershipChange`'s metrics/trigger callback) that
-  cancels whichever loop is currently running and starts the other
-  (`runPollLoop` while leader, `runFollowerLoop` while follower) on every
-  transition, including the very first (immediate) `Subscribe` callback.
+  PostgreSQL, a **mode supervisor** goroutine (`runModeSupervisor`, P5)
+  sequences transitions: the elector's own callback (a second, independent
+  `Subscribe`, alongside `onLeadershipChange`'s metrics/trigger callback)
+  never runs the mode switch itself — it only ever replaces the single
+  buffered pending request in a size-1 channel (`requests`) and returns
+  immediately, satisfying the "must not block" contract `Subscribe` callbacks
+  run under. `runModeSupervisor` is the only place that actually cancels the
+  previous mode's context **and waits for its goroutine to return** before
+  starting the next one (`runPollLoop` while leader, `runFollowerLoop` while
+  follower) — so a demoted leader's still-finishing poll write can never
+  overlap a newly started follower rebuild, or vice versa. `Start` blocks on
+  a `supervisorDone` channel so it, too, only returns once the current mode
+  has actually stopped. `runModeSupervisor` delegates to
+  `runModeSupervisorWith(ctx, requests, runLeader, runFollower func(context.Context))`
+  so tests can substitute instrumented fakes without a real PostgreSQL
+  connection (`recorder_snapshot_batch_test.go`).
 - `runPollLoop` is the pre-multi-replica ticker/trigger loop, plus (dialect
   PostgreSQL) a background `listenLoop` on the `jarvis_trigger` channel: a
   follower's forwarded `Trigger()` call reaches the leader this way and is
   turned into a local trigger (`triggerLocal`) without waiting for the next
-  tick.
+  tick. `poll()`/`applyPollResults()` check `ctx.Err()` before each alert's/
+  resolved-alert's DB write and again before the final
+  `AlertStore.Set`/broadcast/`persistSnapshots` (P5) — a poll cancelled
+  mid-flight by a mode transition stops promptly instead of still publishing
+  a stale result after this pod may already be a follower.
 - After each successful `poll()` → `applyPollResults()`, the leader calls
   `persistSnapshots`: for every configured cluster, gzip'd-JSON-encode
   `{alerts, silences, memberUp}` (Resolved Decision 3) from the just-updated
@@ -683,17 +732,32 @@ polls; followers reconstruct their stores from PostgreSQL instead.
   for PostgreSQL).
 - `runFollowerLoop` never polls Alertmanager. On start it does a full resync
   (`resyncAllSnapshots`: `Store.GetAllSnapshots` → decode every cluster's
-  row), then runs a `listenLoop` on `jarvis_snapshot`: each notification's
-  payload is the changed cluster's name, resynced individually
-  (`resyncSnapshot` → `Store.GetSnapshot`); a full resync also runs
-  periodically as a NOTIFY-miss fallback (`listenLoop`'s `onIdle`, firing
-  every `JARVIS_POLL_INTERVAL` if no notification arrived). Every decoded
-  cluster's silences go straight into `SilenceStore` (already the per-cluster
-  cache); alerts are cached per-cluster in `Recorder.followerSnapshots`
-  (`followerMu`-guarded) and re-merged into the whole `AlertStore` on every
-  update (`rebuildFollowerAlertStore` — `AlertStore.Set` always replaces the
-  full store, so a per-cluster update must re-merge everything), then
-  broadcasts via the existing `broadcastAlertsIfChanged`.
+  row), then runs three goroutines joined by a `sync.WaitGroup` (so the
+  function itself only returns once all three have actually stopped): a
+  `listenLoop` on `jarvis_snapshot` whose notification callback only marks
+  the cluster name in a `followerDirtySet` and nudges a size-1 `signal`
+  channel (cheap, non-blocking — no decode/rebuild on the LISTEN goroutine
+  itself); `runFollowerBatchWorker`, which starts a fixed `followerBurstWindow`
+  (200ms) timer on the first signal after being idle and, when it fires,
+  drains every cluster marked dirty since, resyncs each into
+  `followerSnapshots` (`resyncSnapshotEntry`, cache-only — no rebuild yet),
+  then rebuilds the whole `AlertStore` **exactly once** for the whole burst
+  (P5, tmp/memory.md §8.3: several clusters persisting their poll snapshots
+  within milliseconds of each other used to trigger one rebuild per
+  notification); and `runFollowerResyncTicker`, a full resync every
+  `JARVIS_POLL_INTERVAL` **independent of notification traffic** — replacing
+  the old `listenLoop`-`onIdle` fallback, which a continuous stream of *other*
+  clusters' notifications could starve indefinitely even though one
+  cluster's own notification was lost. The burst deadline is fixed at the
+  first signal of a burst and never pushed back by later ones, so a
+  continuously notifying cluster still rebuilds at least once per window
+  instead of starving it. Every decoded cluster's silences go straight into
+  `SilenceStore` (already the per-cluster cache); alerts are cached
+  per-cluster in `Recorder.followerSnapshots` (`followerMu`-guarded) and
+  re-merged into the whole `AlertStore` on every rebuild
+  (`rebuildFollowerAlertStore` — `AlertStore.Set` always replaces the full
+  store, so a per-cluster update must re-merge everything), then broadcasts
+  via the existing `broadcastAlertsIfChanged`.
   `rebuildFollowerAlertStore` also re-hydrates `ActiveClaim` on the merged
   alerts from the shared DB (`Store.GetActiveClaims`, the same batched read
   the leader runs in `applyPollResults`) — the leader's snapshot only carries
@@ -702,6 +766,11 @@ polls; followers reconstruct their stores from PostgreSQL instead.
   follower's next resync and only reappear after the leader's next poll.
   Claims are authoritative from the DB, not the snapshot: a since-released
   claim still present in a stale snapshot is cleared too.
+  Resolved alerts are normalized to the earlier of their `EndsAt` and the
+  snapshot row's `takenAt`; zero/expired values are dropped. The shared sweeper
+  clears them from both `AlertStore` and the cached follower slice (including
+  its backing-array tail), so an old snapshot cannot resurrect them and a
+  promotion cannot reset their episode deadline.
 - `Recorder.ClusterUpStates()` (the metrics-collector-facing view) sources
   member up-states from `followerSnapshots` while follower instead of the
   local (never-polled) `cluster.Cluster.MemberUpStates()` — a follower still
@@ -783,6 +852,25 @@ handled the HTTP request and must still reach every other pod's WS clients.
   and `applySilenceWriteThrough` (`silences.go`, shared by silence
   create/delete). Silence templates currently have no WS broadcast at all
   (checked during D4 implementation) — nothing to fan out there yet.
+- P4 (memory hardening): `BroadcastJSON`/`BroadcastRaw` both funnel through a
+  new `BroadcastTyped(eventType, envelope)` that records the
+  `jarvis_ws_broadcasts_total` metric under a fixed, known event-type set
+  (`metricEventType`) — an unexpected type (e.g. a corrupted fanout envelope)
+  maps to `unknown` instead of creating an unbounded label. `Recorder`'s
+  `broadcastAlertsIfChanged` calls `BroadcastTyped` directly with an envelope
+  it builds by wrapping `AlertStore.EncodedSnapshot()`'s cached array bytes
+  (`{"type":"alerts_update","payload":{"alerts":`+array+`}}`), never a second
+  `json.Marshal` of the alert list; the `broadcaster` interface `Recorder`
+  depends on gained this method alongside `BroadcastJSON`. The global
+  broadcast queue shrank 256→16 and each client's queue 64→4 (message counts,
+  not bytes — several queued large `alerts_update` versions each keep their
+  own backing array reachable). `Hub.Run` now disconnects a client whose
+  queue is full instead of silently dropping its message: the client is
+  removed from `clients` and its `send` channel closed under the hub's
+  exclusive lock, then its socket is closed after the lock is released
+  (immediately unblocking a writer stuck on a slow `conn.Write`, rather than
+  waiting out `writeWait`) — the browser's existing reconnect-and-refetch
+  recovers full state.
 - Receiving side: `api.HandleFanoutMessage(hub, alertStore)` (re-broadcasts
   bytes unchanged) and `api.HandleFanoutRef(store, alertStore, hub, logger)`
   (switches on `ref.Type`: `comment_added` → `store.GetComment`, `claim_set`/
@@ -887,11 +975,17 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
 │                        SilenceTemplate, LabelMatcher, AuthUser, ProviderInfo, AdminUser,
 │                        SettingsResponse, HeatmapRange, AlertHeatmapResponse, ...
 ├── hooks/
-│   ├── useAlerts.ts           → useAlerts, useAlertGroups, useAlertHistory, useAlertTimeline,
+│   ├── useAlerts.ts           → useAlerts(params, {enabled}) plus bounded useResolvedAlertsPage and
+│   │                            useResolvedAlertDetail; both resolved hooks forward TanStack's
+│   │                            AbortSignal, use 10s staleTime + gcTime 0, retry 5xx once and never
+│   │                            retry 4xx. Page queries retain previous data only for a pure offset
+│   │                            change; their keys include the complete server filter/page input.
+│   │                            useAlertGroups, useAlertHistory, useAlertTimeline,
 │   │                            useAlertStats, useAlertHeatmap (staleTime 60s; enabled unconditionally
 │   │                            — both AlertDetailPanel and every AlertCard entry query it),
 │   │                            useRefreshAlerts
-│   ├── useAlertCounts.ts      → per-state alert counts for nav badges
+│   ├── useAlertCounts.ts      → active/suppressed counts + silence count for nav badges; deliberately
+│   │                            never loads resolved history (there is no resolved badge)
 │   ├── useAlertComments.ts    → useAlertComments(fingerprint, cluster, page), useAddComment,
 │   │                            useDeleteComment (all cluster-scoped); COMMENTS_PAGE_SIZE = 20;
 │   │                            query key `['comments', fingerprint, clusterName, page]`
@@ -902,7 +996,11 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
 │   │                            resolveCreatorName
 │   ├── useSilenceTemplates.ts → list + create/update/delete template mutations
 │   ├── useWebSocket.ts        → WS connection + cache patching via handleEvent();
-│   │                            invalidates ALL queries on every (re)connect (WS has no replay)
+│   │                            invalidates ALL queries on every (re)connect (WS has no replay);
+│   │                            reconnect delay jittered 3000-6000ms (P7, getReconnectDelay,
+│   │                            3000 + floor(random()*3001)) — avoids many tabs retrying in lockstep;
+│   │                            wsRef.current === ws guards every socket callback so a stale/
+│   │                            superseded socket's late event starts no duplicate timer/refetch
 │   ├── useProtectedAction.ts  → wraps write actions; opens LoginModal when auth required
 │   ├── useLoginGuard.ts       → login-required state for guarded UI elements
 │   ├── useFormatTime.ts       → relative/absolute timestamp formatter (from settings)
@@ -1127,9 +1225,15 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │                            operator auto-snaps to `>`/`=` when
     │                            the field switches into/out of `@age`; an @age draft with an
     │                            unparseable duration (red border, parseDurationValue) is never
-    │                            promoted from draft to a committed filter chip
+    │                            promoted from draft to a committed filter chip; resolved mode marks
+    │                            invalid server-reported matcher indices and shows the RE2 semantics hint
     ├── alerts/
     │   ├── AlertsPage.tsx     → useWebSocket, filter/search, card|list + detail panel, fullscreen, pagination;
+    │   │                        resolved mode owns the controlled server page, debounces search 300ms,
+    │   │                        resets to page 1 atomically on filter/page-size changes, cancels on mode
+    │   │                        exit, corrects a shrunken result to its last page at most once, and fetches
+    │   │                        selected off-page details by fingerprint+cluster; explicit loading/error/
+    │   │                        retry and stale-page states keep navigation deterministic;
     │   │                        its URL-state writer replaces only alert-owned params and preserves
     │   │                        shell-owned params such as `settings=open`; on first mount, if the URL
     │   │                        has none of `state`/`q`/`matchers`/`alert` (hasAlertViewParams), applies
@@ -1199,6 +1303,9 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │   ├── AlertListView.tsx  → sortable table, cols = Name [· State] · Actions (no Claim column —
     │   │                        claim/release lives only in the detail panel); expandable groups,
     │   │                        section reordering (persisted: 'jarvis-list-section-order:<label>');
+    │   │                        resolved mode renders the server-supplied order without client slicing,
+    │   │                        using controlled right-aligned grouped top/footer pagers that stack
+    │   │                        responsively, plus the persisted per-page selector to their left;
     │   │                        group-header common labels = quiet LabelChip strip (PartitionedLabelChips:
     │   │                        pinned-first + "+N" chip, one partition per group); group silence
     │   │                        action is a labelled button ("Silence group" / "Extend/Recreate/Expire
@@ -1344,7 +1451,8 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │   │                        (ignores the label-matcher filter bar — the point is discovering
     │   │                        what to filter *by*); clicking a value adds an unlocked `=`
     │   │                        matcher via uiStore.addLabelMatcher (no-op if an identical one
-    │   │                        already exists) and closes the modal
+    │   │                        already exists) and closes the modal; in resolved mode it receives and
+    │   │                        explicitly labels the current page from AlertsPage, with no second query
     │   ├── LabelChip.tsx      → one fixed size for every chip (`max-w-[200px]`, `text-[10px]`) so a row
     │   │                        of chips reads as one unit; `emphasized` only adds font weight, unrelated
     │   │                        to color. Neutral (`border-border bg-muted text-foreground`) unless this
@@ -1510,7 +1618,7 @@ interface UIStore {
     labelMatchers: LabelMatcher[]
   }
   wsConnected: boolean                         // NOT persisted
-  alertCounts: AlertCounts                      // { filtered, total, byState: { active, suppressed, resolved }, silenceCount }
+  alertCounts: AlertCounts                      // { filtered, total, byState: { active, suppressed }, silenceCount }
 }
 // savedFilterBase: string | null — NOT persisted in jarvis-ui; sessionStorage key
 //   'jarvis-saved-filter-base' (per tab, survives reload). Name of the saved filter the chips were
@@ -1680,6 +1788,7 @@ consumed snapshot (D3).
 | `JARVIS_DB_MAX_OPEN_CONNS` | PostgreSQL pool cap per pod (default `10`, must be ≥ 1; MaxIdle = MaxOpen). Ignored for SQLite (always 1). Size pods × cap below the server's `max_connections` |
 | `JARVIS_RUNBOOK_BASE_URL` | prefix for non-URL `runbook` values |
 | `JARVIS_ALLOWED_ORIGINS` | CORS + WS origin allow-list (no `*`), comma-separated |
+| `JARVIS_PPROF_ADDR` | opt-in `internal/debugserver` pprof server (`heap`/`allocs`/`goroutine` only), empty (default) = disabled, no port opened. `debugserver.New` validates eagerly (fatal on bad value, same as every other startup check): must be a literal loopback IP (`127.0.0.1`/`::1`, no hostname/wildcard/zone ID) + numeric port 1..65535 — port `0` is rejected in production (test-only path: `serveOn` on an already-open ephemeral listener, bypassing that check). Own `http.NewServeMux`/`http.Server`, never Echo/`DefaultServeMux`; one profile request at a time (429 otherwise); `main.go` calls `Start(ctx)` right after `signal.NotifyContext`, shut down via the same `ctx` |
 | `JARVIS_AUTH_PROVIDER` `JARVIS_AUTH_MODE` | auth; provider default `none`; mode defaults to `write_protect` when provider ≠ none |
 | `JARVIS_SECRET_KEY` | JWT HMAC key, hex-decoded if valid hex, else raw bytes; **≥32 bytes required** when provider ≠ none |
 | `JARVIS_AUTH_OIDC_ISSUER` `…_CLIENT_ID` `…_CLIENT_SECRET` `…_REDIRECT_URL` `…_SCOPES` | OIDC (scopes default `openid,profile,email`) |
@@ -1791,7 +1900,14 @@ with its own `*alertmanager.Client`); `Cluster.AlertmanagerURL` /
 - Enrichment (`cluster/enrich.go`, `enrichMerged`) — moved here from
   `history` — builds `EnrichedAlert` (incl. `@receiver` label) from merged
   alerts; lives in `cluster` because `history` imports `cluster` (not the
-  reverse).
+  reverse). `Status.SilencedBy`/`InhibitedBy` are normalized through
+  `nonNilStrings` so the API always emits JSON `[]`, never `null` — some
+  Alertmanager responses omit these for an alert matching neither, which Go
+  unmarshals as a nil slice, and the frontend unconditionally iterates them
+  (`.agents/lessons.md`). `AlertStore.cloneEnrichedAlert`'s `cloneSlice` helper
+  (`alert_store.go`) must preserve that same non-nil-emptiness through every
+  `Set()` — `append([]T{}, s...)`, not `append([]T(nil), s...)`, which
+  collapses a non-nil-empty source back to nil.
 - History recorder keying is untouched: events stay keyed by
   `(fingerprint, cluster_name)`, since the merge happens *before* the
   recorder sees the snapshot — grace period and occurrence counting

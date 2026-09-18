@@ -104,13 +104,36 @@ event recording).
 Followers never poll Alertmanager. Instead, after every poll the leader
 gzip's a compact per-cluster JSON snapshot (alerts, silences, member
 up/down state) into the `poll_snapshots` table and
-`pg_notify('jarvis_snapshot', clusterName)`. Followers `LISTEN` on that
-channel (plus a periodic full resync as a fallback, in case a notification
-is ever missed) and merge the changed cluster's snapshot into their own
-in-memory stores — so **every** pod still serves reads, the REST API, and
-WebSocket pushes to its own connected browsers, from a snapshot that is
+`pg_notify('jarvis_snapshot', clusterName)`. A follower's own rebuild is
+coalesced rather than run once per notification: it marks the changed
+cluster and, on the first notification after being idle, waits a fixed
+200ms window before resyncing every cluster marked during that window and
+rebuilding its in-memory stores exactly once — several clusters persisting
+their poll snapshots within milliseconds of each other (the normal case,
+since they're all written from the same poll cycle) produce one rebuild, not
+several. That window never gets pushed back by further notifications, so a
+continuously notifying cluster still rebuilds at least once per window
+instead of stalling it indefinitely. Independently of any of that, a full
+resync also runs on a fixed schedule every `JARVIS_POLL_INTERVAL` — a
+genuine fallback for a missed notification even while other clusters keep
+notifying continuously — so **every** pod still serves reads, the REST API,
+and WebSocket pushes to its own connected browsers, from a snapshot that is
 at most one poll interval old, regardless of which pod happens to be
 leader right now.
+
+Resolved alerts in those snapshots keep the same 20-minute live-display
+deadline as on the leader. Followers normalize the resolution timestamp,
+discard already-expired rows while decoding/rebuilding, and physically remove
+expired entries from both their `AlertStore` and per-cluster snapshot cache.
+Promotion never restarts that deadline. Active last-good alerts are not subject
+to this cleanup, and database history is unchanged.
+
+A pod switching between leader and follower mode (or shutting down) always
+finishes tearing down its current mode — its poll loop or its follower
+listener/batch-worker/resync-ticker trio — before the next mode starts, or
+before the pod considers itself stopped. This closes a possible gap where a
+just-demoted leader's still-in-flight write could otherwise race a newly
+started follower rebuild reading the same data.
 
 When a follower rebuilds its alert store from a snapshot it also re-reads
 the active claims from the shared database and re-attaches them to the
@@ -144,6 +167,24 @@ its next snapshot rebuild would briefly show the claim disappearing again.
 Alert-state broadcasts (`alerts_update`, the poll-time `silences_update`)
 are **not** fanned out this way — every pod already derives those from its
 own poll or consumed snapshot.
+
+Each pod's `AlertStore` caches its own last JSON encoding of the current
+alert list, invalidated only when the store actually changes, and reuses it
+for both the unfiltered `GET /api/v1/alerts` response and the `alerts_update`
+WebSocket envelope — so a leader's/follower's poll that changes nothing does
+not re-marshal or re-broadcast the (potentially large) alert list. This is
+purely a per-pod encoding cache; it has no bearing on which pod is leader or
+on the claim-patch requirement above (a claim mutation still bumps the
+cache, so the patched claim is reflected in the very next cached encoding).
+
+WebSocket delivery is intentionally best-effort per client: each pod's hub
+keeps a small bounded queue per connected client and a small bounded global
+broadcast queue. A client that can't keep up (a stuck/slow browser
+connection) is disconnected rather than allowed to sit on a growing backlog
+of queued snapshots — its existing reconnect-and-refetch converges it back
+to current state. This bounds each pod's own WebSocket memory independently
+of how many browsers are connected or how slow any one of them is; it is
+unrelated to leader election or snapshot distribution.
 
 ### User settings
 

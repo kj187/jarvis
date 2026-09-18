@@ -26,6 +26,7 @@ Values are read once at startup — a change means a restart.
 | <a id="jarvis_poll_interval"></a>`JARVIS_POLL_INTERVAL` | `15s` | How often Alertmanager is polled (Go duration, e.g. `30s`). Also scales the grace period to `max(60s, 2 × interval)` — see [Alert lifecycle](alert-lifecycle.md) |
 | <a id="jarvis_allowed_origins"></a>`JARVIS_ALLOWED_ORIGINS` | *(same origin)* | Comma-separated origins allowed for CORS and the WebSocket upgrade, e.g. `https://jarvis.example.com`. Required whenever the browser reaches Jarvis under a different host than the backend itself — see [Running behind a proxy](reverse-proxy.md). No wildcard is accepted |
 | <a id="jarvis_runbook_base_url"></a>`JARVIS_RUNBOOK_BASE_URL` | — | Prefix for runbook links. Prepended to the `runbook` label or annotation when its value is not already an absolute URL, e.g. `https://wiki.example.com/runbooks/` |
+| <a id="jarvis_pprof_addr"></a>`JARVIS_PPROF_ADDR` | — | Opt-in loopback-only pprof debug server (`heap`/`allocs`/`goroutine` profiles only), e.g. `127.0.0.1:6060`. Empty (default) opens no port at all. Must be a literal loopback IP + port — see [Troubleshooting](troubleshooting.md#memory-profiling-jarvis_pprof_addr) |
 
 ---
 

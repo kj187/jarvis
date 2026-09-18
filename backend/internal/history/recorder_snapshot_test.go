@@ -69,3 +69,74 @@ func TestRebuildFollowerAlertStore_ClearsReleasedClaimFromStaleSnapshot(t *testi
 		t.Fatalf("ActiveClaim = %+v, want nil (DB has no active claim; stale snapshot claim must be dropped)", got[0].ActiveClaim)
 	}
 }
+
+func TestFollower_ExpiredResolvedRemovedFromStoreAndCache(t *testing.T) {
+	rec, _ := newTestRecorder(t)
+	now := time.Date(2026, 9, 17, 10, 0, 0, 0, time.UTC)
+	rec.now = func() time.Time { return now }
+	rec.alertStore.now = rec.now
+	rec.followerSnapshots = map[string]followerSnapshotEntry{
+		"a": {
+			alerts: []models.EnrichedAlert{
+				makeEnrichedAlert("active", "active", "a"),
+				resolvedAlertAt("resolved", "a", now.Add(-ResolvedBufferTTL+time.Nanosecond)),
+			},
+			takenAt: now,
+		},
+	}
+	rec.rebuildFollowerAlertStore()
+	now = now.Add(time.Nanosecond)
+
+	if !rec.sweepResolved(now) {
+		t.Fatal("sweep reported no change")
+	}
+	got := rec.alertStore.Get()
+	if len(got) != 1 || got[0].Fingerprint != "active" {
+		t.Fatalf("store alerts = %v, want only active", fingerprints(got))
+	}
+	rec.followerMu.Lock()
+	cached := rec.followerSnapshots["a"].alerts
+	rec.followerMu.Unlock()
+	if len(cached) != 1 || cached[0].Fingerprint != "active" {
+		t.Fatalf("cached alerts = %v, want only active", fingerprints(cached))
+	}
+}
+
+func TestFollower_OldSnapshotCannotResurrect(t *testing.T) {
+	rec, _ := newTestRecorder(t)
+	now := time.Date(2026, 9, 17, 10, 0, 0, 0, time.UTC)
+	rec.now = func() time.Time { return now }
+	rec.alertStore.now = rec.now
+	payload, err := encodeSnapshot(pollSnapshot{Alerts: []models.EnrichedAlert{
+		resolvedAlertAt("old", "a", now.Add(-ResolvedBufferTTL)),
+	}})
+	if err != nil {
+		t.Fatalf("encodeSnapshot: %v", err)
+	}
+
+	rec.applySnapshotRow("a", snapshotRow{Payload: payload, TakenAt: now.Add(-time.Minute)})
+	rec.rebuildFollowerAlertStore()
+	if got := rec.alertStore.Get(); len(got) != 0 {
+		t.Fatalf("old snapshot resurrected %v", fingerprints(got))
+	}
+}
+
+func TestFollower_PromotionPreservesDeadline(t *testing.T) {
+	rec, _ := newTestRecorder(t)
+	base := time.Date(2026, 9, 17, 10, 0, 0, 0, time.UTC)
+	now := base.Add(10 * time.Minute)
+	rec.now = func() time.Time { return now }
+	rec.alertStore.now = rec.now
+	rec.followerSnapshots = map[string]followerSnapshotEntry{
+		"a": {alerts: []models.EnrichedAlert{resolvedAlertAt("fp1", "a", base)}, takenAt: base},
+	}
+	rec.rebuildFollowerAlertStore()
+	rec.rebuildFollowerAlertStore()
+
+	if rec.alertStore.ExpireResolved(base.Add(ResolvedBufferTTL - time.Nanosecond)) {
+		t.Fatal("entry expired before original deadline")
+	}
+	if !rec.alertStore.ExpireResolved(base.Add(ResolvedBufferTTL)) {
+		t.Fatal("rebuild/promotion extended the original deadline")
+	}
+}

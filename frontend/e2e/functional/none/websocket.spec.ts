@@ -108,7 +108,7 @@ test('J1 WebSocket reconnect indicator turns red when blocked and green after re
   await page.evaluate(() => (window as any).__closeAllWS())
   await expect(page.locator('[title="WebSocket disconnected"]').first()).toBeVisible({ timeout: 10_000 })
 
-  // App retries after RECONNECT_DELAY (3s) — indicator turns green
+  // App retries after a jittered 3-6s reconnect delay — indicator turns green
   await expect(page.locator('[title="WebSocket connected"]').first()).toBeVisible({ timeout: 30_000 })
 })
 

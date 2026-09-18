@@ -1,6 +1,8 @@
 package history
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
 	"testing"
 	"time"
@@ -46,6 +48,73 @@ func TestEncodeDecodeSnapshot_RoundTrip(t *testing.T) {
 func TestDecodeSnapshot_InvalidPayload(t *testing.T) {
 	if _, err := decodeSnapshot([]byte("not gzip")); err == nil {
 		t.Error("expected error decoding non-gzip payload")
+	}
+}
+
+// gzipRaw gzips raw bytes directly, bypassing encodeSnapshot's JSON
+// marshaling — used to construct payloads with deliberately malformed
+// decompressed content (trailing document, trailing garbage).
+func gzipRaw(t *testing.T, raw []byte) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	gw := gzip.NewWriter(&buf)
+	if _, err := gw.Write(raw); err != nil {
+		t.Fatalf("gzip write: %v", err)
+	}
+	if err := gw.Close(); err != nil {
+		t.Fatalf("gzip close: %v", err)
+	}
+	return buf.Bytes()
+}
+
+// TestDecodeSnapshot_Truncated verifies a payload cut short (mid-stream or
+// missing the gzip trailer) is rejected rather than silently decoding a
+// partial document.
+func TestDecodeSnapshot_Truncated(t *testing.T) {
+	payload, err := encodeSnapshot(pollSnapshot{
+		Alerts: []models.EnrichedAlert{{Fingerprint: "fp1", ClusterName: "a"}},
+	})
+	if err != nil {
+		t.Fatalf("encodeSnapshot: %v", err)
+	}
+	truncated := payload[:len(payload)-5]
+	if _, err := decodeSnapshot(truncated); err == nil {
+		t.Error("expected error decoding truncated gzip payload")
+	}
+}
+
+// TestDecodeSnapshot_CorruptedTrailer verifies a flipped byte in the gzip
+// trailer (CRC32/ISIZE) is caught, not silently ignored — decodeSnapshot's
+// forced second Decode() call is what reaches the trailer at all.
+func TestDecodeSnapshot_CorruptedTrailer(t *testing.T) {
+	payload, err := encodeSnapshot(pollSnapshot{
+		Alerts: []models.EnrichedAlert{{Fingerprint: "fp1", ClusterName: "a"}},
+	})
+	if err != nil {
+		t.Fatalf("encodeSnapshot: %v", err)
+	}
+	corrupted := append([]byte(nil), payload...)
+	corrupted[len(corrupted)-1] ^= 0xFF
+	if _, err := decodeSnapshot(corrupted); err == nil {
+		t.Error("expected error from corrupted gzip trailer")
+	}
+}
+
+// TestDecodeSnapshot_TrailingDocumentRejected verifies a second JSON document
+// after the payload's single expected document is rejected.
+func TestDecodeSnapshot_TrailingDocumentRejected(t *testing.T) {
+	raw := []byte(`{"alerts":[],"silences":[],"memberUp":{}}{"alerts":[]}`)
+	if _, err := decodeSnapshot(gzipRaw(t, raw)); err == nil {
+		t.Error("expected error for a trailing JSON document after the payload")
+	}
+}
+
+// TestDecodeSnapshot_TrailingGarbageRejected verifies non-JSON bytes after
+// the payload's single expected document are rejected.
+func TestDecodeSnapshot_TrailingGarbageRejected(t *testing.T) {
+	raw := []byte(`{"alerts":[],"silences":[],"memberUp":{}}garbage`)
+	if _, err := decodeSnapshot(gzipRaw(t, raw)); err == nil {
+		t.Error("expected error for trailing garbage after the payload")
 	}
 }
 

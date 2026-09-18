@@ -167,6 +167,12 @@ export interface AlertGroup {
   count: number
 }
 
+export interface ResolvedAlertsPage {
+  alerts: EnrichedAlert[]
+  total: number
+  invalidMatchers: number[]
+}
+
 // ── Filter / UI ───────────────────────────────────────────────────────────────
 
 export type LabelMatcherOperator = '=' | '!=' | '=~' | '!~' | '>' | '<'
@@ -257,4 +263,3 @@ export interface CommentAddedPayload {
 
 // `silences_update` carries an empty payload — a pure invalidation signal;
 // the frontend refetches /api/v1/silences (see useWebSocket).
-

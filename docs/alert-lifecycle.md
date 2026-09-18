@@ -128,8 +128,11 @@ When an alert disappears from a poll snapshot, three things happen:
    "resolved buffer", so operators see recent resolutions without digging
    into the history view. After 20 minutes it moves to the resolved/history
    view only. If it re-fires within those 20 minutes it simply returns to
-   the active list; the removal timer then only clears the (already empty)
-   buffer entry and never touches the active list.
+   the active list. One central once-per-second sweep expires entries by the
+   timestamp of their own resolved episode; there is no timer or goroutine
+   per alert. On startup, only still-live resolutions from the preceding 20
+   minutes are streamed from the database into this buffer. This affects the
+   live display only — the complete lifecycle remains in history.
 3. **Active claims are auto-released — but only after a delay** of
    `max(20min, 2 × grace period)`, and only if the alert is *still* resolved
    at that point. The delay exists so a grace-period re-fire can cancel the

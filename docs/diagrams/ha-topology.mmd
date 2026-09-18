@@ -39,8 +39,8 @@ flowchart LR
     UI -- reads/writes --> LB
     LB -.-> leaderPod
     LB -.-> followerPod
-    LHUB -. push .-> UI
-    FHUB -. push .-> UI
+    LHUB -. "push (bounded queue,<br/>slow client disconnected)" .-> UI
+    FHUB -. "push (bounded queue,<br/>slow client disconnected)" .-> UI
 
     LEL == "holds" ==> LOCK
     FEL -. "retries every 5s" .-> LOCK
@@ -50,10 +50,10 @@ flowchart LR
     LREC -- "persists + NOTIFY jarvis_snapshot" --> SNAP
     SNAP -.-> NOTIFY
 
-    FREC -- "LISTEN jarvis_snapshot<br/>+ periodic resync fallback" --> NOTIFY
+    FREC -- "LISTEN jarvis_snapshot<br/>(200ms batch window,<br/>+ independent full-resync ticker)" --> NOTIFY
     NOTIFY -.-> FREC
     FREC -- "re-reads active claims<br/>on every rebuild" --> HIST
-    FREC -- "merges into own<br/>AlertStore/SilenceStore" --> FHUB
+    FREC -- "one rebuild per burst<br/>into own AlertStore/SilenceStore" --> FHUB
 
     FREC -. "Trigger() forwards via<br/>NOTIFY jarvis_trigger" .-> NOTIFY
     NOTIFY -. "leader LISTENs, polls immediately" .-> LREC

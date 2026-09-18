@@ -1,0 +1,173 @@
+[
+  {
+    "reason": "literal label equality",
+    "alert": {"labels":{"alertname":"HighLatency","severity":"critical","environment":"prod","instance":"api-01"},"receivers":[{"name":"primary"},{"name":"secondary"}],"clusterName":"prod-eu","startsAt":"2026-09-17T09:30:00Z"},
+    "matchers": [{"name":"environment","operator":"=","value":"prod"}],
+    "search": "",
+    "now": "2026-09-17T10:00:00Z",
+    "expectedJS": true,
+    "expectedResolved": true,
+    "invalidMatchers": []
+  },
+  {
+    "reason": "receiver list equality",
+    "alert": {"labels":{"alertname":"HighLatency","severity":"critical","environment":"prod","instance":"api-01"},"receivers":[{"name":"primary"},{"name":"secondary"}],"clusterName":"prod-eu","startsAt":"2026-09-17T09:30:00Z"},
+    "matchers": [{"name":"receiver","operator":"=","value":"secondary"}],
+    "search": "",
+    "now": "2026-09-17T10:00:00Z",
+    "expectedJS": true,
+    "expectedResolved": true,
+    "invalidMatchers": []
+  },
+  {
+    "reason": "RE2 inline flag differs from JavaScript RegExp",
+    "alert": {"labels":{"alertname":"HighLatency","severity":"critical","environment":"prod","instance":"API-01"},"receivers":[],"clusterName":"prod-eu","startsAt":"2026-09-17T09:30:00Z"},
+    "matchers": [{"name":"instance","operator":"=~","value":"(?i)api"}],
+    "search": "",
+    "now": "2026-09-17T10:00:00Z",
+    "expectedJS": false,
+    "expectedResolved": true,
+    "invalidMatchers": []
+  },
+  {
+    "reason": "invalid positive regex",
+    "alert": {"labels":{"alertname":"HighLatency","instance":"api-01"},"receivers":[],"clusterName":"prod-eu","startsAt":"2026-09-17T09:30:00Z"},
+    "matchers": [{"name":"instance","operator":"=~","value":"("}],
+    "search": "",
+    "now": "2026-09-17T10:00:00Z",
+    "expectedJS": false,
+    "expectedResolved": false,
+    "invalidMatchers": [0]
+  },
+  {
+    "reason": "invalid negative regex",
+    "alert": {"labels":{"alertname":"HighLatency","instance":"api-01"},"receivers":[],"clusterName":"prod-eu","startsAt":"2026-09-17T09:30:00Z"},
+    "matchers": [{"name":"instance","operator":"!~","value":"("}],
+    "search": "",
+    "now": "2026-09-17T10:00:00Z",
+    "expectedJS": true,
+    "expectedResolved": true,
+    "invalidMatchers": [0]
+  },
+  {
+    "reason": "age threshold",
+    "alert": {"labels":{"alertname":"HighLatency","instance":"api-01"},"receivers":[],"clusterName":"prod-eu","startsAt":"2026-09-17T09:30:00Z"},
+    "matchers": [{"name":"@age","operator":">","value":"15m"}],
+    "search": "",
+    "now": "2026-09-17T10:00:00Z",
+    "expectedJS": true,
+    "expectedResolved": true,
+    "invalidMatchers": []
+  },
+  {
+    "reason": "search matches a real label name",
+    "alert": {"labels":{"alertname":"HighLatency","instance":"api-01"},"receivers":[],"clusterName":"prod-eu","startsAt":"2026-09-17T09:30:00Z"},
+    "matchers": [],
+    "search": "INSTANCE",
+    "now": "2026-09-17T10:00:00Z",
+    "expectedJS": true,
+    "expectedResolved": true,
+    "invalidMatchers": []
+  },
+  {
+    "reason": "serialized JSON boundary is live-only",
+    "alert": {"labels":{"alertname":"HighLatency","environment":"prod","instance":"api-01"},"receivers":[],"clusterName":"prod-eu","startsAt":"2026-09-17T09:30:00Z"},
+    "matchers": [],
+    "search": "prod\",\"instance",
+    "now": "2026-09-17T10:00:00Z",
+    "expectedJS": true,
+    "expectedResolved": false,
+    "invalidMatchers": []
+  },
+  {
+    "reason": "search excludes pseudo labels",
+    "alert": {"labels":{"alertname":"HighLatency","instance":"api-01"},"receivers":[{"name":"primary"}],"clusterName":"prod-eu","startsAt":"2026-09-17T09:30:00Z"},
+    "matchers": [],
+    "search": "prod-eu",
+    "now": "2026-09-17T10:00:00Z",
+    "expectedJS": false,
+    "expectedResolved": false,
+    "invalidMatchers": []
+  },
+  {
+    "reason": "unicode label value",
+    "alert": {"labels":{"alertname":"HighLatency","team":"BÜHNE"},"receivers":[],"clusterName":"prod-eu","startsAt":"2026-09-17T09:30:00Z"},
+    "matchers": [{"name":"team","operator":"=~","value":"BÜH"}],
+    "search": "bühne",
+    "now": "2026-09-17T10:00:00Z",
+    "expectedJS": true,
+    "expectedResolved": true,
+    "invalidMatchers": []
+  },
+  {
+    "reason": "missing labels are empty strings",
+    "alert": {"labels":{"alertname":"HighLatency"},"receivers":[],"clusterName":"prod-eu","startsAt":"2026-09-17T09:30:00Z"},
+    "matchers": [{"name":"missing","operator":"=","value":""}],
+    "search": "",
+    "now": "2026-09-17T10:00:00Z",
+    "expectedJS": true,
+    "expectedResolved": true,
+    "invalidMatchers": []
+  },
+  {
+    "reason": "negative receiver matcher checks every receiver",
+    "alert": {"labels":{"alertname":"HighLatency"},"receivers":[{"name":"primary"},{"name":"secondary"}],"clusterName":"prod-eu","startsAt":"2026-09-17T09:30:00Z"},
+    "matchers": [{"name":"receiver","operator":"!=","value":"primary"}],
+    "search": "",
+    "now": "2026-09-17T10:00:00Z",
+    "expectedJS": false,
+    "expectedResolved": false,
+    "invalidMatchers": []
+  },
+  {
+    "reason": "resolved alerts are unclaimed",
+    "alert": {"labels":{"alertname":"HighLatency"},"receivers":[],"clusterName":"prod-eu","startsAt":"2026-09-17T09:30:00Z"},
+    "matchers": [{"name":"@claimed-by","operator":"=","value":""}],
+    "search": "",
+    "now": "2026-09-17T10:00:00Z",
+    "expectedJS": true,
+    "expectedResolved": true,
+    "invalidMatchers": []
+  },
+  {
+    "reason": "cluster pseudo label",
+    "alert": {"labels":{"alertname":"HighLatency"},"receivers":[],"clusterName":"prod-eu","startsAt":"2026-09-17T09:30:00Z"},
+    "matchers": [{"name":"@cluster","operator":"=","value":"prod-eu"}],
+    "search": "",
+    "now": "2026-09-17T10:00:00Z",
+    "expectedJS": true,
+    "expectedResolved": true,
+    "invalidMatchers": []
+  },
+  {
+    "reason": "numeric label name",
+    "alert": {"labels":{"alertname":"HighLatency","123":"numeric"},"receivers":[],"clusterName":"prod-eu","startsAt":"2026-09-17T09:30:00Z"},
+    "matchers": [{"name":"123","operator":"=","value":"numeric"}],
+    "search": "123",
+    "now": "2026-09-17T10:00:00Z",
+    "expectedJS": true,
+    "expectedResolved": true,
+    "invalidMatchers": []
+  },
+  {
+    "reason": "HTML quotes and backslashes remain ordinary label text",
+    "alert": {"labels":{"alertname":"HighLatency","detail":"<script>\"C:\\tmp</script>"},"receivers":[],"clusterName":"prod-eu","startsAt":"2026-09-17T09:30:00Z"},
+    "matchers": [{"name":"detail","operator":"=~","value":"C:\\\\tmp"}],
+    "search": "<SCRIPT>",
+    "now": "2026-09-17T10:00:00Z",
+    "expectedJS": true,
+    "expectedResolved": true,
+    "invalidMatchers": []
+  },
+  {
+    "reason": "age comparison is strict at the boundary",
+    "alert": {"labels":{"alertname":"HighLatency"},"receivers":[],"clusterName":"prod-eu","startsAt":"2026-09-17T09:30:00Z"},
+    "matchers": [{"name":"@age","operator":">","value":"30m"}],
+    "search": "",
+    "now": "2026-09-17T10:00:00Z",
+    "expectedJS": false,
+    "expectedResolved": false,
+    "invalidMatchers": []
+
+  }
+]

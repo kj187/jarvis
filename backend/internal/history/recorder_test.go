@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -32,6 +33,10 @@ type broadcastCall struct {
 
 func (m *mockHub) BroadcastJSON(eventType string, payload interface{}) {
 	m.events = append(m.events, broadcastCall{eventType: eventType, payload: payload})
+}
+
+func (m *mockHub) BroadcastTyped(eventType string, envelope []byte) {
+	m.events = append(m.events, broadcastCall{eventType: eventType, payload: envelope})
 }
 
 func newTestRecorder(t *testing.T) (*Recorder, *mockHub) {
@@ -76,6 +81,87 @@ func makeEnrichedAlert(fp, state, clusterName string) models.EnrichedAlert {
 		StartsAt:        time.Now().UTC(),
 		ClusterName:     clusterName,
 		AlertmanagerURL: "http://am:9093",
+	}
+}
+
+func TestEnvelopeCapacity_OverflowGuard(t *testing.T) {
+	overhead := len(alertsUpdatePrefix) + len(alertsUpdateSuffix)
+
+	if got := envelopeCapacity(1234); got != overhead+1234 {
+		t.Fatalf("envelopeCapacity(1234) = %d, want %d", got, overhead+1234)
+	}
+	if got := envelopeCapacity(0); got != overhead {
+		t.Fatalf("envelopeCapacity(0) = %d, want %d", got, overhead)
+	}
+	if got := envelopeCapacity(math.MaxInt - overhead + 1); got != overhead {
+		t.Fatalf("envelopeCapacity(near-overflow) = %d, want fallback %d", got, overhead)
+	}
+	if got := envelopeCapacity(-1); got != overhead {
+		t.Fatalf("envelopeCapacity(-1) = %d, want fallback %d", got, overhead)
+	}
+}
+
+func TestResolvedBuffer_SweepWithoutPoll(t *testing.T) {
+	rec, _ := newTestRecorder(t)
+	base := time.Date(2026, 9, 17, 10, 0, 0, 0, time.UTC)
+	rec.alertStore.Set([]models.EnrichedAlert{makeEnrichedAlert("fp1", "active", "a")})
+	rec.alertStore.MarkResolvedForClusterAt("fp1", "a", base)
+
+	if !rec.sweepResolved(base.Add(ResolvedBufferTTL)) {
+		t.Fatal("sweep did not expire resolved alert without a poll")
+	}
+	if got := rec.alertStore.Get(); len(got) != 0 {
+		t.Fatalf("alerts after sweep = %v, want empty", fingerprints(got))
+	}
+}
+
+func TestResolvedBuffer_RecorderUsesSameRuntimeTimestamp(t *testing.T) {
+	rec, _ := newTestRecorder(t)
+	resolvedAt := time.Date(2026, 9, 17, 10, 0, 0, 123, time.UTC)
+	rec.now = func() time.Time { return resolvedAt }
+	rec.processAlerts(context.Background(), []models.EnrichedAlert{makeEnrichedAlert("fp1", "active", "a")})
+	rec.processAlerts(context.Background(), nil)
+
+	alerts := rec.alertStore.Get()
+	if len(alerts) != 1 || !alerts[0].EndsAt.Equal(resolvedAt) || !alerts[0].UpdatedAt.Equal(resolvedAt) {
+		t.Fatalf("buffer timestamps = %+v, want %s", alerts, resolvedAt)
+	}
+	events, _, err := rec.store.GetHistoryForCluster("fp1", "a", 10, 0)
+	if err != nil {
+		t.Fatalf("GetHistory: %v", err)
+	}
+	var recordedAt time.Time
+	for _, event := range events {
+		if event.Status == models.EventStatusResolved {
+			recordedAt = event.RecordedAt
+			break
+		}
+	}
+	if !recordedAt.Equal(resolvedAt) {
+		t.Fatalf("resolved event = %+v, want recordedAt %s", events, resolvedAt)
+	}
+}
+
+func TestResolvedBuffer_CancelStopsSweeper(t *testing.T) {
+	rec, _ := newTestRecorder(t)
+	base := time.Date(2026, 9, 17, 10, 0, 0, 0, time.UTC)
+	rec.now = func() time.Time { return base.Add(ResolvedBufferTTL) }
+	rec.alertStore.Set([]models.EnrichedAlert{makeEnrichedAlert("fp1", "active", "a")})
+	rec.alertStore.MarkResolvedForClusterAt("fp1", "a", base)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	done := make(chan struct{})
+	go func() {
+		rec.runResolvedSweeper(ctx)
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("sweeper did not stop after cancellation")
+	}
+	if got := rec.alertStore.Get(); len(got) != 1 {
+		t.Fatalf("cancelled sweeper mutated store: %v", fingerprints(got))
 	}
 }
 

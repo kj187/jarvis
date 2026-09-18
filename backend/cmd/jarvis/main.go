@@ -15,6 +15,7 @@ import (
 	"github.com/kj187/jarvis/backend/internal/cluster"
 	"github.com/kj187/jarvis/backend/internal/config"
 	"github.com/kj187/jarvis/backend/internal/db"
+	"github.com/kj187/jarvis/backend/internal/debugserver"
 	"github.com/kj187/jarvis/backend/internal/fanout"
 	"github.com/kj187/jarvis/backend/internal/history"
 	"github.com/kj187/jarvis/backend/internal/leader"
@@ -41,6 +42,16 @@ func main() {
 	}
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: logLevel}))
 	slog.SetDefault(logger)
+
+	// ── Debug/pprof Server ────────────────────────────────────────────────────
+	// Opt-in only (JARVIS_PPROF_ADDR empty by default = no port opened at
+	// all). Validated eagerly, same as every other config-derived startup
+	// error below — a malformed address must fail fast, not silently no-op.
+	debugSrv, err := debugserver.New(cfg.PprofAddr, logger)
+	if err != nil {
+		logger.Error("configure pprof server", "err", err)
+		os.Exit(1)
+	}
 
 	// ── Database ──────────────────────────────────────────────────────────────
 	database, dialect, err := db.Open(cfg.DBDSN, db.WithMaxOpenConns(cfg.DBMaxOpenConns))
@@ -174,6 +185,14 @@ func main() {
 	// ── Start ─────────────────────────────────────────────────────────────────
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	if debugSrv != nil {
+		if err := debugSrv.Start(ctx); err != nil {
+			logger.Error("start pprof server", "err", err)
+			os.Exit(1)
+		}
+		logger.Info("pprof server listening", "addr", cfg.PprofAddr)
+	}
 
 	go el.Run(ctx)
 	go recorder.Start(ctx)

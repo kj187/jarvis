@@ -13,6 +13,7 @@ names the symptom, what actually causes it, and what to check.
 - [An alert re-fired but the occurrence count did not move](#an-alert-re-fired-but-the-occurrence-count-did-not-move)
 - [Every alert briefly resolved at once](#every-alert-briefly-resolved-at-once)
 - [A silence was created but matches nothing](#a-silence-was-created-but-matches-nothing)
+- [Memory profiling (`JARVIS_PPROF_ADDR`)](#memory-profiling-jarvis_pprof_addr)
 
 ---
 
@@ -217,6 +218,35 @@ supposed to cover are still firing.
 
 The affected-alerts preview in the silence dialog evaluates the same rules
 Alertmanager does. If it says zero before you create the silence, believe it.
+
+---
+
+## Memory profiling (`JARVIS_PPROF_ADDR`)
+
+For a suspected memory or goroutine leak, Jarvis can expose Go's standard
+`heap`/`allocs`/`goroutine` pprof profiles — opt-in, off by default, and
+reachable only from loopback inside the pod itself.
+
+**Enable it** by setting [`JARVIS_PPROF_ADDR`](configuration.md#jarvis_pprof_addr)
+to a literal loopback address, e.g. `127.0.0.1:6060` — a hostname, `0.0.0.0`,
+or any non-loopback address is rejected at startup (the process refuses to
+start rather than silently ignoring a misconfigured value). No Kubernetes
+Service, Ingress, or container port is needed or should be added — reach it
+from your own machine with `kubectl port-forward`:
+
+```sh
+kubectl -n apps port-forward pod/<podname> 6060:6060
+curl --fail 'http://127.0.0.1:6060/debug/pprof/heap' -o /tmp/jarvis-heap.pb.gz
+curl --fail 'http://127.0.0.1:6060/debug/pprof/allocs?seconds=60' -o /tmp/jarvis-allocs.pb.gz
+go tool pprof -top -sample_index=inuse_space /tmp/jarvis-heap.pb.gz
+go tool pprof -top -sample_index=alloc_space /tmp/jarvis-allocs.pb.gz
+```
+
+Only `/debug/pprof/heap`, `/debug/pprof/allocs`, and `/debug/pprof/goroutine`
+are exposed — no index, `cmdline`, CPU profile, or `trace`. Only one profile
+request is served at a time; a concurrent second request gets `429`. This is
+a diagnostic tool for an operator who already has cluster access, not a
+monitoring endpoint — leave it unset unless you're actively investigating.
 
 ---
 

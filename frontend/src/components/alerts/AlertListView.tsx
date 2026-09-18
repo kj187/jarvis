@@ -10,7 +10,7 @@ import { Sheet } from '@/components/ui/sheet'
 import { SilenceForm } from '@/components/silences/SilenceForm'
 import { SilenceExpireModal } from '@/components/silences/SilenceExpireModal'
 import { fetchClusters, deleteSilence } from '@/api/client'
-import { formatSilenceDuration, getFilterableLabels, severityOrder, partitionLabelsForDisplay } from '@/lib/alertUtils'
+import { formatSilenceDuration, getFilterableLabels, partitionLabelsForDisplay } from '@/lib/alertUtils'
 import { renderTextWithLinks } from '@/lib/linkUtils'
 import { useSettingsStore, RESOLVED_PAGE_SIZE_OPTIONS } from '@/store/useSettingsStore'
 import type { LabelDisplayConfig } from '@/lib/settingsUtils'
@@ -29,6 +29,14 @@ interface AlertListViewProps {
   stateFilter?: string
   resolvedMode?: boolean
   groupingEnabled?: boolean
+  resolvedPagination?: {
+    page: number
+    pageSize: 10 | 25 | 50 | 100
+    total: number
+    isFetching: boolean
+    onPageChange: (page: number) => void
+    onPageSizeChange: (size: 10 | 25 | 50 | 100) => void
+  }
 }
 
 interface SilenceSheetState {
@@ -210,6 +218,7 @@ export function AlertListView({
   stateFilter,
   resolvedMode,
   groupingEnabled = true,
+  resolvedPagination,
 }: AlertListViewProps) {
   const { guard, loginModalOpen, onLoginSuccess, onLoginClose } = useLoginGuard()
   const showStateColumn = !stateFilter
@@ -218,8 +227,6 @@ export function AlertListView({
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
   const [silenceSheet, setSilenceSheet] = useState<SilenceSheetState>({ open: false, alerts: [] })
   const [expireTargets, setExpireTargets] = useState<Silence[]>([])
-  const resolvedPageSize = useSettingsStore((s) => s.resolvedPageSize)
-  const updateSettings = useSettingsStore((s) => s.update)
   const theme = useSettingsStore((s) => s.theme)
   const groupByLabel = useSettingsStore((s) => s.groupByLabel)
   const labelDisplay = useSettingsStore((s) => s.labelDisplay)
@@ -233,11 +240,6 @@ export function AlertListView({
   const sectionRefs = useRef<Record<string, HTMLTableRowElement | null>>({})
   const dragGhostRef = useRef<HTMLElement | null>(null)
   const dragOverIndexRef = useRef<number | null>(null)
-  const [resolvedPage, setResolvedPage] = useState(1)
-
-  useEffect(() => {
-    setResolvedPage(1)
-  }, [resolvedPageSize])
 
   function persistCollapsed(next: Set<string>) {
     setCollapsedSections(next)
@@ -409,61 +411,58 @@ export function AlertListView({
     ...presentGroupValues.filter((v) => !sectionOrder.includes(v)),
   ]
 
-  if (alerts.length === 0) {
+  if (alerts.length === 0 && !resolvedMode) {
     return <EmptyState />
   }
 
   // ── Resolved mode: flat paginated list sorted by endsAt desc ───────────────
   if (resolvedMode) {
-    const sorted = [...alerts].sort((a, b) => {
-      const timeDiff = new Date(b.endsAt).getTime() - new Date(a.endsAt).getTime()
-      if (timeDiff !== 0) return timeDiff
-      const sevDiff = severityOrder(a.labels['severity'] ?? 'none') - severityOrder(b.labels['severity'] ?? 'none')
-      if (sevDiff !== 0) return sevDiff
-      return (a.labels['alertname'] ?? '').localeCompare(b.labels['alertname'] ?? '')
-    })
-
-    const totalAlerts = sorted.length
+    if (!resolvedPagination) return <EmptyState />
+    const { page: safePage, pageSize: resolvedPageSize, total: totalAlerts, isFetching,
+      onPageChange, onPageSizeChange } = resolvedPagination
     const totalPages = Math.max(1, Math.ceil(totalAlerts / resolvedPageSize))
-    const safePage = Math.min(resolvedPage, totalPages)
     const startIdx = (safePage - 1) * resolvedPageSize
-    const endIdx = Math.min(startIdx + resolvedPageSize, totalAlerts)
-    const pageAlerts = sorted.slice(startIdx, endIdx)
+    const endIdx = Math.min(startIdx + alerts.length, totalAlerts)
+    const pageAlerts = alerts
     const pageWindow = buildPageWindow(safePage, totalPages)
 
-    const pageNavButtons = (
-      <div className="flex items-center gap-0.5">
+    const pageNavButtons = (label: string) => (
+      <nav
+        aria-label={label}
+        className="flex items-center gap-1 rounded-lg border border-border/70 bg-muted/20 p-1 shadow-sm"
+      >
         <button
           type="button"
-          onClick={() => setResolvedPage(1)}
-          disabled={safePage === 1}
-          className="cursor-pointer p-1 rounded text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-default"
+          onClick={() => onPageChange(1)}
+          disabled={safePage === 1 || isFetching}
+          className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-default disabled:opacity-30 disabled:hover:bg-transparent"
           aria-label="First page"
         >
           <ChevronsLeft className="h-3.5 w-3.5" />
         </button>
         <button
           type="button"
-          onClick={() => setResolvedPage((p) => Math.max(1, p - 1))}
-          disabled={safePage === 1}
-          className="cursor-pointer p-1 rounded text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-default"
+          onClick={() => onPageChange(Math.max(1, safePage - 1))}
+          disabled={safePage === 1 || isFetching}
+          className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-default disabled:opacity-30 disabled:hover:bg-transparent"
           aria-label="Previous page"
         >
           <ChevronLeft className="h-3.5 w-3.5" />
         </button>
         {pageWindow.map((entry, i) =>
           entry === '…' ? (
-            <span key={`ellipsis-${i}`} className="px-1 text-xs text-muted-foreground/50 select-none">…</span>
+            <span key={`ellipsis-${i}`} className="inline-flex h-8 min-w-5 select-none items-center justify-center text-xs text-muted-foreground/50">…</span>
           ) : (
             <button
               key={entry}
               type="button"
-              onClick={() => setResolvedPage(entry as number)}
+              onClick={() => onPageChange(entry as number)}
+              disabled={isFetching}
               className={cn(
-                'min-w-[26px] px-1.5 py-0.5 text-xs rounded cursor-pointer transition-colors tabular-nums',
+                'h-8 min-w-8 rounded-md px-2 text-xs tabular-nums cursor-pointer transition-colors',
                 safePage === entry
-                  ? 'bg-accent text-foreground font-medium'
-                  : 'text-muted-foreground hover:text-foreground',
+                  ? 'bg-accent text-foreground font-semibold shadow-sm'
+                  : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
               )}
             >
               {entry}
@@ -472,56 +471,64 @@ export function AlertListView({
         )}
         <button
           type="button"
-          onClick={() => setResolvedPage((p) => Math.min(totalPages, p + 1))}
-          disabled={safePage === totalPages}
-          className="cursor-pointer p-1 rounded text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-default"
+          onClick={() => onPageChange(Math.min(totalPages, safePage + 1))}
+          disabled={safePage === totalPages || isFetching}
+          className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-default disabled:opacity-30 disabled:hover:bg-transparent"
           aria-label="Next page"
         >
           <ChevronRight className="h-3.5 w-3.5" />
         </button>
         <button
           type="button"
-          onClick={() => setResolvedPage(totalPages)}
-          disabled={safePage === totalPages}
-          className="cursor-pointer p-1 rounded text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-default"
+          onClick={() => onPageChange(totalPages)}
+          disabled={safePage === totalPages || isFetching}
+          className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-default disabled:opacity-30 disabled:hover:bg-transparent"
           aria-label="Last page"
         >
           <ChevronsRight className="h-3.5 w-3.5" />
         </button>
-      </div>
+      </nav>
     )
 
     return (
       <div>
         {/* ── Top bar: page navigator + count + page size selector ── */}
-        <div className="flex items-center gap-3 mb-2">
-          {totalAlerts > 0 && pageNavButtons}
+        <div
+          data-testid="resolved-pagination-top"
+          className="mb-3 flex flex-col items-end gap-2 px-1 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end sm:gap-5"
+        >
           {totalAlerts > 0 && (
-            <span className="text-xs text-muted-foreground tabular-nums">
+            <span className="whitespace-nowrap text-xs text-muted-foreground tabular-nums">
               {startIdx + 1}–{endIdx} of {totalAlerts}
             </span>
           )}
-          <div className="flex items-center gap-0.5">
-            <span className="text-xs text-muted-foreground mr-1.5">Per page:</span>
-            {RESOLVED_PAGE_SIZE_OPTIONS.map((size) => (
-              <button
-                key={size}
-                type="button"
-                onClick={() => updateSettings({ resolvedPageSize: size })}
-                className={cn(
-                  'px-2.5 py-1 text-xs rounded cursor-pointer transition-colors',
-                  resolvedPageSize === size
-                    ? 'bg-accent text-foreground font-medium'
-                    : 'text-muted-foreground hover:text-foreground',
-                )}
-              >
-                {size}
-              </button>
-            ))}
+          <div data-testid="resolved-page-size" className="flex items-center gap-2">
+            <span className="whitespace-nowrap text-xs text-muted-foreground">Per page:</span>
+            <div className="flex items-center gap-1 rounded-lg border border-border/70 bg-muted/20 p-1 shadow-sm">
+              {RESOLVED_PAGE_SIZE_OPTIONS.map((size) => (
+                <button
+                  key={size}
+                  type="button"
+                  onClick={() => onPageSizeChange(size)}
+                  className={cn(
+                    'h-8 min-w-8 rounded-md px-2 text-xs tabular-nums cursor-pointer transition-colors',
+                    resolvedPageSize === size
+                      ? 'bg-accent text-foreground font-semibold shadow-sm'
+                      : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
+                  )}
+                >
+                  {size}
+                </button>
+              ))}
+            </div>
           </div>
+          {totalAlerts > 0 && pageNavButtons('Resolved alert pages')}
         </div>
 
-        <div className="overflow-x-auto">
+        {pageAlerts.length === 0 ? <EmptyState /> : <div
+          className={cn('overflow-x-auto transition-opacity', isFetching && 'opacity-60')}
+          data-testid={isFetching ? 'resolved-page-loading' : undefined}
+        >
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border">
@@ -547,15 +554,18 @@ export function AlertListView({
               ))}
             </tbody>
           </table>
-        </div>
+        </div>}
 
         {/* ── Bottom: page navigator + count ── */}
         {totalAlerts > 0 && (
-          <div className="flex items-center gap-3 mt-3 px-1">
-            {pageNavButtons}
-            <span className="text-xs text-muted-foreground tabular-nums">
+          <div
+            data-testid="resolved-pagination-bottom"
+            className="mt-4 flex flex-col items-end gap-2 border-t border-border/60 px-1 pt-3 sm:flex-row sm:items-center sm:justify-end sm:gap-3"
+          >
+            <span className="whitespace-nowrap text-xs text-muted-foreground tabular-nums">
               {startIdx + 1}–{endIdx} of {totalAlerts}
             </span>
+            {pageNavButtons('Resolved alert pages footer')}
           </div>
         )}
 
