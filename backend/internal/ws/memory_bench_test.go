@@ -44,6 +44,13 @@ func BenchmarkMemoryBroadcast(b *testing.B) {
 				for i := 0; i < clients; i++ {
 					client := &Client{hub: hub, send: make(chan []byte, clientBuffer)}
 					hub.clients[client] = struct{}{}
+					// Drain so the client queue (capacity clientBuffer) never
+					// overflows — Hub.Run now closes the conn on overflow,
+					// which these fake clients (no real websocket) don't have.
+					go func(c *Client) {
+						for range c.send {
+						}
+					}(client)
 				}
 				go hub.Run()
 				payload := map[string]interface{}{"alerts": benchmarkAlerts(alerts)}

@@ -24,7 +24,7 @@ The card view is the default landing page and the primary interface for active a
 
 Sections are grouped by a label you choose from the **Grouped** control in the toolbar (default: `severity`) — see [Grouping](#grouping) below. You can collapse/expand each section and reorder sections via drag-and-drop (drag handle on the right). The section order and collapsed state are persisted in localStorage per grouping label.
 
-Within each section, groups are sorted by recency — the group with the most recently fired alert first, not alphabetically by name — so the freshest problems surface at the top of every section instead of being scattered wherever their alert name happens to sort. The view updates in real time via WebSocket: new alerts appear, resolved alerts disappear, and claim/silence state refreshes without any page reload.
+Within each section, groups are sorted by recency — the group with the most recently fired alert first, not alphabetically by name — so the freshest problems surface at the top of every section instead of being scattered wherever their alert name happens to sort. The view updates in real time via WebSocket: new alerts appear, resolved alerts disappear, and claim/silence state refreshes without any page reload. If a browser tab falls behind (a slow network, a backgrounded tab) the server closes that stale connection rather than queuing updates indefinitely; the browser automatically reconnects and refetches the current state, so a dropped connection self-heals without user action.
 
 **Columns:** the grid lays out 1–4 columns depending on window width by default. Pin it to a fixed count (1–6) via **Card columns** in Settings if you'd rather it not reflow as you resize.
 

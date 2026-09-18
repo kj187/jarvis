@@ -18,7 +18,12 @@ const (
 	pongWait       = 60 * time.Second
 	pingPeriod     = 54 * time.Second
 	maxMessageSize = 512 * 1024 // 512 KB
-	clientBuffer   = 64
+	// clientBuffer/globalBroadcastBuffer are message counts, not a byte
+	// budget: different queued alerts_update versions each keep their own
+	// backing array reachable, so a deep queue of large snapshots is a real
+	// memory hold, not just backpressure (P4, tmp/memory.md §8.2).
+	clientBuffer          = 4
+	globalBroadcastBuffer = 16
 )
 
 // Hub manages all active WebSocket connections.
@@ -45,7 +50,7 @@ func NewHub(allowedOrigins []string, logger *slog.Logger, m *metrics.Metrics) *H
 
 	h := &Hub{
 		clients:    make(map[*Client]struct{}),
-		broadcast:  make(chan []byte, 256),
+		broadcast:  make(chan []byte, globalBroadcastBuffer),
 		unregister: make(chan *Client, 16),
 		logger:     logger,
 		metrics:    m,
@@ -83,16 +88,37 @@ func (h *Hub) Run() {
 			h.mu.Unlock()
 
 		case message := <-h.broadcast:
+			var overflowed []*Client
 			h.mu.RLock()
 			for client := range h.clients {
 				select {
 				case client.send <- message:
 				default:
-					// Slow client — drop message.
-					h.logger.Warn("dropping message for slow client")
+					overflowed = append(overflowed, client)
 				}
 			}
 			h.mu.RUnlock()
+			if len(overflowed) == 0 {
+				continue
+			}
+			// A full client queue means the client is too slow to keep up —
+			// disconnect it instead of silently dropping the message, so a
+			// stuck client doesn't keep holding stale, large queued payloads
+			// (P4, tmp/memory.md §8.2). readPump's own unregister on the
+			// resulting read error is idempotent (Run's unregister case checks
+			// map membership before closing send again).
+			h.mu.Lock()
+			for _, client := range overflowed {
+				if _, ok := h.clients[client]; ok {
+					delete(h.clients, client)
+					close(client.send)
+				}
+			}
+			h.mu.Unlock()
+			for _, client := range overflowed {
+				h.logger.Warn("disconnecting slow ws client")
+				_ = client.conn.Close()
+			}
 		}
 	}
 }
@@ -124,25 +150,50 @@ func (h *Hub) BroadcastJSON(eventType string, payload interface{}) {
 		h.logger.Error("build ws event", "type", eventType, "err", err)
 		return
 	}
-	h.BroadcastRaw(data)
+	h.BroadcastTyped(eventType, data)
 }
 
 // BroadcastRaw queues an already-encoded WS event (see BuildEventJSON) for
 // broadcast to this pod's own clients — used directly by fanout consumers
-// that received the bytes from another pod, so they don't need to
-// re-marshal a typed payload value, only pass the bytes through. The event
-// type for the WSBroadcastsTotal metric label is read back out of data
-// itself (models.WSEvent.Type), so callers never need to track it separately.
+// that received the bytes from another pod and don't know the event type
+// upfront. Only the outer {"type":...} envelope field is decoded for the
+// metric label — never the (possibly large) payload, unlike a full
+// models.WSEvent unmarshal.
 func (h *Hub) BroadcastRaw(data []byte) {
-	if h.metrics != nil {
-		var event models.WSEvent
-		eventType := "unknown"
-		if err := json.Unmarshal(data, &event); err == nil {
-			eventType = event.Type
-		}
-		h.metrics.WSBroadcastsTotal.WithLabelValues(eventType).Inc()
+	eventType := "unknown"
+	var head struct {
+		Type string `json:"type"`
 	}
-	h.broadcast <- data
+	if err := json.Unmarshal(data, &head); err == nil {
+		eventType = head.Type
+	}
+	h.BroadcastTyped(eventType, data)
+}
+
+// BroadcastTyped queues an already-encoded WS envelope (see BuildEventJSON)
+// for broadcast to this pod's own clients, recording the metric under
+// eventType without decoding the envelope. eventType is normalized to a
+// fixed, known set (metricEventType) before use as a Prometheus label, so an
+// unexpected string (e.g. a corrupted fanout envelope) can never create
+// unbounded label cardinality.
+func (h *Hub) BroadcastTyped(eventType string, envelope []byte) {
+	if h.metrics != nil {
+		h.metrics.WSBroadcastsTotal.WithLabelValues(metricEventType(eventType)).Inc()
+	}
+	h.broadcast <- envelope
+}
+
+// metricEventType maps eventType to itself if it's one of the known WS event
+// types, else to "unknown" — the fixed label set the WSBroadcastsTotal
+// metric requires.
+func metricEventType(eventType string) string {
+	switch eventType {
+	case models.WSTypeAlertsUpdate, models.WSTypeClaimSet, models.WSTypeClaimReleased,
+		models.WSTypeCommentAdded, models.WSTypeSilencesUpdate:
+		return eventType
+	default:
+		return "unknown"
+	}
 }
 
 // ServeWS upgrades an HTTP connection to a WebSocket and registers the client.

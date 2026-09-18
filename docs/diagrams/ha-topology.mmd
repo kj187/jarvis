@@ -39,8 +39,8 @@ flowchart LR
     UI -- reads/writes --> LB
     LB -.-> leaderPod
     LB -.-> followerPod
-    LHUB -. push .-> UI
-    FHUB -. push .-> UI
+    LHUB -. "push (bounded queue,<br/>slow client disconnected)" .-> UI
+    FHUB -. "push (bounded queue,<br/>slow client disconnected)" .-> UI
 
     LEL == "holds" ==> LOCK
     FEL -. "retries every 5s" .-> LOCK

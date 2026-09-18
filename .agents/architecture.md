@@ -396,6 +396,17 @@ GET    /api/v1/alerts                            full_protect?  → []EnrichedAl
 #        resolvedBuffer is map[fingerprint+cluster]resolvedEntry. Each entry expires
 #        exactly 20 minutes after its episode's EndsAt. Recorder owns one 1s sweeper;
 #        active alerts win duplicate keys and repeated snapshot rebuilds do not extend TTL.
+#        AlertStore also holds a version counter (bumped by every mutation that changes
+#        what Get() would return — a no-op mutation, e.g. SetActiveClaim on a missing
+#        alert, never bumps it) and a cached JSON array encoding invalidated by a version
+#        mismatch: EncodedSnapshot() returns that cache (rebuilding at most once per
+#        change), reused for both the unfiltered GET /api/v1/alerts response
+#        (c.JSONBlob, no re-marshal) and the alerts_update WS envelope (byte
+#        concatenation around the cached array, no second json.Marshal of the alert
+#        list). Set/SetActiveClaim clone incoming Labels/Annotations/Receivers/Status
+#        slices/Claim (incl. its pointer fields) so a caller mutating its own copy
+#        afterward can never alias store-internal data — Get()'s returned alerts still
+#        share that data with the store and must be treated read-only by callers.
 #        state=resolved is the legacy persistent-history read: Store.VisitResolved scans
 #        latest resolved episodes row-by-row (recorded_at DESC, id DESC), and the handler
 #        streams one JSON array element at a time through a 32 KiB buffer under a 10s
@@ -811,6 +822,25 @@ handled the HTTP request and must still reach every other pod's WS clients.
   and `applySilenceWriteThrough` (`silences.go`, shared by silence
   create/delete). Silence templates currently have no WS broadcast at all
   (checked during D4 implementation) — nothing to fan out there yet.
+- P4 (memory hardening): `BroadcastJSON`/`BroadcastRaw` both funnel through a
+  new `BroadcastTyped(eventType, envelope)` that records the
+  `jarvis_ws_broadcasts_total` metric under a fixed, known event-type set
+  (`metricEventType`) — an unexpected type (e.g. a corrupted fanout envelope)
+  maps to `unknown` instead of creating an unbounded label. `Recorder`'s
+  `broadcastAlertsIfChanged` calls `BroadcastTyped` directly with an envelope
+  it builds by wrapping `AlertStore.EncodedSnapshot()`'s cached array bytes
+  (`{"type":"alerts_update","payload":{"alerts":`+array+`}}`), never a second
+  `json.Marshal` of the alert list; the `broadcaster` interface `Recorder`
+  depends on gained this method alongside `BroadcastJSON`. The global
+  broadcast queue shrank 256→16 and each client's queue 64→4 (message counts,
+  not bytes — several queued large `alerts_update` versions each keep their
+  own backing array reachable). `Hub.Run` now disconnects a client whose
+  queue is full instead of silently dropping its message: the client is
+  removed from `clients` and its `send` channel closed under the hub's
+  exclusive lock, then its socket is closed after the lock is released
+  (immediately unblocking a writer stuck on a slow `conn.Write`, rather than
+  waiting out `writeWait`) — the browser's existing reconnect-and-refetch
+  recovers full state.
 - Receiving side: `api.HandleFanoutMessage(hub, alertStore)` (re-broadcasts
   bytes unchanged) and `api.HandleFanoutRef(store, alertStore, hub, logger)`
   (switches on `ref.Type`: `comment_added` → `store.GetComment`, `claim_set`/

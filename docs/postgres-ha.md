@@ -152,6 +152,24 @@ Alert-state broadcasts (`alerts_update`, the poll-time `silences_update`)
 are **not** fanned out this way — every pod already derives those from its
 own poll or consumed snapshot.
 
+Each pod's `AlertStore` caches its own last JSON encoding of the current
+alert list, invalidated only when the store actually changes, and reuses it
+for both the unfiltered `GET /api/v1/alerts` response and the `alerts_update`
+WebSocket envelope — so a leader's/follower's poll that changes nothing does
+not re-marshal or re-broadcast the (potentially large) alert list. This is
+purely a per-pod encoding cache; it has no bearing on which pod is leader or
+on the claim-patch requirement above (a claim mutation still bumps the
+cache, so the patched claim is reflected in the very next cached encoding).
+
+WebSocket delivery is intentionally best-effort per client: each pod's hub
+keeps a small bounded queue per connected client and a small bounded global
+broadcast queue. A client that can't keep up (a stuck/slow browser
+connection) is disconnected rather than allowed to sit on a growing backlog
+of queued snapshots — its existing reconnect-and-refetch converges it back
+to current state. This bounds each pod's own WebSocket memory independently
+of how many browsers are connected or how slow any one of them is; it is
+unrelated to leader election or snapshot distribution.
+
 ### User settings
 
 `user_settings` (one opaque JSON blob per user, `internal/settings`) is

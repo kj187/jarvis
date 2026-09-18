@@ -34,6 +34,10 @@ func (m *mockHub) BroadcastJSON(eventType string, payload interface{}) {
 	m.events = append(m.events, broadcastCall{eventType: eventType, payload: payload})
 }
 
+func (m *mockHub) BroadcastTyped(eventType string, envelope []byte) {
+	m.events = append(m.events, broadcastCall{eventType: eventType, payload: envelope})
+}
+
 func newTestRecorder(t *testing.T) (*Recorder, *mockHub) {
 	t.Helper()
 	database, dialect, err := idb.Open(":memory:")

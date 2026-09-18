@@ -153,11 +153,17 @@ func (s *Server) getAlerts(c echo.Context) error {
 		return s.streamResolvedAlerts(c, clusterFilter, severityFilter)
 	}
 
-	// Active / suppressed alerts come from the in-memory store.
-	alerts := s.alertStore.Get()
+	// Active / suppressed alerts come from the in-memory store. The
+	// unfiltered case reuses AlertStore's cached JSON encoding (P4) instead
+	// of re-marshaling the full alert list on every request.
 	if clusterFilter == "" && severityFilter == "" && stateFilter == "" {
-		return c.JSON(http.StatusOK, alerts)
+		data, _, err := s.alertStore.EncodedSnapshot()
+		if err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, "failed to encode alerts").SetInternal(err)
+		}
+		return c.JSONBlob(http.StatusOK, data)
 	}
+	alerts := s.alertStore.Get()
 	filtered := make([]models.EnrichedAlert, 0)
 	for _, a := range alerts {
 		if clusterFilter != "" && a.ClusterName != clusterFilter {

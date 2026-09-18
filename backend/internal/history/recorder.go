@@ -19,6 +19,11 @@ import (
 // broadcaster is the minimal interface the Recorder needs from the WS hub.
 type broadcaster interface {
 	BroadcastJSON(eventType string, payload interface{})
+	// BroadcastTyped queues an already-encoded WS envelope, recording the
+	// metric under eventType without decoding it — used by
+	// broadcastAlertsIfChanged, which builds the envelope itself from
+	// AlertStore's cached JSON snapshot instead of a typed payload value.
+	BroadcastTyped(eventType string, envelope []byte)
 }
 
 // elector is the minimal leader-election view Recorder needs from
@@ -728,25 +733,43 @@ func (r *Recorder) applyPollResults(
 	}
 }
 
+// alertsUpdatePrefix/Suffix wrap AlertStore.EncodedSnapshot()'s cached alert
+// array JSON into the exact WS envelope shape
+// {"type":"alerts_update","payload":{"alerts":[...]}} via byte concatenation
+// — never a second json.Marshal of the (potentially large) alert array.
+const (
+	alertsUpdatePrefix = `{"type":"` + models.WSTypeAlertsUpdate + `","payload":{"alerts":`
+	alertsUpdateSuffix = `}}`
+)
+
 // broadcastAlertsIfChanged pushes the current alert snapshot to all WebSocket
-// clients, but skips the push when the snapshot is byte-identical to the one
+// clients, but skips the push when the envelope is byte-identical to the one
 // broadcast on the previous poll. The frontend loads its initial state via REST
 // and relies on WebSocket messages only for *changes*, so suppressing redundant
-// identical broadcasts saves an envelope marshal and a fan-out write to every
-// client on idle polls — with no visible effect. AlertStore.Get() returns a
-// deterministically ordered snapshot, so an unchanged poll hashes identically
-// and is correctly suppressed; the comparison can still only ever yield a
-// false "changed" (never a false "unchanged"), so updates are never missed.
+// identical broadcasts saves a fan-out write to every client on idle polls —
+// with no visible effect. AlertStore.Get() returns a deterministically ordered
+// snapshot, so an unchanged poll hashes identically and is correctly
+// suppressed; the comparison can still only ever yield a false "changed"
+// (never a false "unchanged"), so updates are never missed.
+//
+// The array JSON itself comes from AlertStore.EncodedSnapshot()'s cache,
+// which AlertStore only rebuilds when its own version changed — Set() bumps
+// that version on every poll even for a content-identical snapshot, so this
+// function's own content hash (not the store's version) is what actually
+// decides whether to broadcast.
 func (r *Recorder) broadcastAlertsIfChanged() {
-	payload := map[string]interface{}{"alerts": r.alertStore.Get()}
-	data, err := json.Marshal(payload)
+	arrayJSON, _, err := r.alertStore.EncodedSnapshot()
 	if err != nil {
 		r.logger.Error("marshal alerts payload", "err", err)
 		return
 	}
+	envelope := make([]byte, 0, len(alertsUpdatePrefix)+len(arrayJSON)+len(alertsUpdateSuffix))
+	envelope = append(envelope, alertsUpdatePrefix...)
+	envelope = append(envelope, arrayJSON...)
+	envelope = append(envelope, alertsUpdateSuffix...)
 
 	h := fnv.New64a()
-	_, _ = h.Write(data)
+	_, _ = h.Write(envelope)
 	sum := h.Sum64()
 
 	r.broadcastMu.Lock()
@@ -758,7 +781,7 @@ func (r *Recorder) broadcastAlertsIfChanged() {
 	if unchanged {
 		return
 	}
-	r.hub.BroadcastJSON(models.WSTypeAlertsUpdate, json.RawMessage(data))
+	r.hub.BroadcastTyped(models.WSTypeAlertsUpdate, envelope)
 }
 
 // fetchCluster fetches and enriches (deduplicated, merged) alerts for a
