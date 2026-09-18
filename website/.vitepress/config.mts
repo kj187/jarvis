@@ -41,6 +41,13 @@ export default defineConfig({
   // Strict for every internal link; only the docs' example URLs are exempt.
   ignoreDeadLinks: [/^https?:\/\/localhost/],
 
+  // `make website-dev` runs in a container with the repo bind-mounted from the
+  // host; inotify events from host edits never reach it, so Vite's default
+  // watcher silently misses every change (only a restart picked them up).
+  vite: {
+    server: { watch: { usePolling: true, interval: 300 } },
+  },
+
   markdown: {
     // Shiki has no `env` grammar; `promql` has none either and falls back to
     // plain text on its own (harmless build warning).

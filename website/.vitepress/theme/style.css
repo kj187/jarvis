@@ -104,28 +104,78 @@
 .VPHero .text {
   font-family: var(--vp-font-family-display);
 }
+/* The slogan is a long sentence, not a product name: at VitePress' default
+   size (same as the "Jarvis" name, 56px) it wrapped to five lines in the
+   half-width text column. Smaller than the name keeps the hierarchy, and
+   "Day-to-Day" must not break at its hyphens. */
+.VPHero .heading .text {
+  font-size: 28px;
+  line-height: 1.2;
+}
+.VPHero .text .nowrap {
+  white-space: nowrap;
+}
+@media (min-width: 640px) {
+  .VPHero .heading .text {
+    font-size: 34px;
+  }
+}
+@media (min-width: 960px) {
+  .VPHero .heading .text {
+    font-size: 38px;
+  }
+}
 @media (min-width: 960px) {
   .VPHero .image {
     transform: translateX(48px);
   }
 }
 
-.home-showcase {
-  box-sizing: border-box;
-  max-width: 1200px;
+/* Plain-language "what is Jarvis" text below the hero. Same padding/max-width
+   split as .home-hero-screenshot so both edges line up with the hero above. */
+.home-hero-explainer {
+  position: relative;
+  padding: 0 24px 40px;
+}
+@media (min-width: 640px) {
+  .home-hero-explainer {
+    padding: 0 48px 40px;
+  }
+}
+@media (min-width: 960px) {
+  .home-hero-explainer {
+    padding: 0 64px 48px;
+  }
+}
+.home-hero-explainer p {
+  max-width: 1152px;
   margin: 0 auto;
-  padding: 48px 24px 96px;
+  font-size: 18px;
+  line-height: 1.7;
+  color: var(--vp-c-text-2);
+}
+/* The problem statement is the sentence that must be read — full-strength text
+   colour instead of the muted body grey. */
+.home-hero-explainer .lead {
+  color: var(--vp-c-text-1);
+  font-weight: 600;
+}
+
+/* VitePress' own VPHomeContent wrapper already supplies the max-width and the
+   24/48/64px side padding (same as the feature grid above), so only vertical
+   spacing is added here — horizontal padding would inset the text a second
+   time and pull it out of line with the cards. */
+.home-showcase {
+  padding: 48px 0 96px;
 }
 @media (min-width: 640px) {
   .home-showcase {
-    max-width: 1248px;
-    padding: 80px 48px 96px;
+    padding: 80px 0 96px;
   }
 }
 @media (min-width: 960px) {
   .home-showcase {
-    max-width: 1280px;
-    padding: 96px 64px 96px;
+    padding: 96px 0 96px;
   }
 }
 /* VitePress hides heading anchors with `.vp-doc .header-anchor`, and the home

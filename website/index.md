@@ -5,8 +5,8 @@ titleTemplate: An Alertmanager Frontend for Day-to-Day Infrastructure Operations
 
 hero:
   name: Jarvis
-  text: When the alert disappears but the questions remain
-  tagline: An Alertmanager Frontend for Day-to-Day Infrastructure Operations.
+  text: An Alertmanager Frontend for <span class="nowrap">Day-to-Day</span> Infrastructure Operations
+  tagline: When the alert disappears but the questions remain.
   image:
     src: /logo.png
     alt: Jarvis

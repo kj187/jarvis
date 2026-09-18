@@ -42,9 +42,14 @@ Both run containerized (`node:22-alpine`, no local Node/pnpm needed).
 user; `git` is installed inside the container because the build reads each
 page's last commit time via `git log`.
 
-`make website-dev` syncs once at startup. Editing a file under `docs/` while
-it runs does **not** re-sync — restart it (editing files under `website/`
-does hot-reload).
+`make website-dev` syncs at startup and then keeps `sync-content.mjs
+--watch-only` running next to VitePress: it polls the synced `docs/` pages,
+`docs/assets`, `frontend/public` branding and `website/index.md` once a second
+(polling, because inotify events from the host never reach a container bind
+mount) and re-syncs only the files whose bytes changed. Vite itself needs the
+same treatment — `vite.server.watch.usePolling` in `config.mts` — otherwise it
+never sees an edit, neither under `website/` nor in the re-synced `content/`.
+Adding a page or changing `pages.mjs`/`config.mts` still needs a restart.
 
 ---
 
