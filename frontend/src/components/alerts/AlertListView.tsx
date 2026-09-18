@@ -431,13 +431,16 @@ export function AlertListView({
     const pageAlerts = sorted.slice(startIdx, endIdx)
     const pageWindow = buildPageWindow(safePage, totalPages)
 
-    const pageNavButtons = (
-      <div className="flex items-center gap-0.5">
+    const pageNavButtons = (label: string) => (
+      <nav
+        aria-label={label}
+        className="flex items-center gap-1 rounded-lg border border-border/70 bg-muted/20 p-1 shadow-sm"
+      >
         <button
           type="button"
           onClick={() => setResolvedPage(1)}
           disabled={safePage === 1}
-          className="cursor-pointer p-1 rounded text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-default"
+          className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-default disabled:opacity-30 disabled:hover:bg-transparent"
           aria-label="First page"
         >
           <ChevronsLeft className="h-3.5 w-3.5" />
@@ -446,24 +449,24 @@ export function AlertListView({
           type="button"
           onClick={() => setResolvedPage((p) => Math.max(1, p - 1))}
           disabled={safePage === 1}
-          className="cursor-pointer p-1 rounded text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-default"
+          className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-default disabled:opacity-30 disabled:hover:bg-transparent"
           aria-label="Previous page"
         >
           <ChevronLeft className="h-3.5 w-3.5" />
         </button>
         {pageWindow.map((entry, i) =>
           entry === '…' ? (
-            <span key={`ellipsis-${i}`} className="px-1 text-xs text-muted-foreground/50 select-none">…</span>
+            <span key={`ellipsis-${i}`} className="inline-flex h-8 min-w-5 select-none items-center justify-center text-xs text-muted-foreground/50">…</span>
           ) : (
             <button
               key={entry}
               type="button"
               onClick={() => setResolvedPage(entry as number)}
               className={cn(
-                'min-w-[26px] px-1.5 py-0.5 text-xs rounded cursor-pointer transition-colors tabular-nums',
+                'h-8 min-w-8 rounded-md px-2 text-xs tabular-nums cursor-pointer transition-colors',
                 safePage === entry
-                  ? 'bg-accent text-foreground font-medium'
-                  : 'text-muted-foreground hover:text-foreground',
+                  ? 'bg-accent text-foreground font-semibold shadow-sm'
+                  : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
               )}
             >
               {entry}
@@ -474,7 +477,7 @@ export function AlertListView({
           type="button"
           onClick={() => setResolvedPage((p) => Math.min(totalPages, p + 1))}
           disabled={safePage === totalPages}
-          className="cursor-pointer p-1 rounded text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-default"
+          className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-default disabled:opacity-30 disabled:hover:bg-transparent"
           aria-label="Next page"
         >
           <ChevronRight className="h-3.5 w-3.5" />
@@ -483,42 +486,47 @@ export function AlertListView({
           type="button"
           onClick={() => setResolvedPage(totalPages)}
           disabled={safePage === totalPages}
-          className="cursor-pointer p-1 rounded text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-default"
+          className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-default disabled:opacity-30 disabled:hover:bg-transparent"
           aria-label="Last page"
         >
           <ChevronsRight className="h-3.5 w-3.5" />
         </button>
-      </div>
+      </nav>
     )
 
     return (
       <div>
         {/* ── Top bar: page navigator + count + page size selector ── */}
-        <div className="flex items-center gap-3 mb-2">
-          {totalAlerts > 0 && pageNavButtons}
+        <div
+          data-testid="resolved-pagination-top"
+          className="mb-3 flex flex-col items-end gap-2 px-1 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end sm:gap-5"
+        >
           {totalAlerts > 0 && (
-            <span className="text-xs text-muted-foreground tabular-nums">
+            <span className="whitespace-nowrap text-xs text-muted-foreground tabular-nums">
               {startIdx + 1}–{endIdx} of {totalAlerts}
             </span>
           )}
-          <div className="flex items-center gap-0.5">
-            <span className="text-xs text-muted-foreground mr-1.5">Per page:</span>
-            {RESOLVED_PAGE_SIZE_OPTIONS.map((size) => (
-              <button
-                key={size}
-                type="button"
-                onClick={() => updateSettings({ resolvedPageSize: size })}
-                className={cn(
-                  'px-2.5 py-1 text-xs rounded cursor-pointer transition-colors',
-                  resolvedPageSize === size
-                    ? 'bg-accent text-foreground font-medium'
-                    : 'text-muted-foreground hover:text-foreground',
-                )}
-              >
-                {size}
-              </button>
-            ))}
+          <div data-testid="resolved-page-size" className="flex items-center gap-2">
+            <span className="whitespace-nowrap text-xs text-muted-foreground">Per page:</span>
+            <div className="flex items-center gap-1 rounded-lg border border-border/70 bg-muted/20 p-1 shadow-sm">
+              {RESOLVED_PAGE_SIZE_OPTIONS.map((size) => (
+                <button
+                  key={size}
+                  type="button"
+                  onClick={() => updateSettings({ resolvedPageSize: size })}
+                  className={cn(
+                    'h-8 min-w-8 rounded-md px-2 text-xs tabular-nums cursor-pointer transition-colors',
+                    resolvedPageSize === size
+                      ? 'bg-accent text-foreground font-semibold shadow-sm'
+                      : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
+                  )}
+                >
+                  {size}
+                </button>
+              ))}
+            </div>
           </div>
+          {totalAlerts > 0 && pageNavButtons('Resolved alert pages')}
         </div>
 
         <div className="overflow-x-auto">
@@ -551,11 +559,14 @@ export function AlertListView({
 
         {/* ── Bottom: page navigator + count ── */}
         {totalAlerts > 0 && (
-          <div className="flex items-center gap-3 mt-3 px-1">
-            {pageNavButtons}
-            <span className="text-xs text-muted-foreground tabular-nums">
+          <div
+            data-testid="resolved-pagination-bottom"
+            className="mt-4 flex flex-col items-end gap-2 border-t border-border/60 px-1 pt-3 sm:flex-row sm:items-center sm:justify-end sm:gap-3"
+          >
+            <span className="whitespace-nowrap text-xs text-muted-foreground tabular-nums">
               {startIdx + 1}–{endIdx} of {totalAlerts}
             </span>
+            {pageNavButtons('Resolved alert pages footer')}
           </div>
         )}
 

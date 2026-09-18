@@ -58,6 +58,7 @@ func TestRoutes(t *testing.T) {
 
 	routes := []string{
 		"/api/v1/alerts/groups", // must not be interpreted as fingerprint "groups"
+		"/api/v1/alerts/resolved",
 		"/api/v1/alerts",
 		"/api/v1/status",
 		"/api/v1/silences",

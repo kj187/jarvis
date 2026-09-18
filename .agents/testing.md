@@ -146,10 +146,11 @@ For a before/after comparison:
    default; benchmark code and changes to this procedure are.
 
 The benchmark names are intentionally stable: `BenchmarkMemoryResolvedLegacy`,
+`BenchmarkMemoryResolvedCount`, `BenchmarkMemoryResolvedPage`,
+`BenchmarkMemoryResolvedPageFiltered`,
 `BenchmarkMemorySnapshotCodec`, `BenchmarkMemoryLiveGET`, and
-`BenchmarkMemoryBroadcast`. Add the planned resolved count/page benchmarks only
-when those production read paths exist; do not create measurement-only HTTP
-endpoints. The loopback load harness never seeds or deletes data: prepare a
+`BenchmarkMemoryBroadcast`. Count/page exercise the production store queries;
+there is no measurement-only HTTP endpoint. The loopback load harness never seeds or deletes data: prepare a
 disposable local/E2E database separately, and never point a destructive fixture
 at a production DSN.
 
@@ -169,6 +170,7 @@ at a production DSN.
 | `internal/history` | `store_postgres_test.go` | `postgresTestDSN` (skip gate), `newTestPostgresStores(t, n)` — n independent `*sql.DB` connections against one truncated PostgreSQL test database, the multi-replica situation in miniature (reused by later multi-replica-plan slices' elector/recorder/fanout tests); cancelled `VisitResolved` iteration releases a pool capped to one connection for immediate reuse |
 | `internal/history` | `store_concurrency_test.go` | D5 (`AGENTS.md`-pending invariant): `RecordStatusChange` raced concurrently — one Store (SQLite) and 10 Stores on one PostgreSQL database (`JARVIS_TEST_POSTGRES_DSN`-gated) — exactly one resulting event row, no duplicate from a non-atomic idempotency-check-then-insert; 2 racing Postgres connections proved too narrow a window to reproduce the bug reliably (20/20 false-negative runs in development), hence 10 |
 | `internal/history` | `store_extra_test.go`, `store_resolved_test.go` | `GetClaimHistory`, silence history, streaming latest-resolved selection (refire exclusion, cluster isolation, exact TTL boundaries, context/callback cancellation, JSON fallback compatibility, event-ID tie-break), `SeedResolved`, silence templates |
+| `internal/history` | `store_resolved_page_test.go` | bounded Resolved pages: stable event-ID ties across pages, total, single-pass filters, invalid regex indices, past-end offsets, fingerprint detail, refire exclusion; PostgreSQL coverage is env-gated |
 | `internal/history` | `store_retention_test.go` | Retention delete/detach methods (`store_retention.go`): `sweepableEventsCondition` — open firing/suppressed episode head survives any age, a superseded or resolved/expired row past cutoff is deleted; batching (1200 rows/batch 500); context-cancel stops the loop; detach nulls `event_id` only on rows referencing a soon-to-be-deleted event; released-claim/comment/silence-event cutoffs (active claims always survive); orphan fingerprint sweep (survives with any remaining event/claim/comment, deletes only true orphans past `last_seen_at` cutoff); re-fire after a full event sweep does not inflate `occurrence_count` |
 | `internal/history` | `alert_store_test.go` | `Set`/`Get`/`MarkResolved`/`ExpireResolved` (thread safety via goroutines); episode timestamps and exact TTL boundary; seed remaining TTL; refire/resolve deadline replacement; active-wins and duplicate-does-not-extend rules; reset clears expiry metadata; `Get` deterministic total order (invariant #17) |
 | `internal/history` | `silence_store_test.go` | `SilenceStore`: Set/Get copy semantics, Upsert, MarkExpired, Reset, concurrent access |
@@ -189,6 +191,7 @@ at a production DSN.
 | `internal/alertmanager` | `client_test.go` | HTTP client against `httptest.NewServer` |
 | `internal/alertmanager` | `auth_test.go` `oauth2_test.go` | Per-cluster upstream auth (basic/bearer/OAuth2) |
 | `internal/api` | `alerts_test.go` | Alert list/detail handler; legacy resolved-history JSON streaming, bounded response writes, filters, empty result, and failures before/after response commit |
+| `internal/alertfilter` | `filter_test.go`, `testdata/conformance.json` | Resolved-only RE2 matchers, receiver/pseudo-label semantics, strict `@age`, per-label search, invalid-regex indices, and the shared frontend/backend conformance corpus |
 | `internal/api` | `claims_test.go` | Claim set/release handler |
 | `internal/api` | `comments_test.go` | Comment create/delete handler (author-gated) |
 | `internal/api` | `silences_test.go` | Silence list (snapshot-only, zero AM calls, `?cluster=` filter) + create/delete handler incl. `SilenceStore` write-through + poll trigger + silence templates CRUD + backend validation (empty/invalid matchers, endsAt checks) + AM 4xx passthrough |
@@ -315,6 +318,9 @@ to `src/lib/**` only:
   dependencies, no other directory is in scope.
 - `frontend/src/lib/alertUtils.test.ts` — example-based tests for every
   exported function (formatting/escaping helpers, matching/state functions),
+  including the byte-mirrored Resolved-filter corpus from
+  `src/lib/testdata/resolved-filter-conformance.json` (shared expectations
+  plus explicit JavaScript-RegExp/RE2 and serialized-JSON-search differences),
   plus `fast-check` property tests (e.g. "regex built from
   `escapeRegexValue` matches only the original literal"; "every label
   `computeGroupLabelValues` returns is present on every input alert").
@@ -485,7 +491,7 @@ troubleshooting are documented in **`docs/testing-e2e.md`**.
 | `frontend/**` | `pnpm audit --audit-level=high` + `pnpm lint` (eslint) + `pnpm test:unit:coverage` (Vitest + 100% coverage gate, `lib/alertUtils.ts`) + `pnpm duplication` (jscpd) — executed **inside the running dev container** (`jarvis_frontend_1`); hook fails if the container is not running |
 | `charts/**` | `helm lint` + `helm unittest` |
 | always | `scripts/check-changelogs.sh` — chart changes (outside `tests/`) must update `charts/jarvis/CHANGELOG.md`; every chart-changelog version section starts with a non-empty `### Breaking Changes`; changed `.github/release-notes/*.md` contain a Breaking Changes heading (a no-op when none of those paths are staged) |
-| always | `scripts/check-agent-context.sh` (also `make check-agent-context`) — the AI agent context stays tool-agnostic: every `.agents/skills/*/` passes the Agent Skills reference validator (`skills-ref`, pinned, run via `agentskills` / `uvx` / `pipx`) and `SKILL.md` ≤ 500 lines; tool adapters match the lists in the script (`docs/ai-agents.md`); `AGENTS.md` ≤ 30,000 bytes (the smallest project-instruction limit among the supported tools is 32 KiB, including the user's global file); every doc/script path in `AGENTS.md` exists; no tool names or tool-only syntax in `AGENTS.md` or any `.agents/**/*.md`; every `docs/*.md` file is registered in `website/scripts/pages.mjs` (`.agents/skills/website/SKILL.md`) |
+| always | `scripts/check-agent-context.sh` (also `make check-agent-context`) — the AI agent context stays tool-agnostic: every `.agents/skills/*/` passes the Agent Skills reference validator (`skills-ref`, pinned, run via `agentskills` / `uvx` / `pipx`) and `SKILL.md` ≤ 500 lines; tool adapters match the lists in the script (`docs/ai-agents.md`); `AGENTS.md` ≤ 30,000 bytes (the smallest project-instruction limit among the supported tools is 32 KiB, including the user's global file); every doc/script path in `AGENTS.md` exists; no tool names or tool-only syntax in `AGENTS.md` or any `.agents/**/*.md`; every `docs/*.md` file is registered in `website/scripts/pages.mjs` (`.agents/skills/website/SKILL.md`); backend/frontend resolved-filter conformance fixtures are byte-identical |
 | always | **gitleaks** secret scan of the staged diff (via podman, config `.gitleaks.toml`) |
 
 ```bash

@@ -75,9 +75,14 @@ adapters and their rules live in `docs/ai-agents.md`.
    silences (`status.silencedBy` can hold several) expire within ≤15 min →
    returns `active`; a single longer-running silence keeps it suppressed. This
    logic **only** in `lib/alertUtils.ts` — never duplicate.
-4. **Filter functions exclusively in `lib/alertUtils.ts`**:
-   `getFilterableLabels`, `matchesLabelMatchers`, `safeRegex` — no copy-paste
-   into components.
+4. **Filter functions stay centralized, never in components**: live-browser
+   filtering remains exclusively in `lib/alertUtils.ts`
+   (`getFilterableLabels`, `matchesLabelMatchers`, `matchesAlertSearch`,
+   `safeRegex`). The only separate implementation is the persistent Resolved
+   page's server-side `internal/alertfilter` package: it deliberately uses Go
+   RE2 and per-label search, and shares the committed cross-language
+   conformance fixture checked by `scripts/check-agent-context.sh` — never
+   copy either implementation into handlers or components.
 5. **Route order in Echo router**: `/api/v1/alerts/groups` must be registered
    **before** `/api/v1/alerts/:fingerprint/*`, otherwise `groups` is
    interpreted as a fingerprint. General rule: static segments before

@@ -174,9 +174,10 @@ func NewRouter(
 	apiV1.GET("/status", srv.getStatus)
 	apiV1.GET("/info", srv.getInfo)
 
-	// IMPORTANT: /alerts/groups must be registered BEFORE /alerts/:fingerprint/*
-	// to prevent Echo from matching "groups" as a fingerprint parameter.
+	// IMPORTANT: static /alerts routes must be registered BEFORE
+	// /alerts/:fingerprint/* so Echo never treats them as fingerprints.
 	apiV1.GET("/alerts/groups", srv.getAlertGroups)
+	apiV1.GET("/alerts/resolved", srv.getResolvedAlertsPage)
 	apiV1.GET("/alerts", srv.getAlerts)
 	apiV1.GET("/alerts/:fingerprint/history", srv.getAlertHistory)
 	apiV1.GET("/alerts/:fingerprint/timeline", srv.getAlertTimeline)

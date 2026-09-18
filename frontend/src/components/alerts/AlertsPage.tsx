@@ -15,7 +15,7 @@ import { AlertCardGrid } from './AlertCardGrid'
 import { GroupingControl } from './GroupingControl'
 import { AlertListView } from './AlertListView'
 import { AlertDetailPanel } from './AlertDetailPanel'
-import { matchesLabelMatchers, getEffectiveAlertState } from '@/lib/alertUtils'
+import { matchesAlertSearch, matchesLabelMatchers, getEffectiveAlertState } from '@/lib/alertUtils'
 import { findDefaultSavedFilter, hasAlertViewParams } from '@/lib/savedFilters'
 import { FILTER_PARAM, LEGACY_MATCHERS_PARAM, formatMatchers, readUrlMatchers } from '@/lib/filterUrl'
 import { parseAlertSelectionKey } from '@/lib/alertSelection'
@@ -194,11 +194,7 @@ export function AlertsPage() {
 
   // Filter alerts
   const filtered: EnrichedAlert[] = alerts.filter((alert) => {
-    if (filters.search) {
-      const needle = filters.search.toLowerCase()
-      const haystack = (alert.labels['alertname'] ?? '') + JSON.stringify(alert.labels)
-      if (!haystack.toLowerCase().includes(needle)) return false
-    }
+    if (!matchesAlertSearch(alert, filters.search)) return false
 
     if (filters.state && !isResolvedMode) {
       const effectiveState = getEffectiveAlertState(alert, silences)

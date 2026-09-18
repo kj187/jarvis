@@ -253,7 +253,7 @@ Quick reference: which spec file covers what. Use this to find the right place f
 |---|---|---|
 | `app-shell.spec.ts` | A1–A6 | Nav-tabs, theme toggle, mobile hamburger, WS indicator, manual refresh, cluster status in header |
 | `card-view.spec.ts` | B1 | Card view renders polled alerts (smoke test) |
-| `alerts-views.spec.ts` | B2–B6, B9 | List↔card toggle, severity ordering, card pagination, fullscreen, resolved view |
+| `alerts-views.spec.ts` | B2–B6, B9 | List↔card toggle, severity ordering, card pagination, fullscreen, resolved view including right-aligned top/footer page navigation |
 | `resolved-fetch.spec.ts` | — | Resolved history is fetched only in resolved mode; initial spinner, error/retry and mode-exit cancellation |
 | `alerts-views-extended.spec.ts` | B7–B8, B10 | Responsive column binning, empty state, suppressed/silenced view |
 | `filters.spec.ts` | C1, C10, C10b, C11–C13 | Exact matcher + `?filter=` URL (Alertmanager matcher syntax), state restore from URL, legacy `?matchers=` JSON link restored and rewritten to `?filter=` (C10b), `?q=` search, combined search+chips |

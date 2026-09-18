@@ -53,4 +53,6 @@ Notes from verifying the setup:
 "Agent Context", and via `make check-agent-context`. It validates every skill
 with the Agent Skills reference validator, checks the adapters, keeps
 `AGENTS.md` within its size limit with all mentioned paths existing, and
-rejects tool names or tool-only syntax in `AGENTS.md` and `.agents/`.
+rejects tool names or tool-only syntax in `AGENTS.md` and `.agents/`. It also
+keeps the backend and frontend copies of the resolved-filter conformance
+fixture byte-identical so both language implementations test the same cases.

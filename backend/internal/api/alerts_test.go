@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -65,6 +66,24 @@ type boundedWriteRecorder struct {
 	status   int
 	total    int
 	maxWrite int
+}
+
+func encodedMatchers(count int) string {
+	matchers := make([]map[string]string, count)
+	for i := range matchers {
+		matchers[i] = map[string]string{"name": "label", "operator": "=", "value": "value"}
+	}
+	data, _ := json.Marshal(matchers)
+	return url.QueryEscape(string(data))
+}
+
+func encodedMatchersWithValue(count, valueBytes int) string {
+	matchers := make([]map[string]string, count)
+	for i := range matchers {
+		matchers[i] = map[string]string{"name": "label", "operator": "=", "value": strings.Repeat("v", valueBytes)}
+	}
+	data, _ := json.Marshal(matchers)
+	return url.QueryEscape(string(data))
 }
 
 func (w *boundedWriteRecorder) Header() http.Header { return w.header }
@@ -410,6 +429,127 @@ func TestGetAlerts_ResolvedErrorAfterCommitAbortsHTTPConnection(t *testing.T) {
 	}
 	if strings.HasSuffix(string(body), "]\n") {
 		t.Fatalf("aborted response was closed as valid JSON: %q", body)
+	}
+}
+
+func TestParseResolvedPageQuery(t *testing.T) {
+	tests := []struct {
+		name       string
+		query      string
+		wantLimit  int
+		wantOffset int
+		wantErr    bool
+	}{
+		{"defaults", "", 25, 0, false},
+		{"allowed page", "limit=50&offset=100", 50, 100, false},
+		{"minimum limit", "limit=10", 10, 0, false},
+		{"maximum limit", "limit=100", 100, 0, false},
+		{"empty limit", "limit=", 0, 0, true},
+		{"signed offset", "offset=%2B1", 0, 0, true},
+		{"negative offset", "offset=-1", 0, 0, true},
+		{"maximum offset", "offset=2147483547", 25, 2147483547, false},
+		{"overflow offset", "offset=2147483548", 0, 0, true},
+		{"unsupported limit", "limit=20", 0, 0, true},
+		{"duplicate", "limit=25&limit=50", 0, 0, true},
+		{"unknown", "wat=1", 0, 0, true},
+		{"null matchers", "matchers=null", 0, 0, true},
+		{"unknown matcher field", `matchers=%5B%7B%22name%22%3A%22a%22%2C%22operator%22%3A%22%3D%22%2C%22value%22%3A%22b%22%2C%22id%22%3A%221%22%7D%5D`, 0, 0, true},
+		{"empty matcher operator", "matchers=" + url.QueryEscape(`[{"name":"a","operator":"","value":"b"}]`), 0, 0, true},
+		{"matcher name too long", "matchers=" + url.QueryEscape(`[{"name":"`+strings.Repeat("a", 257)+`","operator":"=","value":"b"}]`), 0, 0, true},
+		{"maximum matcher name", "matchers=" + url.QueryEscape(`[{"name":"`+strings.Repeat("a", 256)+`","operator":"=","value":"b"}]`), 25, 0, false},
+		{"maximum matcher value", "matchers=" + url.QueryEscape(`[{"name":"a","operator":"=","value":"`+strings.Repeat("b", 1024)+`"}]`), 25, 0, false},
+		{"matcher value too long", "matchers=" + url.QueryEscape(`[{"name":"a","operator":"=","value":"`+strings.Repeat("b", 1025)+`"}]`), 0, 0, true},
+		{"cluster too long", "cluster=" + strings.Repeat("a", 257), 0, 0, true},
+		{"severity too long", "severity=" + strings.Repeat("a", 65), 0, 0, true},
+		{"search too long", "search=" + strings.Repeat("a", 257), 0, 0, true},
+		{"fifty matchers", "matchers=" + encodedMatchers(50), 25, 0, false},
+		{"fifty-one matchers", "matchers=" + encodedMatchers(51), 0, 0, true},
+		{"decoded matchers too large", "matchers=" + encodedMatchersWithValue(10, 800), 0, 0, true},
+		{"fingerprint detail", "fingerprint=aabbccddeeff0011&cluster=prod", 1, 0, false},
+		{"empty fingerprint", "fingerprint=", 0, 0, true},
+		{"fingerprint rejects limit", "fingerprint=aabbccddeeff0011&limit=25", 0, 0, true},
+		{"invalid fingerprint", "fingerprint=ABC", 0, 0, true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			e := echo.New()
+			req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/alerts/resolved?"+tc.query, nil)
+			c := e.NewContext(req, httptest.NewRecorder())
+			got, err := parseResolvedPageQuery(c)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("parseResolvedPageQuery error = %v, wantErr %v", err, tc.wantErr)
+			}
+			if err == nil && (got.Limit != tc.wantLimit || got.Offset != tc.wantOffset) {
+				t.Fatalf("page = limit %d offset %d, want %d/%d", got.Limit, got.Offset, tc.wantLimit, tc.wantOffset)
+			}
+		})
+	}
+}
+
+func TestGetResolvedAlertsPage(t *testing.T) {
+	httpServer, database := newTestRouterWithDB(t, nil)
+	defer httpServer.Close()
+	now := time.Now().UTC().Truncate(time.Second)
+	for i, severity := range []string{"critical", "warning"} {
+		fp := fmt.Sprintf("aabbccddeeff02%02x", i)
+		if _, err := database.ExecContext(context.Background(), `
+			INSERT INTO alert_fingerprints (fingerprint, alertname, cluster_name, labels, first_seen_at, last_seen_at, occurrence_count)
+			VALUES (?, 'Paged', 'prod', ?, ?, ?, 1)
+		`, fp, `{"alertname":"Paged","severity":"`+severity+`"}`, now, now); err != nil {
+			t.Fatalf("insert fingerprint: %v", err)
+		}
+		if _, err := database.ExecContext(context.Background(), `
+			INSERT INTO alert_events (fingerprint, cluster_name, alertmanager_url, status, starts_at, annotations, recorded_at)
+			VALUES (?, 'prod', 'http://am', 'resolved', ?, '{}', ?)
+		`, fp, now.Add(-time.Hour), now.Add(time.Duration(i)*time.Second)); err != nil {
+			t.Fatalf("insert event: %v", err)
+		}
+	}
+
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet,
+		httpServer.URL+"/api/v1/alerts/resolved?limit=10&severity=critical", nil)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("GET resolved page: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	var page models.ResolvedAlertsPage
+	if err := json.NewDecoder(resp.Body).Decode(&page); err != nil {
+		t.Fatalf("decode page: %v", err)
+	}
+	if page.Total != 1 || len(page.Alerts) != 1 || page.Alerts[0].Labels["severity"] != "critical" {
+		t.Fatalf("page = %#v", page)
+	}
+	if page.InvalidMatchers == nil {
+		t.Fatal("invalidMatchers = nil, want []")
+	}
+}
+
+func TestGetResolvedAlertsPage_InvalidQueryIsGeneric400(t *testing.T) {
+	httpServer := newTestRouter(t, nil)
+	defer httpServer.Close()
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet,
+		httpServer.URL+"/api/v1/alerts/resolved?limit=20", nil)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("GET invalid resolved page: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read response: %v", err)
+	}
+	if resp.StatusCode != http.StatusBadRequest || !strings.Contains(string(body), "invalid resolved alert query") {
+		t.Fatalf("status/body = %d %q", resp.StatusCode, body)
 	}
 }
 

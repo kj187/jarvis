@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import fc from 'fast-check'
 import {
   escapeRegexValue,
@@ -34,7 +34,9 @@ import {
   isRoundTrippableTagList,
   findRelatedAlerts,
   partitionLabelsForDisplay,
+  matchesAlertSearch,
 } from './alertUtils'
+import resolvedFilterConformance from './testdata/resolved-filter-conformance.json'
 import type { EnrichedAlert, LabelMatcher, Silence } from '@/types'
 import { LABEL_COLOR_HUES, LABEL_COLORS, type LabelColorMap, type LabelDisplayConfig } from '@/lib/settingsUtils'
 
@@ -74,6 +76,26 @@ function makeAlert(overrides: Partial<EnrichedAlert> = {}): EnrichedAlert {
     ...overrides,
   }
 }
+
+describe('resolved filter conformance fixture', () => {
+  for (const [index, fixture] of resolvedFilterConformance.entries()) {
+    it(`${index}: ${fixture.reason}`, () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date(fixture.now))
+      try {
+        const alert = makeAlert(fixture.alert as unknown as Partial<EnrichedAlert>)
+        const matchers = fixture.matchers.map((matcher, matcherIndex) => ({
+          id: String(matcherIndex),
+          ...matcher,
+        })) as LabelMatcher[]
+        expect(matchesAlertSearch(alert, fixture.search) && matchesLabelMatchers(alert, matchers))
+          .toBe(fixture.expectedJS)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+  }
+})
 
 describe('escapeRegexValue', () => {
   it('escapes every regex metacharacter', () => {

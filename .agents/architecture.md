@@ -403,6 +403,17 @@ GET    /api/v1/alerts                            full_protect?  → []EnrichedAl
 #        into SQL, severity is filtered during iteration. A failure after HTTP commit
 #        aborts the connection, so clients never receive a closed, apparently valid
 #        partial array. GetAllResolved remains only as a test/benchmark adapter.
+GET    /api/v1/alerts/resolved                   full_protect?  → { alerts: EnrichedAlert[], total, invalidMatchers: number[] }
+#        Additive bounded-history API: limit=10|25|50|100 (default 25), offset>=0,
+#        optional cluster/severity/search/matchers/fingerprint. Static route is
+#        registered before /alerts/:fingerprint/*. Fast requests page + count in
+#        one read-only transaction; filtered requests scan once in server order,
+#        retain at most one page, and decode annotations only for retained rows.
+#        PostgreSQL uses Repeatable Read so rows and total share a snapshot.
+#        internal/alertfilter owns Resolved-only RE2 matcher semantics and search
+#        over individual real label names/values; invalid regex indices are returned
+#        instead of making the request invalid. Request validation and DB work share
+#        a 10s context. Fingerprint detail mode returns total 0 or 1.
 
 # ── Alert details (history store / DB) ───────────────────────────────────────
 GET    /api/v1/alerts/:fingerprint/history       full_protect?  → { events: AlertEvent[], total }  ?limit= ?offset= ?cluster=
@@ -1222,6 +1233,8 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │   ├── AlertListView.tsx  → sortable table, cols = Name [· State] · Actions (no Claim column —
     │   │                        claim/release lives only in the detail panel); expandable groups,
     │   │                        section reordering (persisted: 'jarvis-list-section-order:<label>');
+    │   │                        resolved mode uses right-aligned grouped top/footer pagers that
+    │   │                        stack responsively, plus the persisted per-page selector;
     │   │                        group-header common labels = quiet LabelChip strip (PartitionedLabelChips:
     │   │                        pinned-first + "+N" chip, one partition per group); group silence
     │   │                        action is a labelled button ("Silence group" / "Extend/Recreate/Expire

@@ -36,6 +36,12 @@ type EnrichedAlert struct {
 	SeenOn []string `json:"seenOn,omitempty"`
 }
 
+type ResolvedAlertsPage struct {
+	Alerts          []EnrichedAlert `json:"alerts"`
+	Total           int64           `json:"total"`
+	InvalidMatchers []int           `json:"invalidMatchers"`
+}
+
 // ── Silence ──────────────────────────────────────────────────────────────────
 
 type SilenceMatcher struct {

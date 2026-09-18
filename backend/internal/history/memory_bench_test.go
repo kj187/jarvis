@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kj187/jarvis/backend/internal/alertfilter"
 	idb "github.com/kj187/jarvis/backend/internal/db"
 	"github.com/kj187/jarvis/backend/internal/models"
 )
@@ -155,6 +156,74 @@ func BenchmarkMemoryResolvedLegacy(b *testing.B) {
 				}
 			})
 		}
+	}
+}
+
+func BenchmarkMemoryResolvedPage(b *testing.B) {
+	for _, rows := range []int{2_000, 10_000, 30_000, 100_000} {
+		b.Run(fmt.Sprintf("rows=%d", rows), func(b *testing.B) {
+			store := seedMemoryResolvedFixture(b, rows, true)
+			query := ResolvedPageQuery{Limit: 25}
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				page, err := store.GetResolvedPage(context.Background(), query)
+				if err != nil {
+					b.Fatalf("GetResolvedPage: %v", err)
+				}
+				if len(page.Alerts) != 25 || page.Total != int64(rows) {
+					b.Fatalf("page len/total = %d/%d, want 25/%d", len(page.Alerts), page.Total, rows)
+				}
+			}
+		})
+	}
+}
+
+func BenchmarkMemoryResolvedCount(b *testing.B) {
+	for _, rows := range []int{2_000, 10_000, 30_000, 100_000} {
+		b.Run(fmt.Sprintf("rows=%d", rows), func(b *testing.B) {
+			store := seedMemoryResolvedFixture(b, rows, false)
+			base, args := resolvedPageBase(ResolvedPageQuery{})
+			query := base + `
+				SELECT COUNT(*) FROM alert_events e
+				JOIN latest ON e.id = latest.max_id
+				WHERE e.status = 'resolved'`
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				var total int64
+				if err := store.queryRow(context.Background(), query, args...).Scan(&total); err != nil {
+					b.Fatalf("count resolved: %v", err)
+				}
+				if total != int64(rows) {
+					b.Fatalf("total = %d, want %d", total, rows)
+				}
+			}
+		})
+	}
+}
+
+func BenchmarkMemoryResolvedPageFiltered(b *testing.B) {
+	for _, rows := range []int{2_000, 10_000, 30_000, 100_000} {
+		b.Run(fmt.Sprintf("rows=%d", rows), func(b *testing.B) {
+			store := seedMemoryResolvedFixture(b, rows, true)
+			query := ResolvedPageQuery{
+				Limit:    25,
+				Matchers: []alertfilter.Matcher{{Name: "instance", Operator: "=~", Value: `instance-value-0`}},
+				Now:      memoryBenchmarkTime,
+			}
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				page, err := store.GetResolvedPage(context.Background(), query)
+				if err != nil {
+					b.Fatalf("GetResolvedPage filtered: %v", err)
+				}
+				if len(page.Alerts) > 25 || page.Total == 0 {
+					b.Fatalf("filtered page len/total = %d/%d", len(page.Alerts), page.Total)
+				}
+			}
+		})
 	}
 }
 

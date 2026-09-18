@@ -134,6 +134,13 @@ while IFS= read -r doc; do
     || fail "$doc is not registered in website/scripts/pages.mjs (PAGES) — it would be silently unpublished"
 done <<< "$(find docs -maxdepth 1 -name '*.md' | sort)"
 
+# ── 7. Cross-language resolved-filter fixtures stay byte-identical ────────────
+backend_filter_fixture="backend/internal/alertfilter/testdata/conformance.json"
+frontend_filter_fixture="frontend/src/lib/testdata/resolved-filter-conformance.json"
+if ! cmp -s "$backend_filter_fixture" "$frontend_filter_fixture"; then
+  fail "$backend_filter_fixture and $frontend_filter_fixture must be byte-identical"
+fi
+
 if [ "$errors" -gt 0 ]; then
   exit 1
 fi

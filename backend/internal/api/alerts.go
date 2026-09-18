@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/kj187/jarvis/backend/internal/alertfilter"
 	"github.com/kj187/jarvis/backend/internal/history"
 	"github.com/kj187/jarvis/backend/internal/models"
 	"github.com/labstack/echo/v4"
@@ -27,6 +28,8 @@ var heatmapRanges = map[string]time.Duration{
 
 // Alertmanager generates 16-character lowercase hex fingerprints (FNV-1a hash).
 var fingerprintRegex = regexp.MustCompile(`^[a-f0-9]{16}$`)
+var unsignedDecimalRegex = regexp.MustCompile(`^[0-9]+$`)
+var resolvedMatcherOperators = map[string]bool{"=": true, "!=": true, "=~": true, "!~": true, ">": true, "<": true}
 
 const (
 	resolvedReadTimeout       = 10 * time.Second
@@ -36,6 +39,90 @@ const (
 
 func validateFingerprint(fp string) bool {
 	return fingerprintRegex.MatchString(fp)
+}
+
+func invalidResolvedPageQuery() error {
+	return echo.NewHTTPError(http.StatusBadRequest, "invalid resolved alert query")
+}
+
+func parseResolvedPageQuery(c echo.Context) (history.ResolvedPageQuery, error) {
+	values := c.QueryParams()
+	allowed := map[string]bool{
+		"limit": true, "offset": true, "cluster": true, "severity": true,
+		"search": true, "matchers": true, "fingerprint": true,
+	}
+	for name, items := range values {
+		if !allowed[name] || len(items) != 1 {
+			return history.ResolvedPageQuery{}, invalidResolvedPageQuery()
+		}
+	}
+
+	query := history.ResolvedPageQuery{Limit: 25, Now: time.Now().UTC().Truncate(time.Millisecond)}
+	if raw, ok := values["limit"]; ok {
+		if !unsignedDecimalRegex.MatchString(raw[0]) {
+			return history.ResolvedPageQuery{}, invalidResolvedPageQuery()
+		}
+		limit, err := strconv.Atoi(raw[0])
+		if err != nil || (limit != 10 && limit != 25 && limit != 50 && limit != 100) {
+			return history.ResolvedPageQuery{}, invalidResolvedPageQuery()
+		}
+		query.Limit = limit
+	}
+	if raw, ok := values["offset"]; ok {
+		if !unsignedDecimalRegex.MatchString(raw[0]) {
+			return history.ResolvedPageQuery{}, invalidResolvedPageQuery()
+		}
+		offset, err := strconv.ParseInt(raw[0], 10, 32)
+		if err != nil || offset > 2147483547 {
+			return history.ResolvedPageQuery{}, invalidResolvedPageQuery()
+		}
+		query.Offset = int(offset)
+	}
+
+	query.Cluster = values.Get("cluster")
+	query.Severity = values.Get("severity")
+	query.Search = values.Get("search")
+	query.Fingerprint = values.Get("fingerprint")
+	if len(query.Cluster) > 256 || len(query.Severity) > 64 || len(query.Search) > 256 ||
+		(query.Fingerprint != "" && !validateFingerprint(query.Fingerprint)) {
+		return history.ResolvedPageQuery{}, invalidResolvedPageQuery()
+	}
+	if _, present := values["fingerprint"]; present && query.Fingerprint == "" {
+		return history.ResolvedPageQuery{}, invalidResolvedPageQuery()
+	}
+	if raw, ok := values["matchers"]; ok {
+		if len(raw[0]) > 8192 {
+			return history.ResolvedPageQuery{}, invalidResolvedPageQuery()
+		}
+		var objects []map[string]json.RawMessage
+		if err := json.Unmarshal([]byte(raw[0]), &objects); err != nil || objects == nil || len(objects) > 50 {
+			return history.ResolvedPageQuery{}, invalidResolvedPageQuery()
+		}
+		query.Matchers = make([]alertfilter.Matcher, len(objects))
+		for i, object := range objects {
+			if len(object) != 3 || object["name"] == nil || object["operator"] == nil || object["value"] == nil {
+				return history.ResolvedPageQuery{}, invalidResolvedPageQuery()
+			}
+			matcher := &query.Matchers[i]
+			if err := json.Unmarshal(object["name"], &matcher.Name); err != nil ||
+				json.Unmarshal(object["operator"], &matcher.Operator) != nil ||
+				json.Unmarshal(object["value"], &matcher.Value) != nil ||
+				len(matcher.Name) == 0 || len(matcher.Name) > 256 || len(matcher.Value) > 1024 ||
+				!resolvedMatcherOperators[matcher.Operator] {
+				return history.ResolvedPageQuery{}, invalidResolvedPageQuery()
+			}
+		}
+	}
+	if query.Fingerprint != "" {
+		for _, incompatible := range []string{"search", "matchers", "severity", "offset", "limit"} {
+			if _, present := values[incompatible]; present {
+				return history.ResolvedPageQuery{}, invalidResolvedPageQuery()
+			}
+		}
+		query.Limit = 1
+		query.Offset = 0
+	}
+	return query, nil
 }
 
 func parseFingerprintClusterPagination(c echo.Context) (fp, cluster string, limit, offset int, err error) {
@@ -144,6 +231,21 @@ func abortResolvedStream(response *echo.Response, err error) error {
 		panic(http.ErrAbortHandler)
 	}
 	return echo.NewHTTPError(http.StatusInternalServerError, "failed to get resolved alerts").SetInternal(err)
+}
+
+// GET /api/v1/alerts/resolved
+func (s *Server) getResolvedAlertsPage(c echo.Context) error {
+	query, err := parseResolvedPageQuery(c)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(c.Request().Context(), resolvedReadTimeout)
+	defer cancel()
+	page, err := s.store.GetResolvedPage(ctx, query)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get resolved alerts").SetInternal(err)
+	}
+	return c.JSON(http.StatusOK, page)
 }
 
 // GET /api/v1/alerts/groups

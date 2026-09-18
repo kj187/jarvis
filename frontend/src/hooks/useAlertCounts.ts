@@ -2,7 +2,7 @@ import { useEffect, useMemo } from 'react'
 import { useAlerts } from '@/hooks/useAlerts'
 import { useSilences } from '@/hooks/useSilences'
 import { useUIStore } from '@/store/uiStore'
-import { getEffectiveAlertState, matchesLabelMatchers, filterSilences } from '@/lib/alertUtils'
+import { getEffectiveAlertState, matchesAlertSearch, matchesLabelMatchers, filterSilences } from '@/lib/alertUtils'
 
 export function useAlertCounts() {
   const filters = useUIStore((s) => s.filters)
@@ -14,11 +14,7 @@ export function useAlertCounts() {
   const byState = useMemo(() => {
     const counts = { active: 0, suppressed: 0 }
     liveAlerts.forEach((alert) => {
-      if (filters.search) {
-        const needle = filters.search.toLowerCase()
-        const haystack = (alert.labels['alertname'] ?? '') + JSON.stringify(alert.labels)
-        if (!haystack.toLowerCase().includes(needle)) return
-      }
+      if (!matchesAlertSearch(alert, filters.search)) return
       if (!matchesLabelMatchers(alert, filters.labelMatchers)) return
       const s = getEffectiveAlertState(alert, silences)
       if (s in counts) counts[s as keyof typeof counts]++

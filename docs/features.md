@@ -173,7 +173,15 @@ The resolved view is Jarvis's history log. Every alert that has ever fired is re
 
 Jarvis loads this database-backed history only when you open the **Resolved** tab (or open the Alerts Overview while that tab is active). Active and Suppressed views do not refresh the resolved list in the background. The first load shows a progress indicator; if it fails, **Retry** repeats the request, while a failed refresh keeps the last successful result visible.
 
-Alerts are displayed as a flat list sorted by resolution time (newest first). A **page browser** at the top and bottom allows navigation through large result sets. The **per-page selector** (10 / 25 / 50 / 100) is persisted in localStorage so your preference is remembered across sessions.
+For clients that need bounded history reads, Jarvis also exposes
+`GET /api/v1/alerts/resolved`. It returns a stable event-ID-ordered page plus
+the matching total, accepts page sizes 10/25/50/100, and can filter by cluster,
+severity, search text, or label matchers. Resolved regex matchers use Go's RE2
+syntax; invalid regex indices are reported in the response rather than failing
+the whole request. Search is case-insensitive within each real label name or
+value and does not search JSON punctuation or synthesized labels.
+
+Alerts are displayed as a flat list sorted by resolution time (newest first). A right-aligned, grouped **page browser** at the top and bottom allows navigation through large result sets without crowding the alert list; on narrow screens its controls wrap into stacked rows. The **per-page selector** (10 / 25 / 50 / 100) is persisted in localStorage so your preference is remembered across sessions.
 
 **What is stored per alert:**
 - First seen timestamp (when it first fired, ever)
