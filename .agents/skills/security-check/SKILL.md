@@ -121,6 +121,24 @@ deployment, the mitigation is network policy / ingress rules, not app auth.
 
 ---
 
+## Debug/pprof Server
+
+`internal/debugserver` is opt-in production diagnostics (`heap`/`allocs`/
+`goroutine` profiles), disabled by default — no port opens unless
+`JARVIS_PPROF_ADDR` is explicitly set. It never shares anything with the main
+Echo router or `http.DefaultServeMux`: its own `http.NewServeMux`, exposing
+exactly three GET routes, nothing else (no index, `cmdline`, CPU profile, or
+`trace`). `debugserver.New` rejects anything but a literal loopback IP (`127.0.0.1`
+or `::1`) plus a numeric port 1..65535 at startup — a hostname, `0.0.0.0`, a
+non-loopback IP, a zone ID, or port 0 is a fatal config error, not a silent
+no-op. No Kubernetes Service/Ingress/container port should ever be added for
+it; access is via `kubectl port-forward` to a specific pod only. A single
+semaphore caps profiling at one concurrent request (429 otherwise) — there is
+no server-side queue. See `docs/troubleshooting.md#memory-profiling-jarvis_pprof_addr`
+for the operator-facing usage.
+
+---
+
 ## CORS + WebSocket Origin
 
 The backend validates the `Origin` header for both HTTP CORS and the WebSocket

@@ -29,6 +29,12 @@ type Config struct {
 	AllowedOrigins []string
 	Clusters       []ClusterConfig
 
+	// PprofAddr enables the opt-in loopback-only pprof debug server
+	// (internal/debugserver) when non-empty — heap/allocs/goroutine profiles
+	// only, e.g. "127.0.0.1:6060". Empty (default) means disabled; the
+	// address itself is validated by debugserver.New, not here.
+	PprofAddr string
+
 	LogRequests bool
 
 	// Auth
@@ -234,6 +240,7 @@ func Load() (*Config, error) {
 		RunbookBaseURL:   getEnv("JARVIS_RUNBOOK_BASE_URL", ""),
 		AllowedOrigins:   allowedOrigins,
 		Clusters:         clusters,
+		PprofAddr:        getEnv("JARVIS_PPROF_ADDR", ""),
 		AuthProvider:     authProvider,
 		AuthMode:         authMode,
 		SecretKey:        secretKey,

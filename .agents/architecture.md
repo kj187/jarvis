@@ -1788,6 +1788,7 @@ consumed snapshot (D3).
 | `JARVIS_DB_MAX_OPEN_CONNS` | PostgreSQL pool cap per pod (default `10`, must be ≥ 1; MaxIdle = MaxOpen). Ignored for SQLite (always 1). Size pods × cap below the server's `max_connections` |
 | `JARVIS_RUNBOOK_BASE_URL` | prefix for non-URL `runbook` values |
 | `JARVIS_ALLOWED_ORIGINS` | CORS + WS origin allow-list (no `*`), comma-separated |
+| `JARVIS_PPROF_ADDR` | opt-in `internal/debugserver` pprof server (`heap`/`allocs`/`goroutine` only), empty (default) = disabled, no port opened. `debugserver.New` validates eagerly (fatal on bad value, same as every other startup check): must be a literal loopback IP (`127.0.0.1`/`::1`, no hostname/wildcard/zone ID) + numeric port 1..65535 — port `0` is rejected in production (test-only path: `serveOn` on an already-open ephemeral listener, bypassing that check). Own `http.NewServeMux`/`http.Server`, never Echo/`DefaultServeMux`; one profile request at a time (429 otherwise); `main.go` calls `Start(ctx)` right after `signal.NotifyContext`, shut down via the same `ctx` |
 | `JARVIS_AUTH_PROVIDER` `JARVIS_AUTH_MODE` | auth; provider default `none`; mode defaults to `write_protect` when provider ≠ none |
 | `JARVIS_SECRET_KEY` | JWT HMAC key, hex-decoded if valid hex, else raw bytes; **≥32 bytes required** when provider ≠ none |
 | `JARVIS_AUTH_OIDC_ISSUER` `…_CLIENT_ID` `…_CLIENT_SECRET` `…_REDIRECT_URL` `…_SCOPES` | OIDC (scopes default `openid,profile,email`) |
