@@ -49,11 +49,19 @@
   --vp-c-divider: hsl(220 13% 88%);
   --vp-c-gutter: hsl(220 13% 88%);
 
+  /* Accents taken from the owl's eyes: coral = the alert / the open question,
+     teal = what Jarvis remembers. Darker in light mode for contrast. */
+  --jarvis-coral: hsl(6 65% 48%);
+  --jarvis-teal: hsl(168 40% 38%);
+
   --vp-home-hero-name-color: var(--vp-c-brand-1);
   --vp-home-hero-name-background: transparent;
 }
 
 .dark {
+  --jarvis-coral: hsl(6 68% 60%);
+  --jarvis-teal: hsl(168 38% 58%);
+
   --vp-c-brand-1: hsl(213 94% 68%);
   --vp-c-brand-2: hsl(213 94% 62%);
   --vp-c-brand-3: hsl(213 94% 56%);
@@ -112,6 +120,10 @@
   font-size: 28px;
   line-height: 1.2;
 }
+.VPHero .tagline .accent {
+  color: var(--jarvis-coral);
+  white-space: nowrap;
+}
 .VPHero .text .nowrap {
   white-space: nowrap;
 }
@@ -148,8 +160,11 @@
   }
 }
 .home-hero-explainer p {
+  box-sizing: border-box;
   max-width: 1152px;
   margin: 0 auto;
+  padding-left: 22px;
+  border-left: 2px solid var(--jarvis-teal);
   font-size: 18px;
   line-height: 1.7;
   color: var(--vp-c-text-2);
