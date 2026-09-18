@@ -106,6 +106,7 @@ frontend/
       auth.ts           # dismissNoAuthNotice, ensureInternalAdmin, loginInternal, loginOIDC
       fixtures.ts       # test.extend (auto reset+clear per test), freezeClock, waitForActiveAlerts
       heatmapHistory.ts # fireWithHeatmapHistory() — screenshot-only, see below
+      screenshotData.ts # polished alert fixture + label hiding shared by card-view / home-tour shots
     fixtures/
       alerts.ts         # kubernetesAlerts (4), manyAlerts (~14, for populated screenshots)
     functional/

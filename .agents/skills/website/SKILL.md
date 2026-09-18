@@ -186,15 +186,26 @@ since it matches on the already-rewritten `/assets/…` paths.
   viewports. The fix keeps padding on `.home-hero-screenshot` and moves
   `max-width`/`margin: 0 auto` onto the `img`s inside it, reproducing the
   same two-step centering — never collapse them back onto one element.
-- **`theme/components/HomeScreenshot.vue`** renders the card-view screenshot
-  (same theme toggling as above) via the `home-hero-after` slot in
-  `Layout.vue`, so it appears between the hero and the feature grid. This is
-  the only way to place anything there: `VPHome` always renders the page's
-  own Content (the `<div class="home-showcase">` block) *after* the feature
-  grid, regardless of where it sits in `index.md`'s source — a screenshot
-  meant to show "before the feature grid" cannot be placed there in markdown.
-  It imports the PNGs directly (`../../../content/assets/...`), which exist
-  once `pnpm run sync` has run (both `dev` and `build` do this first).
+- **`theme/components/HomeScreenshot.vue`** renders an automatic five-scene
+  product tour via the `home-hero-after` slot in `Layout.vue`, so it appears
+  between the hero and the feature grid. Every scene imports a dark/light PNG
+  pair directly from `../../../content/assets/...`; the site's current theme
+  selects the matching image. The last scene (`split: true`, "Dark & light")
+  is the exception: it stacks both themes of one screenshot behind a
+  `clip-path` divider so light mode is always visible. The `tour-*` PNG pairs
+  come from `frontend/e2e/screenshots/none/home-tour.screenshot.spec.ts`
+  (`make e2e-screenshot NAME=home-tour`); a new scene needs a dark and a light
+  PNG plus the matching count in `scripts/media.test.mjs`. Scenes advance every nine seconds with a slow
+  horizontal slide; a labelled tab row under the image shows the active scene's
+  progress bar and a pause/play button. Reduced-motion preference disables autoplay,
+  while an explicit play action still starts it. The plain-language product
+  explainer follows the scene frame without an inset or rule — not in the hero
+  and not duplicated in `index.md`. `content/assets` exists once `pnpm run
+  sync` has run (both `dev` and `build` do this first).
+- **`theme/components/HomeVideo.vue`** owns the linked product-intro cover and
+  renders through `Layout.vue`'s `home-features-after` slot. Keep it after the
+  feature grid: placing a full screenshot and a full video back-to-back above
+  the feature explanation makes the first viewport visually top-heavy.
 - The feature grid's first two entries in `index.md`'s `features:` list are
   rendered larger and spanning two of four grid columns each — the remaining
   four stay compact, one column each — via `.VPHomeFeatures .items` overrides

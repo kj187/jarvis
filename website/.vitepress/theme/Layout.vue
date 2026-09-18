@@ -3,6 +3,7 @@ import DefaultTheme from 'vitepress/theme'
 import { useData } from 'vitepress'
 import MeshCanvas from './components/MeshCanvas.vue'
 import HomeScreenshot from './components/HomeScreenshot.vue'
+import HomeVideo from './components/HomeVideo.vue'
 import ImageLightbox from './components/ImageLightbox.vue'
 
 const { frontmatter } = useData()
@@ -17,24 +18,14 @@ const { frontmatter } = useData()
         </div>
       </div>
     </template>
-    <!-- Placed here, not in index.md's Content, because VPHome always
-         renders Content after the feature grid — this slot is the only way
-         to show the screenshot before it (W11g). -->
+    <!-- Product scenes belong directly after the hero and before the feature
+         grid; the explanatory copy lives below the product instead of making
+         the text-heavy hero even longer. -->
     <template #home-hero-after>
-      <!-- The slogans say why Jarvis exists, not what it is. This says it
-           plainly, full width below the hero (the hero's own text column is
-           only half as wide). -->
-      <div class="home-hero-explainer">
-        <p>
-          <span class="lead">Alertmanager shows what is firing right now — and forgets it the moment it resolves.</span>
-          Jarvis is an open-source web UI on top of
-          <a href="https://prometheus.io/docs/alerting/latest/alertmanager/" target="_blank" rel="noreferrer">Prometheus Alertmanager</a>.
-          It adds what Alertmanager doesn't have: the full history of every alert, including how
-          often it fired, plus claims and comments so your team knows who is on it and what was
-          found. All your clusters in one live view.
-        </p>
-      </div>
       <HomeScreenshot />
+    </template>
+    <template #home-features-after>
+      <HomeVideo />
     </template>
   </DefaultTheme.Layout>
   <ImageLightbox />

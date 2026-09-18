@@ -143,28 +143,16 @@
   }
 }
 
-/* Plain-language "what is Jarvis" text below the hero. Same padding/max-width
-   split as .home-hero-screenshot so both edges line up with the hero above. */
+/* Plain-language "what is Jarvis" copy follows the product scene instead of
+   extending the already text-heavy hero. */
 .home-hero-explainer {
   position: relative;
-  padding: 0 24px 40px;
-}
-@media (min-width: 640px) {
-  .home-hero-explainer {
-    padding: 0 48px 40px;
-  }
-}
-@media (min-width: 960px) {
-  .home-hero-explainer {
-    padding: 0 64px 48px;
-  }
+  margin: 32px 0 0;
+  padding: 0;
 }
 .home-hero-explainer p {
   box-sizing: border-box;
-  max-width: 1152px;
-  margin: 0 auto;
-  padding-left: 22px;
-  border-left: 2px solid var(--jarvis-teal);
+  margin: 0;
   font-size: 18px;
   line-height: 1.7;
   color: var(--vp-c-text-2);
@@ -228,7 +216,7 @@ html.dark .light-only {
    on the same element here (as it used to be) skips that extra inset, so
    the screenshot's left edge sits further right than the hero text/buttons
    above it at wide viewports. Padding on the wrapper + max-width/margin on
-   the img reproduces the same two-step centering so both edges line up. */
+   the inner shell reproduces the same two-step centering so both edges line up. */
 .home-hero-screenshot {
   position: relative;
   padding: 0 24px 64px;
@@ -243,20 +231,238 @@ html.dark .light-only {
     padding: 0 64px 80px;
   }
 }
-.home-hero-screenshot img {
-  display: block;
-  width: 100%;
+.home-scene-shell {
   max-width: 1152px;
   margin: 0 auto;
+}
+.home-scene-stage {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
   border: 1px solid var(--vp-c-border);
   border-radius: 14px;
+  background: var(--vp-c-bg-alt);
   box-shadow: 0 24px 64px -28px rgb(0 0 0 / 55%);
 }
+.home-scene-panel {
+  position: absolute;
+  inset: 0;
+  will-change: opacity, transform;
+}
+.home-scene-stage img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  object-fit: cover;
+  object-position: top center;
+}
+/* "Dark & light" scene: both themes of one screenshot, split down the middle. */
+.home-scene-stage img.home-scene-split-light {
+  position: absolute;
+  inset: 0;
+  clip-path: inset(0 0 0 50%);
+}
+.home-scene-split-divider {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  transform: translateX(-1px);
+  background: var(--vp-c-brand-1);
+  box-shadow: 0 0 18px 2px color-mix(in srgb, var(--vp-c-brand-1) 60%, transparent);
+}
+.home-scene-split-tag {
+  position: absolute;
+  bottom: 16px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.home-scene-split-tag.dark {
+  left: 16px;
+  color: #fff;
+  background: rgb(15 18 24 / 82%);
+}
+.home-scene-split-tag.light {
+  right: 16px;
+  color: #111827;
+  background: rgb(255 255 255 / 88%);
+}
 
+/* Tab row under the stage: one labelled tab per scene, the active one carries a
+   progress bar that fills over the auto-rotation interval. */
+.home-scene-controls {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  margin-top: 20px;
+}
+.home-scene-tab {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  border: 0;
+  padding: 4px 0 0;
+  text-align: left;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--vp-c-text-3);
+  background: transparent;
+  transition: color 0.3s;
+}
+.home-scene-tab:hover,
+.home-scene-tab.active {
+  color: var(--vp-c-text-1);
+}
+.home-scene-tab-label {
+  flex: 1; /* labels of different length still put every progress bar on one line */
+}
+.home-scene-tab-number {
+  margin-right: 8px;
+  font-variant-numeric: tabular-nums;
+  color: var(--vp-c-brand-1);
+  opacity: 0.7;
+}
+.home-scene-tab-track {
+  display: block;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--vp-c-divider);
+}
+.home-scene-tab-fill {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--vp-c-brand-1);
+  transform-origin: left center;
+}
+.home-scene-tab-fill.running {
+  animation: home-scene-progress var(--tour-duration, 9s) linear forwards;
+}
+@keyframes home-scene-progress {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+.home-scene-toggle {
+  flex: none;
+  align-self: center;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--vp-c-border);
+  border-radius: 999px;
+  padding: 0;
+  font-size: 13px;
+  color: var(--vp-c-text-1);
+  background: var(--vp-c-bg-soft);
+  transition: border-color 0.2s, color 0.2s;
+}
+.home-scene-toggle:hover {
+  border-color: var(--vp-c-brand-1);
+  color: var(--vp-c-brand-1);
+}
+.home-scene-tab:focus-visible,
+.home-scene-toggle:focus-visible {
+  outline: 2px solid var(--vp-c-brand-1);
+  outline-offset: 3px;
+}
+@media (max-width: 639px) {
+  .home-scene-controls {
+    gap: 8px;
+  }
+  /* Five labels do not fit a phone row: keep number + progress bar, the
+     buttons still carry an aria-label. */
+  .home-scene-tab-label {
+    font-size: 0;
+  }
+  .home-scene-tab-number {
+    margin-right: 0;
+    font-size: 13px;
+  }
+}
+/* Slow horizontal slide with a little parallax: the incoming scene glides in
+   from the right while the outgoing one drifts left and fades underneath. */
+.home-scene-enter-active,
+.home-scene-leave-active {
+  transition:
+    transform 1.6s cubic-bezier(0.65, 0, 0.35, 1),
+    opacity 1.6s cubic-bezier(0.65, 0, 0.35, 1);
+}
+.home-scene-enter-active {
+  z-index: 1;
+}
+.home-scene-enter-from {
+  transform: translateX(100%);
+}
+.home-scene-leave-to {
+  opacity: 0.35;
+  transform: translateX(-28%);
+}
+@media (max-width: 639px) {
+  .home-hero-explainer {
+    margin-top: 24px;
+  }
+  .home-hero-explainer p {
+    font-size: 16px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .home-scene-enter-active,
+  .home-scene-leave-active {
+    transition: opacity 0.2s ease;
+  }
+  .home-scene-enter-from,
+  .home-scene-leave-to {
+    transform: none;
+    opacity: 0;
+  }
+  .home-scene-tab-fill.running {
+    animation: none;
+  }
+}
+
+.home-intro-video-wrap {
+  position: relative;
+  padding: 72px 24px 0;
+}
+@media (min-width: 640px) {
+  .home-intro-video-wrap {
+    padding-right: 48px;
+    padding-left: 48px;
+  }
+}
+@media (min-width: 960px) {
+  .home-intro-video-wrap {
+    padding-right: 64px;
+    padding-left: 64px;
+  }
+}
 .home-intro-video {
   width: 100%;
   max-width: 1152px;
-  margin: 72px auto 0;
+  margin: 0 auto;
+}
+.home-intro-video h2 {
+  margin: 0 0 20px;
+  border-top: 0;
+  padding-top: 0;
+  font-family: var(--vp-font-family-display);
+  text-align: center;
 }
 .home-intro-video p {
   margin: 16px 0 0;
@@ -288,7 +494,7 @@ html.dark .light-only {
   margin: 0;
 }
 .vp-doc img:not(.no-lightbox),
-.home-hero-screenshot > img:not(.no-lightbox) {
+.home-scene-stage img:not(.no-lightbox) {
   cursor: zoom-in;
 }
 .vp-doc a img {

@@ -53,14 +53,6 @@ features:
 
 <div class="home-showcase">
 
-## The context behind every alert
-
-Alertmanager shows what is firing now. Jarvis preserves what happened before:
-the complete lifecycle, recurring occurrences, claims, and the team's comments.
-That context remains available after a resolve, restart, or re-fire.
-
-[See how alert history works](/concepts/alert-lifecycle) · [Explore all features](/reference/features)
-
 ## Focused by design
 
 Jarvis is the part between an alert firing and a human deciding what to do about it. It
