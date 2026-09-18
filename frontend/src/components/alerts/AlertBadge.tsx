@@ -1,36 +1,33 @@
 import { cn } from '@/lib/utils'
-import { useSettingsStore } from '@/store/useSettingsStore'
+
+// Status roles come from the design tokens (`critical`, `warning`, …): each role carries its own
+// text/fill/edge for both themes, so no component branches on the theme for colour.
+const BADGE = 'inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-semibold'
+
+const ROLE = {
+  critical: 'bg-critical-soft text-critical-fg border-critical-edge',
+  warning: 'bg-warning-soft text-warning-fg border-warning-edge',
+  info: 'bg-info-soft text-info-fg border-info-edge',
+  neutral: 'bg-neutral-soft text-neutral-fg border-neutral-edge',
+  success: 'bg-success-soft text-success-fg border-success-edge',
+  attention: 'bg-attention-soft text-attention-fg border-attention-edge',
+} as const
 
 interface AlertBadgeProps {
   severity: string
   className?: string
 }
 
-const severityConfig: Record<string, { label: string; dark: string; light: string }> = {
-  critical: { label: 'Critical', dark: 'bg-red-600/20 text-red-400 border-red-700',     light: 'bg-red-100 text-red-700 border-red-300' },
-  warning:  { label: 'Warning',  dark: 'bg-yellow-500/20 text-yellow-300 border-yellow-600', light: 'bg-yellow-100 text-yellow-700 border-yellow-400' },
-  info:     { label: 'Info',     dark: 'bg-blue-600/20 text-blue-400 border-blue-700',   light: 'bg-blue-100 text-blue-700 border-blue-300' },
-  none:     { label: 'None',     dark: 'bg-slate-600/20 text-slate-400 border-slate-700', light: 'bg-slate-100 text-slate-600 border-slate-300' },
+const severityConfig: Record<string, { label: string; role: keyof typeof ROLE }> = {
+  critical: { label: 'Critical', role: 'critical' },
+  warning: { label: 'Warning', role: 'warning' },
+  info: { label: 'Info', role: 'info' },
+  none: { label: 'None', role: 'neutral' },
 }
 
 export function AlertBadge({ severity, className }: AlertBadgeProps) {
-  const theme = useSettingsStore((s) => s.theme)
-  const cfg = severityConfig[severity] ?? {
-    label: severity || 'Unknown',
-    dark: 'bg-slate-600/20 text-slate-400 border-slate-700',
-    light: 'bg-slate-100 text-slate-600 border-slate-300',
-  }
-  return (
-    <span
-      className={cn(
-        'inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-semibold',
-        theme === 'light' ? cfg.light : cfg.dark,
-        className,
-      )}
-    >
-      {cfg.label}
-    </span>
-  )
+  const cfg = severityConfig[severity] ?? { label: severity || 'Unknown', role: 'neutral' as const }
+  return <span className={cn(BADGE, ROLE[cfg.role], className)}>{cfg.label}</span>
 }
 
 interface StatusBadgeProps {
@@ -38,29 +35,14 @@ interface StatusBadgeProps {
   className?: string
 }
 
-const stateConfig: Record<string, { label: string; dark: string; light: string }> = {
-  active:      { label: 'Active',      dark: 'bg-red-600/20 text-red-400 border-red-700',       light: 'bg-red-100 text-red-700 border-red-300' },
-  unprocessed: { label: 'Unprocessed', dark: 'bg-orange-600/20 text-orange-400 border-orange-700', light: 'bg-orange-100 text-orange-700 border-orange-300' },
-  suppressed:  { label: 'Suppressed',  dark: 'bg-slate-600/20 text-slate-400 border-slate-700', light: 'bg-slate-100 text-slate-600 border-slate-300' },
-  resolved:    { label: 'Resolved',    dark: 'bg-green-600/20 text-green-400 border-green-700', light: 'bg-green-100 text-green-700 border-green-300' },
+const stateConfig: Record<string, { label: string; role: keyof typeof ROLE }> = {
+  active: { label: 'Active', role: 'critical' },
+  unprocessed: { label: 'Unprocessed', role: 'attention' },
+  suppressed: { label: 'Suppressed', role: 'neutral' },
+  resolved: { label: 'Resolved', role: 'success' },
 }
 
 export function StatusBadge({ state, className }: StatusBadgeProps) {
-  const theme = useSettingsStore((s) => s.theme)
-  const cfg = stateConfig[state] ?? {
-    label: state,
-    dark: 'bg-slate-600/20 text-slate-400 border-slate-700',
-    light: 'bg-slate-100 text-slate-600 border-slate-300',
-  }
-  return (
-    <span
-      className={cn(
-        'inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-semibold',
-        theme === 'light' ? cfg.light : cfg.dark,
-        className,
-      )}
-    >
-      {cfg.label}
-    </span>
-  )
+  const cfg = stateConfig[state] ?? { label: state, role: 'neutral' as const }
+  return <span className={cn(BADGE, ROLE[cfg.role], className)}>{cfg.label}</span>
 }

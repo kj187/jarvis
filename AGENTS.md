@@ -216,7 +216,9 @@ adapters and their rules live in `docs/ai-agents.md`.
 4. **Frontend checklist**: `cursor: pointer` on all clickable elements · no
    `console.log` · no `dangerouslySetInnerHTML` · import shared utils from
    `lib/alertUtils.ts` (never re-implement in components) · handle loading
-   and error states.
+   and error states · colours only through semantic tokens (`bg-critical-soft`,
+   `text-muted-foreground`, `border-control`, …), never raw palette classes —
+   `node scripts/check-palette-classes.mjs` enforces it.
 5. **Backend**: All outbound HTTP calls use `context.WithTimeout` (default
    10s). Error responses never leak internal details.
 6. **Keep the AI context files in sync — part of every change, not optional.**

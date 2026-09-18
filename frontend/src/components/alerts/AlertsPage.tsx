@@ -390,9 +390,9 @@ export function AlertsPage() {
           className={`fixed inset-0 z-50 flex items-center justify-center pointer-events-none select-none transition-opacity duration-700 ${hintVisible ? 'opacity-100' : 'opacity-0'}`}
           style={{ backdropFilter: hintVisible ? 'blur(2px)' : undefined }}
         >
-          <div className="px-12 py-8 rounded-2xl shadow-2xl bg-neutral-900/95 dark:bg-neutral-100/95 text-neutral-100 dark:text-neutral-900 text-xl font-semibold flex items-center gap-4 border border-neutral-700 dark:border-neutral-300">
+          <div className="px-12 py-8 rounded-2xl shadow-2xl bg-foreground/95 text-background text-xl font-semibold flex items-center gap-4 border border-border">
             Press
-            <kbd className="px-4 py-2 rounded-lg bg-neutral-700 dark:bg-neutral-300 font-mono text-lg leading-none">ESC</kbd>
+            <kbd className="px-4 py-2 rounded-lg bg-background/25 font-mono text-lg leading-none">ESC</kbd>
             to exit fullscreen
           </div>
         </div>

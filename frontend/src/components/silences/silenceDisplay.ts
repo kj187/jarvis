@@ -4,18 +4,18 @@ import type { Silence } from '@/types'
 
 /** Text colour per urgency — same shades the silence views have always used. */
 export const URGENCY_TEXT_CLASS: Record<SilenceUrgency, string> = {
-  pending: 'text-slate-400',
-  ok: 'text-green-400',
-  soon: 'text-yellow-400',
+  pending: 'text-neutral-fg',
+  ok: 'text-success-fg',
+  soon: 'text-warning-fg',
   expired: 'text-muted-foreground',
 }
 
 /** Bar-fill / stripe colour per urgency. */
 export const URGENCY_FILL_CLASS: Record<SilenceUrgency, string> = {
-  pending: 'bg-slate-400',
-  ok: 'bg-green-500',
-  soon: 'bg-yellow-500',
-  expired: 'bg-slate-500',
+  pending: 'bg-neutral-solid',
+  ok: 'bg-success-solid',
+  soon: 'bg-warning-solid',
+  expired: 'bg-neutral-solid',
 }
 
 /** `alertname=`, `env!~`, … — the Alertmanager matcher operator. */

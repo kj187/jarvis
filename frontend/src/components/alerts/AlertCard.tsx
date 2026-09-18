@@ -90,7 +90,6 @@ function AlertEntry({
   const isResolved = alert.status.state === 'resolved'
   const { data: stats } = useAlertStats(alert.fingerprint, alert.clusterName)
   const claim = alert.activeClaim ?? null
-  const theme = useSettingsStore((s) => s.theme)
   const labelDisplay = useSettingsStore((s) => s.labelDisplay)
   const maintainer = claim ? null : (alert.labels['maintainer'] ?? null)
   const formatTime = useFormatTime()
@@ -113,9 +112,9 @@ function AlertEntry({
         'group relative flex cursor-pointer items-start gap-1 px-3 py-3.5 transition-colors focus:outline-none focus-visible:outline-none',
         // Claimed entries carry a blue left accent — "someone's on it", scannable
         // in a large group — not the old grey tint that read as "deprioritised".
-        claim ? 'border-l-2 border-blue-400/70 bg-blue-500/10 hover:bg-blue-500/[0.14]' : 'hover:bg-accent/20',
-        isSelected && !claim && 'bg-blue-500/10 hover:bg-blue-500/15',
-        isSelected && claim && 'bg-blue-500/20 hover:bg-blue-500/25',
+        claim ? 'border-l-2 border-claim-edge bg-claim-soft hover:bg-selected' : 'hover:bg-accent/20',
+        isSelected && !claim && 'bg-selected hover:bg-info-soft',
+        isSelected && claim && 'bg-info-soft',
       )}
     >
       <div className="min-w-0 flex-1">
@@ -125,24 +124,23 @@ function AlertEntry({
         {claim && (
           claim.note ? (
             <div className={cn(
-              'mb-2 flex items-start gap-2 rounded border-l-2 border-blue-400 px-2 py-1.5 text-xs',
-              theme === 'light' ? 'bg-blue-50 text-blue-800' : 'bg-blue-500/10 text-blue-200',
+              'mb-2 flex items-start gap-2 rounded border-l-2 border-claim-edge bg-claim-soft px-2 py-1.5 text-xs text-claim-fg',
             )}>
-              <User className="mt-0.5 h-3 w-3 shrink-0 text-blue-400" />
+              <User className="mt-0.5 h-3 w-3 shrink-0 text-claim-solid" />
               <div className="min-w-0 flex-1">
                 <div title={claim.claimedBy}>
                   <span className="opacity-70">Claimed by: </span>
                   <span className="font-medium">{shortClaimant(claim.claimedBy)}</span>
                   <span className="opacity-70"> · {formatTime(claim.claimedAt)}</span>
                 </div>
-                <div className={cn('mt-0.5', theme === 'light' ? 'text-blue-700' : 'text-blue-300/80')}>
+                <div className="mt-0.5">
                   {claim.note}
                 </div>
               </div>
             </div>
           ) : (
             <div
-              className={cn('mb-1.5 flex items-center gap-1.5 text-xs', theme === 'light' ? 'text-blue-700' : 'text-blue-300')}
+              className="mb-1.5 flex items-center gap-1.5 text-xs text-claim-fg"
               title={claim.claimedBy}
             >
               <User className="h-3 w-3 shrink-0" />
@@ -185,7 +183,7 @@ function AlertEntry({
             {maintainer && <span>{maintainer}</span>}
           </div>
           {isResolved && stats?.lastResolvedAt && (
-            <span className="text-green-600/70" title={new Date(stats.lastResolvedAt).toLocaleString('en-US')}>
+            <span className="text-success-fg" title={new Date(stats.lastResolvedAt).toLocaleString('en-US')}>
               ✓ {formatTime(stats.lastResolvedAt)}
             </span>
           )}
@@ -209,8 +207,7 @@ function AlertEntry({
         )}
         {silenceType === 'expiring' && remaining !== undefined && (
           <div className={cn(
-            'mb-2 flex items-center gap-1.5 rounded px-2 py-1.5 text-xs',
-            theme === 'light' ? 'bg-amber-50 border border-amber-200 text-amber-700' : 'bg-yellow-900/40 text-yellow-300',
+            'mb-2 flex items-center gap-1.5 rounded border border-warning-edge bg-warning-soft px-2 py-1.5 text-xs text-warning-fg',
           )}>
             <BellOff className="h-3 w-3 shrink-0" />
             <span>Silence expires in {formatSilenceDuration(remaining)}</span>
@@ -329,7 +326,7 @@ export function AlertCard({
           )}
           {claimedCount > 0 && (
             <span
-              className="flex h-5 items-center gap-0.5 rounded-full bg-blue-500/20 px-1.5 text-xs font-medium text-blue-400"
+              className="flex h-5 items-center gap-0.5 rounded-full bg-claim-soft px-1.5 text-xs font-medium text-claim-fg"
               title={`${claimedCount} of ${count} claimed`}
             >
               <User className="h-2.5 w-2.5" />

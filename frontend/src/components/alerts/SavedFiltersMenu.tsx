@@ -232,7 +232,7 @@ export function SavedFiltersMenu() {
             <span
               data-testid="saved-filters-unsaved-dot"
               aria-hidden="true"
-              className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-amber-500 ring-1 ring-background"
+              className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-warning-solid ring-1 ring-background"
             />
           )}
         </span>
@@ -348,14 +348,14 @@ export function SavedFiltersMenu() {
                     >
                       <span className="flex w-3 shrink-0 justify-center text-primary" aria-hidden="true">
                         {isActive && <Check className="h-3 w-3" />}
-                        {isBase && <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />}
+                        {isBase && <span className="h-1.5 w-1.5 rounded-full bg-warning-solid" />}
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="flex items-center gap-1.5">
                           <span className={cn('truncate text-xs text-foreground', isActive && 'font-medium')}>
                             {filter.name}
                           </span>
-                          {isBase && <span className="shrink-0 text-[10px] italic text-amber-500">modified</span>}
+                          {isBase && <span className="shrink-0 text-[10px] italic text-warning-fg">modified</span>}
                         </span>
                         <span className="block truncate font-mono text-[10px] text-muted-foreground">{summary}</span>
                       </span>
@@ -371,7 +371,7 @@ export function SavedFiltersMenu() {
                         : 'Make default — applied when you open Jarvis without a filter in the link'}
                       className={cn(
                         'flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded hover:bg-accent/60',
-                        filter.isDefault ? 'text-amber-500' : 'text-muted-foreground hover:text-foreground',
+                        filter.isDefault ? 'text-warning-fg' : 'text-muted-foreground hover:text-foreground',
                       )}
                     >
                       <Star className={cn('h-3.5 w-3.5', filter.isDefault && 'fill-current')} />
@@ -386,7 +386,7 @@ export function SavedFiltersMenu() {
                           type="button"
                           onClick={() => confirmThen('overwrite', filter.name, () => overwriteWithCurrent(filter.name))}
                           aria-label={`Click again to overwrite ${filter.name}`}
-                          className="h-6 shrink-0 cursor-pointer whitespace-nowrap rounded px-1 text-[10px] font-medium text-amber-500 hover:bg-accent/60"
+                          className="h-6 shrink-0 cursor-pointer whitespace-nowrap rounded px-1 text-[10px] font-medium text-warning-fg hover:bg-accent/60"
                         >
                           Overwrite?
                         </button>

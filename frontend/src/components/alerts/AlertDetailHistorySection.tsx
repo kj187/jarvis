@@ -52,16 +52,16 @@ export function AlertDetailHistorySection({
   alertmanagerUrl,
 }: AlertDetailHistorySectionProps) {
   const actionColor: Record<string, string> = {
-    'Alert fired': 'text-red-600 dark:text-red-400',
-    'Alert resolved': 'text-green-600 dark:text-green-400',
-    'Alert suppressed': 'text-muted-foreground dark:text-slate-400',
-    'Silence expired': 'text-yellow-600 dark:text-yellow-400',
-    claimed: 'text-blue-600 dark:text-blue-400',
+    'Alert fired': 'text-critical-fg',
+    'Alert resolved': 'text-success-fg',
+    'Alert suppressed': 'text-muted-foreground',
+    'Silence expired': 'text-warning-fg',
+    claimed: 'text-claim-fg',
     unclaimed: 'text-muted-foreground',
-    'Silence pending': 'text-muted-foreground dark:text-slate-300',
-    'Silence created': 'text-muted-foreground dark:text-slate-300',
-    'Silence updated': 'text-muted-foreground dark:text-slate-300',
-    'Silence deleted': 'text-orange-600 dark:text-orange-400',
+    'Silence pending': 'text-muted-foreground',
+    'Silence created': 'text-muted-foreground',
+    'Silence updated': 'text-muted-foreground',
+    'Silence deleted': 'text-attention-fg',
   }
 
   const mappedRows: HistoryRow[] = (timelineData?.entries ?? []).map((entry) => ({

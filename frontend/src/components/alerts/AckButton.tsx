@@ -284,7 +284,7 @@ export function AckButton({
               feedback === 'error'
                 ? 'text-destructive'
                 : feedback === 'done'
-                  ? 'text-emerald-600 dark:text-emerald-400'
+                  ? 'text-success-fg'
                   : subtle
                     ? 'text-muted-foreground/80 hover:bg-accent hover:text-foreground'
                     : 'text-muted-foreground hover:bg-accent hover:text-foreground',
@@ -306,7 +306,7 @@ export function AckButton({
               feedback === 'error'
                 ? 'border-destructive/40 bg-card text-destructive'
                 : feedback === 'done'
-                  ? 'border-emerald-500/40 bg-card text-emerald-600 dark:text-emerald-400'
+                  ? 'border-success-edge bg-card text-success-fg'
                   : 'border-border bg-card text-muted-foreground hover:bg-accent hover:text-foreground',
             )}
           >
@@ -328,7 +328,7 @@ export function AckButton({
               feedback === 'error'
                 ? 'text-destructive'
                 : feedback === 'done'
-                  ? 'text-emerald-600 dark:text-emerald-400'
+                  ? 'text-success-fg'
                   : undefined
             }
           >

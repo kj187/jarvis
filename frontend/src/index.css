@@ -15,6 +15,10 @@
  * edit them there and run `node scripts/design-tokens.mjs`. */
 @import "./generated/tokens.css";
 
+/* `dark:` follows the app's own theme (`data-theme` is always set on <html>), not the OS
+ * preference — without this the variant flipped with the system setting instead of the toggle. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 @theme {
   --radius: 0.5rem;
 
@@ -160,7 +164,7 @@ body {
 .hljs-selector-tag,
 .hljs-literal,
 .hljs-section,
-.hljs-link { color: var(--color-severity-info); }
+.hljs-link { color: var(--color-info-solid); }
 .hljs-string,
 .hljs-title,
 .hljs-name,
@@ -171,13 +175,13 @@ body {
 .hljs-addition,
 .hljs-variable,
 .hljs-template-tag,
-.hljs-template-variable { color: var(--color-severity-warning); }
+.hljs-template-variable { color: var(--color-warning-solid); }
 .hljs-comment,
 .hljs-quote,
 .hljs-deletion,
 .hljs-meta { color: var(--color-muted-foreground); font-style: italic; }
 .hljs-number,
-.hljs-regexp { color: var(--color-severity-critical); }
+.hljs-regexp { color: var(--color-critical-solid); }
 .hljs-emphasis { font-style: italic; }
 .hljs-strong { font-weight: 600; }
 

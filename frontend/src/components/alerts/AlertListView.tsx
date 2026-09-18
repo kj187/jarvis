@@ -71,37 +71,14 @@ function buildPageWindow(current: number, total: number): (number | '…')[] {
 
 const SEVERITY_ORDER = ['critical', 'error', 'warning', 'info', 'none']
 
-const severitySectionConfig: Record<string, { label: string; darkRowClass: string; lightRowClass: string; borderClass: string }> = {
-  critical: {
-    label: 'Critical',
-    darkRowClass: 'text-red-400',
-    lightRowClass: 'text-red-700 bg-red-100/80',
-    borderClass: 'border-l-red-600',
-  },
-  error: {
-    label: 'Error',
-    darkRowClass: 'text-orange-400',
-    lightRowClass: 'text-orange-700 bg-orange-100/80',
-    borderClass: 'border-l-orange-500',
-  },
-  warning: {
-    label: 'Warning',
-    darkRowClass: 'text-yellow-400',
-    lightRowClass: 'text-yellow-700 bg-yellow-100/80',
-    borderClass: 'border-l-yellow-500',
-  },
-  info: {
-    label: 'Info',
-    darkRowClass: 'text-blue-400',
-    lightRowClass: 'text-blue-700 bg-blue-100/80',
-    borderClass: 'border-l-blue-600',
-  },
-  none: {
-    label: 'None',
-    darkRowClass: 'text-slate-400',
-    lightRowClass: 'text-slate-600 bg-slate-200/80',
-    borderClass: 'border-l-slate-600',
-  },
+type SeveritySection = { label: string; textClass: string; softClass: string; borderClass: string }
+
+const severitySectionConfig: Record<string, SeveritySection> = {
+  critical: { label: 'Critical', textClass: 'text-critical-fg', softClass: 'bg-critical-soft', borderClass: 'border-l-critical-solid' },
+  error: { label: 'Error', textClass: 'text-attention-fg', softClass: 'bg-attention-soft', borderClass: 'border-l-attention-solid' },
+  warning: { label: 'Warning', textClass: 'text-warning-fg', softClass: 'bg-warning-soft', borderClass: 'border-l-warning-solid' },
+  info: { label: 'Info', textClass: 'text-info-fg', softClass: 'bg-info-soft', borderClass: 'border-l-info-solid' },
+  none: { label: 'None', textClass: 'text-neutral-fg', softClass: 'bg-neutral-soft', borderClass: 'border-l-neutral-solid' },
 }
 
 interface GroupSilenceInfo {
@@ -698,12 +675,7 @@ export function AlertListView({
         <tbody>
           {orderedGroupValues.map((groupValue, sectionIdx) => {
             const groups = sortGroups(groupsByLabel.get(groupValue)!)
-            const cfg = severitySectionConfig[groupValue] ?? {
-              label: groupValue,
-              darkRowClass: 'text-slate-400',
-              lightRowClass: 'text-slate-600 bg-slate-200/80',
-              borderClass: 'border-l-slate-600',
-            }
+            const cfg = severitySectionConfig[groupValue] ?? { ...severitySectionConfig.none, label: groupValue }
             const totalAlerts = groups.reduce((sum, g) => sum + g.alerts.length, 0)
             const sectionCollapsed = collapsedSections.has(groupValue)
             return (
@@ -730,7 +702,7 @@ export function AlertListView({
                     colSpan={showStateColumn ? 3 : 2}
                     className={cn(
                       'border-l-4 px-4 py-2',
-                      theme === 'light' ? cfg.lightRowClass : cn(cfg.darkRowClass, 'bg-muted/30'),
+                      cfg.textClass, theme === 'light' ? cfg.softClass : 'bg-muted/30',
                       cfg.borderClass,
                     )}
                   >
@@ -805,7 +777,7 @@ export function AlertListView({
                                 </span>
                               )}
                               {activeSilences.length === 0 && expiringSilences.length > 0 && (
-                                <span className={cn('inline-flex items-center gap-1 text-xs font-normal', theme === 'light' ? 'text-amber-600' : 'text-yellow-400')} title={`Group silence expires in ${formatSilenceDuration(expiringSilences[0].remaining)}`}>
+                                <span className={cn('inline-flex items-center gap-1 text-xs font-normal', 'text-warning-fg')} title={`Group silence expires in ${formatSilenceDuration(expiringSilences[0].remaining)}`}>
                                   <BellOff className="h-3 w-3 shrink-0" />
                                   {formatSilenceDuration(expiringSilences[0].remaining)}
                                 </span>
@@ -858,9 +830,7 @@ export function AlertListView({
                                 title={expiringSilences.length > 1 ? `Extend ${expiringSilences.length} group silences` : 'Extend the group silence'}
                                 className={cn(
                                   'cursor-pointer flex w-fit items-center gap-1.5 rounded border px-2 py-1 text-xs transition-colors',
-                                  theme === 'light'
-                                    ? 'border-amber-400/70 text-amber-700 hover:border-amber-500'
-                                    : 'border-yellow-700/60 text-yellow-400 hover:border-yellow-500',
+                                  'border-warning-edge text-warning-fg hover:border-warning-solid',
                                 )}
                               >
                                 <RefreshCw className="h-3.5 w-3.5 shrink-0" />
@@ -868,7 +838,7 @@ export function AlertListView({
                                 {expiringSilences.length > 1 && (
                                   <span className={cn(
                                     'rounded-full px-1 text-[10px] leading-tight',
-                                    theme === 'light' ? 'bg-amber-100' : 'bg-yellow-900/50',
+                                    'bg-warning-soft',
                                   )}>{expiringSilences.length}</span>
                                 )}
                               </button>

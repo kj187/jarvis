@@ -51,8 +51,9 @@ echo "  [Agent context] Checking skills, tool adapters and AGENTS.md..."
 scripts/check-agent-context.sh
 
 # ── Design tokens (always; cheap) — generated files must match design/tokens.json ──
-echo "  [Design] Checking generated design tokens..."
+echo "  [Design] Checking generated design tokens and raw palette classes..."
 node scripts/design-tokens.mjs --check
+node scripts/check-palette-classes.mjs
 
 # ── Secret scanning (always, all file types) ──────────────────────────────────
 echo "  [Security] Running gitleaks (secret scan)..."

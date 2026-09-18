@@ -32,9 +32,9 @@ export function NoAuthNotice() {
       aria-label="Authentication notice"
     >
       <div className="absolute inset-0 bg-black/60" onClick={close} />
-      <div data-testid="noauth-notice-panel" className="relative z-10 w-full max-w-md rounded-lg border border-amber-500/30 bg-card p-6 shadow-xl space-y-4">
+      <div data-testid="noauth-notice-panel" className="relative z-10 w-full max-w-md rounded-lg border border-warning-edge bg-card p-6 shadow-xl space-y-4">
         <div className="flex items-start justify-between gap-4">
-          <div className="flex items-center gap-2 text-amber-500">
+          <div className="flex items-center gap-2 text-warning-fg">
             <ShieldOff className="h-5 w-5 shrink-0" />
             <h2 className="text-base font-semibold">No authentication configured</h2>
           </div>
@@ -77,7 +77,7 @@ export function NoAuthNotice() {
               href="https://github.com/kj187/jarvis/blob/main/docs/authentication.md"
               target="_blank"
               rel="noopener noreferrer"
-              className="underline text-foreground hover:text-amber-400 cursor-pointer"
+              className="underline text-foreground hover:text-warning-fg cursor-pointer"
             >
               authentication docs
             </a>{' '}

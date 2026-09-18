@@ -235,7 +235,6 @@ export function AlertDetailPanel({
   const [manualClaimName, setManualClaimName] = useState(() => localStorage.getItem(USERNAME_KEY) ?? '')
   const { user } = useAuthStore()
   const { guard, loginModalOpen, onLoginSuccess, onLoginClose } = useLoginGuard()
-  const theme = useSettingsStore((s) => s.theme)
   const claimName = user?.username ?? manualClaimName
   const [promptCopied, setPromptCopied] = useState(false)
   const [expiredSilenceCollapsed, setExpiredSilenceCollapsed] = useState(true)
@@ -555,12 +554,12 @@ export function AlertDetailPanel({
           <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
             <div className="flex flex-wrap items-center gap-2">
               {activeClaim ? (
-                <div data-testid="detail-claim-badge" className={cn('flex h-8 min-w-0 max-w-[16rem] items-center gap-1.5 rounded-md border px-2', theme === 'light' ? 'border-blue-300 bg-blue-50' : 'border-blue-800 bg-blue-950/40')}>
-                  <User className={cn('h-3 w-3 shrink-0', theme === 'light' ? 'text-blue-600' : 'text-blue-400')} />
-                  <span className={cn('shrink-0 text-xs font-medium', theme === 'light' ? 'text-blue-700' : 'text-blue-300')}>{activeClaim.claimedBy}</span>
+                <div data-testid="detail-claim-badge" className={cn('flex h-8 min-w-0 max-w-[16rem] items-center gap-1.5 rounded-md border px-2', 'border-claim-edge bg-claim-soft')}>
+                  <User className="h-3 w-3 shrink-0 text-claim-solid" />
+                  <span className="shrink-0 text-xs font-medium text-claim-fg">{activeClaim.claimedBy}</span>
                   {activeClaim.note && (
                     <Tooltip content={activeClaim.note} wrapperClassName="min-w-0">
-                      <span data-testid="detail-claim-note" className={cn('min-w-0 truncate text-xs', theme === 'light' ? 'text-blue-600' : 'text-blue-400/80')}>{activeClaim.note}</span>
+                      <span data-testid="detail-claim-note" className="min-w-0 truncate text-xs text-claim-fg">{activeClaim.note}</span>
                     </Tooltip>
                   )}
                   {isOwner(activeClaim.claimedBy) && (
@@ -568,7 +567,7 @@ export function AlertDetailPanel({
                       <button
                         data-testid="claim-edit-note-button"
                         title="Edit note"
-                        className={cn('ml-1 shrink-0 cursor-pointer', theme === 'light' ? 'text-blue-500 hover:text-blue-700' : 'text-blue-400/70 hover:text-blue-300')}
+                        className="ml-1 shrink-0 cursor-pointer text-claim-fg opacity-80 hover:opacity-100"
                         onClick={() => {
                           setEditNote(activeClaim.note ?? '')
                           setShowEditNoteForm((v) => !v)
@@ -579,7 +578,7 @@ export function AlertDetailPanel({
                     ) : (
                       <button
                         data-testid="claim-edit-note-button"
-                        className={cn('ml-1 shrink-0 cursor-pointer whitespace-nowrap text-[10px] font-medium underline decoration-dotted underline-offset-2', theme === 'light' ? 'text-blue-500 hover:text-blue-700' : 'text-blue-400/70 hover:text-blue-300')}
+                        className="ml-1 shrink-0 cursor-pointer whitespace-nowrap text-[10px] font-medium text-claim-fg underline decoration-dotted underline-offset-2 opacity-80 hover:opacity-100"
                         onClick={() => {
                           setEditNote('')
                           setShowEditNoteForm((v) => !v)
@@ -731,8 +730,8 @@ export function AlertDetailPanel({
                   aria-expanded={isExpanded}
                 >
                   {isExpanded ? <ChevronUp className="h-3 w-3 shrink-0 text-muted-foreground" /> : <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />}
-                  <BellOff className={cn('h-3 w-3 shrink-0', isExpiring ? (theme === 'light' ? 'text-yellow-700' : 'text-yellow-300') : 'text-foreground')} />
-                  <span className={isPending ? 'text-muted-foreground' : isExpiring ? (theme === 'light' ? 'text-yellow-700' : 'text-yellow-300') : 'text-foreground'}>
+                  <BellOff className={cn('h-3 w-3 shrink-0', isExpiring ? 'text-warning-fg' : 'text-foreground')} />
+                  <span className={isPending ? 'text-muted-foreground' : isExpiring ? 'text-warning-fg' : 'text-foreground'}>
                     {isPending ? 'Silence pending' : 'Silence active'}
                   </span>
                   <span className="truncate font-normal text-muted-foreground">
@@ -752,7 +751,7 @@ export function AlertDetailPanel({
                         <button
                           key={label}
                           disabled={isExtending}
-                          className="flex items-center gap-1 rounded border border-yellow-700 px-2 py-0.5 text-xs text-yellow-300 hover:bg-yellow-900/50 cursor-pointer disabled:opacity-40"
+                          className="flex items-center gap-1 rounded border border-warning-edge px-2 py-0.5 text-xs text-warning-fg hover:bg-warning-soft cursor-pointer disabled:opacity-40"
                           onClick={() => guard(() => upsertSilence({
                             id: s.id,
                             cluster: s.clusterName,
@@ -779,7 +778,7 @@ export function AlertDetailPanel({
                   </button>
                   <button
                     disabled={isDeleting}
-                    className="flex items-center gap-1 rounded border border-border px-2 py-0.5 text-xs text-red-500/70 hover:text-red-400 hover:bg-red-950/40 cursor-pointer disabled:opacity-40"
+                    className="flex items-center gap-1 rounded border border-border px-2 py-0.5 text-xs text-critical-fg hover:bg-critical-soft cursor-pointer disabled:opacity-40"
                     onClick={() => guard(() => handleDelete(s))}
                   >
                     <Trash2 className="h-3 w-3" />
@@ -803,10 +802,10 @@ export function AlertDetailPanel({
                       </a>
 
                       <span className="text-muted-foreground">Created by</span>
-                      <span className={isExpiring ? (theme === 'light' ? 'text-yellow-800' : 'text-yellow-200') : 'text-foreground'}>{s.createdBy}</span>
+                      <span className={isExpiring ? 'text-warning-fg' : 'text-foreground'}>{s.createdBy}</span>
 
                       <span className="text-muted-foreground">Created at</span>
-                      <span className={isExpiring ? (theme === 'light' ? 'text-yellow-700' : 'text-yellow-400') : 'text-muted-foreground'}>
+                      <span className={isExpiring ? 'text-warning-fg' : 'text-muted-foreground'}>
                         {format(new Date(s.updatedAt), 'yyyy-MM-dd HH:mm', { locale: enUS })} {tzAbbr}
                       </span>
 
@@ -820,7 +819,7 @@ export function AlertDetailPanel({
                       ) : (
                         <>
                           <span className="text-muted-foreground">{isExpiring ? 'Expires' : 'Ends'}</span>
-                          <span className={isExpiring ? (theme === 'light' ? 'text-yellow-700' : 'text-yellow-400') : 'text-muted-foreground'}>
+                          <span className={isExpiring ? 'text-warning-fg' : 'text-muted-foreground'}>
                             in {formatDuration(remaining)} ({format(new Date(s.endsAt), 'yyyy-MM-dd HH:mm', { locale: enUS })} {tzAbbr})
                           </span>
                         </>
@@ -829,7 +828,7 @@ export function AlertDetailPanel({
                       {s.comment && (
                         <>
                           <span className="text-muted-foreground">Reason</span>
-                          <span className={isExpiring ? (theme === 'light' ? 'text-yellow-700' : 'text-yellow-400') : 'text-muted-foreground'}>{s.comment}</span>
+                          <span className={isExpiring ? 'text-warning-fg' : 'text-muted-foreground'}>{s.comment}</span>
                         </>
                       )}
                     </div>

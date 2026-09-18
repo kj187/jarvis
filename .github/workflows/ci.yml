@@ -76,6 +76,9 @@ jobs:
       # Generated colour tokens (app, docs site, video) must match design/tokens.json.
       - name: Check design tokens
         run: node scripts/design-tokens.mjs --check
+      # No raw Tailwind palette classes / colour literals in frontend code: semantic tokens only.
+      - name: Check palette classes
+        run: node scripts/check-palette-classes.mjs
 
   backend:
     name: Backend

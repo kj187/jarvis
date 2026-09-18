@@ -848,7 +848,7 @@ export function SilenceForm({
       <div className="space-y-5">
         {/* Existing silence warning */}
         {silenceGroups.length > 0 && (
-          <div className="flex gap-2.5 rounded-md border border-yellow-500/40 bg-yellow-500/10 px-3 py-2.5 text-yellow-700 dark:text-yellow-400">
+          <div className="flex gap-2.5 rounded-md border border-warning-edge bg-warning-soft px-3 py-2.5 text-warning-fg">
             <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
             <div className="w-full space-y-2.5 text-xs">
               <p className="text-sm font-medium">
@@ -859,7 +859,7 @@ export function SilenceForm({
               {silenceGroups.map(({ silence: s, alerts }) => (
                 <div key={s.id} className="space-y-1 opacity-90">
                   <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
-                    <span className="rounded bg-yellow-500/20 px-1 font-mono text-[10px]">{s.clusterName}</span>
+                    <span className="rounded bg-warning-soft px-1 font-mono text-[10px]">{s.clusterName}</span>
                     <a
                       href={`${s.alertmanagerUrl}/#/silences/${s.id}`}
                       target="_blank"
@@ -882,7 +882,7 @@ export function SilenceForm({
                           return (
                             <span
                               key={m.name}
-                              className="inline-flex items-center gap-0.5 rounded bg-yellow-500/20 px-1.5 py-0.5 font-mono text-[10px]"
+                              className="inline-flex items-center gap-0.5 rounded bg-warning-soft px-1.5 py-0.5 font-mono text-[10px]"
                             >
                               <span className="opacity-70">{m.name}=</span>
                               <span>{val}</span>
@@ -1000,7 +1000,7 @@ export function SilenceForm({
                     <span className={cn(
                       'rounded px-1.5 py-0.5 text-[10px] font-medium shrink-0',
                       alert.labels.severity === 'critical' && 'bg-destructive/20 text-destructive',
-                      alert.labels.severity === 'warning' && 'bg-yellow-500/20 text-yellow-600 dark:text-yellow-400',
+                      alert.labels.severity === 'warning' && 'bg-warning-soft text-warning-fg',
                       !['critical', 'warning'].includes(alert.labels.severity) && 'bg-accent text-muted-foreground',
                     )}>
                       {alert.labels.severity}
@@ -1105,7 +1105,7 @@ export function SilenceForm({
                 syntax like `(?i)`), so the affected-alerts count below can't be trusted: matchers
                 using it are treated as matching everything rather than silently showing 0. */}
             {hasUnevaluableRegex && (
-              <div className="flex gap-2.5 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-amber-700 dark:text-amber-400">
+              <div className="flex gap-2.5 rounded-md border border-warning-edge bg-warning-soft px-3 py-2.5 text-warning-fg">
                 <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
                 <div className="text-xs space-y-0.5">
                   <p>
@@ -1118,7 +1118,7 @@ export function SilenceForm({
 
             {/* Zero-match warning */}
             {hasActiveMatchers && liveMatchCount === 0 && (
-              <div className="flex gap-2.5 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-amber-700 dark:text-amber-400">
+              <div className="flex gap-2.5 rounded-md border border-warning-edge bg-warning-soft px-3 py-2.5 text-warning-fg">
                 <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
                 <div className="text-xs space-y-0.5">
                   <p>No current alerts match these matchers — the silence will be created but has no immediate effect.</p>
@@ -1466,7 +1466,7 @@ export function SilenceForm({
 
             {result.status === 'success' && (
               <div className="flex items-center gap-1.5 overflow-hidden">
-                <Check className="h-3.5 w-3.5 shrink-0 text-green-500" />
+                <Check className="h-3.5 w-3.5 shrink-0 text-success-solid" />
                 {clusterUrlMap.has(cluster) ? (
                   <a
                     href={`${clusterUrlMap.get(cluster)}/#/silences/${result.id}`}

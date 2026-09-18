@@ -735,7 +735,7 @@ export function SettingsSheet({ open, onClose }: SettingsSheetProps) {
           ) : providerMode === 'none' || providerMode === undefined ? (
             <p className="text-[10px] text-muted-foreground">Stored in this browser</p>
           ) : (
-            <div className="flex items-start gap-1.5 rounded-md border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-[11px] text-amber-500">
+            <div className="flex items-start gap-1.5 rounded-md border border-warning-edge bg-warning-soft px-2.5 py-1.5 text-[11px] text-warning-fg">
               <Info className="h-3.5 w-3.5 shrink-0 mt-px" />
               <span>Stored in this browser — sign in to sync across devices</span>
             </div>

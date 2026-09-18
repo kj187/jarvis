@@ -35,11 +35,11 @@ const SEVERITY_LABEL: Record<string, string> = {
 }
 
 const SEVERITY_DOT: Record<string, string> = {
-  critical: 'bg-red-500',
-  error: 'bg-orange-500',
-  warning: 'bg-yellow-500',
-  info: 'bg-blue-500',
-  none: 'bg-slate-500',
+  critical: 'bg-critical-solid',
+  error: 'bg-attention-solid',
+  warning: 'bg-warning-solid',
+  info: 'bg-info-solid',
+  none: 'bg-neutral-solid',
 }
 
 function computeAutoColumns(): number {
@@ -398,7 +398,7 @@ export function AlertCardGrid({
                 aria-expanded={!isCollapsed}
               >
                 {isCollapsed ? <ChevronRight className="h-3.5 w-3.5 shrink-0" /> : <ChevronDown className="h-3.5 w-3.5 shrink-0" />}
-                <span className={`h-2 w-2 rounded-full shrink-0 ${SEVERITY_DOT[groupValue] ?? 'bg-slate-500'}`} />
+                <span className={`h-2 w-2 rounded-full shrink-0 ${SEVERITY_DOT[groupValue] ?? 'bg-neutral-solid'}`} />
                 {groupByLabel === 'severity'
                   ? (SEVERITY_LABEL[groupValue] ?? groupValue)
                   : `${groupByLabel}: ${groupValue}`}{' '}

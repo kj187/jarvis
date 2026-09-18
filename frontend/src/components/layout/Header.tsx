@@ -64,7 +64,7 @@ function InfoColophon({ version }: { version: string | null }) {
 // Live-connection indicator. Green icon when connected; when the socket is down it also says
 // "Offline" in text, so the state never depends on hue or a hover-only title (the title stays for
 // pointer users and tests).
-function WsStatus({ connected, light }: { connected: boolean; light: boolean }) {
+function WsStatus({ connected }: { connected: boolean }) {
   const title = connected ? 'WebSocket connected' : 'WebSocket disconnected'
   return (
     <div
@@ -73,9 +73,9 @@ function WsStatus({ connected, light }: { connected: boolean; light: boolean }) 
       aria-label={connected ? title : `Offline — ${title}`}
       title={title}
     >
-      {connected ? <Wifi className="h-4 w-4 text-green-500" /> : <WifiOff className="h-4 w-4 text-red-500" />}
+      {connected ? <Wifi className="h-4 w-4 text-success-solid" /> : <WifiOff className="h-4 w-4 text-critical-solid" />}
       {!connected && (
-        <span className={`text-xs font-medium ${light ? 'text-red-700' : 'text-red-400'}`}>Offline</span>
+        <span className="text-xs font-medium text-critical-fg">Offline</span>
       )}
     </div>
   )
@@ -221,7 +221,7 @@ export function Header() {
                 : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-accent/20'
             }`}
           >
-            <span className={`h-1.5 w-1.5 rounded-full ${activePage === 'alerts' ? 'bg-orange-500' : 'bg-orange-400'}`} />
+            <span className={`h-1.5 w-1.5 rounded-full bg-attention-solid ${activePage === 'alerts' ? '' : 'opacity-80'}`} />
             Alerts
             <span className="tabular-nums opacity-75">{alertCounts.byState?.active ?? 0}</span>
           </button>
@@ -234,7 +234,7 @@ export function Header() {
                 : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-accent/20'
             }`}
           >
-            <span className={`h-1.5 w-1.5 rounded-full ${activePage === 'silences' ? 'bg-blue-500' : 'bg-blue-400'}`} />
+            <span className={`h-1.5 w-1.5 rounded-full bg-info-solid ${activePage === 'silences' ? '' : 'opacity-80'}`} />
             Silences
             <span className="tabular-nums opacity-75">{alertCounts.silenceCount ?? 0}</span>
           </button>
@@ -254,7 +254,7 @@ export function Header() {
               aria-controls={clusterPanelId}
               {...clusterPopover.triggerProps}
             >
-              <div className={`h-2 w-2 rounded-full ${healthyCount === clusters.length ? 'bg-green-500' : 'bg-red-500'}`} />
+              <div className={`h-2 w-2 rounded-full ${healthyCount === clusters.length ? 'bg-success-solid' : 'bg-critical-solid'}`} />
               <span className="text-muted-foreground tabular-nums">{healthyCount}/{clusters.length}</span>
             </button>
             {clusterHoverOpen && clusters.length > 0 && (
@@ -263,16 +263,16 @@ export function Header() {
                 {clusters.map((c) => (
                   <div
                     key={c.name}
-                    className={`px-3 py-2 border-b border-border last:border-0 ${!c.healthy ? (theme === 'light' ? 'bg-red-50' : 'bg-red-950/30') : ''}`}
+                    className={`px-3 py-2 border-b border-border last:border-0 ${!c.healthy ? 'bg-critical-soft' : ''}`}
                   >
                     <div className="flex items-center justify-between gap-3">
                       <div className="relative flex items-center gap-2">
                         {c.healthy ? (
-                          <div className="h-2 w-2 rounded-full shrink-0 bg-green-500" />
+                          <div className="h-2 w-2 rounded-full shrink-0 bg-success-solid" />
                         ) : (
                           <div className="relative shrink-0">
-                            <div className="h-2.5 w-2.5 rounded-full bg-red-500" />
-                            <div className="absolute inset-0 rounded-full bg-red-500 animate-ping opacity-75" />
+                            <div className="h-2.5 w-2.5 rounded-full bg-critical-solid" />
+                            <div className="absolute inset-0 rounded-full bg-critical-solid animate-ping opacity-75" />
                           </div>
                         )}
                         <div
@@ -282,7 +282,7 @@ export function Header() {
                           }}
                         >
                           <button
-                            className="rounded text-xs font-medium text-foreground hover:text-blue-400 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            className="rounded text-xs font-medium text-foreground hover:text-link cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                             onMouseEnter={() => setClusterFilterOpen(c.name)}
                             onMouseLeave={() => setClusterFilterOpen(null)}
                             onFocus={() => setClusterFilterOpen(c.name)}
@@ -310,7 +310,7 @@ export function Header() {
                                   }}
                                 >
                                   <span className="font-mono text-muted-foreground">@cluster</span>
-                                  <span className="font-mono text-blue-400">{op}</span>
+                                  <span className="font-mono text-link">{op}</span>
                                   <span className="font-medium text-foreground">{c.name}</span>
                                 </button>
                               ))}
@@ -318,7 +318,7 @@ export function Header() {
                           )}
                         </div>
                         {!c.healthy && (
-                          <span className="rounded bg-red-500/20 px-1 py-0.5 text-[10px] font-semibold text-red-400 uppercase tracking-wide">DOWN</span>
+                          <span className="rounded bg-critical-soft px-1 py-0.5 text-[10px] font-semibold text-critical-fg uppercase tracking-wide">DOWN</span>
                         )}
                       </div>
                       <span className="text-xs text-muted-foreground whitespace-nowrap">{c.alertCount} Alerts</span>
@@ -327,7 +327,7 @@ export function Header() {
                       <div className="mt-1 pl-[1.375rem] space-y-0.5">
                         {c.members.map((m) => (
                           <div key={m.name} className="flex items-center gap-1.5 text-[10px]">
-                            <div className={`h-1.5 w-1.5 rounded-full shrink-0 ${m.healthy ? 'bg-green-500' : 'bg-red-500'}`} />
+                            <div className={`h-1.5 w-1.5 rounded-full shrink-0 ${m.healthy ? 'bg-success-solid' : 'bg-critical-solid'}`} />
                             <span className="break-all text-muted-foreground">{m.url}</span>
                           </div>
                         ))}
@@ -342,7 +342,7 @@ export function Header() {
           </div>
 
           {/* WS status */}
-          <WsStatus connected={wsConnected} light={theme === 'light'} />
+          <WsStatus connected={wsConnected} />
 
           {/* Refresh — custom docked popover (not the generic Tooltip) so it matches
               the flush, header-colored look of the other header popovers. */}
@@ -430,7 +430,7 @@ export function Header() {
 
         {/* ── Mobile: WS status + hamburger ── */}
         <div className="flex md:hidden items-center gap-1">
-          <WsStatus connected={wsConnected} light={theme === 'light'} />
+          <WsStatus connected={wsConnected} />
           <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => setMenuOpen((v) => !v)} aria-label="Toggle menu" aria-expanded={menuOpen}>
             {menuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
           </Button>
@@ -443,7 +443,7 @@ export function Header() {
           <div className="flex items-center gap-1 flex-wrap">
             <div className="flex-1" />
             <div className="flex items-center gap-1.5 px-2 text-xs cursor-pointer select-none" aria-label={`Instances ${healthyCount}/${clusters.length}`}>
-              <div className={`h-2 w-2 rounded-full ${healthyCount === clusters.length ? 'bg-green-500' : 'bg-red-500'}`} />
+              <div className={`h-2 w-2 rounded-full ${healthyCount === clusters.length ? 'bg-success-solid' : 'bg-critical-solid'}`} />
               <span className="text-muted-foreground tabular-nums">{healthyCount}/{clusters.length}</span>
             </div>
             <Tooltip content={refreshTooltipText} side="bottom">

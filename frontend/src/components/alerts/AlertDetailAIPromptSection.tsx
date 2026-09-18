@@ -20,7 +20,7 @@ export function AlertDetailAIPromptSection({ promptText, promptCopied, setPrompt
             setTimeout(() => setPromptCopied(false), 2000)
           }}
         >
-          {promptCopied ? <Check className="h-3 w-3 text-green-400" /> : <Copy className="h-3 w-3" />}
+          {promptCopied ? <Check className="h-3 w-3 text-success-fg" /> : <Copy className="h-3 w-3" />}
           {promptCopied ? 'Copied!' : 'Copy'}
         </button>
       </div>
