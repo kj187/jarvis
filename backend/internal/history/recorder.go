@@ -314,26 +314,86 @@ func (r *Recorder) Start(ctx context.Context) {
 		return
 	}
 
-	var (
-		modeMu     sync.Mutex
-		cancelMode context.CancelFunc = func() {}
-	)
-	r.elector.Subscribe(func(isLeader bool) {
-		modeMu.Lock()
-		defer modeMu.Unlock()
-		cancelMode()
-		modeCtx, cancel := context.WithCancel(ctx)
-		cancelMode = cancel
-		if isLeader {
-			go r.runPollLoop(modeCtx)
-		} else {
-			go r.runFollowerLoop(modeCtx)
+	// requests carries at most one pending desired mode: setDesiredMode below
+	// always replaces it in place rather than blocking, so the elector's own
+	// callback (which must never block — see onLeadershipChange) can enqueue
+	// a mode change and return immediately. runModeSupervisor is the only
+	// goroutine that ever cancels a running mode and waits for it to
+	// actually return before starting the next one (P5, tmp/memory.md §8.3):
+	// without that wait, a demoted leader's still-finishing poll could still
+	// be writing while a newly started follower loop rebuilds from the same
+	// data.
+	requests := make(chan bool, 1)
+	setDesiredMode := func(isLeader bool) {
+		for {
+			select {
+			case requests <- isLeader:
+				return
+			default:
+				select {
+				case <-requests:
+				default:
+				}
+			}
 		}
-	})
+	}
+
+	supervisorDone := make(chan struct{})
+	go func() {
+		defer close(supervisorDone)
+		r.runModeSupervisor(ctx, requests)
+	}()
+
+	r.elector.Subscribe(setDesiredMode)
+
 	<-ctx.Done()
-	modeMu.Lock()
-	cancelMode()
-	modeMu.Unlock()
+	<-supervisorDone
+}
+
+// runModeSupervisor sequences leader/follower mode transitions requested via
+// requests: each one cancels the previous mode's context and waits for its
+// goroutine to actually return before starting the next one. This is the
+// only place a mode transition happens — the elector callback (setDesiredMode
+// in Start) only ever replaces the single buffered pending request and never
+// blocks here itself.
+func (r *Recorder) runModeSupervisor(ctx context.Context, requests <-chan bool) {
+	r.runModeSupervisorWith(ctx, requests, r.runPollLoop, r.runFollowerLoop)
+}
+
+// runModeSupervisorWith is runModeSupervisor with the leader/follower mode
+// functions passed in explicitly, so tests can substitute instrumented fakes
+// without needing a real PostgreSQL connection.
+func (r *Recorder) runModeSupervisorWith(ctx context.Context, requests <-chan bool, runLeader, runFollower func(context.Context)) {
+	cancel := func() {}
+	var done chan struct{}
+	stop := func() {
+		cancel()
+		if done != nil {
+			<-done
+			done = nil
+		}
+	}
+	defer stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case isLeader := <-requests:
+			stop()
+			modeCtx, c := context.WithCancel(ctx)
+			cancel = c
+			d := make(chan struct{})
+			done = d
+			go func() {
+				defer close(d)
+				if isLeader {
+					runLeader(modeCtx)
+				} else {
+					runFollower(modeCtx)
+				}
+			}()
+		}
+	}
 }
 
 func (r *Recorder) runResolvedSweeper(ctx context.Context) {
@@ -483,8 +543,10 @@ func (r *Recorder) poll(ctx context.Context) {
 
 	// Persist + notify per-cluster snapshots for followers (D3). Leader-only
 	// (this method only ever runs while leader — see runPollLoop) and
-	// PostgreSQL-only (r.dsn is empty on SQLite).
-	if r.dsn != "" {
+	// PostgreSQL-only (r.dsn is empty on SQLite). Skipped once ctx is
+	// cancelled (mode transition/shutdown) — a stale poll must not persist a
+	// snapshot after this pod may already be a follower consuming its own.
+	if r.dsn != "" && ctx.Err() == nil {
 		r.persistSnapshots(ctx, clusters)
 	}
 }
@@ -631,6 +693,9 @@ func (r *Recorder) applyPollResults(
 	now := r.currentTime()
 	if r.IsLeader() {
 		for i := range allAlerts {
+			if ctx.Err() != nil {
+				return
+			}
 			a := &allAlerts[i]
 			alertKey := recorderAlertKey(a.Fingerprint, a.ClusterName)
 			if err := r.store.UpsertFingerprint(a.Fingerprint, a.Labels["alertname"], a.ClusterName, a.Labels); err != nil {
@@ -665,6 +730,9 @@ func (r *Recorder) applyPollResults(
 		// Resolve missing alerts.
 		if len(resolvedAlerts) > 0 {
 			for _, ra := range resolvedAlerts {
+				if ctx.Err() != nil {
+					return
+				}
 				if err := r.store.RecordResolvedForCluster(ra.fingerprint, ra.clusterName, now); err != nil {
 					r.logger.Error("record resolved", "fp", ra.fingerprint, "cluster", ra.clusterName, "err", err)
 				} else if r.metrics != nil {
@@ -721,6 +789,13 @@ func (r *Recorder) applyPollResults(
 		if claim, ok := activeClaims[key]; ok {
 			allAlerts[i].ActiveClaim = claim
 		}
+	}
+
+	// A poll cancelled by a mode transition (demotion/shutdown) must not still
+	// publish this attempt's result after the fact — the next mode (follower
+	// loop, or none on shutdown) must never race this Set/broadcast/persist.
+	if ctx.Err() != nil {
+		return
 	}
 
 	r.alertStore.Set(allAlerts)

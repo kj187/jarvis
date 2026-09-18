@@ -104,11 +104,20 @@ event recording).
 Followers never poll Alertmanager. Instead, after every poll the leader
 gzip's a compact per-cluster JSON snapshot (alerts, silences, member
 up/down state) into the `poll_snapshots` table and
-`pg_notify('jarvis_snapshot', clusterName)`. Followers `LISTEN` on that
-channel (plus a periodic full resync as a fallback, in case a notification
-is ever missed) and merge the changed cluster's snapshot into their own
-in-memory stores — so **every** pod still serves reads, the REST API, and
-WebSocket pushes to its own connected browsers, from a snapshot that is
+`pg_notify('jarvis_snapshot', clusterName)`. A follower's own rebuild is
+coalesced rather than run once per notification: it marks the changed
+cluster and, on the first notification after being idle, waits a fixed
+200ms window before resyncing every cluster marked during that window and
+rebuilding its in-memory stores exactly once — several clusters persisting
+their poll snapshots within milliseconds of each other (the normal case,
+since they're all written from the same poll cycle) produce one rebuild, not
+several. That window never gets pushed back by further notifications, so a
+continuously notifying cluster still rebuilds at least once per window
+instead of stalling it indefinitely. Independently of any of that, a full
+resync also runs on a fixed schedule every `JARVIS_POLL_INTERVAL` — a
+genuine fallback for a missed notification even while other clusters keep
+notifying continuously — so **every** pod still serves reads, the REST API,
+and WebSocket pushes to its own connected browsers, from a snapshot that is
 at most one poll interval old, regardless of which pod happens to be
 leader right now.
 
@@ -118,6 +127,13 @@ discard already-expired rows while decoding/rebuilding, and physically remove
 expired entries from both their `AlertStore` and per-cluster snapshot cache.
 Promotion never restarts that deadline. Active last-good alerts are not subject
 to this cleanup, and database history is unchanged.
+
+A pod switching between leader and follower mode (or shutting down) always
+finishes tearing down its current mode — its poll loop or its follower
+listener/batch-worker/resync-ticker trio — before the next mode starts, or
+before the pod considers itself stopped. This closes a possible gap where a
+just-demoted leader's still-in-flight write could otherwise race a newly
+started follower rebuild reading the same data.
 
 When a follower rebuilds its alert store from a snapshot it also re-reads
 the active claims from the shared database and re-attaches them to the

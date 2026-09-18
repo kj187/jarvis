@@ -696,16 +696,31 @@ polls; followers reconstruct their stores from PostgreSQL instead.
   process-context resolved-buffer sweeper, then picks a mode. SQLite (or a
   Recorder built without an elector/dsn, e.g. most unit tests) always calls
   `runPollLoop` — today's unconditional-poll behavior, unchanged. On
-  PostgreSQL, a **mode supervisor** subscribes a second callback to the
-  elector (alongside `onLeadershipChange`'s metrics/trigger callback) that
-  cancels whichever loop is currently running and starts the other
-  (`runPollLoop` while leader, `runFollowerLoop` while follower) on every
-  transition, including the very first (immediate) `Subscribe` callback.
+  PostgreSQL, a **mode supervisor** goroutine (`runModeSupervisor`, P5)
+  sequences transitions: the elector's own callback (a second, independent
+  `Subscribe`, alongside `onLeadershipChange`'s metrics/trigger callback)
+  never runs the mode switch itself — it only ever replaces the single
+  buffered pending request in a size-1 channel (`requests`) and returns
+  immediately, satisfying the "must not block" contract `Subscribe` callbacks
+  run under. `runModeSupervisor` is the only place that actually cancels the
+  previous mode's context **and waits for its goroutine to return** before
+  starting the next one (`runPollLoop` while leader, `runFollowerLoop` while
+  follower) — so a demoted leader's still-finishing poll write can never
+  overlap a newly started follower rebuild, or vice versa. `Start` blocks on
+  a `supervisorDone` channel so it, too, only returns once the current mode
+  has actually stopped. `runModeSupervisor` delegates to
+  `runModeSupervisorWith(ctx, requests, runLeader, runFollower func(context.Context))`
+  so tests can substitute instrumented fakes without a real PostgreSQL
+  connection (`recorder_snapshot_batch_test.go`).
 - `runPollLoop` is the pre-multi-replica ticker/trigger loop, plus (dialect
   PostgreSQL) a background `listenLoop` on the `jarvis_trigger` channel: a
   follower's forwarded `Trigger()` call reaches the leader this way and is
   turned into a local trigger (`triggerLocal`) without waiting for the next
-  tick.
+  tick. `poll()`/`applyPollResults()` check `ctx.Err()` before each alert's/
+  resolved-alert's DB write and again before the final
+  `AlertStore.Set`/broadcast/`persistSnapshots` (P5) — a poll cancelled
+  mid-flight by a mode transition stops promptly instead of still publishing
+  a stale result after this pod may already be a follower.
 - After each successful `poll()` → `applyPollResults()`, the leader calls
   `persistSnapshots`: for every configured cluster, gzip'd-JSON-encode
   `{alerts, silences, memberUp}` (Resolved Decision 3) from the just-updated
@@ -717,17 +732,32 @@ polls; followers reconstruct their stores from PostgreSQL instead.
   for PostgreSQL).
 - `runFollowerLoop` never polls Alertmanager. On start it does a full resync
   (`resyncAllSnapshots`: `Store.GetAllSnapshots` → decode every cluster's
-  row), then runs a `listenLoop` on `jarvis_snapshot`: each notification's
-  payload is the changed cluster's name, resynced individually
-  (`resyncSnapshot` → `Store.GetSnapshot`); a full resync also runs
-  periodically as a NOTIFY-miss fallback (`listenLoop`'s `onIdle`, firing
-  every `JARVIS_POLL_INTERVAL` if no notification arrived). Every decoded
-  cluster's silences go straight into `SilenceStore` (already the per-cluster
-  cache); alerts are cached per-cluster in `Recorder.followerSnapshots`
-  (`followerMu`-guarded) and re-merged into the whole `AlertStore` on every
-  update (`rebuildFollowerAlertStore` — `AlertStore.Set` always replaces the
-  full store, so a per-cluster update must re-merge everything), then
-  broadcasts via the existing `broadcastAlertsIfChanged`.
+  row), then runs three goroutines joined by a `sync.WaitGroup` (so the
+  function itself only returns once all three have actually stopped): a
+  `listenLoop` on `jarvis_snapshot` whose notification callback only marks
+  the cluster name in a `followerDirtySet` and nudges a size-1 `signal`
+  channel (cheap, non-blocking — no decode/rebuild on the LISTEN goroutine
+  itself); `runFollowerBatchWorker`, which starts a fixed `followerBurstWindow`
+  (200ms) timer on the first signal after being idle and, when it fires,
+  drains every cluster marked dirty since, resyncs each into
+  `followerSnapshots` (`resyncSnapshotEntry`, cache-only — no rebuild yet),
+  then rebuilds the whole `AlertStore` **exactly once** for the whole burst
+  (P5, tmp/memory.md §8.3: several clusters persisting their poll snapshots
+  within milliseconds of each other used to trigger one rebuild per
+  notification); and `runFollowerResyncTicker`, a full resync every
+  `JARVIS_POLL_INTERVAL` **independent of notification traffic** — replacing
+  the old `listenLoop`-`onIdle` fallback, which a continuous stream of *other*
+  clusters' notifications could starve indefinitely even though one
+  cluster's own notification was lost. The burst deadline is fixed at the
+  first signal of a burst and never pushed back by later ones, so a
+  continuously notifying cluster still rebuilds at least once per window
+  instead of starving it. Every decoded cluster's silences go straight into
+  `SilenceStore` (already the per-cluster cache); alerts are cached
+  per-cluster in `Recorder.followerSnapshots` (`followerMu`-guarded) and
+  re-merged into the whole `AlertStore` on every rebuild
+  (`rebuildFollowerAlertStore` — `AlertStore.Set` always replaces the full
+  store, so a per-cluster update must re-merge everything), then broadcasts
+  via the existing `broadcastAlertsIfChanged`.
   `rebuildFollowerAlertStore` also re-hydrates `ActiveClaim` on the merged
   alerts from the shared DB (`Store.GetActiveClaims`, the same batched read
   the leader runs in `applyPollResults`) — the leader's snapshot only carries
