@@ -6,6 +6,7 @@ import (
 	"hash/fnv"
 	"log/slog"
 	"maps"
+	"math"
 	"strings"
 	"sync"
 	"time"
@@ -817,6 +818,22 @@ const (
 	alertsUpdateSuffix = `}}`
 )
 
+// envelopeCapacity returns a safe make() capacity for the WS envelope byte
+// slice. arrayLen is never negative or anywhere near math.MaxInt in practice
+// (it's the length of AlertStore's own JSON encoding), but computing a make()
+// size from a summed length still trips static overflow analysis (CodeQL
+// go/allocation-size-overflow) unless the addition is explicitly guarded —
+// so this falls back to the (constant, small) fixed overhead instead of an
+// unchecked sum. append() still grows the slice correctly either way; only
+// the pre-sizing optimization is skipped on the (unreachable) fallback path.
+func envelopeCapacity(arrayLen int) int {
+	overhead := len(alertsUpdatePrefix) + len(alertsUpdateSuffix)
+	if arrayLen < 0 || arrayLen > math.MaxInt-overhead {
+		return overhead
+	}
+	return overhead + arrayLen
+}
+
 // broadcastAlertsIfChanged pushes the current alert snapshot to all WebSocket
 // clients, but skips the push when the envelope is byte-identical to the one
 // broadcast on the previous poll. The frontend loads its initial state via REST
@@ -838,7 +855,7 @@ func (r *Recorder) broadcastAlertsIfChanged() {
 		r.logger.Error("marshal alerts payload", "err", err)
 		return
 	}
-	envelope := make([]byte, 0, len(alertsUpdatePrefix)+len(arrayJSON)+len(alertsUpdateSuffix))
+	envelope := make([]byte, 0, envelopeCapacity(len(arrayJSON)))
 	envelope = append(envelope, alertsUpdatePrefix...)
 	envelope = append(envelope, arrayJSON...)
 	envelope = append(envelope, alertsUpdateSuffix...)

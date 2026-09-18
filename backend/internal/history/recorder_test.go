@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -80,6 +81,23 @@ func makeEnrichedAlert(fp, state, clusterName string) models.EnrichedAlert {
 		StartsAt:        time.Now().UTC(),
 		ClusterName:     clusterName,
 		AlertmanagerURL: "http://am:9093",
+	}
+}
+
+func TestEnvelopeCapacity_OverflowGuard(t *testing.T) {
+	overhead := len(alertsUpdatePrefix) + len(alertsUpdateSuffix)
+
+	if got := envelopeCapacity(1234); got != overhead+1234 {
+		t.Fatalf("envelopeCapacity(1234) = %d, want %d", got, overhead+1234)
+	}
+	if got := envelopeCapacity(0); got != overhead {
+		t.Fatalf("envelopeCapacity(0) = %d, want %d", got, overhead)
+	}
+	if got := envelopeCapacity(math.MaxInt - overhead + 1); got != overhead {
+		t.Fatalf("envelopeCapacity(near-overflow) = %d, want fallback %d", got, overhead)
+	}
+	if got := envelopeCapacity(-1); got != overhead {
+		t.Fatalf("envelopeCapacity(-1) = %d, want fallback %d", got, overhead)
 	}
 }
 
