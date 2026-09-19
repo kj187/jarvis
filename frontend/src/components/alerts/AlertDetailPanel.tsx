@@ -3,7 +3,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import { enUS } from 'date-fns/locale'
-import { ExternalLink, BookOpen, ChevronDown, ChevronUp, BellOff, Pencil, Trash2, User, Server, X } from 'lucide-react'
+import { ExternalLink, BookOpen, ChevronDown, ChevronUp, BellOff, Pencil, Trash2, User, Server, X, Link2, Check } from 'lucide-react'
 import { TruncatableChip } from '@/components/ui/truncatable-chip'
 import { cn } from '@/lib/utils'
 import { Sheet } from '@/components/ui/sheet'
@@ -31,6 +31,8 @@ import { Tooltip } from '@/components/ui/tooltip'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { makeAlertSelectionKeyForAlert } from '@/lib/alertSelection'
+import { buildAlertShareUrl } from '@/lib/alertLink'
+import { copyText } from '@/lib/clipboard'
 import type { EnrichedAlert, LabelMatcher, Silence, SilenceMatcher } from '@/types'
 import { renderTextWithLinks, extractLinkButtons, type LinkButton } from '@/lib/linkUtils'
 import { pickIdentifierLabel, tzAbbr, silenceMatchesAlert } from '@/lib/alertUtils'
@@ -237,6 +239,12 @@ export function AlertDetailPanel({
   const { guard } = useLoginGuard()
   const claimName = user?.username ?? manualClaimName
   const [promptCopied, setPromptCopied] = useState(false)
+  const [linkCopy, setLinkCopy] = useState<'idle' | 'copied' | 'failed'>('idle')
+  useEffect(() => {
+    if (linkCopy === 'idle') return
+    const t = setTimeout(() => setLinkCopy('idle'), 2000)
+    return () => clearTimeout(t)
+  }, [linkCopy])
   const [expiredSilenceCollapsed, setExpiredSilenceCollapsed] = useState(true)
   const [expandedSilenceIds, setExpandedSilenceIds] = useState<Set<string>>(new Set())
   // Tab state lives in uiStore (synced to the `tab` URL param) so a shared
@@ -522,6 +530,18 @@ export function AlertDetailPanel({
               </span>
               <AlertBadge severity={severity} />
               <StatusBadge state={alert.status.state} />
+              <button
+                data-testid="detail-copy-link"
+                onClick={() => {
+                  void copyText(buildAlertShareUrl(alert, window.location)).then((ok) => setLinkCopy(ok ? 'copied' : 'failed'))
+                }}
+                aria-label="Copy link to this alert"
+                title="Copy a link that opens this alert for anyone who has access to Jarvis"
+                className="ml-1 inline-flex items-center gap-1 rounded-compact border border-border px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground cursor-pointer"
+              >
+                {linkCopy === 'copied' ? <Check className="h-3.5 w-3.5 text-success-fg" /> : <Link2 className="h-3.5 w-3.5" />}
+                {linkCopy === 'copied' ? 'Link copied' : linkCopy === 'failed' ? 'Copy failed' : 'Copy link'}
+              </button>
               <button
                 data-testid="detail-panel-close"
                 onClick={onClose}

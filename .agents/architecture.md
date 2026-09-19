@@ -1102,6 +1102,13 @@ index.css             → self-hosted Inter (`public/fonts/inter-variable-latin.
 │   │                            exception to the functional-E2E-only strategy, see .agents/testing.md
 │   ├── alertSelection.ts      → makeAlertSelectionKey / parseAlertSelectionKey — selection key
 │   │                            format `<cluster>::<fingerprint>` (URL `alert=` param, cluster-safe)
+│   ├── alertLink.ts           → buildAlertShareUrl — the "Copy link" URL: origin+path with only `state`
+│   │                            (`resolved` for a resolved alert, else `active`) and `alert=` (selection
+│   │                            key) — no search/filter/tab, so it stays short and the recipient's own
+│   │                            defaults are not overridden
+│   ├── clipboard.ts           → copyText — navigator.clipboard, falling back to a hidden textarea +
+│   │                            execCommand('copy'), because the Clipboard API needs a secure context and
+│   │                            Jarvis is often served over plain http in a cluster
 │   ├── linkUtils.tsx          → isUrl, extractLinkButtons (URL-valued labels/annotations + runbook
 │   │                            logic), renderTextWithLinks. AlertDetailPanel.tsx appends one more
 │   │                            `LinkButton` of its own — label "Alertmanager", built from
