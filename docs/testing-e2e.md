@@ -270,7 +270,7 @@ Quick reference: which spec file covers what. Use this to find the right place f
 | `filters.spec.ts` | C1, C10, C10b, C11–C13 | Exact matcher + `?filter=` URL (Alertmanager matcher syntax), state restore from URL, legacy `?matchers=` JSON link restored and rewritten to `?filter=` (C10b), `?q=` search, combined search+chips |
 | `filters-extended.spec.ts` | C2–C8 (C9 removed) | `!=`/`=~`/`!~` operators, regex multi-value, label/value suggestions, label chip → filter, AND matchers, draft→promotion, remove-all |
 | `copy-alert-link.spec.ts` | C1–C2 | Detail-panel "Copy link": minimal link (no search/filter) opens the same alert in a fresh session; works without the Clipboard API (plain http) |
-| `detail-panel.spec.ts` | D1–D2, D5–D11, G2 | Open/close/URL param, labels/annotations, stats & timeline, claim set/release, comments add/delete, claim note edit, AI prompt, section collapse, extend controls |
+| `detail-panel.spec.ts` | D1–D2, D5–D11, G2 | Open/close/URL param, labels/annotations, stats & timeline, claim set/release, comments add/delete, claim note edit, AI prompt, section collapse, extend menu (expiring and long-running silence, configured `silenceDurations`) |
 | `detail-panel-extended.spec.ts` | D4, D12–D14 | Runbook/URL links, AI prompt tab copy, section collapse/expand, silence from detail panel |
 | `cluster-scoping.spec.ts` | X1–X3 | Cross-cluster isolation for identical fingerprint: stats/history, comments, claims |
 | `silences-page.spec.ts` | E1–E7, E4b, G1, G3 | List view persist, grouping, show/hide expired, sort (expires/created + asc/desc direction), "By:" creator filter, matcher filter, expiry status, re-create, expire single/group |

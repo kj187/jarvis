@@ -9,6 +9,7 @@ import { HIDDEN_LABEL_KEYS } from '@/lib/alertUtils'
 import { Sheet } from '@/components/ui/sheet'
 import { SilenceForm } from '@/components/silences/SilenceForm'
 import { SilenceExpireModal } from '@/components/silences/SilenceExpireModal'
+import { ExtendSilenceMenu } from '@/components/silences/ExtendSilenceMenu'
 import { fetchClusters, deleteSilence } from '@/api/client'
 import { formatSilenceDuration, getFilterableLabels, partitionLabelsForDisplay } from '@/lib/alertUtils'
 import { renderTextWithLinks } from '@/lib/linkUtils'
@@ -545,10 +546,10 @@ export function AlertListView({
           </div>
         )}
 
-        <Sheet open={silenceSheet.open} onClose={closeSilenceForm} className="sm:max-w-2xl lg:max-w-3xl" ariaLabel={silenceSheet.isRecreate ? 'Extend silence' : 'Create silence'}>
+        <Sheet open={silenceSheet.open} onClose={closeSilenceForm} className="sm:max-w-2xl lg:max-w-3xl" ariaLabel={silenceSheet.isRecreate ? 'Re-create silence' : 'Create silence'}>
           <div className="p-5 pt-10">
             <h2 className="mb-4 text-base font-semibold">
-              {silenceSheet.isRecreate ? 'Extend silence' : 'Create silence'}
+              {silenceSheet.isRecreate ? 'Re-create silence' : 'Create silence'}
             </h2>
             <SilenceForm
               availableClusters={
@@ -616,10 +617,10 @@ export function AlertListView({
           isPending={expireMutation.isPending}
         />
 
-        <Sheet open={silenceSheet.open} onClose={closeSilenceForm} className="sm:max-w-2xl lg:max-w-3xl" ariaLabel={silenceSheet.isRecreate ? 'Extend silence' : 'Create silence'}>
+        <Sheet open={silenceSheet.open} onClose={closeSilenceForm} className="sm:max-w-2xl lg:max-w-3xl" ariaLabel={silenceSheet.isRecreate ? 'Re-create silence' : 'Create silence'}>
           <div className="p-5 pt-10">
             <h2 className="mb-4 text-base font-semibold">
-              {silenceSheet.isRecreate ? 'Extend silence' : 'Create silence'}
+              {silenceSheet.isRecreate ? 'Re-create silence' : 'Create silence'}
             </h2>
             <SilenceForm
               availableClusters={
@@ -808,6 +809,14 @@ export function AlertListView({
                         )}
                         <td className="px-4 py-2.5" onClick={(e) => e.stopPropagation()}>
                           <div className="flex flex-col items-start gap-1">
+                            {hasSilence && (
+                              <ExtendSilenceMenu
+                                silences={[...activeSilences, ...expiringSilences].map(({ silence }) => silence)}
+                                variant="button"
+                                tone={activeSilences.length === 0 ? 'warning' : 'default'}
+                                className="w-fit"
+                              />
+                            )}
                             {activeSilences.length > 0 && (
                               <button
                                 type="button"
@@ -819,26 +828,6 @@ export function AlertListView({
                                 <span>Expire group silence</span>
                                 {activeSilences.length > 1 && (
                                   <span className="rounded-pill bg-muted px-1 text-[10px] leading-tight">{activeSilences.length}</span>
-                                )}
-                              </button>
-                            )}
-                            {activeSilences.length === 0 && expiringSilences.length > 0 && (
-                              <button
-                                type="button"
-                                onClick={() => openSilenceForm(group.alerts, expiringSilences[0].silence, true)}
-                                title={expiringSilences.length > 1 ? `Extend ${expiringSilences.length} group silences` : 'Extend the group silence'}
-                                className={cn(
-                                  'cursor-pointer flex w-fit items-center gap-1.5 rounded-compact border px-2 py-1 text-xs transition-colors',
-                                  'border-warning-edge text-warning-fg hover:border-warning-solid',
-                                )}
-                              >
-                                <RefreshCw className="h-3.5 w-3.5 shrink-0" />
-                                <span>Extend group silence</span>
-                                {expiringSilences.length > 1 && (
-                                  <span className={cn(
-                                    'rounded-pill px-1 text-[10px] leading-tight',
-                                    'bg-warning-soft',
-                                  )}>{expiringSilences.length}</span>
                                 )}
                               </button>
                             )}
@@ -915,10 +904,10 @@ export function AlertListView({
         isPending={expireMutation.isPending}
       />
 
-      <Sheet open={silenceSheet.open} onClose={closeSilenceForm} className="sm:max-w-2xl lg:max-w-3xl" ariaLabel={silenceSheet.isRecreate ? 'Extend silence' : 'Create silence'}>
+      <Sheet open={silenceSheet.open} onClose={closeSilenceForm} className="sm:max-w-2xl lg:max-w-3xl" ariaLabel={silenceSheet.isRecreate ? 'Re-create silence' : 'Create silence'}>
         <div className="p-5 pt-10">
           <h2 className="mb-4 text-base font-semibold">
-            {silenceSheet.isRecreate ? 'Extend silence' : 'Create silence'}
+            {silenceSheet.isRecreate ? 'Re-create silence' : 'Create silence'}
           </h2>
           <SilenceForm
             availableClusters={

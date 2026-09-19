@@ -617,45 +617,61 @@ test.describe('D10: Delete comment (author only)', () => {
   })
 })
 
-test.describe('G2: Extend controls in detail panel', () => {
-  test('active expiring silence shows +1h/+4h/+1d and hides after extend', async ({ page, am, jarvis }) => {
-    await dismissNoAuthNotice(page)
-    await am.fire(kubernetesAlerts)
-    await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, kubernetesAlerts.length)
+test.describe('G2: Extend menu in detail panel', () => {
+  // One extend logic for every running silence — whether it has 10 minutes or 2 hours left, the
+  // same "Extend by…" menu adds the picked duration to the silence's current end time.
+  for (const { title, remainingMs } of [
+    { title: 'silence about to expire', remainingMs: 10 * 60 * 1000 },
+    { title: 'long-running silence', remainingMs: 2 * 60 * 60 * 1000 },
+  ]) {
+    test(`${title} is extended by the picked duration, added to its current end`, async ({ page, am, jarvis }) => {
+      await dismissNoAuthNotice(page)
+      await am.fire(kubernetesAlerts)
+      await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, kubernetesAlerts.length)
 
-    const now = Date.now()
-    await jarvis.createSilence(
-      'e2e',
-      [{ name: 'alertname', value: 'KubePodCrashLooping', isRegex: false, isEqual: true }],
-      {
-        startsAt: new Date(now - 5 * 60 * 1000),
-        endsAt: new Date(now + 10 * 60 * 1000),
-        createdBy: 'e2e-tester',
-        comment: 'expiring silence',
-      },
+      const comment = `extend menu: ${title}`
+      const now = Date.now()
+      const endsAt = now + remainingMs
+      await jarvis.createSilence(
+        'e2e',
+        [{ name: 'alertname', value: 'KubePodCrashLooping', isRegex: false, isEqual: true }],
+        {
+          startsAt: new Date(now - 5 * 60 * 1000),
+          endsAt: new Date(endsAt),
+          createdBy: 'e2e-tester',
+          comment,
+        },
+      )
+      await jarvis.poll()
+
+      const res = await fetch(`${JARVIS_BASE_URL}/api/v1/alerts`)
+      const alerts: any[] = await res.json()
+      const target = alerts.find((a) => a.labels?.alertname === 'KubePodCrashLooping')
+      expect(target).toBeTruthy()
+
+      await page.goto(`/?state=active&alert=${target.fingerprint}`)
+      const panel = page.getByTestId('detail-panel')
+      await expect(panel).toBeVisible()
+      await expect(panel.getByText('Silence active').first()).toBeVisible()
+
+      await panel.getByTestId('extend-silence-button').click()
+      await panel.getByTestId('extend-silence-option').filter({ hasText: '+1h' }).click()
+
+      await expect
+        .poll(async () => {
+          const silences: any[] = await (await fetch(`${JARVIS_BASE_URL}/api/v1/silences`)).json()
+          const s = silences.find((x) => x.comment === comment && x.status.state !== 'expired')
+          return s ? Math.round((new Date(s.endsAt).getTime() - endsAt) / 60_000) : null
+        })
+        .toBe(60)
+    })
+  }
+
+  test('the menu offers the configured silence durations (same list as Fast-Silence)', async ({ page, am, jarvis }) => {
+    await dismissNoAuthNotice(page)
+    await page.route('**/api/v1/settings', (route) =>
+      route.fulfill({ json: { user: null, global: { silenceDurations: [1440, 43200] } } }),
     )
-    await jarvis.poll()
-
-    const res = await fetch(`${JARVIS_BASE_URL}/api/v1/alerts`)
-    const alerts: any[] = await res.json()
-    const target = alerts.find((a) => a.labels?.alertname === 'KubePodCrashLooping')
-    expect(target).toBeTruthy()
-
-    await page.goto(`/?state=active&alert=${target.fingerprint}`)
-    const panel = page.getByTestId('detail-panel')
-    await expect(panel).toBeVisible()
-    await expect(panel.getByText('Silence active').first()).toBeVisible()
-
-    await expect(panel.getByRole('button', { name: '+1h' })).toBeVisible()
-    await expect(panel.getByRole('button', { name: '+4h' })).toBeVisible()
-    await expect(panel.getByRole('button', { name: '+1d' })).toBeVisible()
-
-    await panel.getByRole('button', { name: '+1h' }).click()
-    await expect(panel.getByRole('button', { name: '+1h' })).toHaveCount(0)
-  })
-
-  test('non-expiring active silence does not show extend quick actions', async ({ page, am, jarvis }) => {
-    await dismissNoAuthNotice(page)
     await am.fire(kubernetesAlerts)
     await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, kubernetesAlerts.length)
 
@@ -667,24 +683,22 @@ test.describe('G2: Extend controls in detail panel', () => {
         startsAt: new Date(now - 5 * 60 * 1000),
         endsAt: new Date(now + 2 * 60 * 60 * 1000),
         createdBy: 'e2e-tester',
-        comment: 'long active silence',
+        comment: 'extend menu: configured durations',
       },
     )
     await jarvis.poll()
 
-    const res = await fetch(`${JARVIS_BASE_URL}/api/v1/alerts`)
-    const alerts: any[] = await res.json()
+    const alerts: any[] = await (await fetch(`${JARVIS_BASE_URL}/api/v1/alerts`)).json()
     const target = alerts.find((a) => a.labels?.alertname === 'KubePodCrashLooping')
     expect(target).toBeTruthy()
 
     await page.goto(`/?state=active&alert=${target.fingerprint}`)
     const panel = page.getByTestId('detail-panel')
-    await expect(panel).toBeVisible()
     await expect(panel.getByText('Silence active').first()).toBeVisible()
 
-    await expect(panel.getByRole('button', { name: '+1h' })).toHaveCount(0)
-    await expect(panel.getByRole('button', { name: '+4h' })).toHaveCount(0)
-    await expect(panel.getByRole('button', { name: '+1d' })).toHaveCount(0)
+    await panel.getByTestId('extend-silence-button').click()
+    await expect(panel.getByTestId('extend-silence-option').first()).toBeVisible()
+    expect(await panel.getByTestId('extend-silence-option').allInnerTexts()).toEqual(['+1d', '+30d'])
   })
 })
 

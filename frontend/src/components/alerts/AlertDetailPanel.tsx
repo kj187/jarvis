@@ -17,11 +17,12 @@ import { AlertDetailRelatedSection } from './AlertDetailRelatedSection'
 import { AlertDetailSection } from './AlertDetailSection'
 import { AlertHeatmap } from './AlertHeatmap'
 import { SilenceForm } from '@/components/silences/SilenceForm'
+import { ExtendSilenceMenu } from '@/components/silences/ExtendSilenceMenu'
 import { AckButton } from './AckButton'
 import { useAlerts, useAlertTimeline, useAlertStats } from '@/hooks/useAlerts'
 import { useFormatTime } from '@/hooks/useFormatTime'
 import { useActiveClaim, useClaimController, USERNAME_KEY } from '@/hooks/useAlertClaim'
-import { useDeleteSilence, useUpsertSilence } from '@/hooks/useSilences'
+import { useDeleteSilence } from '@/hooks/useSilences'
 import { useAuthStore } from '@/store/authStore'
 import { useLoginGuard } from '@/hooks/useLoginGuard'
 import { useSettingsStore } from '@/store/useSettingsStore'
@@ -303,7 +304,6 @@ export function AlertDetailPanel({
     updateNote,
   } = useClaimController(alert?.fingerprint ?? '', alert?.clusterName ?? '')
   const { mutate: deleteSilence } = useDeleteSilence()
-  const { mutate: upsertSilence, isPending: isExtending } = useUpsertSilence()
   const { data: allAlerts = [] } = useAlerts()
   // Shares its cache/network with CommentsPanel's own page-1 query (same key) —
   // only read here for the "Comments" tab count badge.
@@ -761,34 +761,7 @@ export function AlertDetailPanel({
                   </span>
                 </button>
                 <div className="flex shrink-0 items-center gap-2">
-                  {isExpiring && (
-                    <>
-                      {([
-                        { label: '+1h', ms: 60 * 60_000 },
-                        { label: '+4h', ms: 4 * 60 * 60_000 },
-                        { label: '+1d', ms: 24 * 60 * 60_000 },
-                      ] as const).map(({ label, ms }) => (
-                        <button
-                          key={label}
-                          disabled={isExtending}
-                          className="flex items-center gap-1 rounded-compact border border-warning-edge px-2 py-0.5 text-xs text-warning-fg hover:bg-warning-soft cursor-pointer disabled:opacity-40"
-                          onClick={() => guard(() => upsertSilence({
-                            id: s.id,
-                            cluster: s.clusterName,
-                            matchers: s.matchers,
-                            startsAt: s.startsAt,
-                            endsAt: new Date(new Date(s.endsAt).getTime() + ms).toISOString(),
-                            createdBy: s.createdBy,
-                            comment: s.comment,
-                            fingerprint: alert.fingerprint,
-                            performedBy: useAuthStore.getState().user?.username ?? localStorage.getItem(USERNAME_KEY) ?? 'unknown',
-                          }))}
-                        >
-                          {label}
-                        </button>
-                      ))}
-                    </>
-                  )}
+                  <ExtendSilenceMenu silences={[s]} fingerprint={alert.fingerprint} variant="button" tone={isExpiring ? 'warning' : 'default'} />
                   <button
                     className="flex items-center gap-1 rounded-compact border border-border px-2 py-0.5 text-xs text-muted-foreground hover:text-foreground hover:bg-accent cursor-pointer"
                     onClick={() => setSilenceFormTarget(s)}
