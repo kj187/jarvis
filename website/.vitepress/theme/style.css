@@ -530,3 +530,44 @@ html.dark .light-only {
     font-size: 15px;
   }
 }
+
+/* ── Documentation body ──────────────────────────────────────────────────────────
+   Light touches only — the landing page carries the brand, the reading pages stay
+   plain VitePress. Rounded like the product's surface role, a brand-blue accent on
+   callouts, and a visible keyboard focus ring (2 px, brand blue). */
+.vp-doc table {
+  border-radius: 10px;
+  overflow: hidden;
+}
+.vp-doc th {
+  background: var(--vp-c-bg-soft);
+  font-weight: 600;
+}
+.vp-doc div[class*='language-'] {
+  border-radius: 10px;
+}
+.vp-doc :not(pre) > code {
+  border-radius: 6px;
+}
+.custom-block {
+  border-radius: 10px;
+}
+.custom-block.tip,
+.custom-block.info {
+  border-left: 3px solid var(--vp-c-brand-1);
+}
+.custom-block.warning {
+  border-left: 3px solid var(--vp-c-warning-1);
+}
+.custom-block.danger {
+  border-left: 3px solid var(--vp-c-danger-1);
+}
+.VPDoc a:focus-visible,
+.VPDoc button:focus-visible,
+.VPNav a:focus-visible,
+.VPNav button:focus-visible,
+.VPSidebar a:focus-visible {
+  outline: 2px solid var(--vp-c-brand-1);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
