@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { X, Plus, ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { InfoHint } from '@/components/ui/info-hint'
 import { useUIStore } from '@/store/uiStore'
 import { useAlerts } from '@/hooks/useAlerts'
 import { getFilterableLabels, parseDurationValue } from '@/lib/alertUtils'
@@ -323,6 +324,7 @@ export function MatcherChipsBar({
   showResolvedRE2Hint?: boolean
 }) {
   const { filters, addLabelMatcher, updateLabelMatcher, removeLabelMatcher } = useUIStore()
+  const hasRegexMatcher = filters.labelMatchers.some((m) => m.operator === '=~' || m.operator === '!~')
   const { data: allAlerts = [] } = useAlerts()
   const [drafts, setDrafts] = useState<{ id: string; data: Draft }[]>([])
 
@@ -405,8 +407,12 @@ export function MatcherChipsBar({
           </button>
         )
       })()}
-      {showResolvedRE2Hint && (
-        <span className="whitespace-nowrap text-[10px] text-muted-foreground">Resolved regex filters use RE2</span>
+      {showResolvedRE2Hint && hasRegexMatcher && (
+        <InfoHint size="sm" label="About regex filters on resolved alerts">
+          Resolved alerts are filtered on the server, whose regex syntax is a bit smaller than in the Active view:
+          no lookaheads or lookbehinds like <code>(?=…)</code> or <code>(?&lt;=…)</code>, and no backreferences
+          like <code>\1</code>. A filter that uses them is marked red.
+        </InfoHint>
       )}
     </div>
   )
