@@ -1,4 +1,4 @@
-import { useId, useRef, useState, useEffect } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Wifi, WifiOff, RefreshCw, Plus, Settings, LogIn, LogOut, Shield, Sun, Moon, Menu, X, CircleUserRound, Info } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -17,7 +17,7 @@ import { fetchClusters, fetchStatus } from '@/api/client'
 import { FALLBACK_REFETCH_INTERVAL_MS } from '@/lib/refetch'
 import { Tooltip } from '@/components/ui/tooltip'
 import { useVersion } from '@/hooks/useVersion'
-import { useHoverPopover } from '@/hooks/useHoverPopover'
+import { Popover } from '@/components/ui/popover'
 
 function formatPollInterval(seconds: number): string {
   if (seconds < 60) return `${seconds}s`
@@ -98,11 +98,6 @@ export function Header() {
   const [refreshing, setRefreshing] = useState(false)
   const [clusterHoverOpen, setClusterHoverOpen] = useState(false)
   const [clusterFilterOpen, setClusterFilterOpen] = useState<string | null>(null)
-  const clusterPanelId = useId()
-  const refreshPanelId = useId()
-  const infoPanelId = useId()
-  const userPanelId = useId()
-  const clusterPopover = useHoverPopover(clusterHoverOpen, setClusterHoverOpen)
 
   const [menuOpen, setMenuOpen] = useState(false)
   const [pollSpinning, setPollSpinning] = useState(false)
@@ -151,10 +146,7 @@ export function Header() {
   // crossing the gap to the panel doesn't flicker-close it. Mobile has no
   // hover, so its own panels below share the same open state but stay purely
   // click-toggled.
-  const userMenu = useHoverPopover(userMenuOpen, setUserMenuOpen)
-  const infoPopover = useHoverPopover(infoOpen, setInfoOpen)
   const [refreshTooltipOpen, setRefreshTooltipOpen] = useState(false)
-  const refreshPopover = useHoverPopover(refreshTooltipOpen, setRefreshTooltipOpen)
 
   const healthyCount = clusters.filter((c) => c.healthy).length
 
@@ -246,181 +238,195 @@ export function Header() {
         {/* ── Desktop controls ── */}
         <div className="hidden md:flex items-center gap-1.5 self-stretch">
           {/* Cluster status */}
-          <div className="relative shrink-0 self-stretch flex items-center" {...clusterPopover.wrapperProps}>
-            <button
-              type="button"
-              className="flex items-center gap-1.5 rounded-compact px-2 py-1 text-xs cursor-pointer select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              aria-label={`Instances ${healthyCount}/${clusters.length}`}
-              aria-controls={clusterPanelId}
-              {...clusterPopover.triggerProps}
-            >
-              <div className={`h-2 w-2 rounded-pill ${healthyCount === clusters.length ? 'bg-success-solid' : 'bg-critical-solid'}`} />
-              <span className="text-muted-foreground tabular-nums">{healthyCount}/{clusters.length}</span>
-            </button>
-            {clusterHoverOpen && clusters.length > 0 && (
-              <div id={clusterPanelId} className="absolute right-0 top-full z-50 min-w-[26rem] rounded-b-control border border-t-0 border-border bg-header shadow-lg" role="region" aria-label="Connected instances" onMouseEnter={clusterPopover.show} onMouseLeave={clusterPopover.hide}>
-                <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-border">Connected Instances</div>
-                {clusters.map((c) => (
-                  <div
-                    key={c.name}
-                    className={`px-3 py-2 border-b border-border last:border-0 ${!c.healthy ? 'bg-critical-soft' : ''}`}
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="relative flex items-center gap-2">
-                        {c.healthy ? (
-                          <div className="h-2 w-2 rounded-pill shrink-0 bg-success-solid" />
-                        ) : (
-                          <div className="relative shrink-0">
-                            <div className="h-2.5 w-2.5 rounded-pill bg-critical-solid" />
-                            <div className="absolute inset-0 rounded-pill bg-critical-solid animate-ping opacity-75" />
-                          </div>
-                        )}
-                        <div
-                          className="relative"
-                          onBlur={(e) => {
-                            if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setClusterFilterOpen(null)
-                          }}
-                        >
-                          <button
-                            className="rounded-compact text-xs font-medium text-foreground hover:text-link cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                            onMouseEnter={() => setClusterFilterOpen(c.name)}
-                            onMouseLeave={() => setClusterFilterOpen(null)}
-                            onFocus={() => setClusterFilterOpen(c.name)}
-                            onClick={() => {
-                              addLabelMatcher({ name: '@cluster', operator: '=', value: c.name })
-                              setClusterHoverOpen(false)
-                            }}
-                          >
-                            {c.name}
-                          </button>
-                          {clusterFilterOpen === c.name && (
-                            <div
-                              className="absolute left-0 top-full mt-0.5 z-60 rounded-compact border border-border bg-popover shadow-md text-[11px]"
-                              onMouseEnter={() => setClusterFilterOpen(c.name)}
-                              onMouseLeave={() => setClusterFilterOpen(null)}
-                            >
-                              {(['=', '!='] as const).map((op) => (
-                                <button
-                                  key={op}
-                                  className="flex w-full items-center gap-1.5 whitespace-nowrap px-2.5 py-1.5 text-left hover:bg-accent cursor-pointer"
-                                  onClick={() => {
-                                    addLabelMatcher({ name: '@cluster', operator: op, value: c.name })
-                                    setClusterFilterOpen(null)
-                                    setClusterHoverOpen(false)
-                                  }}
-                                >
-                                  <span className="font-mono text-muted-foreground">@cluster</span>
-                                  <span className="font-mono text-link">{op}</span>
-                                  <span className="font-medium text-foreground">{c.name}</span>
-                                </button>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                        {!c.healthy && (
-                          <span className="rounded-compact bg-critical-soft px-1 py-0.5 text-[10px] font-semibold text-critical-fg uppercase tracking-wide">DOWN</span>
-                        )}
-                      </div>
-                      <span className="text-xs text-muted-foreground whitespace-nowrap">{c.alertCount} Alerts</span>
-                    </div>
-                    {c.members && c.members.length > 0 ? (
-                      <div className="mt-1 pl-[1.375rem] space-y-0.5">
-                        {c.members.map((m) => (
-                          <div key={m.name} className="flex items-center gap-1.5 text-[10px]">
-                            <div className={`h-1.5 w-1.5 rounded-pill shrink-0 ${m.healthy ? 'bg-success-solid' : 'bg-critical-solid'}`} />
-                            <span className="break-all text-muted-foreground">{m.url}</span>
-                          </div>
-                        ))}
-                      </div>
+          <Popover
+            open={clusterHoverOpen && clusters.length > 0}
+            onOpenChange={setClusterHoverOpen}
+            className="relative shrink-0 self-stretch flex items-center"
+            panelClassName="absolute right-0 top-full z-50 min-w-[26rem] rounded-b-control border border-t-0 border-border bg-header shadow-lg"
+            role="region"
+            label="Connected instances"
+            trigger={({ props }) => (
+              <button
+                type="button"
+                className="flex items-center gap-1.5 rounded-compact px-2 py-1 text-xs cursor-pointer select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label={`Instances ${healthyCount}/${clusters.length}`}
+                {...props}
+              >
+                <div className={`h-2 w-2 rounded-pill ${healthyCount === clusters.length ? 'bg-success-solid' : 'bg-critical-solid'}`} />
+                <span className="text-muted-foreground tabular-nums">{healthyCount}/{clusters.length}</span>
+              </button>
+            )}
+          >
+            <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-border">Connected Instances</div>
+            {clusters.map((c) => (
+              <div
+                key={c.name}
+                className={`px-3 py-2 border-b border-border last:border-0 ${!c.healthy ? 'bg-critical-soft' : ''}`}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div className="relative flex items-center gap-2">
+                    {c.healthy ? (
+                      <div className="h-2 w-2 rounded-pill shrink-0 bg-success-solid" />
                     ) : (
-                      <div className="mt-1 pl-[1.375rem] text-[10px] text-muted-foreground break-all">{c.alertmanagerUrl}</div>
+                      <div className="relative shrink-0">
+                        <div className="h-2.5 w-2.5 rounded-pill bg-critical-solid" />
+                        <div className="absolute inset-0 rounded-pill bg-critical-solid animate-ping opacity-75" />
+                      </div>
+                    )}
+                    <div
+                      className="relative"
+                      onBlur={(e) => {
+                        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setClusterFilterOpen(null)
+                      }}
+                    >
+                      <button
+                        className="rounded-compact text-xs font-medium text-foreground hover:text-link cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        onMouseEnter={() => setClusterFilterOpen(c.name)}
+                        onMouseLeave={() => setClusterFilterOpen(null)}
+                        onFocus={() => setClusterFilterOpen(c.name)}
+                        onClick={() => {
+                          addLabelMatcher({ name: '@cluster', operator: '=', value: c.name })
+                          setClusterHoverOpen(false)
+                        }}
+                      >
+                        {c.name}
+                      </button>
+                      {clusterFilterOpen === c.name && (
+                        <div
+                          className="absolute left-0 top-full mt-0.5 z-60 rounded-compact border border-border bg-popover shadow-md text-[11px]"
+                          onMouseEnter={() => setClusterFilterOpen(c.name)}
+                          onMouseLeave={() => setClusterFilterOpen(null)}
+                        >
+                          {(['=', '!='] as const).map((op) => (
+                            <button
+                              key={op}
+                              className="flex w-full items-center gap-1.5 whitespace-nowrap px-2.5 py-1.5 text-left hover:bg-accent cursor-pointer"
+                              onClick={() => {
+                                addLabelMatcher({ name: '@cluster', operator: op, value: c.name })
+                                setClusterFilterOpen(null)
+                                setClusterHoverOpen(false)
+                              }}
+                            >
+                              <span className="font-mono text-muted-foreground">@cluster</span>
+                              <span className="font-mono text-link">{op}</span>
+                              <span className="font-medium text-foreground">{c.name}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    {!c.healthy && (
+                      <span className="rounded-compact bg-critical-soft px-1 py-0.5 text-[10px] font-semibold text-critical-fg uppercase tracking-wide">DOWN</span>
                     )}
                   </div>
-                ))}
+                  <span className="text-xs text-muted-foreground whitespace-nowrap">{c.alertCount} Alerts</span>
+                </div>
+                {c.members && c.members.length > 0 ? (
+                  <div className="mt-1 pl-[1.375rem] space-y-0.5">
+                    {c.members.map((m) => (
+                      <div key={m.name} className="flex items-center gap-1.5 text-[10px]">
+                        <div className={`h-1.5 w-1.5 rounded-pill shrink-0 ${m.healthy ? 'bg-success-solid' : 'bg-critical-solid'}`} />
+                        <span className="break-all text-muted-foreground">{m.url}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="mt-1 pl-[1.375rem] text-[10px] text-muted-foreground break-all">{c.alertmanagerUrl}</div>
+                )}
               </div>
-            )}
-          </div>
+            ))}
+          </Popover>
 
           {/* WS status */}
           <WsStatus connected={wsConnected} />
 
           {/* Refresh — custom docked popover (not the generic Tooltip) so it matches
               the flush, header-colored look of the other header popovers. */}
-          <div className="relative shrink-0 self-stretch flex items-center" {...refreshPopover.wrapperProps} onFocus={refreshPopover.show}>
-            <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={handleRefresh} aria-label="Refresh now" aria-describedby={refreshTooltipOpen ? refreshPanelId : undefined} disabled={refreshing}>
-              <RefreshCw className={`h-4 w-4 ${isSpinning ? 'animate-spin' : ''}`} />
-            </Button>
-            {refreshTooltipOpen && (
-              <div id={refreshPanelId} role="tooltip" className="absolute right-0 top-full z-50 w-72 rounded-b-control border border-t-0 border-border bg-header px-3 py-2 text-xs leading-snug text-muted-foreground shadow-lg" onMouseEnter={refreshPopover.show} onMouseLeave={refreshPopover.hide}>
-                {refreshTooltipText}
-              </div>
+          <Popover
+            open={refreshTooltipOpen}
+            onOpenChange={setRefreshTooltipOpen}
+            className="relative shrink-0 self-stretch flex items-center"
+            panelClassName="absolute right-0 top-full z-50 w-72 rounded-b-control border border-t-0 border-border bg-header px-3 py-2 text-xs leading-snug text-muted-foreground shadow-lg"
+            role="tooltip"
+            openOnFocus
+            trigger={({ panelId, open }) => (
+              <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={handleRefresh} aria-label="Refresh now" aria-describedby={open ? panelId : undefined} disabled={refreshing}>
+                <RefreshCw className={`h-4 w-4 ${isSpinning ? 'animate-spin' : ''}`} />
+              </Button>
             )}
-          </div>
+          >
+            {refreshTooltipText}
+          </Popover>
           <div className="w-px h-5 bg-border shrink-0 mx-0.5" />
 
           {/* Info — Jarvis logo, version, copyright. Opens on hover, like cluster status above. */}
-          <div className="relative shrink-0 self-stretch flex items-center" {...infoPopover.wrapperProps}>
-            <button
-              className="flex items-center justify-center h-8 w-8 rounded-compact cursor-pointer text-foreground hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              aria-label="About Jarvis"
-              aria-controls={infoPanelId}
-              data-testid="info-menu"
-              {...infoPopover.triggerProps}
-            >
-              <Info className="h-4 w-4" />
-            </button>
-            {infoOpen && (
-              <div id={infoPanelId} className="absolute right-0 top-full z-50 w-56 rounded-b-control border border-t-0 border-border bg-header shadow-lg" onMouseEnter={infoPopover.show} onMouseLeave={infoPopover.hide}>
-                <InfoColophon version={version} />
-              </div>
+          <Popover
+            open={infoOpen}
+            onOpenChange={setInfoOpen}
+            className="relative shrink-0 self-stretch flex items-center"
+            panelClassName="absolute right-0 top-full z-50 w-56 rounded-b-control border border-t-0 border-border bg-header shadow-lg"
+            trigger={({ props }) => (
+              <button
+                className="flex items-center justify-center h-8 w-8 rounded-compact cursor-pointer text-foreground hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label="About Jarvis"
+                data-testid="info-menu"
+                {...props}
+              >
+                <Info className="h-4 w-4" />
+              </button>
             )}
-          </div>
+          >
+            <InfoColophon version={version} />
+          </Popover>
 
           {/* User menu — always present (Grafana-style): avatar when authenticated,
               generic icon otherwise. Settings + theme live here regardless of auth
               state; Login/Logout are added on top depending on it. Opens on hover. */}
-          <div className="relative shrink-0 self-stretch flex items-center" {...userMenu.wrapperProps}>
-            <button
-              className="flex items-center justify-center h-8 w-8 rounded-compact cursor-pointer text-foreground hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              aria-label="User menu"
-              aria-controls={userPanelId}
-              data-testid="user-menu"
-              {...userMenu.triggerProps}
-            >
-              {isAuthenticated && user ? <Avatar name={user.username} className="h-6 w-6" /> : <CircleUserRound className="h-5 w-5" />}
-            </button>
-            {userMenuOpen && (
-              <div id={userPanelId} data-testid="user-menu-panel" className="absolute right-0 top-full z-50 min-w-40 rounded-b-control border border-t-0 border-border bg-header shadow-lg" onMouseEnter={userMenu.show} onMouseLeave={userMenu.hide}>
-                {isAuthenticated && user && (
-                  <div className="px-3 py-2 text-xs font-medium text-foreground border-b border-border">{user.username}</div>
-                )}
-                {isAuthenticated && user && user.role === 'admin' && (
-                  <button className="w-full flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-accent/60 cursor-pointer border-b border-border" onClick={() => { setUserMenuOpen(false); setAdminOpen(true) }}>
-                    <Shield className="h-3.5 w-3.5" />Admin
-                  </button>
-                )}
-                <button className="w-full flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-accent/60 cursor-pointer" onClick={() => { setUserMenuOpen(false); setSettingsVisibility(true) }}>
-                  <Settings className="h-3.5 w-3.5" />Settings
-                </button>
-                <button
-                  className="w-full flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-accent/60 cursor-pointer"
-                  onClick={() => updateSettings({ theme: theme === 'dark' ? 'light' : 'dark' })}
-                >
-                  {theme === 'dark' ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
-                  {theme === 'dark' ? 'Light mode' : 'Dark mode'}
-                </button>
-                {isAuthenticated && user ? (
-                  <button className="w-full flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-accent/60 cursor-pointer border-t border-border" onClick={() => { setUserMenuOpen(false); logout() }}>
-                    <LogOut className="h-3.5 w-3.5" />Logout
-                  </button>
-                ) : providerInfo !== null && providerInfo.mode !== 'none' ? (
-                  <button data-testid="login-button" className="w-full flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-accent/60 cursor-pointer border-t border-border" onClick={() => { setUserMenuOpen(false); setLoginModalOpen(true) }}>
-                    <LogIn className="h-3.5 w-3.5" />Login
-                  </button>
-                ) : null}
-              </div>
+          <Popover
+            open={userMenuOpen}
+            onOpenChange={setUserMenuOpen}
+            className="relative shrink-0 self-stretch flex items-center"
+            panelClassName="absolute right-0 top-full z-50 min-w-40 rounded-b-control border border-t-0 border-border bg-header shadow-lg"
+            panelProps={{ 'data-testid': 'user-menu-panel' }}
+            trigger={({ props }) => (
+              <button
+                className="flex items-center justify-center h-8 w-8 rounded-compact cursor-pointer text-foreground hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label="User menu"
+                                data-testid="user-menu"
+                {...props}
+              >
+                {isAuthenticated && user ? <Avatar name={user.username} className="h-6 w-6" /> : <CircleUserRound className="h-5 w-5" />}
+              </button>
             )}
-          </div>
+          >
+            {isAuthenticated && user && (
+              <div className="px-3 py-2 text-xs font-medium text-foreground border-b border-border">{user.username}</div>
+            )}
+            {isAuthenticated && user && user.role === 'admin' && (
+              <button className="w-full flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-accent/60 cursor-pointer border-b border-border" onClick={() => { setUserMenuOpen(false); setAdminOpen(true) }}>
+                <Shield className="h-3.5 w-3.5" />Admin
+              </button>
+            )}
+            <button className="w-full flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-accent/60 cursor-pointer" onClick={() => { setUserMenuOpen(false); setSettingsVisibility(true) }}>
+              <Settings className="h-3.5 w-3.5" />Settings
+            </button>
+            <button
+              className="w-full flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-accent/60 cursor-pointer"
+              onClick={() => updateSettings({ theme: theme === 'dark' ? 'light' : 'dark' })}
+            >
+              {theme === 'dark' ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+              {theme === 'dark' ? 'Light mode' : 'Dark mode'}
+            </button>
+            {isAuthenticated && user ? (
+              <button className="w-full flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-accent/60 cursor-pointer border-t border-border" onClick={() => { setUserMenuOpen(false); logout() }}>
+                <LogOut className="h-3.5 w-3.5" />Logout
+              </button>
+            ) : providerInfo !== null && providerInfo.mode !== 'none' ? (
+              <button data-testid="login-button" className="w-full flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-accent/60 cursor-pointer border-t border-border" onClick={() => { setUserMenuOpen(false); setLoginModalOpen(true) }}>
+                <LogIn className="h-3.5 w-3.5" />Login
+              </button>
+            ) : null}
+          </Popover>
 
           <Button size="sm" onClick={() => setSilenceFormOpen(true)} className="h-7 text-xs shrink-0">
             <Plus className="mr-1 h-3.5 w-3.5" />

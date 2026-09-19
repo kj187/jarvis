@@ -992,7 +992,7 @@ index.css             → self-hosted Inter (`public/fonts/inter-variable-latin.
 │   │                            useRefreshAlerts
 │   ├── useAlertCounts.ts      → active/suppressed counts + silence count for nav badges; deliberately
 │   │                            never loads resolved history (there is no resolved badge)
-│   ├── useHoverPopover.ts     → useHoverPopover(open, setOpen): wiring for the Header's
+│   ├── useHoverPopover.ts     → useHoverPopover(open, setOpen): the behaviour behind `components/ui/popover.tsx` — wiring for the Header's
 │   │                            desktop popovers (cluster status, refresh hint, info, user menu).
 │   │                            Hover opens (delayed close), `wrapperProps` add Escape → close +
 │   │                            focus back to the `data-popover-trigger`, focus-out → close;
@@ -1185,7 +1185,14 @@ index.css             → self-hosted Inter (`public/fonts/inter-variable-latin.
 │   └── utils.ts               → cn(), formatDuration() + misc helpers
 └── components/
     ├── ui/                    → shadcn/ui: button, card, badge, dialog, sheet, select, input,
-    │                            textarea, date-time-picker, tooltip, truncatable-chip, avatar
+    │                            textarea, date-time-picker, tooltip, truncatable-chip, avatar, plus two
+    │                            overlay primitives with a fixed role each: `popover` (non-modal, opens on
+    │                            hover AND Enter/Space, Escape closes and restores focus, focus-out closes,
+    │                            `aria-expanded`/`aria-controls`; used by the four Header popovers) and
+    │                            `info-hint` (an "(i)" button + `Tooltip`, focusable, `aria-describedby`,
+    │                            Escape closes the hint without closing a surrounding Sheet). Modal content
+    │                            → `dialog`/`sheet`; short non-interactive text → `tooltip`. Never build a
+    │                            hover-only surface
     ├── common/
     │   ├── EmptyState.tsx     → shared empty view for alerts (AlertListView.tsx, AlertCardGrid.tsx —
     │   │                        default message "No alerts") and silences (SilencesPage.tsx —

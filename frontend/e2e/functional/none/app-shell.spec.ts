@@ -256,3 +256,26 @@ test('A11 header shows the owl mark left of the navigation tabs, also on mobile'
   await expect(mark).toBeVisible()
   await expect(alertsTab).toBeVisible()
 })
+
+test('A12 info hints are keyboard-reachable and Escape closes the hint, not the sheet', async ({ page }) => {
+  await dismissNoAuthNotice(page)
+  await page.goto('/')
+
+  await page.getByTestId('user-menu').first().click()
+  await page.getByRole('button', { name: 'Settings' }).click()
+  const sheet = page.getByRole('dialog')
+  await expect(sheet).toBeVisible()
+
+  const hint = sheet.getByRole('button', { name: 'More information' }).first()
+  await hint.focus()
+  const bubble = page.getByRole('tooltip')
+  await expect(bubble).toBeVisible()
+  await expect(hint).toHaveAttribute('aria-describedby', /.+/)
+
+  await page.keyboard.press('Escape')
+  await expect(bubble).toBeHidden()
+  await expect(sheet).toBeVisible() // the sheet stays open
+
+  await page.keyboard.press('Escape')
+  await expect(sheet).toBeHidden()
+})

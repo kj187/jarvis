@@ -12,6 +12,8 @@ interface TooltipProps {
   delayMs?: number
   /** Classes for the floating tooltip bubble. */
   className?: string
+  /** `id` of the bubble, so a trigger can point at it with `aria-describedby`. */
+  id?: string
   /** Classes for the inline wrapper around the trigger. */
   wrapperClassName?: string
   children: React.ReactNode
@@ -24,6 +26,7 @@ export function Tooltip({
   side = 'top',
   delayMs = 200,
   className,
+  id,
   wrapperClassName,
   children,
 }: TooltipProps) {
@@ -66,6 +69,19 @@ export function Tooltip({
 
   React.useEffect(() => () => clearTimeout(timer.current), [])
 
+  // WCAG 1.4.13: hover/focus content must be dismissible without moving the pointer or focus.
+  React.useEffect(() => {
+    if (!open) return
+    // Capture phase + stopPropagation: dismissing a hint must not also close the Sheet/Dialog it sits in.
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      e.stopPropagation()
+      hide()
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [open, hide])
+
   React.useEffect(() => {
     if (!open) return
     const handle = () => hide()
@@ -103,6 +119,7 @@ export function Tooltip({
       {open &&
         createPortal(
           <div
+            id={id}
             role="tooltip"
             className={cn(
               'pointer-events-none fixed z-[100] max-w-xs rounded-control border border-border bg-popover px-2.5 py-1.5',

@@ -1,3 +1,4 @@
+import { InfoHint } from '@/components/ui/info-hint'
 import { useState, useRef, useMemo, useEffect, useLayoutEffect, type MouseEvent as ReactMouseEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { X, RotateCcw, Info, Grip, Pin, Eye, EyeOff, Search } from 'lucide-react'
@@ -466,33 +467,7 @@ function Section({
 }
 
 function InfoTooltip({ text, ariaLabel = 'More information' }: { text: string; ariaLabel?: string }) {
-  const [rect, setRect] = useState<DOMRect | null>(null)
-  const ref = useRef<HTMLSpanElement>(null)
-
-  return (
-    <span
-      ref={ref}
-      aria-label={ariaLabel}
-      className="inline-flex cursor-help"
-      onMouseEnter={() => setRect(ref.current?.getBoundingClientRect() ?? null)}
-      onMouseLeave={() => setRect(null)}
-    >
-      <Info className="h-3.5 w-3.5 shrink-0 text-muted-foreground hover:text-foreground transition-colors" />
-      {rect && createPortal(
-        <div
-          className="fixed z-[9999] max-w-[280px] rounded-control border border-border bg-popover px-2.5 py-1.5 text-xs text-popover-foreground shadow-md pointer-events-none"
-          style={{
-            left: rect.left + rect.width / 2,
-            top: rect.bottom + 6,
-            transform: 'translateX(-50%)',
-          }}
-        >
-          {text}
-        </div>,
-        document.body,
-      )}
-    </span>
-  )
+  return <InfoHint label={ariaLabel}>{text}</InfoHint>
 }
 
 function SettingRow({

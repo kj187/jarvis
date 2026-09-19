@@ -1,8 +1,9 @@
+import { InfoHint } from '@/components/ui/info-hint'
 import { useState, useEffect, useMemo } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import { enUS } from 'date-fns/locale'
-import { ExternalLink, BookOpen, ChevronDown, ChevronUp, BellOff, Pencil, Trash2, User, Info, Server, X } from 'lucide-react'
+import { ExternalLink, BookOpen, ChevronDown, ChevronUp, BellOff, Pencil, Trash2, User, Server, X } from 'lucide-react'
 import { TruncatableChip } from '@/components/ui/truncatable-chip'
 import { cn } from '@/lib/utils'
 import { Sheet } from '@/components/ui/sheet'
@@ -997,17 +998,13 @@ export function AlertDetailPanel({
             title={
               <>
                 Links
-                <span
-                  className="group relative inline-flex items-center"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <Info className="h-3.5 w-3.5 cursor-help text-muted-foreground hover:text-foreground" />
-                  <span className="pointer-events-none absolute left-0 top-5 z-50 w-72 rounded-control border border-border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-lg opacity-0 group-hover:opacity-100 transition-opacity normal-case tracking-normal font-normal leading-relaxed">
-                    Links are auto-generated from labels and annotations whose value is an absolute URL (http:// or https://).
-                    <br /><br />
-                    The <code className="rounded-compact bg-accent px-0.5 font-mono">runbook</code> key also accepts a plain ID — set{' '}
-                    <code className="rounded-compact bg-accent px-0.5 font-mono">JARVIS_RUNBOOK_BASE_URL</code> to build the full URL automatically.
-                  </span>
+                <span onClick={(e) => e.stopPropagation()} className="inline-flex">
+                  <InfoHint label="About links">
+                Links are auto-generated from labels and annotations whose value is an absolute URL (http:// or https://).
+                <br /><br />
+                The <code className="rounded-compact bg-accent px-0.5 font-mono">runbook</code> key also accepts a plain ID — set{' '}
+                <code className="rounded-compact bg-accent px-0.5 font-mono">JARVIS_RUNBOOK_BASE_URL</code> to build the full URL automatically.
+                  </InfoHint>
                 </span>
               </>
             }
