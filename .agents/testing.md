@@ -208,6 +208,7 @@ at a production DSN.
 | `internal/api` | `silence_validation_test.go` | `validateSilenceMatchers` (empty-string-match rule, RE2 compile), `sanitizeAMMessage`, `isUniqueViolation` |
 | `internal/api` | `silence_validation_fuzz_test.go` | Fuzz: `validateSilenceMatchers` accept/reject is consistent with its own regex compilation; `sanitizeAMMessage` never panics, always bounded and newline-free |
 | `internal/api` | `auth_handler_test.go` | login/logout/me/info, OIDC handlers |
+| `internal/api` | `oidc_flow_test.go` | OIDC state-cookie packing (`popup` / `return_to`, legacy two-field cookie) and `sanitizeReturnTo` open-redirect guard (absolute/`//`/backslash/control chars/`/auth` `/api` `/ws` paths rejected; forged cookie falls back to `/`) |
 | `internal/api` | `setup_test.go` | first-run `/setup` handler (internal mode, 403 when users exist) |
 | `internal/api` | `admin_handler_test.go` | admin user CRUD + role/self guards |
 | `internal/api` | `clusters_test.go` | Cluster health from cached poll up-state (up/degraded/all-down/no-poll-yet), zero live `/api/v2/status` calls, single-member `members` omission |

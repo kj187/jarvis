@@ -483,6 +483,8 @@ Open the Settings panel from the **user-menu** button in the top-right of the he
 |:---:|:---:|
 | ![User menu — signed out](assets/feature-user-menu.png) | ![User menu — signed in](assets/auth-user-menu.png) |
 
+Logging in never costs you your place: when a write needs a session — because you were not logged in, or the session expired while you worked — the login opens on top of the current page and the action you started (for example creating a silence you just filled in) completes right after. With SSO the login runs in a popup so the page stays untouched. Details in [User Authentication](authentication-user.md).
+
 Settings and the theme toggle are always there either way; Login only appears signed out, Logout (and Admin, for admins) only signed in. In auth mode `none` there is no Login entry at all — see [User Authentication](authentication-user.md).
 
 #### Available settings

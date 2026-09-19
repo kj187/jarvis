@@ -16,7 +16,6 @@ import { useSettingsStore, RESOLVED_PAGE_SIZE_OPTIONS } from '@/store/useSetting
 import type { LabelDisplayConfig } from '@/lib/settingsUtils'
 import { useUIStore } from '@/store/uiStore'
 import { useLoginGuard } from '@/hooks/useLoginGuard'
-import { LoginModal } from '@/components/auth/LoginModal'
 import { matchesAlertSelectionKey, makeAlertSelectionKeyForAlert } from '@/lib/alertSelection'
 import type { EnrichedAlert, Silence } from '@/types'
 import { cn } from '@/lib/utils'
@@ -197,7 +196,7 @@ export function AlertListView({
   groupingEnabled = true,
   resolvedPagination,
 }: AlertListViewProps) {
-  const { guard, loginModalOpen, onLoginSuccess, onLoginClose } = useLoginGuard()
+  const { guard } = useLoginGuard()
   const showStateColumn = !stateFilter
   const [sortKey, setSortKey] = useState<SortKey>('alertname')
   const [sortAsc, setSortAsc] = useState(true)
@@ -935,7 +934,6 @@ export function AlertListView({
           />
         </div>
       </Sheet>
-      <LoginModal open={loginModalOpen} onSuccess={onLoginSuccess} onClose={onLoginClose} />
     </div>
   )
 }

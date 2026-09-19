@@ -7,7 +7,6 @@ import { Sheet } from '@/components/ui/sheet'
 import { SilenceForm } from '@/components/silences/SilenceForm'
 import { SilenceTemplateTab } from '@/components/silences/SilenceTemplateTab'
 import { SettingsSheet } from '@/components/settings/SettingsSheet'
-import { LoginModal } from '@/components/auth/LoginModal'
 import { UserManagement } from '@/components/admin/UserManagement'
 import { useUIStore } from '@/store/uiStore'
 import { useAuthStore } from '@/store/authStore'
@@ -133,11 +132,10 @@ export function Header() {
   const [settingsOpen, setSettingsOpen] = useState(
     () => new URLSearchParams(window.location.search).get('settings') === 'open',
   )
-  const [loginModalOpen, setLoginModalOpen] = useState(false)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const [infoOpen, setInfoOpen] = useState(false)
   const [adminOpen, setAdminOpen] = useState(false)
-  const { user, isAuthenticated, logout, providerInfo } = useAuthStore()
+  const { user, isAuthenticated, logout, providerInfo, requestLogin } = useAuthStore()
   const theme = useSettingsStore((s) => s.theme)
   const updateSettings = useSettingsStore((s) => s.update)
   const version = useVersion()
@@ -422,7 +420,7 @@ export function Header() {
                 <LogOut className="h-3.5 w-3.5" />Logout
               </button>
             ) : providerInfo !== null && providerInfo.mode !== 'none' ? (
-              <button data-testid="login-button" className="w-full flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-accent/60 cursor-pointer border-t border-border" onClick={() => { setUserMenuOpen(false); setLoginModalOpen(true) }}>
+              <button data-testid="login-button" className="w-full flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-accent/60 cursor-pointer border-t border-border" onClick={() => { setUserMenuOpen(false); void requestLogin() }}>
                 <LogIn className="h-3.5 w-3.5" />Login
               </button>
             ) : null}
@@ -513,7 +511,7 @@ export function Header() {
                   <LogOut className="h-3.5 w-3.5" />Logout
                 </button>
               ) : providerInfo !== null && providerInfo.mode !== 'none' ? (
-                <button data-testid="login-button" className="w-full flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-accent/60 cursor-pointer border-t border-border" onClick={() => { setUserMenuOpen(false); setLoginModalOpen(true); setMenuOpen(false) }}>
+                <button data-testid="login-button" className="w-full flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-accent/60 cursor-pointer border-t border-border" onClick={() => { setUserMenuOpen(false); void requestLogin(); setMenuOpen(false) }}>
                   <LogIn className="h-3.5 w-3.5" />Login
                 </button>
               ) : null}
@@ -565,12 +563,6 @@ export function Header() {
     <SettingsSheet
       open={settingsOpen}
       onClose={() => setSettingsVisibility(false)}
-    />
-
-    <LoginModal
-      open={loginModalOpen}
-      onSuccess={() => setLoginModalOpen(false)}
-      onClose={() => setLoginModalOpen(false)}
     />
 
     <Sheet open={adminOpen} onClose={() => setAdminOpen(false)} ariaLabel="User Management">

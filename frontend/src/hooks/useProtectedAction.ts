@@ -1,53 +1,18 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback } from 'react'
 import { useAuthStore } from '@/store/authStore'
 
-interface UseProtectedActionResult {
-  execute: () => void
-  loginModalOpen: boolean
-  onLoginSuccess: () => void
-  onLoginClose: () => void
-}
-
 /**
- * Wraps any async action. If the user is not authenticated, opens the login
- * modal first. After login, re-executes the action automatically.
+ * Wraps any async action. If the user is not authenticated, opens the app-wide
+ * login prompt first and re-executes the action after a successful login.
  *
- * When provider mode == "none", the action is never executed and no modal opens.
- * Callers should check providerInfo.mode and disable the button accordingly.
+ * When provider mode == "none", no login is needed and the action runs directly.
  */
-export function useProtectedAction<T>(action: () => Promise<T>): UseProtectedActionResult {
-  const { isAuthenticated, providerInfo, isLoading } = useAuthStore()
-  const [loginModalOpen, setLoginModalOpen] = useState(false)
-  const pendingRef = useRef(false)
+export function useProtectedAction<T>(action: () => Promise<T>): { execute: () => void } {
+  const requestLogin = useAuthStore((s) => s.requestLogin)
 
   const execute = useCallback(() => {
-    // Still loading auth state — ignore click, user can retry once loaded.
-    if (isLoading || providerInfo === null) return
-    // none mode: no auth required — execute directly.
-    if (providerInfo.mode === 'none') {
-      action()
-      return
-    }
-    if (!isAuthenticated) {
-      pendingRef.current = true
-      setLoginModalOpen(true)
-      return
-    }
-    action()
-  }, [isAuthenticated, providerInfo, isLoading, action])
+    void requestLogin().then((ok) => { if (ok) void action() })
+  }, [requestLogin, action])
 
-  const onLoginSuccess = useCallback(() => {
-    setLoginModalOpen(false)
-    if (pendingRef.current) {
-      pendingRef.current = false
-      action()
-    }
-  }, [action])
-
-  const onLoginClose = useCallback(() => {
-    setLoginModalOpen(false)
-    pendingRef.current = false
-  }, [])
-
-  return { execute, loginModalOpen, onLoginSuccess, onLoginClose }
+  return { execute }
 }

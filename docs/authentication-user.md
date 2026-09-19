@@ -102,6 +102,16 @@ After setup, users log in via the login modal (triggered by the **Login** button
 
 ![Login modal — internal](assets/auth-login-internal.png)
 
+### Logging in never costs you your place
+
+Whenever something needs a session, the login modal opens **on top of the page you are on** and the interrupted action carries on once you are logged in — nothing navigates, nothing is reset. This holds for every write (silences, claims, comments, templates, expiring silences):
+
+- **Not logged in yet:** buttons stay usable. In the silence form, *Preview* works without a session; the login is asked at **Create**, on top of the finished form, and the silence is created straight after.
+- **Session expired while you worked:** if the session token ran out unnoticed, the first write that comes back `401` opens the modal (titled *Session expired*) and is replayed automatically after you log in.
+- **`full_protect`:** a session that expires while the app is open keeps the page mounted and shows a modal you cannot dismiss; the full-page login screen only appears when you were never logged in.
+
+A modal you dismiss simply drops the pending action.
+
 ### Admin Panel
 
 Admins can manage users at `/admin/users`:
@@ -122,9 +132,11 @@ The admin panel is only accessible to users with the `admin` role. Open it from 
 
 Jarvis uses the **Authorization Code Flow with PKCE**. No client-side secrets are exposed to the browser.
 
-Users are redirected to the OIDC provider on login. The login modal shows a single **Login with SSO** button:
+The login modal shows a single **Login with SSO** button:
 
 ![Login modal — OIDC](assets/auth-login-oidc.png)
+
+From the modal the SSO login runs in a **popup window**, so the page underneath — a half-filled silence form, an open alert — stays exactly as it is; as soon as the login succeeds the popup is closed for you and the interrupted action completes. If the browser blocks the popup, Jarvis falls back to a full-page redirect that brings you back to the page you left (`/auth/oidc/start?return_to=<in-app path>`; only same-origin in-app paths are honoured, anything else lands on `/`). The full-page login screen (`full_protect`) uses the same `return_to`, so a deep link with filters survives the round trip.
 
 ### Flow
 

@@ -2,7 +2,6 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type Keyboar
 import { createPortal } from 'react-dom'
 import { Bell, BellOff, Check, ChevronDown, ChevronRight, ChevronUp, Loader2, TriangleAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { LoginModal } from '@/components/auth/LoginModal'
 import { useAckAlert, useGroupAckAlert } from '@/hooks/useSilences'
 import { useProtectedAction } from '@/hooks/useProtectedAction'
 import { getEffectiveAlertState, FAST_SILENCE_DURATIONS } from '@/lib/alertUtils'
@@ -145,7 +144,7 @@ export function AckButton({
     }
   }, [ack, ackGroup, activeAlerts, alerts.length, flash])
 
-  const { execute, loginModalOpen, onLoginSuccess, onLoginClose } = useProtectedAction(action)
+  const { execute } = useProtectedAction(action)
 
   const position = useCallback(() => {
     const el = triggerRef.current
@@ -410,8 +409,6 @@ export function AckButton({
           </div>,
           document.body,
         )}
-
-      <LoginModal open={loginModalOpen} onSuccess={onLoginSuccess} onClose={onLoginClose} />
     </>
   )
 }

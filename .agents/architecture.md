@@ -371,8 +371,13 @@ GET    /auth/info                                None        → { mode, loginUr
 POST   /auth/login                               None  (RL)  Body: { username, password } → user + Set-Cookie
 POST   /auth/logout                              None        → clears session cookie
 GET    /auth/me                                  Auth        → User
-GET    /auth/oidc/start                          None        → 302 redirect to OIDC issuer (PKCE)
-GET    /auth/oidc/callback                       None        → exchanges code, sets cookie, 302 → /
+GET    /auth/oidc/start                          None        → 302 redirect to OIDC issuer (PKCE). Optional ?popup=1 (login in a
+#                                                              popup: callback lands on /?login=popup-done, the SPA notifies the opener
+#                                                              over BroadcastChannel 'jarvis-auth' and closes) or ?return_to=<in-app path>
+#                                                              (validated by sanitizeReturnTo: relative, no //, no \, no /auth /api /ws).
+#                                                              Both ride in the state cookie (`state|verifier[|popup|r:<b64url>]`,
+#                                                              oidc_flow.go) — the callback re-validates, a forged cookie falls back to /
+GET    /auth/oidc/callback                       None        → exchanges code, sets cookie, 302 → landing target (/ | popup-done | return_to)
 POST   /setup                                    None  (RL)  Body: { username, password } (internal mode only; 403 if users exist)
 
 # ── WebSocket ────────────────────────────────────────────────────────────────
@@ -973,7 +978,10 @@ index.css             → self-hosted Inter (`public/fonts/inter-variable-latin.
 ├── api/client.ts     → All fetch wrappers (alerts, silences, templates, claims, comments, auth, admin, poll, clusters)
 ├── store/
 │   ├── uiStore.ts            → Zustand+persist('jarvis-ui'): nav page, view modes, filters, fullscreen, counts
-│   ├── authStore.ts          → user, providerInfo, hydrate() (retries on slow backend), login/logout
+│   ├── authStore.ts          → user, providerInfo, hydrate() (retries on slow backend), login/logout;
+│   │                            `requestLogin()` (promise: true after login, false when dismissed — one
+│   │                            shared prompt for concurrent callers) + `loginPromptOpen`, `sessionExpired`,
+│   │                            `expireSession()`; registers the 401 handler of api/client.ts
 │   └── useSettingsStore.ts   → Zustand+persist('jarvis-user-settings', v3): resolved user preferences
 │                                + sparse overrides — local (anon) or server (account) storage,
 │                                see "Settings Store" below; types/logic live in lib/settingsUtils.ts
@@ -1013,8 +1021,8 @@ index.css             → self-hosted Inter (`public/fonts/inter-variable-latin.
 │   │                            3000 + floor(random()*3001)) — avoids many tabs retrying in lockstep;
 │   │                            wsRef.current === ws guards every socket callback so a stale/
 │   │                            superseded socket's late event starts no duplicate timer/refetch
-│   ├── useProtectedAction.ts  → wraps write actions; opens LoginModal when auth required
-│   ├── useLoginGuard.ts       → login-required state for guarded UI elements
+│   ├── useProtectedAction.ts  → wraps a write action: `execute()` = requestLogin() then action (no modal state)
+│   ├── useLoginGuard.ts       → `guard(action)` = requestLogin() then action; one hook covers many actions
 │   ├── useFormatTime.ts       → relative/absolute timestamp formatter (from settings)
 │   ├── useSettingsSync.ts     → mounted once in App.tsx; the only place deciding local vs.
 │   │                            server settings storage (see "Settings Store" below)
@@ -1605,7 +1613,11 @@ index.css             → self-hosted Inter (`public/fonts/inter-variable-latin.
     │                            second-click-within-3s confirmation pattern as "Reset all settings"
     │                            (separate state/timer; each reset remains scoped).
     ├── auth/
-    │   ├── LoginModal.tsx     → on-demand login (write_protect)
+    │   ├── LoginModal.tsx     → the login dialog (internal form / SSO popup button); never navigates
+    │   ├── LoginPrompt.tsx    → the ONE app-wide LoginModal, mounted in App, driven by authStore
+    │   │                        (`loginPromptOpen`; non-dismissable in full_protect after `sessionExpired`);
+    │   │                        invalidates all queries after a prompted login. Components never mount
+    │   │                        their own LoginModal — they call requestLogin()/guard()/execute()
     │   ├── LoginPage.tsx      → full-page login (full_protect)
     │   ├── NoAuthNotice.tsx   → banner in mode "none" (dismiss persisted)
     │   └── SetupPage.tsx      → first-run admin creation
@@ -1798,7 +1810,8 @@ consumed snapshot (D3).
 - **Middleware**: `RequireAuth` (valid JWT cookie/header) on write routes + `/auth/me`; `RequireAdmin` on `/api/v1/admin/*`; `firstRunRedirect` → `/setup` when internal mode has no users.
 - **`OptionalAuth`**: like `RequireAuth` (resolves the cookie and sets `auth.ContextKey`) but never rejects the request — for routes that must answer both anonymous and authenticated callers differently without requiring login (`GET /api/v1/settings` is the only user so far). A route with neither `RequireAuth` nor `OptionalAuth` never gets `auth.ContextKey` set, so `auth.UserFromContext(c)` is always nil there even with a valid cookie present — this bit a first draft of the settings endpoint (PUT wrote correctly, but the unauthenticated-by-design GET always read back `user: null`, silently "losing" every write) before `OptionalAuth` was added; `internal/api/settings_handler_test.go`'s `TestGetSettings_RealHTTPRoundTrip` guards against a regression by driving a real cookie through a real `httptest.Server` + router instead of `c.Set(auth.ContextKey, ...)`, which would mask this class of bug.
 - **JWT**: HMAC-SHA256 signed with `JARVIS_SECRET_KEY`; claims `sub, username, email, role, provider, exp, iat`; delivered as secure HttpOnly cookie.
-- **OIDC**: `/auth/oidc/start` (PKCE + state cookie) → issuer → `/auth/oidc/callback` (state CSRF check, ID-token verify, `UpsertOIDCUser` by `sub`). Admin role from `JARVIS_OIDC_ADMIN_CLAIM` == `JARVIS_OIDC_ADMIN_VALUE`.
+- **OIDC**: `/auth/oidc/start` (PKCE + state cookie) → issuer → `/auth/oidc/callback` (state CSRF check, ID-token verify, `UpsertOIDCUser` by `sub`). Admin role from `JARVIS_OIDC_ADMIN_CLAIM` == `JARVIS_OIDC_ADMIN_VALUE`. The frontend runs it in a popup (`lib/ssoLogin.ts` `startSsoLogin`, `?popup=1`) so page state survives; popup-blocked and the full-page `LoginPage` use `?return_to=`.
+- **Login never navigates (frontend)**: anything needing a session calls `authStore.requestLogin()` → the single `LoginPrompt`. `api/client.ts` `request()` also replays a write once after a 401 → login (session expired mid-task); a 401 on a GET only calls `expireSession()` (no dialog from background polls). The backend forces the actor (createdBy/claimedBy/authorName/by) to the session user in every auth mode ≠ none, so an action queued before login and run after it is safe with a stale client-side user.
 - **Rate limits**: `/setup` 6/min · `/auth/login` 12/min · writes 30/min · `/poll` 1/5s · `/admin/users` 30/min.
 - **Admin guards**: cannot change own role; cannot delete self.
 

@@ -27,7 +27,6 @@ import {
   type SilenceSortDir,
 } from '@/lib/alertUtils'
 import { useLoginGuard } from '@/hooks/useLoginGuard'
-import { LoginModal } from '@/components/auth/LoginModal'
 import type { Silence } from '@/types'
 import type { SilenceGroup } from './SilenceGroupCard'
 
@@ -60,7 +59,7 @@ export function SilencesPage() {
   })
   const deleteMutation = useDeleteSilence()
 
-  const { guard, loginModalOpen, onLoginSuccess, onLoginClose } = useLoginGuard()
+  const { guard } = useLoginGuard()
   const { silencesViewMode: viewMode, setSilencesViewMode, filters, setFilter, isFullscreen, setIsFullscreen } = useUIStore()
   const [sortBy, setSortByState] = useState<SilenceSortBy>('expires')
   const [sortDir, setSortDir] = useState<SilenceSortDir>(() => defaultSilenceSortDir('expires'))
@@ -386,7 +385,6 @@ export function SilencesPage() {
         silences={silences}
         onSelectAlert={setSelectedFingerprint}
       />
-      <LoginModal open={loginModalOpen} onSuccess={onLoginSuccess} onClose={onLoginClose} />
     </div>
   )
 }

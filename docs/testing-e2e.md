@@ -287,6 +287,7 @@ Quick reference: which spec file covers what. Use this to find the right place f
 | Spec file | Groups | What it covers |
 |---|---|---|
 | `login.spec.ts` | I2, I4, I6 | First-run setup + login happy path, write_protect login modal on write attempt, retry flow after modal login |
+| `session-resume.spec.ts` | R1–R2 | Login (up front or after a mid-task session expiry → `401`) opens over the page and the interrupted silence Create completes; Preview stays enabled logged out |
 | `admin.spec.ts` | I10–I14 | Admin panel user list, add-user password validation, role change, delete confirm flow, self-row guards |
 
 ### Mode: `oidc`
@@ -294,6 +295,7 @@ Quick reference: which spec file covers what. Use this to find the right place f
 | Spec file | Groups | What it covers |
 |---|---|---|
 | `login.spec.ts` | I3, I8–I9 | Full PKCE flow against mock IdP, admin-claim mapping, write_protect SSO modal on write attempt |
+| `sso-resume.spec.ts` | S1–S3 | SSO in a popup keeps the silence form and completes the Create; `return_to` returns a full-page login to its page and never leaves the origin |
 
 ### Known gaps (candidates for future cycles)
 

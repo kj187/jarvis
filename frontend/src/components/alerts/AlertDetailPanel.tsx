@@ -24,7 +24,6 @@ import { useActiveClaim, useClaimController, USERNAME_KEY } from '@/hooks/useAle
 import { useDeleteSilence, useUpsertSilence } from '@/hooks/useSilences'
 import { useAuthStore } from '@/store/authStore'
 import { useLoginGuard } from '@/hooks/useLoginGuard'
-import { LoginModal } from '@/components/auth/LoginModal'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { useUIStore } from '@/store/uiStore'
 import { Button } from '@/components/ui/button'
@@ -235,7 +234,7 @@ export function AlertDetailPanel({
   const [editNote, setEditNote] = useState('')
   const [manualClaimName, setManualClaimName] = useState(() => localStorage.getItem(USERNAME_KEY) ?? '')
   const { user } = useAuthStore()
-  const { guard, loginModalOpen, onLoginSuccess, onLoginClose } = useLoginGuard()
+  const { guard } = useLoginGuard()
   const claimName = user?.username ?? manualClaimName
   const [promptCopied, setPromptCopied] = useState(false)
   const [expiredSilenceCollapsed, setExpiredSilenceCollapsed] = useState(true)
@@ -1166,7 +1165,6 @@ export function AlertDetailPanel({
           </div>
         </Sheet>
       )}
-      <LoginModal open={loginModalOpen} onSuccess={onLoginSuccess} onClose={onLoginClose} />
     </>
   )
 }
