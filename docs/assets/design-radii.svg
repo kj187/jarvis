@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 300" width="960" height="300" role="img" aria-labelledby="t d">
+  <title id="t">Corner radius roles</title>
+  <desc id="d">The five corner radius roles: compact, control, surface, overlay and pill, each shown as a box with its value.</desc>
+  <defs></defs>
+  <rect width="960" height="300" rx="16" fill="#12151c"/>
+  <text x="32" y="44" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="22" font-weight="700" fill="#e6eaf2" text-anchor="start">Corner radii</text>
+  <text x="32" y="70" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="400" fill="#9aa4b5" text-anchor="start">Five roles instead of one-off values: rounded-compact … rounded-pill.</text>
+  <rect x="32.0" y="100" width="168.0" height="96" rx="4" fill="#1d1f26" stroke="#6c7689" stroke-width="1.5"/>
+  <text x="116.0" y="156" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#e6eaf2" text-anchor="middle">4 px</text>
+  <text x="116.0" y="226" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" fill="#e6eaf2" text-anchor="middle">rounded-compact</text>
+  <text x="116.0" y="246" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#9aa4b5" text-anchor="middle">chips, table cells</text>
+  <rect x="214.0" y="100" width="168.0" height="96" rx="6" fill="#1d1f26" stroke="#6c7689" stroke-width="1.5"/>
+  <text x="298.0" y="156" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#e6eaf2" text-anchor="middle">6 px</text>
+  <text x="298.0" y="226" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" fill="#e6eaf2" text-anchor="middle">rounded-control</text>
+  <text x="298.0" y="246" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#9aa4b5" text-anchor="middle">fields, buttons</text>
+  <rect x="396.0" y="100" width="168.0" height="96" rx="8" fill="#1d1f26" stroke="#6c7689" stroke-width="1.5"/>
+  <text x="480.0" y="156" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#e6eaf2" text-anchor="middle">8 px</text>
+  <text x="480.0" y="226" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" fill="#e6eaf2" text-anchor="middle">rounded-surface</text>
+  <text x="480.0" y="246" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#9aa4b5" text-anchor="middle">cards, panels</text>
+  <rect x="578.0" y="100" width="168.0" height="96" rx="12" fill="#1d1f26" stroke="#6c7689" stroke-width="1.5"/>
+  <text x="662.0" y="156" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#e6eaf2" text-anchor="middle">12 px</text>
+  <text x="662.0" y="226" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" fill="#e6eaf2" text-anchor="middle">rounded-overlay</text>
+  <text x="662.0" y="246" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#9aa4b5" text-anchor="middle">dialogs, floating layers</text>
+  <rect x="760.0" y="100" width="168.0" height="96" rx="48" fill="#1d1f26" stroke="#6c7689" stroke-width="1.5"/>
+  <text x="844.0" y="156" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#e6eaf2" text-anchor="middle">pill</text>
+  <text x="844.0" y="226" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" fill="#e6eaf2" text-anchor="middle">rounded-pill</text>
+  <text x="844.0" y="246" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#9aa4b5" text-anchor="middle">badges, dots</text>
+</svg>

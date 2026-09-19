@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 560" width="960" height="560" role="img" aria-labelledby="t d">
+  <title id="t">Status roles</title>
+  <desc id="d">The seven status roles, each with text, fill, edge and solid colour, shown as a badge in the dark and the light theme.</desc>
+  <defs></defs>
+  <rect width="960" height="560" rx="16" fill="#12151c"/>
+  <text x="32" y="44" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="22" font-weight="700" fill="#e6eaf2" text-anchor="start">Status roles</text>
+  <text x="32" y="70" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="400" fill="#9aa4b5" text-anchor="start">Text on a tinted fill with an edge, plus a solid for dots and stripes. Text is at least 4.5:1 on its fill.</text>
+  <rect x="32.0" y="96" width="440.0" height="440" rx="12" fill="#1d1f26" stroke="#2a2f3a" stroke-width="1"/>
+  <text x="52.0" y="124" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" fill="#7d8a9b" text-anchor="start">Dark</text>
+  <text x="52.0" y="166" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" fill="#dfe6ec" text-anchor="start">critical</text>
+  <rect x="162.0" y="144" width="110" height="32" rx="6" fill="#dc2828" fill-opacity="0.2" stroke="#ba1c1c" stroke-width="1"/>
+  <text x="217.0" y="165" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#f87272" text-anchor="middle">Critical</text>
+  <circle cx="294.0" cy="160" r="6" fill="#ef4343"/>
+  <rect x="312.0" y="145" width="4" height="30" rx="2" fill="#ef4343"/>
+  <text x="52.0" y="221" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" fill="#dfe6ec" text-anchor="start">warning</text>
+  <rect x="162.0" y="199" width="110" height="32" rx="6" fill="#e7b008" fill-opacity="0.2" stroke="#c88a04" stroke-width="1"/>
+  <text x="217.0" y="220" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#fde63a" text-anchor="middle">Warning</text>
+  <circle cx="294.0" cy="215" r="6" fill="#f59f0a"/>
+  <rect x="312.0" y="200" width="4" height="30" rx="2" fill="#f59f0a"/>
+  <text x="52.0" y="276" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" fill="#dfe6ec" text-anchor="start">info</text>
+  <rect x="162.0" y="254" width="110" height="32" rx="6" fill="#2463eb" fill-opacity="0.2" stroke="#1d4fd7" stroke-width="1"/>
+  <text x="217.0" y="275" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#61a6fa" text-anchor="middle">Info</text>
+  <circle cx="294.0" cy="270" r="6" fill="#3c83f6"/>
+  <rect x="312.0" y="255" width="4" height="30" rx="2" fill="#3c83f6"/>
+  <text x="52.0" y="331" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" fill="#dfe6ec" text-anchor="start">neutral</text>
+  <rect x="162.0" y="309" width="110" height="32" rx="6" fill="#48566a" fill-opacity="0.2" stroke="#344256" stroke-width="1"/>
+  <text x="217.0" y="330" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#94a3b8" text-anchor="middle">Neutral</text>
+  <circle cx="294.0" cy="325" r="6" fill="#65758b"/>
+  <rect x="312.0" y="310" width="4" height="30" rx="2" fill="#65758b"/>
+  <text x="52.0" y="386" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" fill="#dfe6ec" text-anchor="start">success</text>
+  <rect x="162.0" y="364" width="110" height="32" rx="6" fill="#16a249" fill-opacity="0.2" stroke="#157f3c" stroke-width="1"/>
+  <text x="217.0" y="385" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#4ade80" text-anchor="middle">Success</text>
+  <circle cx="294.0" cy="380" r="6" fill="#21c45d"/>
+  <rect x="312.0" y="365" width="4" height="30" rx="2" fill="#21c45d"/>
+  <text x="52.0" y="441" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" fill="#dfe6ec" text-anchor="start">attention</text>
+  <rect x="162.0" y="419" width="110" height="32" rx="6" fill="#e9590c" fill-opacity="0.2" stroke="#c03f0c" stroke-width="1"/>
+  <text x="217.0" y="440" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#fb923c" text-anchor="middle">Attention</text>
+  <circle cx="294.0" cy="435" r="6" fill="#f97415"/>
+  <rect x="312.0" y="420" width="4" height="30" rx="2" fill="#f97415"/>
+  <text x="52.0" y="496" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" fill="#dfe6ec" text-anchor="start">claim</text>
+  <rect x="162.0" y="474" width="110" height="32" rx="6" fill="#3c83f6" fill-opacity="0.1" stroke="#61a6fa" stroke-width="1"/>
+  <text x="217.0" y="495" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#91c3fd" text-anchor="middle">Claim</text>
+  <circle cx="294.0" cy="490" r="6" fill="#61a6fa"/>
+  <rect x="312.0" y="475" width="4" height="30" rx="2" fill="#61a6fa"/>
+  <rect x="488.0" y="96" width="440.0" height="440" rx="12" fill="#ffffff" stroke="#2a2f3a" stroke-width="1"/>
+  <text x="508.0" y="124" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" fill="#666d7a" text-anchor="start">Light</text>
+  <text x="508.0" y="166" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" fill="#171c26" text-anchor="start">critical</text>
+  <rect x="618.0" y="144" width="110" height="32" rx="6" fill="#fee1e1" fill-opacity="1.0" stroke="#fca6a6" stroke-width="1"/>
+  <text x="673.0" y="165" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#ba1c1c" text-anchor="middle">Critical</text>
+  <circle cx="750.0" cy="160" r="6" fill="#ef4343"/>
+  <rect x="768.0" y="145" width="4" height="30" rx="2" fill="#ef4343"/>
+  <text x="508.0" y="221" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" fill="#171c26" text-anchor="start">warning</text>
+  <rect x="618.0" y="199" width="110" height="32" rx="6" fill="#fef9c3" fill-opacity="1.0" stroke="#facc14" stroke-width="1"/>
+  <text x="673.0" y="220" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#a26107" text-anchor="middle">Warning</text>
+  <circle cx="750.0" cy="215" r="6" fill="#f59f0a"/>
+  <rect x="768.0" y="200" width="4" height="30" rx="2" fill="#f59f0a"/>
+  <text x="508.0" y="276" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" fill="#171c26" text-anchor="start">info</text>
+  <rect x="618.0" y="254" width="110" height="32" rx="6" fill="#dcebfe" fill-opacity="1.0" stroke="#91c3fd" stroke-width="1"/>
+  <text x="673.0" y="275" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#1d4fd7" text-anchor="middle">Info</text>
+  <circle cx="750.0" cy="270" r="6" fill="#3c83f6"/>
+  <rect x="768.0" y="255" width="4" height="30" rx="2" fill="#3c83f6"/>
+  <text x="508.0" y="331" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" fill="#171c26" text-anchor="start">neutral</text>
+  <rect x="618.0" y="309" width="110" height="32" rx="6" fill="#f1f5f9" fill-opacity="1.0" stroke="#cbd5e1" stroke-width="1"/>
+  <text x="673.0" y="330" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#48566a" text-anchor="middle">Neutral</text>
+  <circle cx="750.0" cy="325" r="6" fill="#65758b"/>
+  <rect x="768.0" y="310" width="4" height="30" rx="2" fill="#65758b"/>
+  <text x="508.0" y="386" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" fill="#171c26" text-anchor="start">success</text>
+  <rect x="618.0" y="364" width="110" height="32" rx="6" fill="#defce9" fill-opacity="1.0" stroke="#85efac" stroke-width="1"/>
+  <text x="673.0" y="385" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#157f3c" text-anchor="middle">Success</text>
+  <circle cx="750.0" cy="380" r="6" fill="#21c45d"/>
+  <rect x="768.0" y="365" width="4" height="30" rx="2" fill="#21c45d"/>
+  <text x="508.0" y="441" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" fill="#171c26" text-anchor="start">attention</text>
+  <rect x="618.0" y="419" width="110" height="32" rx="6" fill="#ffedd6" fill-opacity="1.0" stroke="#fdba72" stroke-width="1"/>
+  <text x="673.0" y="440" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#c03f0c" text-anchor="middle">Attention</text>
+  <circle cx="750.0" cy="435" r="6" fill="#f97415"/>
+  <rect x="768.0" y="420" width="4" height="30" rx="2" fill="#f97415"/>
+  <text x="508.0" y="496" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" fill="#171c26" text-anchor="start">claim</text>
+  <rect x="618.0" y="474" width="110" height="32" rx="6" fill="#f0f6ff" fill-opacity="1.0" stroke="#61a6fa" stroke-width="1"/>
+  <text x="673.0" y="495" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#1d4fd7" text-anchor="middle">Claim</text>
+  <circle cx="750.0" cy="490" r="6" fill="#61a6fa"/>
+  <rect x="768.0" y="475" width="4" height="30" rx="2" fill="#61a6fa"/>
+</svg>

@@ -140,6 +140,13 @@ since it matches on the already-rewritten `/assets/…` paths.
 
 ## Look & feel
 
+The rules for colour, type, radii and contrast are the same as for the app — see
+`.agents/skills/design-system/SKILL.md` and `docs/design-system.md`.
+
+The reading pages get only light touches (end of `theme/style.css`, "Documentation body"):
+rounded tables/code/callouts, a brand-blue accent on tip/info callouts, and a 2 px brand-blue
+keyboard focus ring. Do not restyle VitePress wholesale; the landing page carries the brand.
+
 - The palette comes from the single token source `design/tokens.json`:
   `node scripts/design-tokens.mjs` writes `theme/generated-tokens.css`
   (the `--vp-c-*` variables and `--jarvis-coral`), which `theme/style.css`

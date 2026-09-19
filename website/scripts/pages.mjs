@@ -56,6 +56,7 @@ export const PAGES = [
   // Project
   { src: 'CONTRIBUTING.md', route: 'project/contributing' },
   { src: 'docs/testing-e2e.md', route: 'project/testing-e2e' },
+  { src: 'docs/design-system.md', route: 'project/design-system' },
   { src: 'docs/ai-agents.md', route: 'project/ai-agents' },
   { src: 'SECURITY.md', route: 'project/security-policy', title: 'Security Policy' },
   { src: 'MAINTAINERS.md', route: 'project/maintainers' },

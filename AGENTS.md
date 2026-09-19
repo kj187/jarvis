@@ -27,7 +27,7 @@ Repository layout:
 - `backend/` — Go backend (`internal/api`, `internal/history`, `internal/alertmanager`, `internal/auth`, `internal/ws`, …)
 - `frontend/` — React app (`src/components`, `src/hooks`, `src/lib`, `src/store`, `e2e/`)
 - `charts/jarvis/` — Helm chart (+ helm-unittest tests under `tests/`, own `CHANGELOG.md`)
-- `docs/` — user-facing documentation (not AI context, except `docs/testing-e2e.md`, `docs/scope.md` and `docs/ai-agents.md`)
+- `docs/` — user-facing documentation (not AI context, except `docs/testing-e2e.md`, `docs/scope.md`, `docs/design-system.md` and `docs/ai-agents.md`)
 - `website/` — VitePress documentation site; renders the repo's own markdown, deployed to GitHub Pages
 - `design/` — brand assets: the vector logo master and its derived variants (`design/README.md`)
 - `scripts/` — E2E runner, mock-OIDC config, manual test-alert/silence fixtures
@@ -48,6 +48,7 @@ adapters and their rules live in `docs/ai-agents.md`.
 | Adding a feature: new endpoint, new component, new WS event, new cluster parameter (TDD checklist) | `.agents/skills/add-feature/SKILL.md` |
 | Branching, committing, opening/merging a PR, fixing CI, changelog entries | `.agents/skills/pr-workflow/SKILL.md` |
 | Judging whether a feature idea fits the project scope (scope gate) | `docs/scope.md` |
+| Visual or UI changes: colours, tokens, typography, radii, focus/contrast/motion, overlays, logo, screenshots, videos, social images | `.agents/skills/design-system/SKILL.md` (the rules: `docs/design-system.md`) |
 | Triaging a GitHub feature-request issue against the scope, drafting a reply | `.agents/skills/scope-triage/SKILL.md` |
 | Writing or running tests, test matrix, test utilities, CI pipeline | `.agents/testing.md` |
 | E2E / screenshot stack: Playwright specs, fixtures, auth modes, `compose.e2e.yml` | `docs/testing-e2e.md` |
@@ -245,6 +246,7 @@ adapters and their rules live in `docs/ai-agents.md`.
    | A colour token (app, docs site, video) | `design/tokens.json`, then `node scripts/design-tokens.mjs` — never edit the generated files (`frontend/src/generated/tokens.css`, `website/.vitepress/theme/generated-tokens.css`, `frontend/e2e/video/generated-theme.ts`) |
    | Logo or other brand asset | `design/assets/` (edit the master, then run `python3 scripts/logo-assets.py`; never edit derived files) |
    | Scope definition, in/out-of-scope boundaries, litmus test | `docs/scope.md` |
+   | Colour/typography/contrast/motion/overlay rules, logo and media guidelines, a token or visual decision | `docs/design-system.md` |
    | Project description, invariants, workflow rules, commit format, repo layout, Task Router | `AGENTS.md` itself |
    | Tool adapter, `scripts/check-agent-context.sh` | `docs/ai-agents.md` |
    | E2E stack, specs, fixtures, auth modes | `docs/testing-e2e.md` |
