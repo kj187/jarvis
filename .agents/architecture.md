@@ -1329,6 +1329,9 @@ index.css             → self-hosted Inter (`public/fonts/inter-variable-latin.
     │   │                        first + every label present on the currently visible (non-resolved)
     │   │                        alerts, each annotated with its distinct-value count.
     │   ├── AlertCard.tsx      → card + claim info + count badge + silence/detail actions + Fast-Silence (hover);
+    │   │                        an entry is a plain container, never role="button" (it holds real
+    │   │                        buttons); the whole surface stays mouse-clickable, the keyboard/AT
+    │   │                        path is the named "Open details" button in the action rail;
     │   │                        common labels (shared by the whole group) render as a quiet
     │   │                        LabelChip strip above the entries; multi-alert groups: each entry
     │   │                        leads with an identity line (position pill `n/total` + its

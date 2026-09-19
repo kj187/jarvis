@@ -100,17 +100,24 @@ function AlertEntry({
   // Only dress up entries that share a card with siblings — a lone alert
   // already has the card's own frame.
   const multi = total > 1
+  // The alertname lives in the card header, outside the entry, so the open button has to
+  // name it itself; siblings additionally carry their position to stay distinguishable.
+  const alertname = alert.labels['alertname'] ?? 'alert'
+  const openDetailsLabel = multi
+    ? `Open details for ${alertname} (${index + 1} of ${total})`
+    : `Open details for ${alertname}`
 
   return (
+    // Deliberately not a role="button": the entry carries real buttons (Fast-Silence,
+    // label chips, extend-silence), which a widget role would swallow into one flattened
+    // accessible name. The whole surface stays a mouse click target; the keyboard and
+    // screen-reader path is the named "Open details" button in the action rail.
     <div
-      role="button"
-      tabIndex={0}
       data-testid="alert-card"
       data-fingerprint={alert.fingerprint}
       onClick={() => onClick(makeAlertSelectionKeyForAlert(alert), groupKeys)}
-      onKeyDown={(e) => e.key === 'Enter' && onClick(makeAlertSelectionKeyForAlert(alert), groupKeys)}
       className={cn(
-        'group relative flex cursor-pointer items-start gap-1 px-3 py-3.5 transition-colors focus:outline-none focus-visible:outline-none',
+        'group relative flex cursor-pointer items-start gap-1 px-3 py-3.5 transition-colors',
         // Claimed entries carry a blue right accent — "someone's on it", scannable
         // in a large group — not the old grey tint that read as "deprioritised".
         claim ? 'border-r-4 border-claim-edge bg-claim-soft hover:bg-selected' : 'hover:bg-accent/20',
@@ -248,12 +255,22 @@ function AlertEntry({
         )}
       </div>
 
-      {/* Persistent action rail — always visible, deliberately subtle */}
+      {/* Persistent action rail — always visible, deliberately subtle. The arrow is the
+          entry's own affordance and a real button, so the detail panel is reachable
+          without a mouse. */}
       <div className="flex shrink-0 flex-col items-center gap-0.5 pt-0.5">
-        <ArrowUpRight
-          className="h-3.5 w-3.5 text-muted-foreground/30 transition-colors group-hover:text-muted-foreground"
-          aria-hidden="true"
-        />
+        <button
+          type="button"
+          data-testid="alert-open-details"
+          aria-label={openDetailsLabel}
+          onClick={(e) => {
+            e.stopPropagation()
+            onClick(makeAlertSelectionKeyForAlert(alert), groupKeys)
+          }}
+          className="inline-flex h-6 w-6 items-center justify-center rounded-compact text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        >
+          <ArrowUpRight className="h-3.5 w-3.5" />
+        </button>
         <AckButton alerts={[alert]} silences={silences} variant="icon" onCreateSilence={onCreateSilence} />
       </div>
     </div>
