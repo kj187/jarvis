@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import fc from 'fast-check'
+import { DEFAULT_SETTINGS } from './settingsUtils'
+import { parseSilenceDuration } from './silenceDurations'
 import {
   escapeRegexValue,
   formatAckDuration,
@@ -12,7 +14,6 @@ import {
   anchoredRegex,
   severityOrder,
   buildAckSilenceBody,
-  FAST_SILENCE_DURATIONS,
   matchesLabelMatchers,
   parseDurationValue,
   silenceWouldMatchAlert,
@@ -247,6 +248,10 @@ describe('formatSilenceDuration', () => {
 })
 
 describe('formatAckDuration', () => {
+  it('collapses exact years (365 days)', () => {
+    expect(formatAckDuration(525600)).toBe('1y')
+  })
+
   it('collapses exact weeks', () => {
     expect(formatAckDuration(10080)).toBe('1w')
     expect(formatAckDuration(20160)).toBe('2w')
@@ -270,9 +275,9 @@ describe('formatAckDuration', () => {
     expect(formatAckDuration(90)).toBe('1h 30m')
   })
 
-  it('matches every FAST_SILENCE_DURATIONS label', () => {
-    for (const d of FAST_SILENCE_DURATIONS) {
-      expect(formatAckDuration(d.minutes)).toBe(d.label)
+  it('labels every built-in silence duration as the text that parses back to it', () => {
+    for (const minutes of DEFAULT_SETTINGS.silenceDurations) {
+      expect(parseSilenceDuration(formatAckDuration(minutes))).toBe(minutes)
     }
   })
 })

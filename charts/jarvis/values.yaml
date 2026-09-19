@@ -124,6 +124,11 @@ config:
   # (e.g. when accessed via an ingress). Example: "https://jarvis.example.com"
   # Leave empty for same-origin-only access.
   allowedOrigins: ""
+  # Instance-wide default durations of the Fast-Silence and Extend-silence
+  # menus — comma-separated, each a number plus m, h, d, w or y, at most 12,
+  # each between 1m and 365d. Empty keeps the built-in defaults. Users can still
+  # override them for themselves in Settings. Example: "15m,1h,4h,1d,1w,30d"
+  silenceDurations: ""
 
 # Alertmanager cluster configuration.
 # At least one cluster is required. Add additional clusters by appending entries.

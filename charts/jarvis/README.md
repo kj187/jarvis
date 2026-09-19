@@ -108,6 +108,7 @@ Tests cover four suites (`deployment`, `configmap`, `secret`, `ingress`) and run
 | `config.pollInterval` | string | `15s` | Alertmanager poll interval |
 | `config.runbookBaseURL` | string | `""` | Base URL prepended to runbook label values |
 | `config.allowedOrigins` | string | `""` | Comma-separated allowed CORS/WebSocket origins |
+| `config.silenceDurations` | string | `""` | Instance default durations of the Fast-Silence and Extend-silence menus, e.g. `15m,1h,4h,1d,1w,30d` (`m`/`h`/`d`/`w`/`y`, max 12, 1m–365d). Empty = built-in defaults; users can override it in Settings |
 | `clusters` | list | see below | Alertmanager cluster list (at least one required) |
 | `clusters[].name` | string | `default` | Display name for the cluster |
 | `clusters[].alertmanagerUrl` | string | `http://alertmanager:9093` | Internal Alertmanager URL |

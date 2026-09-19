@@ -1,6 +1,6 @@
 import { test, expect, JARVIS_BASE_URL, waitForActiveAlerts } from '../../support/fixtures'
 import { dismissNoAuthNotice } from '../../support/auth'
-import { manyAlerts } from '../../fixtures/alerts'
+import { manyAlerts, kubernetesAlerts } from '../../fixtures/alerts'
 import type { Page } from '@playwright/test'
 
 async function openSettings(page: Page) {
@@ -323,4 +323,89 @@ test('H7 defaultCreatorName from settings pre-fills the author in the silence fo
   // Author field should be pre-filled from settings.defaultCreatorName
   const authorInput = dialog.getByPlaceholder('Your name')
   await expect(authorInput).toHaveValue('h7-settings-user')
+})
+
+/** Durations offered by the open Fast-Silence menu of the first alert, in order. */
+async function fastSilenceOptions(page: Page): Promise<string[]> {
+  await page.getByLabel('Silence options for this alert').first().hover()
+  const options = page.getByTestId('alert-ack-option')
+  await expect(options.first()).toBeVisible()
+  return options.allInnerTexts()
+}
+
+test('H13 silence durations edited in settings show up in the Fast-Silence menu', async ({ page, am, jarvis }) => {
+  await dismissNoAuthNotice(page)
+  await am.fire(kubernetesAlerts)
+  await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, kubernetesAlerts.length)
+  await page.goto('/?state=active')
+
+  expect(await fastSilenceOptions(page)).toEqual(['5m', '10m', '15m', '30m', '1h', '4h', '1d', '1w'])
+  await page.keyboard.press('Escape')
+
+  const dialog = await openSettings(page)
+  const editor = dialog.getByTestId('duration-list-editor').first()
+  await editor.getByRole('button', { name: 'Remove 5m' }).click()
+  await editor.getByRole('textbox', { name: /Add duration to Silence durations/ }).fill('30d')
+  await page.keyboard.press('Enter')
+  await expect(editor.getByRole('button', { name: 'Remove 30d' })).toBeVisible()
+
+  // Only the user's deviation from the defaults is stored, as minutes.
+  const stored = await page.evaluate(() => {
+    const raw = localStorage.getItem('jarvis-user-settings')
+    return raw ? JSON.parse(raw).state.overrides.silenceDurations : null
+  })
+  expect(stored).toEqual([10, 15, 30, 60, 240, 1440, 10080, 43200])
+
+  await dialog.getByRole('button', { name: 'Close' }).click()
+  expect(await fastSilenceOptions(page)).toEqual(['10m', '15m', '30m', '1h', '4h', '1d', '1w', '30d'])
+
+  // Reset restores the default list and drops the override again.
+  await page.keyboard.press('Escape')
+  await openSettings(page)
+  await editor.getByRole('button', { name: 'Reset' }).click()
+  await expect(editor.getByRole('button', { name: 'Remove 5m' })).toBeVisible()
+  await expect(editor.getByRole('button', { name: 'Reset' })).toHaveCount(0)
+})
+
+test('H14 an invalid duration is rejected with a hint and the list stays unchanged', async ({ page }) => {
+  await dismissNoAuthNotice(page)
+  await page.goto('/')
+
+  const dialog = await openSettings(page)
+  const editor = dialog.getByTestId('duration-list-editor').first()
+  const input = editor.getByRole('textbox', { name: /Add duration to Silence durations/ })
+
+  await input.fill('2y')
+  await input.press('Enter')
+  await expect(editor.getByRole('alert')).toContainText('max 365d')
+
+  await input.fill('1h')
+  await input.press('Enter')
+  await expect(editor.getByRole('alert')).toContainText('already in the list')
+
+  await expect(editor.getByRole('listitem')).toHaveCount(8)
+})
+
+test('H15 instance defaults from the server replace the built-in silence durations', async ({ page, am, jarvis }) => {
+  await dismissNoAuthNotice(page)
+  await page.route('**/api/v1/settings', (route) =>
+    route.fulfill({
+      json: { user: null, global: { silenceDurations: [15, 60, 43200] } },
+    }),
+  )
+  await am.fire(kubernetesAlerts)
+  await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, kubernetesAlerts.length)
+  await page.goto('/?state=active')
+
+  expect(await fastSilenceOptions(page)).toEqual(['15m', '1h', '30d'])
+  await page.keyboard.press('Escape')
+
+  // A user's own list beats the instance default, and Reset returns to the instance default.
+  const dialog = await openSettings(page)
+  const editor = dialog.getByTestId('duration-list-editor').first()
+  await editor.getByRole('button', { name: 'Remove 15m' }).click()
+  await expect(editor.getByRole('button', { name: 'Reset' })).toBeVisible()
+  await editor.getByRole('button', { name: 'Reset' }).click()
+  await expect(editor.getByRole('button', { name: 'Remove 15m' })).toBeVisible()
+  await expect(editor.getByRole('listitem')).toHaveCount(3)
 })

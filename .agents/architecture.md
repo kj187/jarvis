@@ -500,8 +500,11 @@ GET    /api/v1/settings                          full_protect?  → { user: {...
 #        user: null when unauthenticated OR authenticated with no row yet (frontend already
 #        knows which, from authStore) — the frontend resolves the storage location itself
 #        (driven by "is there an authenticated user", not authMode).
-#        global: reserved for instance-wide defaults, always {} (not built). Reads the DB only —
-#        never calls Alertmanager (Invariant #13), never cached, not leader-gated.
+#        global: instance-wide defaults built from the env by Server.globalSettings() — only keys that
+#        are configured: silenceDurations (int minutes, from JARVIS_SILENCE_DURATIONS,
+#        config.ParseSilenceDurations); {} when none is set.
+#        Served to anonymous callers too (the frontend reads it in local mode). Reads the DB and the
+#        parsed Config only — never calls Alertmanager (Invariant #13), never cached, not leader-gated.
 PUT    /api/v1/settings                          Auth  (RL)   Body: the settings object (sparse; whole row replaced,
 #        last write wins, no merge/versioning) — 400 on non-object JSON or a body > 16 KiB.
 #        The backend never inspects individual keys (see user_settings above) — validation is
@@ -1025,7 +1028,8 @@ index.css             → self-hosted Inter (`public/fonts/inter-variable-latin.
 │   ├── useLoginGuard.ts       → `guard(action)` = requestLogin() then action; one hook covers many actions
 │   ├── useFormatTime.ts       → relative/absolute timestamp formatter (from settings)
 │   ├── useSettingsSync.ts     → mounted once in App.tsx; the only place deciding local vs.
-│   │                            server settings storage (see "Settings Store" below)
+│   │                            server settings storage and the only reader of the instance
+│   │                            defaults (`global`) — see "Settings Store" below
 │   └── useVersion.ts          → app version (staleTime Infinity)
 ├── lib/
 │   ├── refetch.ts             → FALLBACK_REFETCH_INTERVAL_MS (60s) — safety-net refetch cadence;
@@ -1065,7 +1069,7 @@ index.css             → self-hosted Inter (`public/fonts/inter-variable-latin.
 │   │                            whether an AM regex matcher is a Jarvis-style escaped-literal-OR-list
 │   │                            SilenceForm can safely edit as tags, vs. a real regex needing raw-text
 │   │                            editing — see SilenceForm's `raw` matcher mode),
-│   │                            FAST_SILENCE_DURATIONS, HIDDEN_LABEL_KEYS, shortClaimant,
+│   │                            HIDDEN_LABEL_KEYS, shortClaimant,
 │   │                            labelColorStyle(key, labelColors, theme) → CSSProperties | undefined;
 │   │                            labels have no automatic color — undefined (→ caller's neutral
 │   │                            `border-border bg-muted text-foreground` classes) unless labelColors[key]
@@ -1140,6 +1144,11 @@ index.css             → self-hosted Inter (`public/fonts/inter-variable-latin.
 │   │                            neighbourhood graph computed once from resting positions. 100% unit
 │   │                            tested (owlMesh.test.ts, synthetic bitmaps). Consumed by
 │   │                            `components/common/OwlMeshBackdrop.tsx`
+│   ├── silenceDurations.ts    → Fast-Silence / Extend duration lists: `parseSilenceDuration`
+│   │                            (`30m 4h 1d 1w 30d 1y` → minutes, mirrors Go's `ParseSilenceDurations`),
+│   │                            `normalizeSilenceDurations`, `isValidSilenceDurationMinutes`,
+│   │                            `formatDurationChoice` (button label that parses back), limits
+│   │                            MAX_SILENCE_DURATION_MINUTES (365d) / MAX_SILENCE_DURATION_CHOICES (12)
 │   ├── settingsUtils.ts       → UserSettings, DEFAULT_SETTINGS + option constants,
 │   │                            LabelDisplayConfig ({ order: string[] (pinned); hidden: string[] },
 │   │                            default `{ order: ['@cluster'], hidden: [] }` — matches pre-feature
@@ -1473,7 +1482,7 @@ index.css             → self-hosted Inter (`public/fonts/inter-variable-latin.
     │   │                        for both the detail-panel heatmap and the card sparkline
     │   ├── AckButton.tsx      → one-click Fast-Silence (short-lived exact-match silence); active-only
     │   │                        (getEffectiveAlertState), auth-gated (useProtectedAction); hover/focus
-    │   │                        popover menu (FAST_SILENCE_DURATIONS 30m/1h/4h/1d/1w) picks the duration;
+    │   │                        popover menu (the `silenceDurations` setting, default 5m…1w) picks the duration;
     │   │                        transient Silenced/Failed feedback; used by AlertCard + AlertDetailPanel
     │   ├── AlertBadge.tsx     → severity badge
     │   ├── AlertFilters.tsx   → label matcher chips + state dropdown
@@ -1573,13 +1582,16 @@ index.css             → self-hosted Inter (`public/fonts/inter-variable-latin.
     │   ├── MatcherEditor.tsx  → matcher rows: operators + tag multi-value + suggestions
     │   └── SilenceTemplateTab.tsx → template CRUD + apply-to-form
     ├── settings/
+    │   ├── DurationListEditor.tsx → tag input for a duration list (chips + inline input in one field; remove ×, add by typing + Enter
+    │   │                        `30d`, Reset to the instance/built-in default); used once in
+    │   │                        SettingsSheet for `silenceDurations`
     │   └── SettingsSheet.tsx  → status line under the heading (`origin`/`syncState` from
     │                            useSettingsStore): "Synced to your account", "Could not save —
     │                            changes are local to this browser" (syncState 'error'), "Stored in
     │                            this browser" (mode 'none'), or "Stored in this browser — sign in to
     │                            sync across devices" (provider active, origin 'local'). Display: time
     │                            format, default view, card columns, group-by label,
-    │                            claim animation. Silences: default duration only. Saved label
+    │                            claim animation. Silences: default duration (picked from the silence durations) plus the `DurationListEditor`. Saved label
     │                            filters (`savedFilters`) have no Settings section of their own —
     │                            they're managed from `SavedFiltersMenu.tsx` in the alert toolbar
     │                            instead, next to what they filter (replaces the removed
@@ -1690,7 +1702,11 @@ interface UserSettings {
                                                  // { name, matchers: SavedFilterMatcher[], isDefault }
                                                  // — see "Frontend Component Tree" lib/savedFilters.ts
   resolvedPageSize: 10 | 25 | 50 | 100          // default 25
-  defaultSilenceDurationMinutes: number         // default 60; ALLOWED_SILENCE_DURATIONS = [15,30,60,240,480,1440,4320]
+  defaultSilenceDurationMinutes: number         // default 60; any integer 1…525600 (isValidSilenceDurationMinutes) — the Settings picker
+                                                 // offers silenceDurations + the current value
+  silenceDurations: number[]                    // minutes, ascending, 1…12 entries, each 1…525600 (365d); default [5,10,15,30,60,240,1440,10080].
+                                                 // ONE list for the Fast-Silence menu (AckButton) and the Extend-silence menu.
+                                                 // Layers: built-in → instance (`global`) → user.
   defaultCreatorName: string                    // default ''
   claimAnimationEnabled: boolean                // default true
   labelDisplay: LabelDisplayConfig              // pinned (order) / hidden chips, card+list views only;
@@ -1718,13 +1734,13 @@ never the full resolved blob — computed as:
 resolveSettings(globalDefaults, overrides) // = { ...DEFAULT_SETTINGS, ...globalDefaults, ...overrides }
 ```
 
-`globalDefaults` is reserved for instance-wide defaults and always `{}` (not built).
+`globalDefaults` are the instance-wide defaults from `GET /api/v1/settings` → `global` (normalized like user settings; today only `silenceDurations`, from `JARVIS_SILENCE_DURATIONS`). The duration list is cleaned by `lib/silenceDurations.ts` (`normalizeSilenceDurations`: valid minutes only, sorted, deduplicated, capped at 12; an empty result drops the key so the next layer applies). The duration grammar (`30m 4h 1d 1w 30d 1y`) is parsed by `parseSilenceDuration` there and by `config.ParseSilenceDurations` in Go — keep the two in sync.
 `useSettingsStore` extends `UserSettings` with the *resolved* flat fields
 (unchanged consumer API) plus:
 
 ```typescript
 overrides: Partial<UserSettings>        // source of truth for persistence
-globalDefaults: Partial<UserSettings>   // reserved for instance-wide defaults, always {}
+globalDefaults: Partial<UserSettings>   // instance-wide defaults (`global` from the server)
 origin: 'local' | 'server'              // drives the SettingsSheet hint text
 syncState: 'idle' | 'saving' | 'error'  // last PUT/DELETE outcome
 anonOverrides: Partial<UserSettings>    // device's anon-slot overrides, kept across login/logout
@@ -1732,14 +1748,14 @@ userMirror: { id: string; overrides: Partial<UserSettings> } | null // last know
 
 update(partial)   // merges into overrides; a value that matches the default-without-it is REMOVED
                   // from overrides instead of being stored, so toggling back to default doesn't cement it
-reset()           // overrides = {}; server mode sends DELETE (not PUT {}), so future instance-wide defaults can apply
+reset()           // overrides = {}; server mode sends DELETE (not PUT {}), so the instance-wide defaults apply again
 applyRemote(user, global, origin, userId?)  // internal — used by useSettingsSync only
 setSyncState(s)   // internal — used by useSettingsSync only
 ```
 
 `hooks/useSettingsSync.ts` (mounted once in `App.tsx`, next to `useWebSocket`)
 is the **only** place that decides where to read/write: local mode reads
-`anonOverrides` and never makes a request; server mode does
+`anonOverrides` for the user's own settings and fetches only the instance defaults (`global`; skipped in full_protect until login); server mode does
 `GET /api/v1/settings` via TanStack Query (`queryKey: ['settings', userId]`,
 `staleTime: Infinity`), adopts the anon slot exactly once if the account has
 no row yet, and registers a debounced (300ms) writer via
@@ -1840,6 +1856,7 @@ consumed snapshot (D3).
 | `JARVIS_CLUSTER_N_BASIC_AUTH_USER` `…_BASIC_AUTH_PASSWORD` `…_BEARER_TOKEN` | per-cluster upstream auth |
 | `JARVIS_CLUSTER_N_HEADER_<Name>` | arbitrary custom HTTP header sent with every upstream request (header name taken verbatim after `HEADER_`) |
 | `JARVIS_CLUSTER_N_OAUTH2_CLIENT_ID` `…_OAUTH2_CLIENT_SECRET` `…_OAUTH2_TOKEN_URL` `…_OAUTH2_SCOPES` | per-cluster OAuth2 client-credentials (takes priority over bearer/basic/headers) |
+| `JARVIS_SILENCE_DURATIONS` | instance default durations of the Fast-Silence / Extend-silence menus (one list for both); comma-separated `<n>m|h|d|w|y` (y = 365d), each 1m…365d, ≤ 12 entries, parsed by `config.ParseSilenceDurations` into `Config.SilenceDurations` (minutes, ascending, deduplicated; nil = unset). Served as `global` in `GET /api/v1/settings`; a user's own list wins. Invalid → startup error naming the variable. Helm: `config.silenceDurations` |
 | `JARVIS_RETENTION_DAYS` `…_EVENTS_DAYS` `…_CLAIMS_DAYS` `…_SILENCE_EVENTS_DAYS` `…_COMMENTS_DAYS` `…_SWEEP_INTERVAL` | data retention (`docs/retention.md`); `Config.Retention RetentionConfig`. All `*_DAYS` default `0` = disabled — an upgrade never silently deletes data. `EffectiveEventsDays`/`EffectiveClaimsDays`/`EffectiveSilenceEventsDays` inherit the global `Days` when their own override is `0`; `EffectiveCommentsDays` **never** inherits — only an explicit `JARVIS_RETENTION_COMMENTS_DAYS > 0` enables comment deletion. `SweepInterval` default `12h`. Negative values → startup error |
 
 ---

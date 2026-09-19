@@ -15,6 +15,9 @@ data:
   {{- if .Values.config.allowedOrigins }}
   JARVIS_ALLOWED_ORIGINS: {{ .Values.config.allowedOrigins | quote }}
   {{- end }}
+  {{- if .Values.config.silenceDurations }}
+  JARVIS_SILENCE_DURATIONS: {{ .Values.config.silenceDurations | quote }}
+  {{- end }}
   JARVIS_AUTH_PROVIDER: {{ .Values.auth.provider | quote }}
   {{- if .Values.auth.mode }}
   JARVIS_AUTH_MODE: {{ .Values.auth.mode | quote }}

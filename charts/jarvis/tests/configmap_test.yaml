@@ -32,6 +32,19 @@ tests:
           path: data.JARVIS_POLL_INTERVAL
           value: 30s
 
+  - it: omits JARVIS_SILENCE_DURATIONS by default
+    asserts:
+      - notExists:
+          path: data.JARVIS_SILENCE_DURATIONS
+
+  - it: renders JARVIS_SILENCE_DURATIONS when config.silenceDurations is set
+    set:
+      config.silenceDurations: "15m,1h,30d"
+    asserts:
+      - equal:
+          path: data.JARVIS_SILENCE_DURATIONS
+          value: "15m,1h,30d"
+
   - it: sets JARVIS_DB_MAX_OPEN_CONNS to 10 by default
     asserts:
       - equal:

@@ -1,12 +1,11 @@
 import type { LabelMatcher, LabelMatcherOperator } from '@/types'
+import { isValidSilenceDurationMinutes, normalizeSilenceDurations } from '@/lib/silenceDurations'
 
 export const CARD_COLUMN_OPTIONS = [1, 2, 3, 4, 5, 6] as const
 export type CardColumns = 'auto' | (typeof CARD_COLUMN_OPTIONS)[number]
 
 export const RESOLVED_PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const
 export type ResolvedPageSizeOption = (typeof RESOLVED_PAGE_SIZE_OPTIONS)[number]
-
-export const ALLOWED_SILENCE_DURATIONS = [15, 30, 60, 240, 480, 1440, 4320] as const
 
 const MATCHER_OPERATORS: LabelMatcherOperator[] = ['=', '!=', '=~', '!~', '>', '<']
 
@@ -72,6 +71,11 @@ export interface UserSettings {
 
   // Silences
   defaultSilenceDurationMinutes: number
+  // The durations (minutes, ascending) offered by the one-click Fast-Silence
+  // menu and the Extend-silence menu — one list for both. Layered like every
+  // setting: built-in default → instance default (JARVIS_SILENCE_DURATIONS,
+  // served as `global`) → the user's own list.
+  silenceDurations: number[]
   defaultCreatorName: string
 
   // Animations
@@ -93,13 +97,14 @@ export const DEFAULT_SETTINGS: UserSettings = {
   savedFilters: [],
   resolvedPageSize: 25,
   defaultSilenceDurationMinutes: 60,
+  silenceDurations: [5, 10, 15, 30, 60, 240, 1440, 10080],
   defaultCreatorName: '',
   claimAnimationEnabled: true,
   labelDisplay: { order: ['@cluster'], hidden: [] },
   labelColors: {},
 }
 
-/** Layers instance-wide defaults (reserved, {} for now) and per-user overrides on top of the app defaults. */
+/** Layers instance-wide defaults (`global` from GET /api/v1/settings) and per-user overrides on top of the app defaults. */
 export function resolveSettings(
   global: Partial<UserSettings>,
   overrides: Partial<UserSettings>,
@@ -233,11 +238,14 @@ export function normalizeSettings(raw: unknown): Partial<UserSettings> {
   ) {
     out.resolvedPageSize = obj.resolvedPageSize as ResolvedPageSizeOption
   }
-  if (
-    typeof obj.defaultSilenceDurationMinutes === 'number' &&
-    (ALLOWED_SILENCE_DURATIONS as readonly number[]).includes(obj.defaultSilenceDurationMinutes)
-  ) {
+  if (isValidSilenceDurationMinutes(obj.defaultSilenceDurationMinutes)) {
     out.defaultSilenceDurationMinutes = obj.defaultSilenceDurationMinutes
+  }
+  if (Array.isArray(obj.silenceDurations)) {
+    // An empty list would leave the menus with no buttons — drop it so the
+    // next layer (instance default, then built-in) applies instead.
+    const durations = normalizeSilenceDurations(obj.silenceDurations)
+    if (durations.length > 0) out.silenceDurations = durations
   }
   if (typeof obj.defaultCreatorName === 'string') {
     out.defaultCreatorName = obj.defaultCreatorName

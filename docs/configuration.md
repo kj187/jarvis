@@ -11,6 +11,7 @@ Values are read once at startup — a change means a restart.
 - [Upstream authentication](#upstream-authentication)
 - [Database](#database)
 - [User authentication](#user-authentication)
+- [Silence durations](#silence-durations)
 - [Data retention](#data-retention)
 
 ---
@@ -116,6 +117,31 @@ With `internal`, the first visit redirects to `/setup` to create the admin
 account; further users are managed at `/admin/users`. Provider setup for
 Keycloak and Authentik, the OIDC flow, role mapping, session details and
 Kubernetes secrets are in [User authentication](authentication-user.md).
+
+---
+
+## Silence durations
+
+The durations offered by the one-click **Fast-Silence** menu and the **Extend
+silence** menu are configurable — one list serves both. Set an instance-wide
+default here; every user can still change their own list in *Settings →
+Silences* — that list wins over this one. Without either, the built-in list
+applies.
+
+| Variable | Default | Description |
+|---|---|---|
+| <a id="jarvis_silence_durations"></a>`JARVIS_SILENCE_DURATIONS` | `5m,10m,15m,30m,1h,4h,1d,1w` | Silence durations, comma-separated |
+
+```env
+JARVIS_SILENCE_DURATIONS=15m,1h,4h,1d,1w,30d
+```
+
+Each entry is a number plus a unit: `m` minutes, `h` hours, `d` days, `w` weeks,
+`y` years (365 days) — for example `30m`, `4h`, `1d`, `1w`, `30d`, `1y`. Every
+value must be between `1m` and `365d`, and a list holds at most 12 entries;
+order and duplicates are sorted out for you. An invalid value stops Jarvis from
+starting, with the variable named in the error. What the menus and the
+per-user override look like is described in [Fast-Silence](features.md#fast-silence).
 
 ---
 

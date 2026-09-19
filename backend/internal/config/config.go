@@ -50,6 +50,13 @@ type Config struct {
 	OIDCAdminValue   string // value inside that claim that grants admin (e.g. "Administrator")
 
 	Retention RetentionConfig
+
+	// SilenceDurations is the instance-wide default list of silence durations
+	// (minutes, ascending) behind the Fast-Silence and Extend-silence menus,
+	// served as `global` in GET /api/v1/settings. nil = not configured: the
+	// frontend falls back to its built-in defaults, and a user's own list always
+	// wins over both.
+	SilenceDurations []int
 }
 
 // RetentionConfig holds the data-retention sweep settings. All Days fields
@@ -221,6 +228,11 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 
+	silenceDurations, err := ParseSilenceDurations("JARVIS_SILENCE_DURATIONS", getEnv("JARVIS_SILENCE_DURATIONS", ""))
+	if err != nil {
+		return nil, err
+	}
+
 	dbMaxOpenConnsRaw := getEnv("JARVIS_DB_MAX_OPEN_CONNS", "10")
 	dbMaxOpenConns, err := strconv.Atoi(dbMaxOpenConnsRaw)
 	if err != nil {
@@ -252,6 +264,8 @@ func Load() (*Config, error) {
 		OIDCAdminClaim:   getEnv("JARVIS_OIDC_ADMIN_CLAIM", ""),
 		OIDCAdminValue:   getEnv("JARVIS_OIDC_ADMIN_VALUE", ""),
 		Retention:        retention,
+
+		SilenceDurations: silenceDurations,
 	}, nil
 }
 
