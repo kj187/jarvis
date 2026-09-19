@@ -18,7 +18,6 @@ import { upsertSilence, triggerPoll } from '@/api/client'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { useAuthStore } from '@/store/authStore'
 import { useLoginGuard } from '@/hooks/useLoginGuard'
-import { LoginModal } from '@/components/auth/LoginModal'
 import type { EnrichedAlert, LabelMatcher, LabelMatcherOperator, Silence } from '@/types'
 
 const USERNAME_KEY = 'jarvis-username'
@@ -480,7 +479,7 @@ export function SilenceForm({
   const qc = useQueryClient()
   const { user, providerInfo } = useAuthStore()
   const authMode = providerInfo?.mode ?? 'none'
-  const { guard, loginModalOpen, onLoginSuccess, onLoginClose } = useLoginGuard()
+  const { guard } = useLoginGuard()
   const isEdit = (Boolean(prefillSilence) || Boolean(prefillGroup?.length)) && !isRecreate
   const prefillSource = prefillGroup?.[0] ?? prefillSilence
 
@@ -831,10 +830,14 @@ export function SilenceForm({
       : null
     : null
 
+  // With an auth provider the author is the session user (the backend enforces
+  // it), so a missing one must not block Preview — the login is requested at
+  // Create, right on top of the finished form, instead of after the work is done.
+  const needsLoginAtSubmit = authMode !== 'none' && !user
   const canSubmit =
     !timeError &&
     comment.trim() &&
-    effectiveCreatedBy.trim() &&
+    (needsLoginAtSubmit || effectiveCreatedBy.trim()) &&
     selectedClusters.length > 0 &&
     Boolean(startsAt) &&
     Boolean(endsAt) &&
@@ -1288,7 +1291,9 @@ export function SilenceForm({
                 {user.username}
               </div>
             ) : (
-              <p className="text-xs text-muted-foreground">Login required to create a silence.</p>
+              <p className="text-xs text-muted-foreground">
+                You'll be asked to log in when you create the silence — nothing you entered here is lost.
+              </p>
             )
           ) : (
             <Input
@@ -1365,7 +1370,7 @@ export function SilenceForm({
             <span className="text-muted-foreground">End</span>
             <span className="font-mono">{previewEnd} {tzAbbr} <span className="text-muted-foreground ml-1">({previewDuration})</span></span>
             <span className="text-muted-foreground">Author</span>
-            <span>{effectiveCreatedBy}</span>
+            <span>{effectiveCreatedBy || 'You (after login)'}</span>
             <span className="text-muted-foreground">Reason</span>
             <span className="break-all">{comment}</span>
           </div>
@@ -1438,7 +1443,6 @@ export function SilenceForm({
           </Button>
         </div>
       </div>
-      <LoginModal open={loginModalOpen} onSuccess={onLoginSuccess} onClose={onLoginClose} />
       </>
     )
   }

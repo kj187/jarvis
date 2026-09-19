@@ -945,3 +945,19 @@ same `SetActiveClaim`/`ClearActiveClaim` patch every receiving pod, mirroring
 fans a WS event out, the fan-out receivers must apply the identical local
 patch — re-broadcasting the event alone leaves every other pod's read path
 stale until its next poll.
+
+## Dev backend (air) does not see host edits on Podman/macOS — restart it before testing backend changes
+
+**Symptom**: A backend change (new query param, changed redirect) has no effect
+in the `make up` dev stack, while frontend edits hot-reload fine. Found while
+testing the SSO popup: the popup kept landing on `/` and loaded the whole app,
+because the callback still ran the pre-change code.
+
+**Cause**: file-change events from the macOS host do not reach the container's
+bind mount, so `air` never rebuilds (its log showed the last `building...`
+hours before the edit). Vite's HMR works because it polls.
+
+**Fix / check**: `podman restart jarvis_backend_1` after backend edits, then
+verify the new behaviour directly (e.g. `curl -si localhost:8080/auth/oidc/start?popup=1`
+shows `|popup` in the `jarvis_oidc_state` cookie). When "the fix does nothing",
+compare `air`'s last build time in `podman logs jarvis_backend_1` with your edit.

@@ -4,6 +4,7 @@ import { AlertsPage } from '@/components/alerts/AlertsPage'
 import { SilencesPage } from '@/components/silences/SilencesPage'
 import { SetupPage } from '@/components/auth/SetupPage'
 import { LoginPage } from '@/components/auth/LoginPage'
+import { LoginPrompt } from '@/components/auth/LoginPrompt'
 import { NoAuthNotice } from '@/components/auth/NoAuthNotice'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { useUIStore, VIEW_MODE_KEY } from '@/store/uiStore'
@@ -26,6 +27,7 @@ export default function App() {
   const setupRequired = useAuthStore((s) => s.setupRequired)
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
   const isLoading = useAuthStore((s) => s.isLoading)
+  const sessionExpired = useAuthStore((s) => s.sessionExpired)
 
   useLayoutEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
@@ -43,8 +45,10 @@ export default function App() {
     return <SetupPage />
   }
 
-  // full_protect: block all content until authenticated.
-  if (!isLoading && providerInfo?.authMode === 'full_protect' && !isAuthenticated) {
+  // full_protect: block all content until authenticated. A session that expired
+  // while the app was open keeps the page mounted instead (LoginPrompt covers it),
+  // so open dialogs and half-filled forms survive the re-login.
+  if (!isLoading && providerInfo?.authMode === 'full_protect' && !isAuthenticated && !sessionExpired) {
     return <LoginPage />
   }
 
@@ -55,6 +59,7 @@ export default function App() {
       <main className={isFullscreen ? '' : 'py-4'}>
         {activePage === 'silences' ? <SilencesPage /> : <AlertsPage />}
       </main>
+      <LoginPrompt />
     </div>
   )
 }

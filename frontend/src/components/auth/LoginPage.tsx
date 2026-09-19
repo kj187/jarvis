@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { postLogin } from '@/api/client'
+import { ssoRedirectUrl } from '@/lib/ssoLogin'
 import { useAuthStore } from '@/store/authStore'
 
 export function LoginPage() {
@@ -75,7 +76,7 @@ export function LoginPage() {
             </p>
             <Button
               className="w-full"
-              onClick={() => { window.location.href = providerInfo!.loginUrl }}
+              onClick={() => { window.location.href = ssoRedirectUrl(providerInfo!.loginUrl) }}
             >
               Sign in with SSO
             </Button>

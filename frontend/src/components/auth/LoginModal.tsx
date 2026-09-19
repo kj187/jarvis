@@ -4,20 +4,27 @@ import { X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { postLogin } from '@/api/client'
+import { startSsoLogin } from '@/lib/ssoLogin'
 import { useAuthStore } from '@/store/authStore'
 
 interface LoginModalProps {
   open: boolean
-  onSuccess: () => void
   onClose: () => void
+  /** False when the app cannot be used without logging in again (full_protect). */
+  dismissible?: boolean
 }
 
-export function LoginModal({ open, onSuccess, onClose }: LoginModalProps) {
-  const { providerInfo, isLoading, setUser } = useAuthStore()
+/**
+ * Logging in never navigates away: a successful login updates the auth store,
+ * which closes the prompt and releases the action that was waiting for it.
+ */
+export function LoginModal({ open, onClose, dismissible = true }: LoginModalProps) {
+  const { providerInfo, isLoading, setUser, sessionExpired } = useAuthStore()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [waitingForSso, setWaitingForSso] = useState(false)
 
   if (!open) return null
 
@@ -30,7 +37,6 @@ export function LoginModal({ open, onSuccess, onClose }: LoginModalProps) {
     try {
       const result = await postLogin(username, password)
       setUser(result.user)
-      onSuccess()
     } catch {
       setError('Invalid username or password.')
     } finally {
@@ -47,14 +53,27 @@ export function LoginModal({ open, onSuccess, onClose }: LoginModalProps) {
       aria-modal="true"
       aria-label="Login"
     >
-      <div className="absolute inset-0 bg-black/60" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/60" onClick={dismissible ? onClose : undefined} />
       <div data-testid="login-modal-panel" className="relative z-10 w-full max-w-sm rounded-surface border border-border bg-card p-6 shadow-xl space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold">Login required</h2>
-          <button onClick={onClose} className="cursor-pointer text-muted-foreground hover:text-foreground">
-            <X className="h-4 w-4" />
-          </button>
+          <h2 className="text-base font-semibold">
+            {sessionExpired ? 'Session expired' : 'Login required'}
+          </h2>
+          {dismissible && (
+            <button
+              onClick={onClose}
+              aria-label="Close"
+              className="cursor-pointer text-muted-foreground hover:text-foreground"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
         </div>
+        {mode !== null && mode !== 'none' && (
+          <p className="text-sm text-muted-foreground">
+            Log in to continue — you stay on this page and pick up right where you left off.
+          </p>
+        )}
 
         {(mode === null || isLoading) && (
           <p className="text-sm text-muted-foreground">
@@ -95,12 +114,15 @@ export function LoginModal({ open, onSuccess, onClose }: LoginModalProps) {
 
         {mode === 'oidc' && !isLoading && (
           <div className="space-y-3">
-            <p className="text-sm text-muted-foreground">Login via your organization's SSO provider.</p>
             <Button
               className="w-full"
-              onClick={() => { window.location.href = providerInfo!.loginUrl }}
+              disabled={waitingForSso}
+              onClick={() => {
+                setWaitingForSso(true)
+                startSsoLogin(providerInfo!.loginUrl, () => setWaitingForSso(false))
+              }}
             >
-              Login with SSO
+              {waitingForSso ? 'Waiting for SSO login…' : 'Login with SSO'}
             </Button>
           </div>
         )}

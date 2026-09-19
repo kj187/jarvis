@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Tooltip } from '@/components/ui/tooltip'
-import { LoginModal } from '@/components/auth/LoginModal'
 import { useProtectedAction } from '@/hooks/useProtectedAction'
 import { useAuthStore } from '@/store/authStore'
 import { cn } from '@/lib/utils'
@@ -41,7 +40,7 @@ function CommentRow({ comment, fingerprint, clusterName, user, authMode }: Comme
     () => deleteMutation.mutateAsync(comment.id),
     [deleteMutation, comment.id],
   )
-  const { execute: execDelete, loginModalOpen, onLoginSuccess, onLoginClose } = useProtectedAction(deleteAction)
+  const { execute: execDelete } = useProtectedAction(deleteAction)
 
   // Show delete only for the comment's own author.
   // Prefer user_id comparison (robust against username changes); fall back to
@@ -85,7 +84,6 @@ function CommentRow({ comment, fingerprint, clusterName, user, authMode }: Comme
           </Suspense>
         </div>
       </div>
-      <LoginModal open={loginModalOpen} onSuccess={onLoginSuccess} onClose={onLoginClose} />
     </>
   )
 }
@@ -125,7 +123,7 @@ export function CommentsPanel({ fingerprint, clusterName }: CommentsPanelProps) 
       }),
     [addMutation, authorName, body],
   )
-  const { execute: executeAdd, loginModalOpen, onLoginSuccess, onLoginClose } = useProtectedAction(addAction)
+  const { execute: executeAdd } = useProtectedAction(addAction)
 
   function handleSubmit(e?: React.SyntheticEvent) {
     e?.preventDefault()
@@ -285,8 +283,6 @@ export function CommentsPanel({ fingerprint, clusterName }: CommentsPanelProps) 
           Send
         </Button>
       </form>
-
-      <LoginModal open={loginModalOpen} onSuccess={onLoginSuccess} onClose={onLoginClose} />
     </div>
   )
 }

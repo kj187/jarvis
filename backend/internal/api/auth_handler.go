@@ -7,7 +7,6 @@ import (
 	"encoding/base64"
 	"log/slog"
 	"net/http"
-	"strings"
 
 	"github.com/labstack/echo/v4"
 
@@ -107,8 +106,13 @@ func (s *Server) getOIDCStart(c echo.Context) error {
 	}
 	state := base64.RawURLEncoding.EncodeToString(stateBytes)
 
-	// Store state|codeVerifier in cookie (pipe-separated, both already base64url).
-	auth.SetOIDCStateCookie(c, state+"|"+codeVerifier)
+	// Remember where to send the browser afterwards: ?popup=1 (login in a popup
+	// window that then closes) or ?return_to=<in-app path> (full-page redirect back
+	// to the page the user came from). Both live in the state cookie, so the IdP
+	// round trip needs no server-side state.
+	popup := c.QueryParam("popup") == "1"
+	returnTo := sanitizeReturnTo(c.QueryParam("return_to"))
+	auth.SetOIDCStateCookie(c, encodeOIDCState(state, codeVerifier, popup, returnTo))
 
 	return c.Redirect(http.StatusFound, s.authProvider.AuthURL(state, codeChallenge))
 }
@@ -128,11 +132,10 @@ func (s *Server) getOIDCCallback(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "missing state cookie")
 	}
 
-	parts := strings.SplitN(cookie.Value, "|", 2)
-	if len(parts) != 2 {
+	cookieState, codeVerifier, landing, ok := decodeOIDCState(cookie.Value)
+	if !ok {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid state cookie")
 	}
-	cookieState, codeVerifier := parts[0], parts[1]
 
 	// Constant-time state comparison to prevent timing attacks.
 	if subtle.ConstantTimeCompare([]byte(stateParam), []byte(cookieState)) != 1 {
@@ -151,5 +154,5 @@ func (s *Server) getOIDCCallback(c echo.Context) error {
 	}
 	auth.SetSessionCookie(c, tok)
 
-	return c.Redirect(http.StatusFound, "/")
+	return c.Redirect(http.StatusFound, landing)
 }

@@ -23,7 +23,20 @@ import type {
 
 const BASE = '/api/v1'
 
-async function request<T>(path: string, options?: RequestInit): Promise<T> {
+type UnauthorizedHandler = (method: string) => Promise<boolean>
+
+let onUnauthorized: UnauthorizedHandler | null = null
+
+/**
+ * Registers what happens when an API call comes back 401. The handler resolves
+ * true once the user logged in again, and the request is then replayed once.
+ * Registered by `authStore` (which imports this module, hence the indirection).
+ */
+export function setUnauthorizedHandler(handler: UnauthorizedHandler | null): void {
+  onUnauthorized = handler
+}
+
+async function request<T>(path: string, options?: RequestInit, replayed = false): Promise<T> {
   const res = await fetch(BASE + path, {
     ...options,
     headers: {
@@ -32,6 +45,11 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
       ...(options?.headers ?? {}),
     },
   })
+  if (res.status === 401 && !replayed && onUnauthorized !== null) {
+    if (await onUnauthorized((options?.method ?? 'GET').toUpperCase())) {
+      return request<T>(path, options, true)
+    }
+  }
   if (!res.ok) {
     const text = await res.text().catch(() => res.statusText)
     throw new Error(`${res.status}: ${text}`)
