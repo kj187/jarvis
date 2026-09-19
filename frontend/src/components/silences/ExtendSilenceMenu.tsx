@@ -125,7 +125,7 @@ export function ExtendSilenceMenu({ silences, fingerprint, variant = 'icon', ton
       <Popover
         open={open}
         onOpenChange={handleOpenChange}
-        role="menu"
+        role="group"
         label={label}
         className="inline-flex"
         panelClassName="fixed z-[100] w-56 rounded-overlay border border-border bg-popover p-2 shadow-xl"
@@ -134,7 +134,6 @@ export function ExtendSilenceMenu({ silences, fingerprint, variant = 'icon', ton
           <button
             type="button"
             data-testid="extend-silence-button"
-            aria-haspopup="menu"
             aria-label={label}
             title={label}
             disabled={isPending}
@@ -168,7 +167,6 @@ export function ExtendSilenceMenu({ silences, fingerprint, variant = 'icon', ton
             <button
               key={minutes}
               type="button"
-              role="menuitem"
               data-testid="extend-silence-option"
               onClick={pick(minutes)}
               className="flex items-center justify-center rounded-surface border border-border bg-card px-1 py-1.5 text-xs font-semibold tabular-nums text-foreground transition-colors hover:border-link/40 hover:bg-link/10 hover:text-link cursor-pointer"
