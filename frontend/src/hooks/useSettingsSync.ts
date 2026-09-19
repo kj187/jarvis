@@ -24,21 +24,27 @@ export function useSettingsSync(): void {
   const isServerMode = !isLoading && providerInfo != null && providerInfo.mode !== 'none' && user !== null
   const userId = isServerMode && user ? user.id : null
 
+  // The instance defaults (`global`) are served to everyone, so local mode reads
+  // them too — just without ever writing. full_protect without a session would
+  // only get a 401, so it waits for the login (which flips to server mode).
+  const isBlockedByLogin = providerInfo?.authMode === 'full_protect' && user === null
   const { data, error, isSuccess } = useQuery({
     queryKey: ['settings', userId],
     queryFn: fetchSettings,
-    enabled: isServerMode,
+    enabled: !isLoading && (isServerMode || !isBlockedByLogin),
     staleTime: Infinity,
     retry: 1,
   })
 
-  // Local mode (no auth provider, or not logged in): resolve from the anon
-  // mirror, no request at all.
+  // Local mode (no auth provider, or not logged in): the user's own settings
+  // come from the anon mirror; only the instance defaults are fetched. A failed
+  // fetch just means no instance defaults — the built-in ones apply.
   useEffect(() => {
     if (isLoading || isServerMode) return
     const anon = useSettingsStore.getState().anonOverrides
-    applyRemote(anon, {}, 'local')
-  }, [isLoading, isServerMode, applyRemote])
+    const global = isSuccess && data ? normalizeSettings(data.global) : {}
+    applyRemote(anon, global, 'local')
+  }, [isLoading, isServerMode, isSuccess, data, applyRemote])
 
   // Server mode, fetch succeeded: adopt the anon slot once if the account has
   // no row yet, otherwise resolve the fetched blob.

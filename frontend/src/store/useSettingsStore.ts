@@ -6,7 +6,6 @@ import {
   DEFAULT_SETTINGS,
   CARD_COLUMN_OPTIONS,
   RESOLVED_PAGE_SIZE_OPTIONS,
-  ALLOWED_SILENCE_DURATIONS,
 } from '@/lib/settingsUtils'
 import type {
   UserSettings,
@@ -22,7 +21,6 @@ export {
   DEFAULT_SETTINGS,
   CARD_COLUMN_OPTIONS,
   RESOLVED_PAGE_SIZE_OPTIONS,
-  ALLOWED_SILENCE_DURATIONS,
 }
 export type { UserSettings, SavedFilter, SavedFilterMatcher, CardColumns, ResolvedPageSizeOption, LabelDisplayConfig, LabelColorMap }
 

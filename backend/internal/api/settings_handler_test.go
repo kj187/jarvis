@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -50,6 +51,31 @@ func TestGetSettings_Anonymous(t *testing.T) {
 	}
 	if resp.Global == nil || len(resp.Global) != 0 {
 		t.Fatalf("global = %v, want {}", resp.Global)
+	}
+}
+
+func TestGetSettings_GlobalDurationsFromConfig(t *testing.T) {
+	srv, _ := newAuthServer(t)
+	srv.cfg.SilenceDurations = []int{15, 60, 43200}
+
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/settings", nil)
+	rec := httptest.NewRecorder()
+	c := echo.New().NewContext(req, rec)
+	if err := srv.getSettings(c); err != nil {
+		t.Fatalf("getSettings: %v", err)
+	}
+
+	var resp struct {
+		Global map[string]interface{} `json:"global"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	want := map[string]interface{}{
+		"silenceDurations": []interface{}{float64(15), float64(60), float64(43200)},
+	}
+	if !reflect.DeepEqual(resp.Global, want) {
+		t.Fatalf("global = %v, want %v", resp.Global, want)
 	}
 }
 

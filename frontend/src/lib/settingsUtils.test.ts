@@ -36,7 +36,7 @@ describe('normalizeSettings', () => {
     ['theme', 'neon'],
     ['resolvedPageSize', 7],
     ['cardColumns', 99],
-    ['defaultSilenceDurationMinutes', 13],
+    ['defaultSilenceDurationMinutes', 0],
   ])('drops invalid value for %s', (key, value) => {
     const result = normalizeSettings({ [key]: value }) as Record<string, unknown>
     expect(result[key]).toBeUndefined()
@@ -250,6 +250,51 @@ describe('normalizeSettings', () => {
     ]
     const result = normalizeSettings({ savedFilters: config })
     expect(JSON.stringify(result.savedFilters)).toBe(JSON.stringify(config))
+  })
+})
+
+describe('normalizeSettings — silence durations', () => {
+  it('keeps a valid silenceDurations list, sorted and deduplicated', () => {
+    expect(normalizeSettings({ silenceDurations: [1440, 5, 60, 5, 43200, 525600] })).toEqual({
+      silenceDurations: [5, 60, 1440, 43200, 525600],
+    })
+  })
+
+  it('drops invalid entries but keeps the rest', () => {
+    expect(normalizeSettings({ silenceDurations: [15, 'x', 0, 60, 999999999] })).toEqual({
+      silenceDurations: [15, 60],
+    })
+  })
+
+  it.each([[[]], [['x']], ['1h'], [{}], [null]])(
+    'drops a list that is empty or malformed after cleaning (%j)',
+    (value) => {
+      expect(normalizeSettings({ silenceDurations: value })).toEqual({})
+    },
+  )
+
+  it('accepts any valid duration as defaultSilenceDurationMinutes, not just a fixed set', () => {
+    expect(normalizeSettings({ defaultSilenceDurationMinutes: 480 })).toEqual({
+      defaultSilenceDurationMinutes: 480,
+    })
+    expect(normalizeSettings({ defaultSilenceDurationMinutes: 43200 })).toEqual({
+      defaultSilenceDurationMinutes: 43200,
+    })
+  })
+
+  it.each([0, -60, 1.5, 525601, '60', null])('rejects defaultSilenceDurationMinutes %j', (v) => {
+    expect(normalizeSettings({ defaultSilenceDurationMinutes: v })).toEqual({})
+  })
+
+  it('ships a built-in default list', () => {
+    expect(DEFAULT_SETTINGS.silenceDurations).toEqual([5, 10, 15, 30, 60, 240, 1440, 10080])
+  })
+
+  it('layers instance default (global) between built-in default and user override', () => {
+    const global = { silenceDurations: [15, 60, 43200] }
+    expect(resolveSettings(global, {}).silenceDurations).toEqual([15, 60, 43200])
+    expect(resolveSettings(global, { silenceDurations: [5] }).silenceDurations).toEqual([5])
+    expect(resolveSettings({}, {}).silenceDurations).toEqual(DEFAULT_SETTINGS.silenceDurations)
   })
 })
 

@@ -383,10 +383,12 @@ One-click, form-free silence on any active alert — hover the button, pick a du
 
 **How it works:**
 1. In card view, every alert entry has a small bell icon in its persistent action column on the right — no hovering needed to find it. The card header carries the same bell icon for the whole visible group.
-2. Hovering (or focusing/tapping) the bell opens a menu: **Silence…** at the top opens the full pre-filled form (see [Silence from Alert](#silence-from-alert)); below it, **Fast-Silence for…** lists durations — `5m`, `10m`, `15m`, `30m`, `1h`, `4h`, `1d`, `1w`.
+2. Hovering (or focusing/tapping) the bell opens a menu: **Silence…** at the top opens the full pre-filled form (see [Silence from Alert](#silence-from-alert)); below it, **Fast-Silence for…** lists durations — by default `5m`, `10m`, `15m`, `30m`, `1h`, `4h`, `1d`, `1w` (configurable, see *Choosing the durations* below).
 3. Picking a duration on a single alert's bell creates one exact-match silence for that alert's real labels, no form involved. Picking a duration on the **card header's** bell creates one broader silence per cluster represented in the group (normally just one) — matchers use the same common-vs-varying label logic as the "Silence…" form's own group prefill (exact match on labels shared by every alert, regex-OR match on labels that vary, e.g. `pod`), so it covers exactly the same scope a reviewed form submission would default to.
 
 The same bell + menu pattern is also available (without the group case) on list-view rows and in the alert detail panel. Each created silence's comment is auto-filled as `Fast-Silence for <duration>` so its origin is clear later in the [Active Silence](#active-silence) view or Alertmanager itself. The button shows a transient "Silenced" confirmation immediately, before the next poll flips the alert(s) to suppressed.
+
+**Choosing the durations.** The button list is yours to change. Open *Settings → Silences*: **Silence durations** shows the current list as chips — remove one with its ×, add one by typing a number plus `m`, `h`, `d`, `w` or `y` and pressing Enter (`30m`, `4h`, `1d`, `1w`, `30d`, `1y`; between `1m` and `365d`, at most 12, at least one). Your list is stored with your other [settings](#settings) and only when it differs from the default; **Reset** brings the default back. The same list feeds the Extend-silence menu and the **Default duration** of the Create Silence form. The default is set per instance with [`JARVIS_SILENCE_DURATIONS`](configuration.md#jarvis_silence_durations) — so an operator can offer `30d` to everyone, while a user who wants their own set still can.
 
 The per-alert bell is only shown while that alert is active (invariant: it disappears once suppressed or resolved); the card header's bell stays available regardless of state, since its "Silence…" form link is still useful for a resolved group, but its Fast-Silence section hides itself once nothing in the group is active. Every path respects the same authentication gate as other write actions — in `write_protect` mode, picking a duration prompts login first.
 
@@ -497,7 +499,8 @@ Settings and the theme toggle are always there either way; Login only appears si
 | **Default view** | Choose whether the app starts in *Card* or *List* view on every page load. |
 | **Card columns** | Fixed column count (1–6) for the Card View grid, or *Auto* to let it reflow with window width (up to 4). |
 | **Claim animation** | Toggle the animated snake border on the Claim button for unclaimed alerts. |
-| **Default silence duration** | Pre-selected duration when the silence creation form opens (15 min to 3 days). |
+| **Default silence duration** | Pre-selected duration when the silence creation form opens — pick from your silence durations. |
+| **Silence durations** | The durations of the one-click [Fast-Silence](#fast-silence) menu, the Extend-silence menu and the default duration above, as one tag field — removable chips plus an input, Enter adds (`30m`, `4h`, `1d`, `1w`, `30d`, `1y`; 1 min to 365 days, at most 12). **Reset** restores the instance default ([`JARVIS_SILENCE_DURATIONS`](configuration.md#jarvis_silence_durations)) or, without one, the built-in list. |
 | **Labels** | Pin the label chips you care about to the front, hide the ones you don't, and optionally give a label a color — see below. |
 
 Which label sections Card and List view group by is no longer a Settings entry — it moved to the **Grouped** toolbar control, see [Grouping](#grouping). The resolved-view page size is set from its own per-page selector, not from this panel — see [Resolved View](#resolved-view). Reusable label filters are no longer a Settings entry either — see [Saved filters](#saved-filters) above.

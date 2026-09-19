@@ -3,6 +3,7 @@ import { enUS } from 'date-fns/locale'
 import type React from 'react'
 import type { UpsertSilenceBody } from '@/api/client'
 import type { EnrichedAlert, LabelMatcher, Silence } from '@/types'
+import { formatDurationChoice } from '@/lib/silenceDurations'
 import { LABEL_COLOR_HUES, type LabelColorMap, type LabelDisplayConfig } from '@/lib/settingsUtils'
 
 export const tzAbbr = new Date().toLocaleTimeString('en', { timeZoneName: 'short' }).split(' ').pop() ?? ''
@@ -622,32 +623,17 @@ export function severityOrder(severity: string): number {
 
 // ── One-click acknowledgement ─────────────────────────────────────────────
 
-/** Duration choices offered by the one-click Fast-Silence menu (shortest → longest). */
-export const FAST_SILENCE_DURATIONS: ReadonlyArray<{ label: string; minutes: number }> = [
-  { label: '5m', minutes: 5 },
-  { label: '10m', minutes: 10 },
-  { label: '15m', minutes: 15 },
-  { label: '30m', minutes: 30 },
-  { label: '1h', minutes: 60 },
-  { label: '4h', minutes: 240 },
-  { label: '1d', minutes: 1440 },
-  { label: '1w', minutes: 10080 },
-]
-
 /**
- * Human-readable Fast-Silence duration. Exact multiples collapse to a single
- * unit — `Xw` (weeks) → `Xd` (days) → `Xh` (hours) → `Xm` (minutes); mixed
- * hour/minute values fall back to `Xh Ym`. Kept in sync with the labels in
- * `FAST_SILENCE_DURATIONS` (5m, 10m, 15m, 30m, 1h, 4h, 1d, 1w).
+ * Human-readable duration for a Fast-Silence / Extend pick or the silence
+ * comment. Exact multiples collapse to a single unit — `Xy` (365 days) →
+ * `Xw` → `Xd` → `Xh` → `Xm` (see `formatDurationChoice`); mixed hour/minute
+ * values fall back to `Xh Ym`.
  */
 export function formatAckDuration(minutes: number): string {
-  if (minutes > 0 && minutes % 10080 === 0) return `${minutes / 10080}w`
-  if (minutes > 0 && minutes % 1440 === 0) return `${minutes / 1440}d`
-  if (minutes > 0 && minutes % 60 === 0) return `${minutes / 60}h`
-  if (minutes < 60) return `${minutes}m`
-  const hours = Math.floor(minutes / 60)
-  const rem = minutes % 60
-  return `${hours}h ${rem}m`
+  if (minutes >= 60 && minutes % 60 !== 0) {
+    return `${Math.floor(minutes / 60)}h ${minutes % 60}m`
+  }
+  return formatDurationChoice(minutes)
 }
 
 /**

@@ -14,6 +14,7 @@ Entries up to and including 1.7.6 were reconstructed from the git history when t
 
 ### Added
 
+- `config.silenceDurations` value, rendered as `JARVIS_SILENCE_DURATIONS` in the ConfigMap only when set. It defines the instance-wide default durations of the Fast-Silence and Extend-silence menus (comma-separated `m`/`h`/`d`/`w`/`y` durations, up to 12, each 1m–365d); an invalid value makes the app refuse to start, so it surfaces on rollout rather than silently. Empty by default, so an existing release renders unchanged and keeps the built-in durations — not breaking.
 - `clusters[].auth.*` values for per-cluster upstream Alertmanager authentication: OAuth2 client credentials, bearer token, basic auth, and custom headers — rendered as the existing `JARVIS_CLUSTER_<n>_*` variables the backend already reads. `oauth2.clientSecret`, `bearerToken` and `basicAuth.password` are stored in the chart's Secret, never the ConfigMap; `clusters[].auth.existingSecret` sources them from an externally managed Secret instead, consistent with `database.existingSecret` and `auth.existingSecret`. Setting `oauth2.clientId` without `oauth2.tokenUrl` fails the render, mirroring the backend's own startup validation instead of failing silently at runtime.
 
 ### Changed

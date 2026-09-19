@@ -9,12 +9,13 @@ import { Button } from '@/components/ui/button'
 import { formatTime, HIDDEN_LABEL_KEYS, labelColorStyle } from '@/lib/alertUtils'
 import {
   useSettingsStore,
-  ALLOWED_SILENCE_DURATIONS,
   CARD_COLUMN_OPTIONS,
   DEFAULT_SETTINGS,
 } from '@/store/useSettingsStore'
 import type { CardColumns } from '@/store/useSettingsStore'
-import { LABEL_COLORS, type LabelColor } from '@/lib/settingsUtils'
+import { LABEL_COLORS, resolveSettings, type LabelColor } from '@/lib/settingsUtils'
+import { formatDurationChoice } from '@/lib/silenceDurations'
+import { DurationListEditor } from '@/components/settings/DurationListEditor'
 import { useAlerts } from '@/hooks/useAlerts'
 import { getFilterableLabels } from '@/lib/alertUtils'
 import { useAuthStore } from '@/store/authStore'
@@ -526,16 +527,6 @@ function SettingsSwitch({
   )
 }
 
-const SILENCE_DURATION_LABELS: Record<number, string> = {
-  15: '15 min',
-  30: '30 min',
-  60: '1 hour',
-  240: '4 hours',
-  480: '8 hours',
-  1440: '1 day',
-  4320: '3 days',
-}
-
 // ── Main SettingsSheet ─────────────────────────────────────────────────────────
 
 export function SettingsSheet({ open, onClose }: SettingsSheetProps) {
@@ -545,6 +536,15 @@ export function SettingsSheet({ open, onClose }: SettingsSheetProps) {
   const origin = useSettingsStore((s) => s.origin)
   const syncState = useSettingsStore((s) => s.syncState)
   const providerMode = useAuthStore((s) => s.providerInfo?.mode)
+
+  // "Reset" on the duration list restores the instance default (JARVIS_SILENCE_DURATIONS),
+  // or the built-in one when the instance sets none.
+  const durationBaseline = resolveSettings(settings.globalDefaults, {})
+  // The default-duration picker offers the silence durations plus the
+  // current value, so a value saved earlier never disappears from the list.
+  const defaultDurationOptions = [
+    ...new Set([...settings.silenceDurations, settings.defaultSilenceDurationMinutes]),
+  ].sort((a, b) => a - b)
 
   const { data: allAlerts = [] } = useAlerts()
 
@@ -807,13 +807,21 @@ export function SettingsSheet({ open, onClose }: SettingsSheetProps) {
               className="h-7 w-28"
               selectClassName="text-xs"
             >
-              {ALLOWED_SILENCE_DURATIONS.map((mins) => (
+              {defaultDurationOptions.map((mins) => (
                 <option key={mins} value={String(mins)}>
-                  {SILENCE_DURATION_LABELS[mins]}
+                  {formatDurationChoice(mins)}
                 </option>
               ))}
             </Select>
           </SettingRow>
+
+          <DurationListEditor
+            label="Silence durations"
+            info="The durations offered by the one-click Fast-Silence menu, the Extend-silence menu and the default duration above. Use a number plus m, h, d, w or y (e.g. 30m, 4h, 1d, 1w, 30d, 1y — up to 365d, at most 12). Your own list is kept for your account; without one you get the instance default."
+            value={settings.silenceDurations}
+            baseline={durationBaseline.silenceDurations}
+            onChange={(next) => update({ silenceDurations: next })}
+          />
         </Section>
 
         </div>

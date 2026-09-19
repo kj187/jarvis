@@ -4,7 +4,9 @@ import { Bell, BellOff, Check, ChevronDown, ChevronRight, ChevronUp, Loader2, Tr
 import { Button } from '@/components/ui/button'
 import { useAckAlert, useGroupAckAlert } from '@/hooks/useSilences'
 import { useProtectedAction } from '@/hooks/useProtectedAction'
-import { getEffectiveAlertState, FAST_SILENCE_DURATIONS } from '@/lib/alertUtils'
+import { getEffectiveAlertState } from '@/lib/alertUtils'
+import { formatDurationChoice } from '@/lib/silenceDurations'
+import { useSettingsStore } from '@/store/useSettingsStore'
 import { cn } from '@/lib/utils'
 import type { EnrichedAlert, Silence } from '@/types'
 
@@ -76,7 +78,7 @@ const OFFSCREEN = -9999
 /**
  * One-click Fast-Silence button with a duration menu. Hovering (or clicking /
  * focusing) the button opens a small popover listing the durations from
- * `FAST_SILENCE_DURATIONS` (5m, 10m, 15m, 30m, 1h, 4h, 1d, 1w); clicking one
+ * the `silenceDurations` setting (default 5m … 1w; instance and user configurable); clicking one
  * creates a short-lived exact-match silence for exactly this alert for that
  * duration — no form, no modal. The comment reflects the chosen duration. The
  * menu always opens *below* the button. If `onCreateSilence` is passed, the
@@ -110,7 +112,8 @@ export function AckButton({
   const menuRef = useRef<HTMLDivElement>(null)
   const menuIconRef = useRef<SVGSVGElement>(null)
   const alignedRef = useRef(false)
-  const durationRef = useRef<number>(FAST_SILENCE_DURATIONS[0].minutes)
+  const silenceDurations = useSettingsStore((s) => s.silenceDurations)
+  const durationRef = useRef<number>(silenceDurations[0])
   const activeAlerts = alerts.filter((a) => getEffectiveAlertState(a, silences) === 'active')
 
   useEffect(() => {
@@ -391,16 +394,16 @@ export function AckButton({
                   <div className="h-px flex-1 bg-border" />
                 </div>
                 <div className="grid grid-cols-4 gap-1">
-                  {FAST_SILENCE_DURATIONS.map((d) => (
+                  {silenceDurations.map((minutes) => (
                     <button
-                      key={d.minutes}
+                      key={minutes}
                       type="button"
                       role="menuitem"
                       data-testid="alert-ack-option"
-                      onClick={pick(d.minutes)}
+                      onClick={pick(minutes)}
                       className="flex items-center justify-center rounded-surface border border-border bg-card px-1 py-1.5 text-xs font-semibold tabular-nums text-foreground transition-colors hover:border-link/40 hover:bg-link/10 hover:text-link cursor-pointer"
                     >
-                      {d.label}
+                      {formatDurationChoice(minutes)}
                     </button>
                   ))}
                 </div>
