@@ -244,6 +244,7 @@ The detail panel is the central hub for working with a single alert. It slides i
 
 **Always visible (above the tabs):**
 - Alert name, cluster, severity, and claim chip in the header
+- **Copy link** button in the header: puts a link on the clipboard that opens this very alert in the detail panel for anyone with access to Jarvis — paste it into chat or a ticket. The link carries only the alert (and whether to look in the active or the resolved view), never your own search or filters. It also works when Jarvis is served over plain `http`
 - First seen / last seen timestamps and total occurrence count
 - Firing heatmap (24h / 7d / 30d range toggle) — see [Firing Heatmap](#firing-heatmap)
 - Active/expired silence banners, if the alert is currently or was recently silenced

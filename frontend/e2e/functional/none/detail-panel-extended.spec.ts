@@ -102,7 +102,8 @@ test('D12 AI prompt tab shows the prompt and copy works', async ({ page, am, jar
   await expect(panel).toBeVisible()
 
   // AI Prompt has its own tab — not shown until selected.
-  const copyBtn = panel.getByRole('button', { name: 'Copy' })
+  // exact: the header's "Copy link" button is always present and must not count here.
+  const copyBtn = panel.getByRole('button', { name: 'Copy', exact: true })
   await expect(copyBtn).toHaveCount(0)
 
   await panel.getByTestId('detail-tab-ai-prompt').click()

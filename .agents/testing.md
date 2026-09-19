@@ -409,6 +409,7 @@ to `src/lib/**` only:
   its target and that its result round-trips through `normalizeSettings`
   unchanged, and `hasAlertViewParams` for each of `state`/`q`/`matchers`/`filter`/
   `alert` vs. an empty query or `settings=open` alone.
+- `frontend/src/lib/alertLink.test.ts` — `buildAlertShareUrl`: only `state` + `alert` in the link, alert identity round-trips (incl. cluster names needing escaping), resolved → `state=resolved`, suppressed/unprocessed → `active`, sub-path deployments.
 - `frontend/src/lib/filterUrl.test.ts` — `?filter=` URL serialization in
   Alertmanager matcher syntax: `formatMatchers` (all six operators, bare
   pseudo-label names, quoted/escaped values and reserved-char names),
