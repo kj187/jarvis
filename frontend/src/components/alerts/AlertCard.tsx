@@ -13,6 +13,7 @@ import { useAlertStats, useAlertHeatmap } from '@/hooks/useAlerts'
 import { useFormatTime } from '@/hooks/useFormatTime'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { makeAlertSelectionKeyForAlert, matchesAlertSelectionKey } from '@/lib/alertSelection'
+import { ExtendSilenceMenu } from '@/components/silences/ExtendSilenceMenu'
 import type { EnrichedAlert, Silence } from '@/types'
 
 const PAGE_SIZE = 3
@@ -203,6 +204,7 @@ function AlertEntry({
               <div className="font-semibold text-foreground">SILENCE ACTIVE</div>
               <div className="text-muted-foreground">Ends in {formatSilenceDuration(remaining)}</div>
             </div>
+            <ExtendSilenceMenu silences={[silence]} fingerprint={alert.fingerprint} className="ml-auto" />
           </div>
         )}
         {silenceType === 'expiring' && remaining !== undefined && (
@@ -211,6 +213,7 @@ function AlertEntry({
           )}>
             <BellOff className="h-3 w-3 shrink-0" />
             <span>Silence expires in {formatSilenceDuration(remaining)}</span>
+            {silence && <ExtendSilenceMenu silences={[silence]} fingerprint={alert.fingerprint} tone="warning" className="ml-auto" />}
           </div>
         )}
         {silenceType === 'pending' && silence && (

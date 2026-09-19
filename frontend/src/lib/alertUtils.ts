@@ -670,6 +670,33 @@ export function buildAckSilenceBody(
   }
 }
 
+/**
+ * Builds the body that extends an existing silence by `extraMinutes`: same
+ * `id`, cluster, matchers, start, creator and comment, only `endsAt` moves —
+ * so Alertmanager updates the silence in place instead of minting a new one.
+ * The duration is added to the *current* end time (not to now), so "+1h" can
+ * never shorten a silence that still has hours left. Passing `fingerprint`
+ * records the extension on that alert's timeline, like the other silence writes.
+ */
+export function buildExtendSilenceBody(
+  silence: Silence,
+  extraMinutes: number,
+  performedBy: string,
+  fingerprint?: string,
+): UpsertSilenceBody {
+  return {
+    id: silence.id,
+    cluster: silence.clusterName,
+    matchers: silence.matchers,
+    startsAt: silence.startsAt,
+    endsAt: new Date(new Date(silence.endsAt).getTime() + extraMinutes * 60_000).toISOString(),
+    createdBy: silence.createdBy,
+    comment: silence.comment,
+    performedBy,
+    ...(fingerprint ? { fingerprint } : {}),
+  }
+}
+
 /** Escapes regex metacharacters so a raw label value is safe to embed in an Alertmanager regex matcher. */
 export function escapeRegexValue(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')

@@ -14,6 +14,7 @@ import {
   anchoredRegex,
   severityOrder,
   buildAckSilenceBody,
+  buildExtendSilenceBody,
   matchesLabelMatchers,
   parseDurationValue,
   silenceWouldMatchAlert,
@@ -1587,4 +1588,44 @@ describe('findRelatedAlerts', () => {
     expect(findRelatedAlerts(target, [target, ...others])).toHaveLength(15)
     expect(findRelatedAlerts(target, [target, ...others], 10)).toHaveLength(10)
   })
+})
+
+describe('buildExtendSilenceBody', () => {
+  const silence = makeSilence({
+    id: 's1',
+    clusterName: 'cluster-a',
+    createdBy: 'bob',
+    comment: 'maintenance window',
+    startsAt: '2026-01-01T10:00:00.000Z',
+    endsAt: '2026-01-01T12:00:00.000Z',
+    matchers: [{ isEqual: true, isRegex: false, name: 'alertname', value: 'HighCPU' }],
+  })
+
+  it('adds the duration to the current end time, not to now', () => {
+    const body = buildExtendSilenceBody(silence, 60, 'alice')
+    expect(body.endsAt).toBe('2026-01-01T13:00:00.000Z')
+  })
+
+  it('updates the existing silence in place: same id, cluster, matchers, start, creator and comment', () => {
+    const body = buildExtendSilenceBody(silence, 240, 'alice')
+    expect(body.id).toBe('s1')
+    expect(body.cluster).toBe('cluster-a')
+    expect(body.matchers).toEqual(silence.matchers)
+    expect(body.startsAt).toBe(silence.startsAt)
+    expect(body.createdBy).toBe('bob')
+    expect(body.comment).toBe('maintenance window')
+  })
+
+  it('records who extended it, and the alert fingerprint when given', () => {
+    expect(buildExtendSilenceBody(silence, 60, 'alice').performedBy).toBe('alice')
+    expect(buildExtendSilenceBody(silence, 60, 'alice').fingerprint).toBeUndefined()
+    expect(buildExtendSilenceBody(silence, 60, 'alice', 'fp1').fingerprint).toBe('fp1')
+  })
+
+  it('does not mutate the input silence', () => {
+    const copy = structuredClone(silence)
+    buildExtendSilenceBody(silence, 60, 'alice')
+    expect(silence).toEqual(copy)
+  })
+
 })

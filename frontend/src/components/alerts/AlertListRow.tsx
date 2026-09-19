@@ -1,6 +1,7 @@
-import { BellMinus, BellOff, RefreshCw, User } from 'lucide-react'
+import { BellMinus, BellOff, User } from 'lucide-react'
 import { AlertBadge, StatusBadge } from './AlertBadge'
 import { AckButton } from './AckButton'
+import { ExtendSilenceMenu } from '@/components/silences/ExtendSilenceMenu'
 import { LabelChip, HiddenLabelsToggle } from './LabelChip'
 import { useAlertStats } from '@/hooks/useAlerts'
 import { getFilterableLabels, getSilenceState, formatSilenceDuration, shortClaimant, partitionLabelsForDisplay } from '@/lib/alertUtils'
@@ -197,6 +198,9 @@ export function AlertListRow({
               onCreateSilence={onCreateSilence ? (a) => onCreateSilence(a) : undefined}
             />
           )}
+          {(silenceType === 'active' || silenceType === 'expiring') && silence && (
+            <ExtendSilenceMenu silences={[silence]} fingerprint={alert.fingerprint} tone={silenceType === 'expiring' ? 'warning' : 'default'} />
+          )}
           {silenceType === 'active' && silence && (
             <button
               type="button"
@@ -205,16 +209,6 @@ export function AlertListRow({
               className="cursor-pointer rounded-compact border border-border p-1 text-muted-foreground transition-colors hover:border-border/80 hover:text-foreground"
             >
               <BellMinus className="h-3.5 w-3.5" />
-            </button>
-          )}
-          {silenceType === 'expiring' && silence && (
-            <button
-              type="button"
-              onClick={() => onCreateSilence?.([alert], silence, true)}
-              title="Extend silence"
-              className="cursor-pointer rounded-compact border border-warning-edge p-1 text-warning-fg transition-colors hover:border-warning-solid"
-            >
-              <RefreshCw className="h-3.5 w-3.5" />
             </button>
           )}
         </div>

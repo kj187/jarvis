@@ -2,6 +2,7 @@ import { BellMinus, Loader2, RotateCcw } from 'lucide-react'
 import { format } from 'date-fns'
 import { enUS } from 'date-fns/locale'
 import { Button } from '@/components/ui/button'
+import { ExtendSilenceMenu } from './ExtendSilenceMenu'
 import { SilenceMatcherChip } from './SilenceMatcherChip'
 import { SilenceRemaining } from './SilenceRemaining'
 import { URGENCY_FILL_CLASS } from './silenceDisplay'
@@ -119,15 +120,18 @@ export function SilenceListView({ groups, alerts, onEditGroup, onExpireGroup, de
                   <RotateCcw className="h-3 w-3" />
                 </Button>
               ) : (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6 shrink-0 text-muted-foreground"
-                  onClick={(e) => { e.stopPropagation(); onExpireGroup(group.silences) }}
-                  title={groupCount > 1 ? `Expire ${groupCount} silences` : 'Expire silence'}
-                >
-                  <BellMinus className="h-3 w-3" />
-                </Button>
+                <>
+                  <ExtendSilenceMenu silences={group.silences} />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 shrink-0 text-muted-foreground"
+                    onClick={(e) => { e.stopPropagation(); onExpireGroup(group.silences) }}
+                    title={groupCount > 1 ? `Expire ${groupCount} silences` : 'Expire silence'}
+                  >
+                    <BellMinus className="h-3 w-3" />
+                  </Button>
+                </>
               )}
             </div>
           </div>

@@ -62,7 +62,7 @@ Within each section, groups are collapsed by alert name. Expand a group to see i
 - **Alert Name** — sortable; shows alert count per group, common labels, and cluster names
 - **State** — firing / suppressed / resolved (hidden when a single state tab is active)
 - **Time** — sortable; earliest start time within the group
-- **Actions** — one silence icon (menu: full form + Fast-Silence durations) plus a contextual expire/extend icon when the alert is already suppressed
+- **Actions** — one silence icon (menu: full form + Fast-Silence durations) plus, when the alert is already suppressed, an [Extend](#extend-silence) icon (menu of durations) and an expire icon
 
 There is no separate Claim column — a claimed alert shows a read-only "Claimed by: \<name\> · \<time\>" line above its labels instead; claiming and releasing happen in the detail panel.
 
@@ -317,7 +317,7 @@ When an alert is claimed, the owner's name appears as a chip in the detail panel
 
 **Silence controls**
 - Create a new silence directly from the panel — the form opens pre-filled with the alert's labels
-- Extend or delete an existing silence if the alert is currently suppressed
+- Extend (by a duration, see [Extend Silence](#extend-silence)), edit or expire an existing silence if the alert is currently suppressed
 
 ---
 
@@ -394,6 +394,21 @@ The per-alert bell is only shown while that alert is active (invariant: it disap
 
 ---
 
+### Extend Silence
+
+Push the end of a running silence out by a fixed amount — one hover, one click, no form.
+
+The fix is still in progress and the silence is about to run out? [Fast-Silence](#fast-silence) only creates *new* silences; extending an existing one used to mean opening the edit form and typing a new end time. Every active or pending silence now has an **Extend** icon (alarm clock with a plus) that opens a small menu with the same durations as Fast-Silence (by default **+5m, +10m, +15m, +30m, +1h, +4h, +1d, +1w**). The list is configurable — see *Choosing the durations* under [Fast-Silence](#fast-silence) — so an operator can offer **+30d** for both menus at once.
+
+- The duration is **added to the silence's current end time**, not to "now" — so a "+1h" can never shorten a silence that still has hours left.
+- It updates the **same silence in place** (same ID, matchers, creator and comment); only the end moves. On an alert, the extension shows up in its silence history like any other silence change.
+- Available wherever a running silence is shown: the alert card's silence banner, list-view rows and group headers, the detail panel's silence banner, and every silence on the [Silences page](#silences) (card and list view). On a grouped card, one pick extends all silences in the group together.
+- **One logic for every running silence:** a silence that expires within 15 minutes (see [Expiring Silence](#expiring-silence)) is extended with the very same menu — its icon is just tinted as a warning. There are no separate quick buttons or forms for that case.
+- **Expired** silences can't be extended in place (Alertmanager creates a new silence for those) — use the re-create action instead.
+- Follows the same authentication gate as other write actions: in `write_protect` mode, picking a duration prompts login first.
+
+---
+
 ### Silence Templates
 
 Reusable matcher sets that pre-fill the silence form in one click — no manual re-entry for recurring silences.
@@ -440,7 +455,7 @@ You create a 4-hour silence during an incident and fix the underlying issue — 
 Any alert that is currently suppressed but whose covering silence expires within **15 minutes** is automatically reclassified as active and moved to the top of the active alert list. A distinct warning indicator shows that the alert is "expiring soon" rather than freshly firing.
 
 **This gives the on-call engineer time to:**
-- Extend the silence if the fix is still in progress
+- [Extend the silence](#extend-silence) if the fix is still in progress — with the same menu as for any other running silence
 - Verify that the underlying issue is actually resolved
 - Hand off context to the next person before going off-call
 
@@ -464,7 +479,7 @@ Suppressed alerts (covered by a silence with more than 15 minutes remaining) are
 - **Created by** — who created the silence and when
 - **Comment** — the reason/note left when the silence was created
 - **Expiry countdown** — how much time is left before the silence expires, updated in real time
-- **Actions** — extend or delete the silence with a single click
+- **Actions** — [extend](#extend-silence) (pick a duration), edit or expire the silence
 
 **Why this matters:**
 In teams with multiple on-call engineers or frequent handoffs, it is common to find an alert suppressed by a silence that nobody on the current shift remembers creating. Surfacing the full silence metadata directly on the alert makes it immediately clear what is covered, why, and for how long — without any additional navigation.

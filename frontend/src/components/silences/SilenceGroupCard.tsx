@@ -1,6 +1,7 @@
 import { BellMinus, Layers3, Loader2, RotateCcw } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { ExtendSilenceMenu } from './ExtendSilenceMenu'
 import { SilenceLifetimeBar } from './SilenceLifetimeBar'
 import { SilenceMatcherChip } from './SilenceMatcherChip'
 import { silenceTiming } from '@/lib/alertUtils'
@@ -89,15 +90,18 @@ export function SilenceGroupCard({ group, alerts, onEditGroup, onExpireGroup, de
               <RotateCcw className="h-3.5 w-3.5" />
             </Button>
           ) : (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="ml-auto h-6 w-6 shrink-0 text-muted-foreground"
-              onClick={(e) => { e.stopPropagation(); onExpireGroup(group.silences) }}
-              title={`Expire ${group.silences.length} silences`}
-            >
-              <BellMinus className="h-3.5 w-3.5" />
-            </Button>
+            <div className="ml-auto flex items-center gap-0.5">
+              <ExtendSilenceMenu silences={group.silences} />
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 shrink-0 text-muted-foreground"
+                onClick={(e) => { e.stopPropagation(); onExpireGroup(group.silences) }}
+                title={`Expire ${group.silences.length} silences`}
+              >
+                <BellMinus className="h-3.5 w-3.5" />
+              </Button>
+            </div>
           )}
         </div>
 

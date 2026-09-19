@@ -1,9 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { fetchSilences, fetchSilenceEvents, upsertSilence, deleteSilence, triggerPoll, type UpsertSilenceBody } from '@/api/client'
-import { buildAckSilenceBody, buildGroupAckSilenceBody } from '@/lib/alertUtils'
+import { buildAckSilenceBody, buildExtendSilenceBody, buildGroupAckSilenceBody } from '@/lib/alertUtils'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { useAuthStore } from '@/store/authStore'
-import type { EnrichedAlert } from '@/types'
+import type { EnrichedAlert, Silence } from '@/types'
 import { FALLBACK_REFETCH_INTERVAL_MS } from '@/lib/refetch'
 
 const USERNAME_KEY = 'jarvis-username'
@@ -95,6 +95,28 @@ export function useGroupAckAlert() {
   const ackGroup = (alerts: EnrichedAlert[], durationMinutes: number) =>
     fanOut.mutateAsync({ alerts, durationMinutes })
   return { ackGroup, isPending: fanOut.isPending }
+}
+
+/**
+ * One-click "Extend silence": pushes the end of every given silence out by
+ * `extraMinutes` (see `buildExtendSilenceBody`). Several silences (a group of
+ * covering silences) are updated together; like `useGroupAckAlert` it wraps the
+ * fan-out in its OWN mutation so `isPending` means "any still in flight".
+ * Reuses `useUpsertSilence`'s cache invalidation + poll trigger per write.
+ */
+export function useExtendSilences() {
+  const upsert = useUpsertSilence()
+  const fanOut = useMutation({
+    mutationFn: ({ silences, extraMinutes, fingerprint }: { silences: Silence[]; extraMinutes: number; fingerprint?: string }) => {
+      const performedBy = resolveCreatorName()
+      return Promise.all(
+        silences.map((s) => upsert.mutateAsync(buildExtendSilenceBody(s, extraMinutes, performedBy, fingerprint))),
+      )
+    },
+  })
+  const extend = (silences: Silence[], extraMinutes: number, fingerprint?: string) =>
+    fanOut.mutateAsync({ silences, extraMinutes, fingerprint })
+  return { extend, isPending: fanOut.isPending }
 }
 
 export function useDeleteSilence() {

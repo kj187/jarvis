@@ -1016,6 +1016,7 @@ index.css             → self-hosted Inter (`public/fonts/inter-variable-latin.
 │   │                            useUpdateClaimNote, useClaimController (all cluster-scoped); USERNAME_KEY
 │   ├── useSilences.ts         → useSilences, useSilenceEvents, useUpsertSilence, useDeleteSilence,
 │   │                            useAckAlert (one-click Fast-Silence → short-lived exact-match silence),
+│   │                            useExtendSilences (one-click extend: same-id upsert, endsAt += duration),
 │   │                            resolveCreatorName
 │   ├── useSilenceTemplates.ts → list + create/update/delete template mutations
 │   ├── useWebSocket.ts        → WS connection + cache patching via handleEvent();
@@ -1062,6 +1063,7 @@ index.css             → self-hosted Inter (`public/fonts/inter-variable-latin.
 │   │                            `soon` with negative remainingMs, never silently 100%/frozen),
 │   │                            pickIdentifierLabel, formatSilenceDuration,
 │   │                            formatTime, severityOrder, formatAckDuration, buildAckSilenceBody,
+│   │                            buildExtendSilenceBody,
 │   │                            computeGroupLabelValues (only labels present on EVERY alert in the
 │   │                            group — a partial label is dropped, never partially OR-matched),
 │   │                            buildGroupAckSilenceBody (throws on multi-cluster input),
@@ -1555,6 +1557,11 @@ index.css             → self-hosted Inter (`public/fonts/inter-variable-latin.
     │   ├── SilencesPage.tsx   → dedicated page: card|list, fullscreen, show/hide expired,
     │   │                        sort (expires/created + asc/desc toggle), creator-filter
     │   │                        dropdown (person-icon, silences only), matcher-chip filter
+    │   ├── ExtendSilenceMenu.tsx → one-click "Extend by…" menu for active/pending silences (durations = the `silenceDurations` setting, shared with Fast-Silence; hover/Enter,
+    │   │                        `position: fixed` panel so overflow-hidden cards can't clip it; auth-gated via
+    │   │                        useProtectedAction); used by AlertCard/AlertListRow/AlertListView group header/
+    │   │                        AlertDetailPanel + SilenceCard/SilenceGroupCard/SilenceListView; one logic for
+    │   │                        every running silence — `tone="warning"` only tints the ≤15-min case
     │   ├── SilenceCard.tsx    → single silence: status dot + cluster + by/affected line, quiet
     │   │                        matcher chips, comment quote, then SilenceLifetimeBar; expire/
     │   │                        re-create icon button (`data-testid="silence-card"`)
