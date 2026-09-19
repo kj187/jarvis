@@ -112,6 +112,7 @@ Jarvis exposes the full Alertmanager matcher syntax as an interactive chip UI. Y
 **How filters compose:**
 - Multiple matchers are ANDed — an alert must match all chips to be shown
 - Regex matchers are validated client-side before being applied
+- On the **Resolved** view the history is filtered on the server, whose regex syntax is slightly smaller than in the Active view (no lookaheads/lookbehinds, no backreferences). While a regex filter is set there, an (i) next to the filter bar explains this; a filter the server rejects is marked red
 - An `@age` chip re-evaluates on every alert-list refresh, so it stays accurate without a dedicated ticker
 - Clicking a label chip on any alert card instantly adds an exact-match filter for that label
 

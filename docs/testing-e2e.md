@@ -263,6 +263,7 @@ Quick reference: which spec file covers what. Use this to find the right place f
 | `card-view.spec.ts` | B1 | Card view renders polled alerts (smoke test) |
 | `alerts-views.spec.ts` | B2–B6, B9 | List↔card toggle, severity ordering, card pagination, fullscreen, resolved view including right-aligned top/footer page navigation |
 | `resolved-fetch.spec.ts` | — | Resolved history is fetched only in resolved mode; initial spinner, error/retry and mode-exit cancellation |
+| `resolved-regex-hint.spec.ts` | — | The server-side regex (i) on the Resolved view appears only while a regex filter is set, never on Active |
 | `resolved-pagination.spec.ts` | — | Bounded server pages, no legacy full-history fetch, visible stale-page transition and off-page navigation inputs |
 | `alerts-views-extended.spec.ts` | B7–B8, B10 | Responsive column binning, empty state, suppressed/silenced view |
 | `alerts-overview.spec.ts` | — | Alert label breakdown/filtering plus shared modal accessibility: name, focus containment, Escape and focus restoration |
