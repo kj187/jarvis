@@ -179,12 +179,21 @@ cache, so the patched claim is reflected in the very next cached encoding).
 
 WebSocket delivery is intentionally best-effort per client: each pod's hub
 keeps a small bounded queue per connected client and a small bounded global
-broadcast queue. A client that can't keep up (a stuck/slow browser
-connection) is disconnected rather than allowed to sit on a growing backlog
-of queued snapshots — its existing reconnect-and-refetch converges it back
-to current state. This bounds each pod's own WebSocket memory independently
-of how many browsers are connected or how slow any one of them is; it is
-unrelated to leader election or snapshot distribution.
+broadcast queue. The two kinds of message are bounded differently, because
+they fail differently. An `alerts_update` carries the entire alert list, so a
+newer one makes any still-queued one redundant: at most one is held per client
+and a newer one replaces it. That caps the memory a single connection can tie
+up at one alert list, however far behind it falls. Events that carry a change
+rather than a full picture — a claim, a comment, a silence update — cannot be
+merged that way, so they queue individually, and a client that stops draining
+them is disconnected rather than allowed to lose them silently; its existing
+reconnect-and-refetch converges it back to current state.
+
+A client is therefore only disconnected when it genuinely stops keeping up, not
+because several events happened close together. This bounds each pod's own
+WebSocket memory independently of how many browsers are connected or how slow
+any one of them is; it is unrelated to leader election or snapshot
+distribution.
 
 ### User settings
 

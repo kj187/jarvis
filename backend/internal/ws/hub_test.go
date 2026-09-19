@@ -13,6 +13,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/testutil"
 
 	"github.com/kj187/jarvis/backend/internal/metrics"
+	"github.com/kj187/jarvis/backend/internal/models"
 )
 
 func newTestHub(t *testing.T) *Hub {
@@ -178,81 +179,178 @@ func TestHub_BroadcastRaw_UnknownEventTypeMapsToUnknownMetricLabel(t *testing.T)
 	}
 }
 
-// TestHub_SlowClientDisconnectedOnQueueOverflow reproduces P4 §8.2: a client
-// whose send queue is full (a blocked/unresponsive writer) is disconnected
-// instead of having its messages silently dropped — so it can't hold stale,
-// large queued payloads indefinitely — while a healthy client keeps
-// receiving every broadcast in order.
-func TestHub_SlowClientDisconnectedOnQueueOverflow(t *testing.T) {
-	hub := newTestHub(t)
+// registerStuckClient upgrades a real connection and registers it without
+// starting its pumps, so nothing ever drains its queue — a deterministic stand-in
+// for a writer permanently blocked on a stuck socket, without relying on real
+// OS-level TCP backpressure timing.
+func registerStuckClient(t *testing.T, hub *Hub) *websocket.Conn {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := hub.upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			t.Errorf("upgrade stuck client: %v", err)
+			return
+		}
+		hub.mu.Lock()
+		hub.clients[newClient(hub, conn)] = struct{}{}
+		hub.mu.Unlock()
+	}))
+	t.Cleanup(srv.Close)
 
-	srv := httptest.NewServer(hub.upgraderHandler())
-	defer srv.Close()
-	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http")
-
-	healthyConn, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	conn, resp, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(srv.URL, "http"), nil)
 	if err != nil {
-		t.Fatalf("dial healthy client: %v", err)
+		t.Fatalf("dial stuck client: %v", err)
 	}
 	if resp != nil && resp.Body != nil {
 		_ = resp.Body.Close()
 	}
-	defer func() { _ = healthyConn.Close() }()
+	t.Cleanup(func() { _ = conn.Close() })
+	return conn
+}
 
-	// Slow client: upgrade a real connection but deliberately never start its
-	// read/write pumps, so nothing ever drains its send channel — a
-	// deterministic stand-in for a writer permanently blocked on a stuck
-	// socket, without relying on real OS-level TCP backpressure timing.
-	slowSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		conn, err := hub.upgrader.Upgrade(w, r, nil)
-		if err != nil {
-			t.Errorf("upgrade slow client: %v", err)
-			return
-		}
-		slow := &Client{hub: hub, conn: conn, send: make(chan []byte, clientBuffer)}
-		hub.mu.Lock()
-		hub.clients[slow] = struct{}{}
-		hub.mu.Unlock()
-	}))
-	defer slowSrv.Close()
-	slowWSURL := "ws" + strings.TrimPrefix(slowSrv.URL, "http")
-	slowConn, resp2, err := websocket.DefaultDialer.Dial(slowWSURL, nil)
+func dialClient(t *testing.T, hub *Hub) *websocket.Conn {
+	t.Helper()
+	srv := httptest.NewServer(hub.upgraderHandler())
+	t.Cleanup(srv.Close)
+	conn, resp, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(srv.URL, "http"), nil)
 	if err != nil {
-		t.Fatalf("dial slow client: %v", err)
+		t.Fatalf("dial client: %v", err)
 	}
-	if resp2 != nil && resp2.Body != nil {
-		_ = resp2.Body.Close()
+	if resp != nil && resp.Body != nil {
+		_ = resp.Body.Close()
 	}
-	defer func() { _ = slowConn.Close() }()
+	t.Cleanup(func() { _ = conn.Close() })
+	return conn
+}
 
-	time.Sleep(50 * time.Millisecond)
-	if hub.ClientCount() != 2 {
-		t.Fatalf("ClientCount = %d, want 2 before broadcasting", hub.ClientCount())
+func waitForClientCount(t *testing.T, hub *Hub, want int) {
+	t.Helper()
+	deadline := time.Now().Add(3 * time.Second)
+	for hub.ClientCount() != want && time.Now().Before(deadline) {
+		time.Sleep(2 * time.Millisecond)
 	}
+	if got := hub.ClientCount(); got != want {
+		t.Fatalf("ClientCount = %d, want %d", got, want)
+	}
+}
 
-	const messages = clientBuffer + 2
+// A burst of snapshots must never cost a healthy client its connection. The hub
+// enqueues far faster than any client can write to its socket, so with a queue
+// bounded by message count every client was one burst away from being classified
+// "slow" and dropped — in production that disconnects every open tab at once and
+// each reconnect triggers a full refetch.
+//
+// alerts_update carries the whole alert list, so a newer one supersedes any still
+// queued: it is coalesced in place per client. That keeps P4 §8.2's actual intent
+// (never hold several large snapshots per client — the bound is now one) while the
+// client is guaranteed the newest snapshot rather than every intermediate one.
+func TestHub_SnapshotBurstKeepsDrainingClientAndDeliversNewest(t *testing.T) {
+	hub := newTestHub(t)
+	conn := dialClient(t, hub)
+	waitForClientCount(t, hub, 1)
+
+	const messages = 40
 	for i := 0; i < messages; i++ {
-		hub.BroadcastJSON("alerts_update", map[string]int{"i": i})
+		hub.BroadcastJSON(models.WSTypeAlertsUpdate, map[string]int{"i": i})
 	}
 
-	for i := 0; i < messages; i++ {
-		if err := healthyConn.SetReadDeadline(time.Now().Add(time.Second)); err != nil {
+	// Every read must succeed — being dropped mid-burst is the regression this
+	// guards — and the newest snapshot must arrive.
+	newest := fmt.Sprintf(`"i":%d`, messages-1)
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		if time.Now().After(deadline) {
+			t.Fatalf("newest snapshot %s never arrived", newest)
+		}
+		if err := conn.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
 			t.Fatalf("SetReadDeadline: %v", err)
 		}
-		_, msg, err := healthyConn.ReadMessage()
+		_, msg, err := conn.ReadMessage()
 		if err != nil {
-			t.Fatalf("healthy client read message %d: %v", i, err)
+			t.Fatalf("healthy client dropped during snapshot burst: %v", err)
 		}
-		if !strings.Contains(string(msg), fmt.Sprintf(`"i":%d`, i)) {
-			t.Errorf("healthy client message %d out of order/missing: %s", i, msg)
+		if strings.Contains(string(msg), newest) {
+			break
 		}
 	}
 
-	deadline := time.Now().Add(2 * time.Second)
-	for hub.ClientCount() != 1 && time.Now().Before(deadline) {
-		time.Sleep(5 * time.Millisecond)
-	}
 	if got := hub.ClientCount(); got != 1 {
-		t.Fatalf("ClientCount = %d, want 1 (slow client should have been disconnected)", got)
+		t.Fatalf("ClientCount = %d, want 1 (a snapshot burst must not disconnect a healthy client)", got)
+	}
+}
+
+// Discrete events carry a delta, not a snapshot: dropping or coalescing one leaves
+// that tab wrong until the next poll. They are never merged, and the queue holds
+// enough of them (discreteBuffer) that a normal incident burst cannot overflow it.
+func TestHub_DiscreteEventsAreNeverCoalesced(t *testing.T) {
+	hub := newTestHub(t)
+	conn := dialClient(t, hub)
+	waitForClientCount(t, hub, 1)
+
+	const messages = 12
+	for i := 0; i < messages; i++ {
+		hub.BroadcastJSON(models.WSTypeClaimSet, map[string]int{"i": i})
+	}
+
+	for i := 0; i < messages; i++ {
+		if err := conn.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
+			t.Fatalf("SetReadDeadline: %v", err)
+		}
+		_, msg, err := conn.ReadMessage()
+		if err != nil {
+			t.Fatalf("read discrete event %d: %v", i, err)
+		}
+		if !strings.Contains(string(msg), fmt.Sprintf(`"i":%d`, i)) {
+			t.Errorf("discrete event %d out of order/missing: %s", i, msg)
+		}
+	}
+}
+
+// The case the overflow disconnect exists for: a client that never drains. Only
+// discrete events can fill the queue now (snapshots coalesce into one slot), so
+// that is what pushes it past its bound.
+func TestHub_StuckClientDisconnectedWhenQueueFillsWithDiscreteEvents(t *testing.T) {
+	hub := newTestHub(t)
+	_ = registerStuckClient(t, hub)
+	waitForClientCount(t, hub, 1)
+
+	for i := 0; i < discreteBuffer+2; i++ {
+		hub.BroadcastJSON(models.WSTypeClaimSet, map[string]int{"i": i})
+	}
+
+	waitForClientCount(t, hub, 0)
+}
+
+// A stuck client must not survive on snapshots alone either: coalescing keeps its
+// queue at one slot, so the write deadline in writePump is what tears it down —
+// but the hub must not leak it while that plays out, and a healthy peer must keep
+// receiving throughout.
+func TestHub_SnapshotBurstToStuckClientLeavesHealthyPeerConnected(t *testing.T) {
+	hub := newTestHub(t)
+	healthy := dialClient(t, hub)
+	_ = registerStuckClient(t, hub)
+	waitForClientCount(t, hub, 2)
+
+	const messages = 40
+	for i := 0; i < messages; i++ {
+		hub.BroadcastJSON(models.WSTypeAlertsUpdate, map[string]int{"i": i})
+	}
+
+	newest := fmt.Sprintf(`"i":%d`, messages-1)
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		if time.Now().After(deadline) {
+			t.Fatalf("newest snapshot %s never arrived at the healthy peer", newest)
+		}
+		if err := healthy.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
+			t.Fatalf("SetReadDeadline: %v", err)
+		}
+		_, msg, err := healthy.ReadMessage()
+		if err != nil {
+			t.Fatalf("healthy peer dropped while a stuck client was queued: %v", err)
+		}
+		if strings.Contains(string(msg), newest) {
+			break
+		}
 	}
 }
