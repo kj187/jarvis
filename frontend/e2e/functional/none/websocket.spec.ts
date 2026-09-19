@@ -10,7 +10,7 @@ test('J2 alerts_update WS event updates the UI without page reload', async ({ pa
   await expect(page.locator('[title="WebSocket connected"]').first()).toBeVisible({ timeout: 10_000 })
 
   // No alerts yet — empty state
-  await expect(page.locator('[aria-label="No alerts"]')).toBeVisible({ timeout: 5_000 })
+  await expect(page.getByRole('status').filter({ hasText: 'No alerts' })).toBeVisible({ timeout: 5_000 })
 
   // Fire alerts — poll will deliver them via WS update
   await am.fire(kubernetesAlerts)
@@ -107,6 +107,8 @@ test('J1 WebSocket reconnect indicator turns red when blocked and green after re
   // Force-close the WS from inside the page — triggers onclose → wsConnected=false
   await page.evaluate(() => (window as any).__closeAllWS())
   await expect(page.locator('[title="WebSocket disconnected"]').first()).toBeVisible({ timeout: 10_000 })
+  // The state is also spelled out, not only shown by the red icon
+  await expect(page.getByText('Offline', { exact: true }).first()).toBeVisible()
 
   // App retries after a jittered 3-6s reconnect delay — indicator turns green
   await expect(page.locator('[title="WebSocket connected"]').first()).toBeVisible({ timeout: 30_000 })

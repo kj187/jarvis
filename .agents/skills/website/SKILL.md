@@ -42,9 +42,14 @@ Both run containerized (`node:22-alpine`, no local Node/pnpm needed).
 user; `git` is installed inside the container because the build reads each
 page's last commit time via `git log`.
 
-`make website-dev` syncs once at startup. Editing a file under `docs/` while
-it runs does **not** re-sync — restart it (editing files under `website/`
-does hot-reload).
+`make website-dev` syncs at startup and then keeps `sync-content.mjs
+--watch-only` running next to VitePress: it polls the synced `docs/` pages,
+`docs/assets`, `frontend/public` branding and `website/index.md` once a second
+(polling, because inotify events from the host never reach a container bind
+mount) and re-syncs only the files whose bytes changed. Vite itself needs the
+same treatment — `vite.server.watch.usePolling` in `config.mts` — otherwise it
+never sees an edit, neither under `website/` nor in the re-synced `content/`.
+Adding a page or changing `pages.mjs`/`config.mts` still needs a restart.
 
 ---
 
@@ -65,11 +70,11 @@ does hot-reload).
 
 1. Write the doc where it belongs (`docs/<name>.md`).
 2. Add an entry to `PAGES` in `website/scripts/pages.mjs`
-   (`{ src: 'docs/<name>.md', route: '<category>/<name>' }`; add `title` only
-   when the file has no `# ` heading or needs a different nav title). `route`
-   may be nested (e.g. `howto/retention`) — the site is organised by reader
-   intent (Diátaxis: Getting Started / Tasks / Reference / Concepts / Help /
-   Project), not by source file, and `sync-content.mjs` creates whatever
+(`{ src: 'docs/<name>.md', route: '<category>/<name>' }`; add `title` only
+when the file has no `# ` heading or needs a different nav title). `route`
+may be nested (e.g. `howto/retention`) — the site is organised by reader
+intent (Diátaxis: Getting Started / Install / Operate / Reference / Concepts /
+Help / Project), not by source file, and `sync-content.mjs` creates whatever
    directory depth `route` needs.
 3. Add it to the `sidebar` (and `nav` if it is a top-level entry) in
    `website/.vitepress/config.mts`, under the section matching its category.
@@ -111,7 +116,7 @@ to its **source** file and rewrites it:
 | another file listed in `PAGES` | the website route (`/reference/features`) |
 | any other repo file | `https://github.com/kj187/jarvis/blob/main/<path>` |
 | an image under `docs/assets/` | `/assets/<file>` (public dir — routes now nest to any depth, e.g. `concepts/architecture`, so a page-relative `./assets/…` no longer resolves at a fixed depth; also copied flat into `content/assets/` for `HomeScreenshot.vue`'s direct import) |
-| `frontend/public/logo.png` | `/logo.png` |
+| `frontend/public/logo.png` | `/logo.png` (derived from `design/assets/logo.svg` by `scripts/logo-assets.py`) |
 | any other image | `https://raw.githubusercontent.com/kj187/jarvis/main/<path>` |
 | `http(s):`, `mailto:`, `#fragment` | unchanged |
 
@@ -135,11 +140,22 @@ since it matches on the already-rewritten `/assets/…` paths.
 
 ## Look & feel
 
-- The palette in `theme/style.css` is a **hand-made copy** of the app's
-  tokens (`frontend/src/index.css`, `@theme` for dark and
-  `[data-theme="light"]` for light) — VitePress CSS variables and Tailwind
-  `@theme` tokens are different systems, so changing the app palette means
-  updating this file too.
+The rules for colour, type, radii and contrast are the same as for the app — see
+`.agents/skills/design-system/SKILL.md` and `docs/design-system.md`.
+
+The reading pages get only light touches (end of `theme/style.css`, "Documentation body"):
+rounded tables/code/callouts, a brand-blue accent on tip/info callouts, and a 2 px brand-blue
+keyboard focus ring. Do not restyle VitePress wholesale; the landing page carries the brand.
+
+- The palette comes from the single token source `design/tokens.json`:
+  `node scripts/design-tokens.mjs` writes `theme/generated-tokens.css`
+  (the `--vp-c-*` variables and `--jarvis-coral`), which `theme/style.css`
+  imports. Change a colour in `tokens.json`, never in the generated file;
+  the pre-commit hook and CI run the script with `--check`.
+- Contrast roles: `--vp-c-text-3` is decorative/large-text only (≈3.1:1 light,
+  3.6:1 dark — the mesh lines and VitePress placeholders use it); any label or
+  body copy we style ourselves uses `--vp-c-text-2`. Coral is darkened in light
+  mode (`hsl(6 65% 46%)`, 4.7:1 on `--vp-c-bg`) — keep small coral text ≥ 4.5:1.
 - Dark is the default (`appearance: 'dark'`).
 - `theme/components/MeshCanvas.vue` **imports the pure geometry from the app**
   (`frontend/src/lib/owlMesh.ts`) instead of re-implementing it — do not copy
@@ -165,6 +181,11 @@ since it matches on the already-rewritten `/assets/…` paths.
   a new block needs the same rule. Further `##` sections of the home page go
   inside the same `.home-showcase` wrapper; `.home-showcase h2:not(:first-child)`
   gives them their top spacing.
+- The homepage hero image and Owl mesh are shifted slightly right on desktop
+  (`.VPHero .image` and `.hero-mesh-backdrop`) to keep the dense visual away
+  from the copy. The hand-written `.home-showcase` adds its breakpoint padding
+  *outside* a 1152px content width (`max-width` = content + current padding),
+  so its text edges align with the hero, screenshot, and feature grid.
 - **`.home-hero-screenshot`'s padding/max-width split mirrors `VPHero.vue` on
   purpose.** `VPHero` puts its horizontal padding on the full-bleed outer
   `.VPHero` element and centers a `max-width: 1152px` `.container` *inside*
@@ -176,15 +197,26 @@ since it matches on the already-rewritten `/assets/…` paths.
   viewports. The fix keeps padding on `.home-hero-screenshot` and moves
   `max-width`/`margin: 0 auto` onto the `img`s inside it, reproducing the
   same two-step centering — never collapse them back onto one element.
-- **`theme/components/HomeScreenshot.vue`** renders the card-view screenshot
-  (same theme toggling as above) via the `home-hero-after` slot in
-  `Layout.vue`, so it appears between the hero and the feature grid. This is
-  the only way to place anything there: `VPHome` always renders the page's
-  own Content (the `<div class="home-showcase">` block) *after* the feature
-  grid, regardless of where it sits in `index.md`'s source — a screenshot
-  meant to show "before the feature grid" cannot be placed there in markdown.
-  It imports the PNGs directly (`../../../content/assets/...`), which exist
-  once `pnpm run sync` has run (both `dev` and `build` do this first).
+- **`theme/components/HomeScreenshot.vue`** renders an automatic five-scene
+  product tour via the `home-hero-after` slot in `Layout.vue`, so it appears
+  between the hero and the feature grid. Every scene imports a dark/light PNG
+  pair directly from `../../../content/assets/...`; the site's current theme
+  selects the matching image. The last scene (`split: true`, "Dark & light")
+  is the exception: it stacks both themes of one screenshot behind a
+  `clip-path` divider so light mode is always visible. The `tour-*` PNG pairs
+  come from `frontend/e2e/screenshots/none/home-tour.screenshot.spec.ts`
+  (`make e2e-screenshot NAME=home-tour`); a new scene needs a dark and a light
+  PNG plus the matching count in `scripts/media.test.mjs`. Scenes advance every nine seconds with a slow
+  horizontal slide; a labelled tab row under the image shows the active scene's
+  progress bar and a pause/play button. Reduced-motion preference disables autoplay,
+  while an explicit play action still starts it. The plain-language product
+  explainer follows the scene frame without an inset or rule — not in the hero
+  and not duplicated in `index.md`. `content/assets` exists once `pnpm run
+  sync` has run (both `dev` and `build` do this first).
+- **`theme/components/HomeVideo.vue`** owns the linked product-intro cover and
+  renders through `Layout.vue`'s `home-features-after` slot. Keep it after the
+  feature grid: placing a full screenshot and a full video back-to-back above
+  the feature explanation makes the first viewport visually top-heavy.
 - The feature grid's first two entries in `index.md`'s `features:` list are
   rendered larger and spanning two of four grid columns each — the remaining
   four stay compact, one column each — via `.VPHomeFeatures .items` overrides

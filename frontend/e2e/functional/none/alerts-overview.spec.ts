@@ -68,6 +68,32 @@ test('opens the overview, shows the label breakdown, and clicking a value applie
   await expect.poll(() => visibleAlertCount(page)).toBe(2)
 })
 
+test('overview dialog traps focus, has an accessible name, and restores focus on close', async ({ page, am, jarvis }) => {
+  await dismissNoAuthNotice(page)
+  await resetPersistedUIState(page)
+  await am.fire(kubernetesAlerts)
+  await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, kubernetesAlerts.length)
+
+  await page.goto('/?state=active')
+  await ensureAlertsPage(page)
+
+  const trigger = page.getByRole('button', { name: 'Open alerts overview' })
+  await trigger.click()
+
+  const dialog = page.getByRole('dialog', { name: 'Alerts Overview' })
+  await expect(dialog).toBeVisible()
+  await expect(dialog).toBeFocused()
+
+  // Shift+Tab from the focused dialog must wrap to its last focusable control,
+  // never move focus into the page behind the modal.
+  await page.keyboard.press('Shift+Tab')
+  await expect.poll(() => dialog.evaluate((node) => node.contains(document.activeElement))).toBe(true)
+
+  await page.keyboard.press('Escape')
+  await expect(dialog).toBeHidden()
+  await expect(trigger).toBeFocused()
+})
+
 test('clicking an already-applied value does not add a duplicate matcher chip', async ({ page, am, jarvis }) => {
   await dismissNoAuthNotice(page)
   await resetPersistedUIState(page)

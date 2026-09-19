@@ -16,13 +16,29 @@ test('every Mermaid source has light and dark documentation assets', () => {
 })
 
 test('YouTube videos use linked covers instead of failure-prone iframes', () => {
-  for (const file of ['docs/demo.md', 'docs/videos.md', 'website/.vitepress/theme/components/HomeScreenshot.vue']) {
+  for (const file of ['docs/demo.md', 'docs/videos.md', 'website/.vitepress/theme/components/HomeVideo.vue']) {
     const markup = read(file)
 
     assert.match(markup, /youtube\.com\/watch\?v=/, file)
     assert.match(markup, /img\.youtube\.com\/vi\//, file)
     assert.doesNotMatch(markup, /<iframe/, file)
   }
+})
+
+test('homepage product scenes auto-rotate, remain controllable, and precede the explainer', () => {
+  const layout = read('website/.vitepress/theme/Layout.vue')
+  const screenshot = read('website/.vitepress/theme/components/HomeScreenshot.vue')
+
+  assert.match(layout, /#home-hero-after[\s\S]*<HomeScreenshot\s*\/>/)
+  assert.match(layout, /#home-features-after[\s\S]*<HomeVideo\s*\/>/)
+  assert.match(screenshot, /setInterval/)
+  assert.match(screenshot, /prefers-reduced-motion/)
+  assert.match(screenshot, /'Pause product tour'/)
+  assert.match(screenshot, /home-scene-tab-fill/)
+  assert.equal((screenshot.match(/darkSrc:/g) ?? []).length, 5)
+  assert.equal((screenshot.match(/lightSrc:/g) ?? []).length, 5)
+  assert.doesNotMatch(screenshot, /Dark and light/)
+  assert.ok(screenshot.indexOf('home-scene-stage') < screenshot.indexOf('home-hero-explainer'))
 })
 
 test('the custom layout mounts the delegated image lightbox', () => {

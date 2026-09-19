@@ -87,18 +87,9 @@ A few things that are hard to notice unless you go looking:
 - **The detail panel** — click any alert. Annotations, labels, the links
   extracted from runbook, dashboard and generator URLs, and the alert's own
   history.
-- **Claim an alert** — the claim button on a card. Claiming says "I am on
-  this" so two people do not debug the same incident.
-- **Comment on it** — in the detail panel. Comments stay with the alert
-  across firings.
-- **Filter by label** — type `team=platform` or `severity=critical` in the
-  filter bar, then save the filter.
-- **Silence one** — the silence button pre-fills matchers from the alert's
-  labels. The preview shows exactly which alerts the silence would cover
-  before you create it.
 
-A guided walkthrough of these four is in
-[First steps in the UI](first-steps.md); the complete tour is in
+For the guided claim, comment, filter, and silence workflow, continue with
+[First steps in the UI](first-steps.md). The complete tour is in
 [Features](features.md).
 
 ---
@@ -157,8 +148,8 @@ you need to know:**
 4. The only complete removal is deleting the database: drop the `/data`
    volume, or the SQLite file, and restart.
 
-So 27 fictional incidents fired against a production Jarvis stay in its
-history permanently. Use the demo stack for demos.
+So the 18 demo incidents—or all 27 when using the extended fixtures below—
+stay permanently in a production Jarvis history. Use the demo stack for demos.
 
 ---
 

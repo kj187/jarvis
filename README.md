@@ -71,6 +71,13 @@ services:
       - "8080:8080"
     volumes:
       - jarvis_data:/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     environment:
       JARVIS_CLUSTER_1_NAME: dev
       JARVIS_CLUSTER_1_ALERTMANAGER_URL: http://alertmanager:9093

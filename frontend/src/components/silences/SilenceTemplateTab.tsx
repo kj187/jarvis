@@ -128,7 +128,7 @@ export function SilenceTemplateTab() {
             {templates.map((template) => (
               <div
                 key={template.id}
-                className="flex items-start justify-between gap-2 p-2 rounded border border-border bg-muted/50"
+                className="flex items-start justify-between gap-2 p-2 rounded-compact border border-border bg-muted/50"
               >
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium truncate">{template.name}</p>
@@ -175,7 +175,7 @@ export function SilenceTemplateTab() {
 
       {/* Template Form */}
       {showForm && (
-        <form onSubmit={handleSubmit} className="space-y-3 p-3 border rounded bg-muted/30">
+        <form onSubmit={handleSubmit} className="space-y-3 p-3 border rounded-compact bg-muted/30">
           <div className="flex items-center justify-between mb-1">
             <h4 className="text-sm font-medium">{editingId ? 'Edit Template' : 'New Template'}</h4>
             <button
@@ -189,7 +189,7 @@ export function SilenceTemplateTab() {
           </div>
 
           {error && (
-            <div className="flex gap-2 p-2 bg-destructive/10 border border-destructive/30 rounded text-xs text-destructive">
+            <div className="flex gap-2 p-2 bg-destructive/10 border border-destructive/30 rounded-compact text-xs text-destructive">
               <AlertCircle className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
               <span>{error}</span>
             </div>

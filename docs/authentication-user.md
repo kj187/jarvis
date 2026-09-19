@@ -282,4 +282,5 @@ For a full values reference see [charts/jarvis/README.md](../charts/jarvis/READM
 - `SameSite=Lax` prevents CSRF on cross-site form submissions.
 - The admin panel (`/admin/users`) requires the `admin` role and is protected by `RequireAdmin` middleware.
 
-For a full security discussion see [SECURITY.md](SECURITY.md).
+For vulnerability reporting and supported versions, see the
+[Security Policy](../SECURITY.md).

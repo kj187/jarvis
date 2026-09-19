@@ -964,6 +964,12 @@ current leader. No leader-only traffic routing exists or is planned.
 ```
 main.tsx              → ReactDOM.createRoot, QueryClient (staleTime 10s, retry 2), authStore.hydrate(), App
 App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect) / RootLayout; applies theme
+index.css             → self-hosted Inter (`public/fonts/inter-variable-latin.woff2`, SIL OFL, licence beside it; `--font-sans`/`--font-mono` stacks); colour tokens are GENERATED into `generated/tokens.css` (imported here) from `design/tokens.json` by `scripts/design-tokens.mjs`, which also writes the docs-site and video palettes; Tailwind v4 `@theme` tokens (dark default) + `[data-theme="light"]` overrides — incl. status roles `critical|warning|info|neutral|success|attention|claim` × `-fg|-soft|-edge|-solid` and `selected`, radius roles `rounded-compact|control|surface|overlay|pill`; `dark:` is bound to `data-theme` via `@custom-variant`, global
+                        pointer-cursor rule, `prefers-reduced-motion` rule (transitions ≈ 0, ping/pulse/claim-snake
+                        off, `animate-spin` kept). Accessibility-relevant tokens: `--color-ring` (focus ring, >= 3:1
+                        vs. every surface, 2px via `focus(-visible):ring-2`) and `--color-control` (edge of text
+                        fields/selects, `border-control`; also the off-state track of toggles, `bg-control`; >= 3:1). `--color-border` stays the quiet edge for
+                        cards/header/tables. Both pairs are guarded by `lib/themeTokens.test.ts`
 ├── api/client.ts     → All fetch wrappers (alerts, silences, templates, claims, comments, auth, admin, poll, clusters)
 ├── store/
 │   ├── uiStore.ts            → Zustand+persist('jarvis-ui'): nav page, view modes, filters, fullscreen, counts
@@ -986,6 +992,12 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
 │   │                            useRefreshAlerts
 │   ├── useAlertCounts.ts      → active/suppressed counts + silence count for nav badges; deliberately
 │   │                            never loads resolved history (there is no resolved badge)
+│   ├── useHoverPopover.ts     → useHoverPopover(open, setOpen): the behaviour behind `components/ui/popover.tsx` — wiring for the Header's
+│   │                            desktop popovers (cluster status, refresh hint, info, user menu).
+│   │                            Hover opens (delayed close), `wrapperProps` add Escape → close +
+│   │                            focus back to the `data-popover-trigger`, focus-out → close;
+│   │                            `triggerProps` add `aria-expanded` and Enter/Space toggle. Hover
+│   │                            is never the only way in — keep that when adding a popover
 │   ├── useAlertComments.ts    → useAlertComments(fingerprint, cluster, page), useAddComment,
 │   │                            useDeleteComment (all cluster-scoped); COMMENTS_PAGE_SIZE = 20;
 │   │                            query key `['comments', fingerprint, clusterName, page]`
@@ -1173,7 +1185,14 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
 │   └── utils.ts               → cn(), formatDuration() + misc helpers
 └── components/
     ├── ui/                    → shadcn/ui: button, card, badge, dialog, sheet, select, input,
-    │                            textarea, date-time-picker, tooltip, truncatable-chip, avatar
+    │                            textarea, date-time-picker, tooltip, truncatable-chip, avatar, plus two
+    │                            overlay primitives with a fixed role each: `popover` (non-modal, opens on
+    │                            hover AND Enter/Space, Escape closes and restores focus, focus-out closes,
+    │                            `aria-expanded`/`aria-controls`; used by the four Header popovers) and
+    │                            `info-hint` (an "(i)" button + `Tooltip`, focusable, `aria-describedby`,
+    │                            Escape closes the hint without closing a surrounding Sheet). Modal content
+    │                            → `dialog`/`sheet`; short non-interactive text → `tooltip`. Never build a
+    │                            hover-only surface
     ├── common/
     │   ├── EmptyState.tsx     → shared empty view for alerts (AlertListView.tsx, AlertCardGrid.tsx —
     │   │                        default message "No alerts") and silences (SilencesPage.tsx —
@@ -1194,7 +1213,7 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │                            component — no assemble animation (that stays video-only, see
     │                            `e2e/video/backdrops.js`'s `owl()`)
     ├── layout/
-    │   ├── Header.tsx         → nav tabs, cluster status, WS indicator, polling/refresh,
+    │   ├── Header.tsx         → `WsStatus` (icon + visible "Offline" text when the socket is down, `title` kept), decorative owl mark (`/logo.png`, `data-testid="header-mark"`, `alt=""`), nav tabs, cluster status, WS indicator, polling/refresh,
     │   │                        create-silence, mobile hamburger. Settings + theme toggle +
     │   │                        login/logout/admin all live in one always-present user-menu
     │   │                        button (Grafana-style) — initials avatar when authenticated
@@ -1294,7 +1313,7 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │   │                        expired-silence shown as an inline muted line, not a banner;
     │   │                        claim = one blue line above the identity line ("Claimed by:
     │   │                        <shortClaimant> · <relative time>"), padded box only with a note,
-    │   │                        + a blue left accent on the claimed entry;
+    │   │                        + a blue right accent (4 px) on the claimed entry;
     │   │                        FiringSparkline: dezent HeatmapCellsRow under the timestamp row —
     │   │                        fetches 30d, keeps only the most recent 14 buckets (fewer/bigger
     │   │                        cells read better at card width); always rendered, even with zero
@@ -1453,6 +1472,9 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │   │                        matcher via uiStore.addLabelMatcher (no-op if an identical one
     │   │                        already exists) and closes the modal; in resolved mode it receives and
     │   │                        explicitly labels the current page from AlertsPage, with no second query
+    │   │                        Uses the shared `ui/Dialog`: the modal has an accessible name,
+    │   │                        receives focus on open, traps Tab/Shift+Tab, closes on Escape, and
+    │   │                        restores focus to the toolbar trigger on close.
     │   ├── LabelChip.tsx      → one fixed size for every chip (`max-w-[200px]`, `text-[10px]`) so a row
     │   │                        of chips reads as one unit; `emphasized` only adds font weight, unrelated
     │   │                        to color. Neutral (`border-border bg-muted text-foreground`) unless this
@@ -1525,7 +1547,8 @@ App.tsx               → auth-gated shell: SetupPage / LoginPage (full_protect)
     │   │                        value always in neutral ink — calmer than the alert views' TruncatableChip
     │   ├── silenceDisplay.ts  → URGENCY_TEXT/FILL_CLASS maps, matcherOperator, silenceRemainingText
     │   │                        (shared by the three above; kept out of the .tsx files for react-refresh)
-    │   ├── SilenceExpireModal.tsx → expire/extend confirmation (silence-ID link → AM)
+    │   ├── SilenceExpireModal.tsx → expire/extend confirmation (silence-ID link → AM); uses the
+    │   │                        shared accessible `ui/Dialog`, labelled with the visible action title
     │   ├── SilenceForm.tsx    → 3 steps: form (matchers, clusters, duration, live match count,
     │   │                        overlap/zero-match/unevaluable-regex warnings) → preview → per-cluster results
     │   │                        Regex matchers whose AM value isn't a literal-tag-OR-list

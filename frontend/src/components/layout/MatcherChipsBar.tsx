@@ -49,7 +49,7 @@ function OperatorSelect({
         <ChevronDown className="h-3 w-3 shrink-0 opacity-60" />
       </button>
       {open && (
-        <div className="combo-dropdown absolute left-0 top-full z-50 -mt-px min-w-full overflow-hidden rounded-b border-x border-b border-border bg-popover shadow-lg">
+        <div className="combo-dropdown absolute left-0 top-full z-50 -mt-px min-w-full overflow-hidden rounded-b-compact border-x border-b border-border bg-popover shadow-lg">
           {operators.map((op) => (
             <button
               key={op}
@@ -152,7 +152,7 @@ function TagField({
             key={i}
             title={invalid ? 'Invalid duration — use e.g. 15m, 2h, 1d' : tag}
             className={cn(
-              'flex min-w-0 shrink items-center gap-0.5 rounded px-1.5 py-0.5 text-[11px]',
+              'flex min-w-0 shrink items-center gap-0.5 rounded-compact px-1.5 py-0.5 text-[11px]',
               invalid
                 ? 'bg-destructive/15 text-destructive border border-destructive/50'
                 : 'bg-accent text-accent-foreground',
@@ -194,7 +194,7 @@ function TagField({
         )}
       </div>
       {open && showInput && filtered.length > 0 && (
-        <div className="combo-dropdown absolute left-0 top-full z-50 -mt-px max-h-48 min-w-full overflow-y-auto rounded-b border-x border-b border-border bg-popover shadow-lg">
+        <div className="combo-dropdown absolute left-0 top-full z-50 -mt-px max-h-48 min-w-full overflow-y-auto rounded-b-compact border-x border-b border-border bg-popover shadow-lg">
           {filtered.map((opt) => (
             <button
               key={opt}
@@ -250,8 +250,8 @@ function EditableMatcherChip({
   return (
     <div
       className={cn(
-        'flex items-center rounded border bg-input min-h-7 max-w-full',
-        ageInvalid || invalidRegex ? 'border-destructive' : 'border-border',
+        'flex items-center rounded-compact border bg-input min-h-7 max-w-full',
+        ageInvalid || invalidRegex ? 'border-destructive' : 'border-control',
       )}
       title={invalidRegex ? 'Invalid RE2 regular expression' : undefined}
     >
@@ -393,7 +393,7 @@ export function MatcherChipsBar({
               setDrafts((d) => [...d, { id: `draft-${draftSeq++}`, data: { name: '', operator: '=', value: '' } }])
             }
             className={cn(
-              'flex items-center justify-center h-7 shrink-0 rounded border bg-input cursor-pointer transition-colors',
+              'flex items-center justify-center h-7 shrink-0 rounded-compact border bg-input cursor-pointer transition-colors',
               isEmpty
                 ? 'gap-1 px-2.5 border-dashed border-border text-muted-foreground hover:text-foreground hover:border-foreground/40 hover:bg-accent/40'
                 : 'w-7 border-border text-muted-foreground hover:text-foreground hover:bg-accent/40',

@@ -50,7 +50,7 @@ export function DateTimePicker({ value, onChange, className }: DateTimePickerPro
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex h-8 w-full items-center gap-2 rounded border border-input bg-background px-2 text-xs hover:border-ring focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer"
+        className="flex h-8 w-full items-center gap-2 rounded-compact border border-control bg-background px-2 text-xs hover:border-ring focus:outline-none focus:ring-2 focus:ring-ring cursor-pointer"
       >
         <CalendarDays className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
         <span className={cn('flex-1 text-left font-mono', !displayValue && 'text-muted-foreground')}>
@@ -64,7 +64,7 @@ export function DateTimePicker({ value, onChange, className }: DateTimePickerPro
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute left-0 top-full z-50 mt-1 rounded border border-border bg-popover shadow-xl">
+          <div className="absolute left-0 top-full z-50 mt-1 rounded-compact border border-border bg-popover shadow-xl">
             <DayPicker
               mode="single"
               selected={selected}
@@ -85,16 +85,16 @@ export function DateTimePicker({ value, onChange, className }: DateTimePickerPro
                 caption_label: 'text-sm font-medium text-foreground pointer-events-none select-none',
                 nav: 'flex items-center justify-between absolute inset-x-0 top-0 z-10 pointer-events-none',
                 button_previous:
-                  'inline-flex h-7 w-7 items-center justify-center rounded-md text-foreground/80 hover:bg-accent hover:text-foreground cursor-pointer transition-colors pointer-events-auto',
+                  'inline-flex h-7 w-7 items-center justify-center rounded-control text-foreground/80 hover:bg-accent hover:text-foreground cursor-pointer transition-colors pointer-events-auto',
                 button_next:
-                  'inline-flex h-7 w-7 items-center justify-center rounded-md text-foreground/80 hover:bg-accent hover:text-foreground cursor-pointer transition-colors pointer-events-auto',
+                  'inline-flex h-7 w-7 items-center justify-center rounded-control text-foreground/80 hover:bg-accent hover:text-foreground cursor-pointer transition-colors pointer-events-auto',
                 month_grid: 'w-full border-collapse',
                 weekdays: 'flex',
                 weekday: 'w-8 text-center text-[10px] font-medium text-muted-foreground',
                 week: 'flex mt-1',
                 day: 'relative flex h-8 w-8 items-center justify-center',
                 day_button:
-                  'h-8 w-8 rounded text-sm hover:bg-accent hover:text-foreground focus:outline-none cursor-pointer transition-colors',
+                  'h-8 w-8 rounded-compact text-sm hover:bg-accent hover:text-foreground focus:outline-none cursor-pointer transition-colors',
                 today:
                   '[&>button]:bg-accent [&>button]:text-foreground [&>button]:font-semibold',
                 selected:
@@ -113,7 +113,7 @@ export function DateTimePicker({ value, onChange, className }: DateTimePickerPro
                 max={23}
                 value={hh}
                 onChange={(e) => handleTime(e.target.value, mm)}
-                className="w-10 rounded border border-input bg-background px-1 py-0.5 text-center font-mono text-xs focus:outline-none focus:ring-1 focus:ring-ring [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                className="w-10 rounded-compact border border-control bg-background px-1 py-0.5 text-center font-mono text-xs focus:outline-none focus:ring-2 focus:ring-ring [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
               />
               <span className="text-muted-foreground">:</span>
               <input
@@ -122,7 +122,7 @@ export function DateTimePicker({ value, onChange, className }: DateTimePickerPro
                 max={59}
                 value={mm}
                 onChange={(e) => handleTime(hh, e.target.value)}
-                className="w-10 rounded border border-input bg-background px-1 py-0.5 text-center font-mono text-xs focus:outline-none focus:ring-1 focus:ring-ring [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                className="w-10 rounded-compact border border-control bg-background px-1 py-0.5 text-center font-mono text-xs focus:outline-none focus:ring-2 focus:ring-ring [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
               />
               <span className="ml-auto text-xs text-muted-foreground font-mono">
                 {hh}:{mm}

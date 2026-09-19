@@ -52,16 +52,16 @@ export function AlertDetailHistorySection({
   alertmanagerUrl,
 }: AlertDetailHistorySectionProps) {
   const actionColor: Record<string, string> = {
-    'Alert fired': 'text-red-600 dark:text-red-400',
-    'Alert resolved': 'text-green-600 dark:text-green-400',
-    'Alert suppressed': 'text-muted-foreground dark:text-slate-400',
-    'Silence expired': 'text-yellow-600 dark:text-yellow-400',
-    claimed: 'text-blue-600 dark:text-blue-400',
+    'Alert fired': 'text-critical-fg',
+    'Alert resolved': 'text-success-fg',
+    'Alert suppressed': 'text-muted-foreground',
+    'Silence expired': 'text-warning-fg',
+    claimed: 'text-claim-fg',
     unclaimed: 'text-muted-foreground',
-    'Silence pending': 'text-muted-foreground dark:text-slate-300',
-    'Silence created': 'text-muted-foreground dark:text-slate-300',
-    'Silence updated': 'text-muted-foreground dark:text-slate-300',
-    'Silence deleted': 'text-orange-600 dark:text-orange-400',
+    'Silence pending': 'text-muted-foreground',
+    'Silence created': 'text-muted-foreground',
+    'Silence updated': 'text-muted-foreground',
+    'Silence deleted': 'text-attention-fg',
   }
 
   const mappedRows: HistoryRow[] = (timelineData?.entries ?? []).map((entry) => ({
@@ -86,7 +86,7 @@ export function AlertDetailHistorySection({
           key={n}
           onClick={() => { setHistoryPageSize(n); setHistoryPage(1) }}
           className={cn(
-            'rounded px-1.5 py-0.5 text-[10px] font-medium cursor-pointer',
+            'rounded-compact px-1.5 py-0.5 text-[10px] font-medium cursor-pointer',
             historyPageSize === n
               ? 'bg-accent text-foreground'
               : 'text-muted-foreground hover:text-foreground hover:bg-accent/50',
@@ -170,7 +170,7 @@ export function AlertDetailHistorySection({
                   <button
                     disabled={safePage === 1}
                     onClick={() => setHistoryPage((p) => p - 1)}
-                    className="rounded px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-30 disabled:cursor-default cursor-pointer"
+                    className="rounded-compact px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-30 disabled:cursor-default cursor-pointer"
                   >
                     ‹
                   </button>
@@ -182,7 +182,7 @@ export function AlertDetailHistorySection({
                         key={p}
                         onClick={() => setHistoryPage(p)}
                         className={cn(
-                          'rounded px-1.5 py-0.5 text-[10px] cursor-pointer',
+                          'rounded-compact px-1.5 py-0.5 text-[10px] cursor-pointer',
                           safePage === p
                             ? 'bg-accent text-foreground font-medium'
                             : 'text-muted-foreground hover:text-foreground hover:bg-accent/50',
@@ -195,7 +195,7 @@ export function AlertDetailHistorySection({
                   <button
                     disabled={safePage === totalPages}
                     onClick={() => setHistoryPage((p) => p + 1)}
-                    className="rounded px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-30 disabled:cursor-default cursor-pointer"
+                    className="rounded-compact px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-30 disabled:cursor-default cursor-pointer"
                   >
                     ›
                   </button>

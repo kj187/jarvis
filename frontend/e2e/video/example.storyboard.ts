@@ -22,7 +22,7 @@ const VERSION = process.env.VIDEO_VERSION ?? '1.12.0'
 /** Shared title-card content: intro (also the cover) and outro vary eyebrow/title/cta. */
 const CARD = {
   title: 'Saved filters, pinned labels & one-click claims',
-  subtitle: 'The open-source web UI for Prometheus Alertmanager',
+  subtitle: 'When the alert disappears but the questions remain',
   features: ['Saved filters', 'Pin & hide labels', 'Group by any label', 'One-click claims'],
 }
 

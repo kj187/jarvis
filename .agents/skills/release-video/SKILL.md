@@ -29,11 +29,18 @@ post anything yourself.
 |---|---|
 | `frontend/e2e/video/recorder.ts` | `VideoRecorder`: device-pixel screencast, cursor, `clickOn`/`moveTo`, `focus`/`focusOn` (zoom keyframes), `highlight` (hand-drawn marker), `scene` (caption + narration sync), `card` (intro/outro title card = cover design), `finish` (timeline, caption and card PNGs) |
 | `frontend/e2e/video/backdrops.js` | animated card backdrops, rendered frame by frame (time-deterministic): **Owl mesh** (neural mesh assembling into the Jarvis owl) on the first and last card, **Neural mesh** on every card in between — the standard look of every video; the cover (both formats) reuses the Owl mesh too, frozen at its assembled end state (`__draw(2.6)`) behind the app screenshot — never the plain gradient alone |
+| `frontend/e2e/video/theme.ts` + `generated-theme.ts` (rules: `.agents/skills/design-system/SKILL.md` § Media) | card colours: `generated-theme.ts` is generated from `design/tokens.json` (never edit); `theme.ts` adds the stage colour and the brand accents — product blue with coral as counterweight (the logo's eyes). **No violet** any more: existing videos keep their look, only newly recorded ones use this palette. `recorder.ts` injects the palette into `backdrops.js` as `window.__JARVIS_PALETTE` |
 | `frontend/e2e/video/fonts.conf` | maps `system-ui`/`sans-serif` to Inter for the recording (the Playwright image falls back to a CJK font) |
 | `frontend/e2e/video/build-video.mjs` | timeline → two ffmpeg passes (sub-pixel eased zoom via `perspective`, then caption/card overlays + narration mix). Cards less than 0.3 s apart (back-to-back chapter/showcase slides with no demo between them) hard-cut into each other — no fade on that shared edge, overlay window closed exactly at the boundary — instead of each dipping toward the base screencast independently, which flashed whatever the app happened to show for a beat |
 | `frontend/e2e/video/example.storyboard.ts` | complete storyboard of v1.12.0 — the release template |
 | `frontend/e2e/video/example.narration.json` | its voice-over script |
 | `frontend/e2e/video/intro.storyboard.ts` + `intro.narration.json` | product introduction video ("What is Jarvis?"), project `intro` — refresh it when the UI changed noticeably |
+
+The release cover's standard subtitle is **“When the alert disappears but
+the questions remain”**. Keep it in the copied release storyboard unless the
+release has a stronger, specifically approved campaign line. The product-intro
+cover additionally uses **“An Alertmanager Frontend for Day-to-Day
+Infrastructure Operations”** as its headline.
 | `frontend/playwright.video.config.ts` | viewport per `VIDEO_FORMAT` (landscape 1600×900, square 1200×1200) |
 | `scripts/release-video.sh` | orchestration: `tts` → `record` (via `scripts/e2e-run.sh video none`) → `render` |
 | `scripts/release-video/tts/` | voice container: Kokoro-82M (Apache-2.0) via kokoro-onnx, int8 model, checksum-pinned — local, free, no account |

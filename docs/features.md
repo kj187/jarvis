@@ -16,7 +16,7 @@ The card view is the default landing page and the primary interface for active a
 - Labels shared by every alert in a group render once, as a quiet strip above the entries; each entry then leads with its own distinguishing labels (the first one emphasized) instead of repeating the common ones — clickable to instantly add a label filter
 - How long the alert has been firing (e.g. "firing for 2h 14m")
 - A 14-day firing sparkline under the timestamp — see [Firing Heatmap](#firing-heatmap)
-- Claim line — "Claimed by: \<name\> · \<time\>" above the entry, with a blue left accent, if anyone has claimed it
+- Claim line — "Claimed by: \<name\> · \<time\>" above the entry, with a blue right accent, if anyone has claimed it
 
 **Actions available directly on the card:**
 - **Silence / Fast-Silence** — a persistent bell icon in a narrow column on the right of each alert entry (and one for the whole group, in the card header) opens a menu with the full silence form and one-click Fast-Silence durations — see [Fast-Silence](#fast-silence)
@@ -171,15 +171,10 @@ Full alert history persisted in the database (SQLite or PostgreSQL — see [docs
 
 The resolved view is Jarvis's history log. Every alert that has ever fired is recorded in the database with its complete lifecycle, and the resolved view shows all alerts that have reached a `resolved` state. This is the core capability that separates Jarvis from in-memory-only UIs.
 
-Jarvis loads this database-backed history only when you open the **Resolved** tab. Active and Suppressed views do not refresh the resolved list in the background. Search waits briefly while you type, then search, label matchers and the per-page choice are sent to the server; changing any of them returns to page 1. During ordinary page navigation the previous page remains dimmed until its replacement arrives, and the controls are temporarily disabled. The first load shows a progress indicator; if it fails, **Retry** repeats the request once requested, while a failed refresh keeps the last successful result visible.
-
-For clients that need bounded history reads, Jarvis also exposes
-`GET /api/v1/alerts/resolved`. It returns a stable event-ID-ordered page plus
-the matching total, accepts page sizes 10/25/50/100, and can filter by cluster,
-severity, search text, or label matchers. Resolved regex matchers use Go's RE2
-syntax; invalid regex indices are reported in the response rather than failing
-the whole request. Search is case-insensitive within each real label name or
-value and does not search JSON punctuation or synthesized labels.
+Jarvis loads this database-backed history only when you open the **Resolved**
+tab. Active and Suppressed views do not fetch it in the background. Search,
+label matchers, cluster and severity filters, and the per-page choice all apply
+to the complete stored history rather than only the visible page.
 
 Alerts are displayed as a flat list in stable newest-event-first order. A right-aligned, grouped **page browser** at the top and bottom allows navigation through large result sets without crowding the alert list; on narrow screens its controls wrap into stacked rows. The **per-page selector** (10 / 25 / 50 / 100) sits to the left of the page browser and is persisted in localStorage so your preference is remembered across sessions. Opening a resolved alert that is not on the current page performs one small fingerprint lookup instead of loading the full history.
 
@@ -212,7 +207,9 @@ Every alert's stats line in the detail panel carries a box-grid heatmap: each ce
 
 Hover the info icon next to the heatmap label for the same explanation inline. Hovering an individual cell shows an exact count and time range tooltip.
 
-The same box-grid rendering (`HeatmapCellsRow`) also drives a smaller, decorative **firing sparkline** on each alert card — the most recent 14 daily buckets under the timestamp row, with no tooltips (so it doesn't fight the card's own click target):
+A smaller, decorative **firing sparkline** on each alert card shows the most
+recent 14 daily buckets under the timestamp row, without competing with the
+card's own click target:
 
 ![Card firing sparkline](assets/feature-heatmap-card.png)
 
@@ -312,7 +309,7 @@ The detail panel is the central hub for working with a single alert. It slides i
 - Other team members can see who has claimed an alert on both the card and list view
 - Unclaim at any time
 
-When an alert is claimed, the owner's name appears as a chip in the detail panel header, and as a "Claimed by: \<name\> · \<time\>" line with a blue left accent on the alert card and list row. The claim history is recorded in the History tab.
+When an alert is claimed, the owner's name appears as a chip in the detail panel header, and as a "Claimed by: \<name\> · \<time\>" line with a blue accent on the alert card (right edge) and list row (left edge). The claim history is recorded in the History tab.
 
 ![Alert Detail Panel — Claimed](assets/feature-detail-claimed.png)
 
@@ -533,3 +530,11 @@ Switch between dark and light mode at any time; the preference is persisted in `
 The theme toggle is located in the top-right corner of the header. Clicking the icon switches the entire UI between dark and light mode instantly — no page reload required.
 
 The selected theme is saved in `localStorage` and restored on every subsequent visit. Dark mode is the default when no preference has been saved.
+
+---
+
+### Keyboard and Accessibility
+
+The header's popovers — cluster status, refresh hint, About and the user menu — open on hover and are equally operable from the keyboard: focus the button and press **Enter** or **Space** to open or close it, **Escape** closes it and returns focus to the button, and moving focus elsewhere closes it. The refresh hint appears when the button receives focus. When the live connection drops, the header says "Offline" in text next to the icon, not only by colour. In the cluster popover, tabbing to a cluster name reveals its `=` / `!=` filter choices.
+
+Keyboard focus is shown with a 2 px blue ring that keeps at least 3:1 contrast against every surface in both themes, and text fields and selects have an edge that meets the same ratio. With the operating system's **reduce motion** setting on, transitions and decorative animations (pulsing indicators, the claim spinner) are switched off; loading spinners keep turning because they are the only progress signal.

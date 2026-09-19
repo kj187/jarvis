@@ -415,8 +415,8 @@ test('F10 inline calendar day selection and time spinner increment work', async 
   const dialog = await openSilenceForm(page)
 
   // The InlineDateTimePicker is always visible (end date).
-  // Its outer container is `.flex.rounded.border.border-border.bg-background`
-  const inlineCalendar = dialog.locator('.flex.rounded.border.border-border.bg-background').first()
+  // Its outer container is `.flex.rounded-compact.border.border-border.bg-background`
+  const inlineCalendar = dialog.locator('.flex.rounded-compact.border.border-border.bg-background').first()
   await expect(inlineCalendar).toBeVisible()
 
   // Click any day button in the DayPicker (buttons with just a 1–2 digit number)

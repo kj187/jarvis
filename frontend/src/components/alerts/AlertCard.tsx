@@ -46,7 +46,7 @@ function FiringSparkline({
   const cells = bucketFiringStarts(data.firingStarts, '30d').slice(-14)
   return (
     <div className="mb-1">
-      <HeatmapCellsRow cells={cells} range="30d" cellClassName="h-2 w-full rounded-sm" gapClassName="gap-0.5" />
+      <HeatmapCellsRow cells={cells} range="30d" cellClassName="h-2 w-full rounded-compact" gapClassName="gap-0.5" />
     </div>
   )
 }
@@ -90,7 +90,6 @@ function AlertEntry({
   const isResolved = alert.status.state === 'resolved'
   const { data: stats } = useAlertStats(alert.fingerprint, alert.clusterName)
   const claim = alert.activeClaim ?? null
-  const theme = useSettingsStore((s) => s.theme)
   const labelDisplay = useSettingsStore((s) => s.labelDisplay)
   const maintainer = claim ? null : (alert.labels['maintainer'] ?? null)
   const formatTime = useFormatTime()
@@ -111,11 +110,11 @@ function AlertEntry({
       onKeyDown={(e) => e.key === 'Enter' && onClick(makeAlertSelectionKeyForAlert(alert), groupKeys)}
       className={cn(
         'group relative flex cursor-pointer items-start gap-1 px-3 py-3.5 transition-colors focus:outline-none focus-visible:outline-none',
-        // Claimed entries carry a blue left accent — "someone's on it", scannable
+        // Claimed entries carry a blue right accent — "someone's on it", scannable
         // in a large group — not the old grey tint that read as "deprioritised".
-        claim ? 'border-l-2 border-blue-400/70 bg-blue-500/10 hover:bg-blue-500/[0.14]' : 'hover:bg-accent/20',
-        isSelected && !claim && 'bg-blue-500/10 hover:bg-blue-500/15',
-        isSelected && claim && 'bg-blue-500/20 hover:bg-blue-500/25',
+        claim ? 'border-r-4 border-claim-edge bg-claim-soft hover:bg-selected' : 'hover:bg-accent/20',
+        isSelected && !claim && 'bg-selected hover:bg-info-soft',
+        isSelected && claim && 'bg-info-soft',
       )}
     >
       <div className="min-w-0 flex-1">
@@ -125,24 +124,23 @@ function AlertEntry({
         {claim && (
           claim.note ? (
             <div className={cn(
-              'mb-2 flex items-start gap-2 rounded border-l-2 border-blue-400 px-2 py-1.5 text-xs',
-              theme === 'light' ? 'bg-blue-50 text-blue-800' : 'bg-blue-500/10 text-blue-200',
+              'mb-2 flex items-start gap-2 rounded-compact border-r-4 border-claim-edge bg-claim-soft px-2 py-1.5 text-xs text-claim-fg',
             )}>
-              <User className="mt-0.5 h-3 w-3 shrink-0 text-blue-400" />
+              <User className="mt-0.5 h-3 w-3 shrink-0 text-claim-solid" />
               <div className="min-w-0 flex-1">
                 <div title={claim.claimedBy}>
                   <span className="opacity-70">Claimed by: </span>
                   <span className="font-medium">{shortClaimant(claim.claimedBy)}</span>
                   <span className="opacity-70"> · {formatTime(claim.claimedAt)}</span>
                 </div>
-                <div className={cn('mt-0.5', theme === 'light' ? 'text-blue-700' : 'text-blue-300/80')}>
+                <div className="mt-0.5">
                   {claim.note}
                 </div>
               </div>
             </div>
           ) : (
             <div
-              className={cn('mb-1.5 flex items-center gap-1.5 text-xs', theme === 'light' ? 'text-blue-700' : 'text-blue-300')}
+              className="mb-1.5 flex items-center gap-1.5 text-xs text-claim-fg"
               title={claim.claimedBy}
             >
               <User className="h-3 w-3 shrink-0" />
@@ -159,7 +157,7 @@ function AlertEntry({
             so each sibling alert reads as its own unit */}
         {multi && (
           <div className="mb-1 flex items-start gap-2">
-            <span className="mt-px shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-muted-foreground">
+            <span className="mt-px shrink-0 rounded-compact bg-muted px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-muted-foreground">
               {index + 1}/{total}
             </span>
             <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
@@ -185,7 +183,7 @@ function AlertEntry({
             {maintainer && <span>{maintainer}</span>}
           </div>
           {isResolved && stats?.lastResolvedAt && (
-            <span className="text-green-600/70" title={new Date(stats.lastResolvedAt).toLocaleString('en-US')}>
+            <span className="text-success-fg" title={new Date(stats.lastResolvedAt).toLocaleString('en-US')}>
               ✓ {formatTime(stats.lastResolvedAt)}
             </span>
           )}
@@ -199,7 +197,7 @@ function AlertEntry({
 
         {/* Silence banner */}
         {silenceType === 'active' && silence && remaining !== undefined && (
-          <div className="mb-2 flex items-center gap-1.5 rounded bg-muted px-2 py-1.5 text-xs">
+          <div className="mb-2 flex items-center gap-1.5 rounded-compact bg-muted px-2 py-1.5 text-xs">
             <BellOff className="h-3 w-3 shrink-0 text-muted-foreground" />
             <div>
               <div className="font-semibold text-foreground">SILENCE ACTIVE</div>
@@ -209,15 +207,14 @@ function AlertEntry({
         )}
         {silenceType === 'expiring' && remaining !== undefined && (
           <div className={cn(
-            'mb-2 flex items-center gap-1.5 rounded px-2 py-1.5 text-xs',
-            theme === 'light' ? 'bg-amber-50 border border-amber-200 text-amber-700' : 'bg-yellow-900/40 text-yellow-300',
+            'mb-2 flex items-center gap-1.5 rounded-compact border border-warning-edge bg-warning-soft px-2 py-1.5 text-xs text-warning-fg',
           )}>
             <BellOff className="h-3 w-3 shrink-0" />
             <span>Silence expires in {formatSilenceDuration(remaining)}</span>
           </div>
         )}
         {silenceType === 'pending' && silence && (
-          <div className="mb-2 rounded bg-muted px-2 py-1.5 text-xs text-muted-foreground">
+          <div className="mb-2 rounded-compact bg-muted px-2 py-1.5 text-xs text-muted-foreground">
             ⏳ Silence from{' '}
             {new Date(silence.startsAt).toLocaleTimeString('en-US', {
               hour: '2-digit',
@@ -226,7 +223,7 @@ function AlertEntry({
           </div>
         )}
         {expiredSilence && (
-          <div className="mb-1 flex items-center gap-1 text-[11px] text-muted-foreground/60">
+          <div className="mb-1 flex items-center gap-1 text-[11px] text-muted-foreground">
             <BellOff className="h-3 w-3 shrink-0" />
             <span title={new Date(expiredSilence.endsAt).toLocaleString('en-US')}>
               Silence expired {formatTime(expiredSilence.endsAt)}
@@ -242,7 +239,7 @@ function AlertEntry({
           </p>
         )}
         {description && (
-          <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground/60" title={description}>
+          <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground" title={description}>
             {renderTextWithLinks(description)}
           </p>
         )}
@@ -308,7 +305,7 @@ export function AlertCard({
   return (
     <div
       className={cn(
-        'overflow-hidden rounded-lg border border-border bg-card shadow-sm',
+        'overflow-hidden rounded-surface border border-border bg-card shadow-sm',
         'border-l-4',
         severityBorderColor[severity] ?? 'border-l-slate-500',
       )}
@@ -323,13 +320,13 @@ export function AlertCard({
         <div className="flex shrink-0 items-center gap-2" title="">
           {showSeverityBadge && severityRaw && <AlertBadge severity={severity} />}
           {count > 1 && (
-            <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-accent px-1.5 text-xs font-bold">
+            <span className="flex h-5 min-w-[20px] items-center justify-center rounded-pill bg-accent px-1.5 text-xs font-bold">
               ×{count}
             </span>
           )}
           {claimedCount > 0 && (
             <span
-              className="flex h-5 items-center gap-0.5 rounded-full bg-blue-500/20 px-1.5 text-xs font-medium text-blue-400"
+              className="flex h-5 items-center gap-0.5 rounded-pill bg-claim-soft px-1.5 text-xs font-medium text-claim-fg"
               title={`${claimedCount} of ${count} claimed`}
             >
               <User className="h-2.5 w-2.5" />
@@ -387,7 +384,7 @@ export function AlertCard({
           <button
             onClick={() => setVisibleCount((n) => Math.max(PAGE_SIZE, n - PAGE_SIZE))}
             disabled={visibleCount <= PAGE_SIZE}
-            className="flex h-6 w-6 cursor-pointer items-center justify-center rounded border border-border font-bold hover:bg-accent disabled:cursor-default disabled:opacity-30"
+            className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-compact border border-border font-bold hover:bg-accent disabled:cursor-default disabled:opacity-30"
           >
             −
           </button>
@@ -395,7 +392,7 @@ export function AlertCard({
           <button
             onClick={() => setVisibleCount((n) => Math.min(count, n + PAGE_SIZE))}
             disabled={visibleCount >= count}
-            className="flex h-6 w-6 cursor-pointer items-center justify-center rounded border border-border font-bold hover:bg-accent disabled:cursor-default disabled:opacity-30"
+            className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-compact border border-border font-bold hover:bg-accent disabled:cursor-default disabled:opacity-30"
           >
             +
           </button>

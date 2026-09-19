@@ -1,69 +1,31 @@
 @import "tailwindcss";
 
-@theme {
-  /* Dark mode (default)
-   * Depth chain: background(9%) → card/header(13-14%) → input(16%) → muted(19%) → accent(21%) → border(23%)
-   * Header is lifted further above background than the chain's step size (9→14, not 9→11) so the
-   * toolbar reads as a distinct raised surface instead of nearly blending into the page.
-   * Low saturation (12-15%) avoids the "electric navy" feeling of high-sat near-black surfaces.
-   */
-  --color-background: hsl(222 15% 9%);
-  --color-foreground: hsl(210 25% 90%);
-  --color-card: hsl(222 14% 13%);
-  --color-card-foreground: hsl(210 25% 90%);
-  --color-border: hsl(220 12% 23%);
-  --color-input: hsl(222 13% 16%);
-  --color-primary: hsl(210 40% 98%);
-  --color-primary-foreground: hsl(222 47% 11%);
-  --color-secondary: hsl(222 13% 16%);
-  --color-secondary-foreground: hsl(210 25% 90%);
-  --color-muted: hsl(222 12% 19%);
-  --color-muted-foreground: hsl(215 13% 55%);
-  --color-accent: hsl(220 12% 21%);
-  --color-accent-foreground: hsl(210 25% 90%);
-  --color-destructive: hsl(0 63% 31%);
-  --color-destructive-foreground: hsl(210 40% 98%);
-  --color-popover: hsl(222 14% 13%);
-  --color-popover-foreground: hsl(215 13% 60%);
-  --color-ring: hsl(220 12% 30%);
-  --color-header: hsl(222 14% 14%);
-  --color-link: hsl(213 94% 68%);
-
-  --color-severity-critical: hsl(0 84% 60%);
-  --color-severity-warning: hsl(38 92% 50%);
-  --color-severity-info: hsl(221 83% 53%);
-  --color-severity-none: hsl(215 16% 47%);
-
-  --radius: 0.5rem;
+/* Inter (SIL OFL 1.1, licence: public/fonts/OFL-Inter.txt), self-hosted so the UI looks the same on
+ * every machine and the strict CSP needs no font CDN. One variable file, Latin subset; the browser
+ * picks any weight off the wght axis. */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/fonts/inter-variable-latin.woff2') format('woff2');
 }
 
-[data-theme="light"] {
-  /*
-   * Depth chain: background(94%) → muted(92%) → accent(89%) → border(83%)
-   * Surface elevation: background(94%) → header(99%) → card(100%)
-   * Consistent hue: 220 (cool blue-gray), saturation 11-15%
-   */
-  --color-background: hsl(220 14% 94%);
-  --color-foreground: hsl(222 25% 12%);
-  --color-header: hsl(220 15% 99%);
-  --color-card: hsl(0 0% 100%);
-  --color-card-foreground: hsl(222 25% 12%);
-  --color-border: hsl(220 13% 83%);
-  --color-input: hsl(220 12% 97%);
-  --color-primary: hsl(222 40% 20%);
-  --color-primary-foreground: hsl(0 0% 100%);
-  --color-secondary: hsl(220 12% 91%);
-  --color-secondary-foreground: hsl(222 25% 12%);
-  --color-muted: hsl(220 11% 92%);
-  --color-muted-foreground: hsl(220 9% 44%);
-  --color-accent: hsl(220 12% 89%);
-  --color-accent-foreground: hsl(222 25% 12%);
-  --color-destructive: hsl(0 72% 51%);
-  --color-destructive-foreground: hsl(0 0% 100%);
-  --color-popover: hsl(0 0% 100%);
-  --color-popover-foreground: hsl(220 9% 44%);
-  --color-ring: hsl(221 60% 58%);
-  --color-link: hsl(221 83% 43%);
+/* Colour tokens (dark default + [data-theme="light"]) are generated from design/tokens.json —
+ * edit them there and run `node scripts/design-tokens.mjs`. */
+@import "./generated/tokens.css";
+
+/* `dark:` follows the app's own theme (`data-theme` is always set on <html>), not the OS
+ * preference — without this the variant flipped with the system setting instead of the toggle. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+@theme {
+  --radius: 0.5rem;
+
+  /* Type stacks. Sans is Inter with the platform UI font only as a fallback while it loads; mono is
+   * a fixed list (matchers, code, IDs) so screenshots do not depend on one platform. */
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
 }
 
 /* Global: all interactive elements show pointer cursor */
@@ -137,10 +99,28 @@ input::-webkit-calendar-picker-indicator {
   );
 }
 
+/* Motion: honor the OS "reduce motion" setting. Transitions and decorative loops
+   (animate-ping/pulse, claim-snake) are neutralised; animate-spin stays because a
+   spinner is the only loading signal there. OwlMeshBackdrop handles its own canvas. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .animate-ping,
+  .animate-pulse,
+  .animate-bounce,
+  .claim-snake-spinner {
+    animation: none !important;
+  }
+}
+
 body {
   background-color: var(--color-background);
   color: var(--color-foreground);
-  font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-family: var(--font-sans);
   overflow-x: hidden;
 }
 
@@ -164,7 +144,7 @@ body {
   border-radius: 0.25rem;
   padding: 0.1rem 0.3rem;
   font-size: 0.85em;
-  font-family: ui-monospace, monospace;
+  font-family: var(--font-mono);
 }
 .comment-markdown pre {
   background: var(--color-muted);
@@ -184,7 +164,7 @@ body {
 .hljs-selector-tag,
 .hljs-literal,
 .hljs-section,
-.hljs-link { color: var(--color-severity-info); }
+.hljs-link { color: var(--color-info-solid); }
 .hljs-string,
 .hljs-title,
 .hljs-name,
@@ -195,13 +175,13 @@ body {
 .hljs-addition,
 .hljs-variable,
 .hljs-template-tag,
-.hljs-template-variable { color: var(--color-severity-warning); }
+.hljs-template-variable { color: var(--color-warning-solid); }
 .hljs-comment,
 .hljs-quote,
 .hljs-deletion,
 .hljs-meta { color: var(--color-muted-foreground); font-style: italic; }
 .hljs-number,
-.hljs-regexp { color: var(--color-severity-critical); }
+.hljs-regexp { color: var(--color-critical-solid); }
 .hljs-emphasis { font-style: italic; }
 .hljs-strong { font-weight: 600; }
 

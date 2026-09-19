@@ -326,6 +326,14 @@ to `src/lib/**` only:
 - `frontend/vitest.config.ts` — `include: ['src/lib/**/*.test.ts']`, coverage
   restricted to `src/lib/alertUtils.ts`. No jsdom/component-testing
   dependencies, no other directory is in scope.
+- `frontend/src/lib/themeTokens.test.ts` — reads `src/index.css` and asserts
+  that `--color-ring` reaches >= 3:1 contrast against every surface token
+  (background/card/header/input/muted/accent) and `--color-control` (text-field
+  edge, `border-control`) against background/card/header/input, in dark and
+  light (WCAG 2.2 SC 1.4.11 / 2.4.11). Outside the coverage scope; extend it
+  for further token pairs. Also asserts `--color-muted-foreground` >= 4.5:1 on every
+  surface and 4.5:1 text contrast for every status role. Browser-level checks live in
+  `e2e/functional/none/a11y.spec.ts` (axe on Alerts and Silences, both themes; reduced motion).
 - `frontend/src/lib/alertUtils.test.ts` — example-based tests for every
   exported function (formatting/escaping helpers, matching/state functions),
   including the byte-mirrored Resolved-filter corpus from
@@ -416,6 +424,9 @@ anything outside `src/lib/` stays E2E-only.
 Specs live under `frontend/e2e/`:
 
 - `e2e/functional/<mode>/*.spec.ts` — functional golden paths per auth mode (`none`, `internal`, `oidc`).
+  `functional/none/alerts-overview.spec.ts` also guards the shared modal-dialog
+  accessibility contract: accessible name, focus moved inside on open,
+  Tab/Shift+Tab containment, Escape close, and focus restoration to the trigger.
   `functional/none/settings.spec.ts` includes H12: opening Settings writes
   `settings=open`, a reload reopens the sheet, and closing it removes only
   that parameter while preserving alert-page URL state.
@@ -502,6 +513,7 @@ troubleshooting are documented in **`docs/testing-e2e.md`**.
 | `charts/**` | `helm lint` + `helm unittest` |
 | always | `scripts/check-changelogs.sh` — chart changes (outside `tests/`) must update `charts/jarvis/CHANGELOG.md`; every chart-changelog version section starts with a non-empty `### Breaking Changes`; changed `.github/release-notes/*.md` contain a Breaking Changes heading (a no-op when none of those paths are staged) |
 | always | `scripts/check-agent-context.sh` (also `make check-agent-context`) — the AI agent context stays tool-agnostic: every `.agents/skills/*/` passes the Agent Skills reference validator (`skills-ref`, pinned, run via `agentskills` / `uvx` / `pipx`) and `SKILL.md` ≤ 500 lines; tool adapters match the lists in the script (`docs/ai-agents.md`); `AGENTS.md` ≤ 30,000 bytes (the smallest project-instruction limit among the supported tools is 32 KiB, including the user's global file); every doc/script path in `AGENTS.md` exists; no tool names or tool-only syntax in `AGENTS.md` or any `.agents/**/*.md`; every `docs/*.md` file is registered in `website/scripts/pages.mjs` (`.agents/skills/website/SKILL.md`); backend/frontend resolved-filter conformance fixtures are byte-identical |
+| always | `node scripts/check-design-drift.mjs` (also a CI step) — no raw Tailwind palette classes, colour literals or radius classes in `frontend/src` (semantic tokens only — `rounded-control`, `rounded-surface`, …; `lib/avatarUtils.ts` and `lib/heatmapUtils.ts` are allow-listed data-viz) · `node scripts/design-tokens.mjs --check` (also a CI step in the Agent Context job) — the generated colour files (`frontend/src/generated/tokens.css`, `website/.vitepress/theme/generated-tokens.css`, `frontend/e2e/video/generated-theme.ts`) must match `design/tokens.json`; `lib/themeTokens.test.ts` reads the generated CSS |
 | always | **gitleaks** secret scan of the staged diff (via podman, config `.gitleaks.toml`) |
 
 ```bash

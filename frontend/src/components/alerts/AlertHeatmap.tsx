@@ -1,7 +1,7 @@
+import { InfoHint } from '@/components/ui/info-hint'
 import { useState } from 'react'
 import { format } from 'date-fns'
 import { enUS } from 'date-fns/locale'
-import { Info } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { bucketFiringStarts, type HeatmapCell } from '@/lib/heatmapUtils'
 import { useAlertHeatmap } from '@/hooks/useAlerts'
@@ -57,21 +57,18 @@ export function AlertHeatmap({ fingerprint, cluster, enabled }: AlertHeatmapProp
     <div className="space-y-2">
       <div className="flex items-center justify-end gap-2">
         <p className="text-[10px] text-muted-foreground">Heatmap, when and how often this alert fired</p>
-        <span className="group relative inline-flex items-center">
-          <Info className="h-3 w-3 cursor-help text-muted-foreground/60 hover:text-muted-foreground" />
-          <span className="pointer-events-none absolute right-0 top-4 z-50 w-72 rounded-md border border-border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-lg opacity-0 group-hover:opacity-100 transition-opacity normal-case tracking-normal font-normal leading-relaxed">
+        <InfoHint size="sm" label="About the heatmap">
             Each cell is one time bucket. Darker/filled cells mean the alert fired more often in that bucket, empty cells mean it didn't fire.
             <br /><br />
             <span className="font-mono">24h</span> shows hourly buckets, <span className="font-mono">7d</span> shows one row per day with hourly buckets, <span className="font-mono">30d</span> shows daily buckets.
-          </span>
-        </span>
-        <div className="flex items-center gap-1 rounded border border-border p-0.5">
+        </InfoHint>
+        <div className="flex items-center gap-1 rounded-compact border border-border p-0.5">
           {RANGES.map((r) => (
             <button
               key={r.value}
               onClick={() => setRange(r.value)}
               className={cn(
-                'rounded px-2 py-0.5 text-[10px] font-medium cursor-pointer',
+                'rounded-compact px-2 py-0.5 text-[10px] font-medium cursor-pointer',
                 range === r.value
                   ? 'bg-accent text-foreground'
                   : 'text-muted-foreground hover:text-foreground hover:bg-accent/50',
@@ -89,7 +86,7 @@ export function AlertHeatmap({ fingerprint, cluster, enabled }: AlertHeatmapProp
         hasActivity ? (
           <HeatmapGrid cells={cells} range={range} />
         ) : (
-          <p className="py-1 text-right text-[10px] text-muted-foreground/60">No activity in this window</p>
+          <p className="py-1 text-right text-[10px] text-muted-foreground">No activity in this window</p>
         )
       )}
     </div>

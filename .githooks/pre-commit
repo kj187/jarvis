@@ -50,6 +50,11 @@ git diff --cached --name-only | scripts/check-changelogs.sh
 echo "  [Agent context] Checking skills, tool adapters and AGENTS.md..."
 scripts/check-agent-context.sh
 
+# ── Design tokens (always; cheap) — generated files must match design/tokens.json ──
+echo "  [Design] Checking generated design tokens and raw colours/radii..."
+node scripts/design-tokens.mjs --check
+node scripts/check-design-drift.mjs
+
 # ── Secret scanning (always, all file types) ──────────────────────────────────
 echo "  [Security] Running gitleaks (secret scan)..."
 git diff --cached | podman run --rm -i \

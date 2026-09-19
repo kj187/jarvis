@@ -75,7 +75,7 @@ export function AlertListRow({
   // just the "who's on it" line, styled and placed like the card.
   const claim = alert.activeClaim
   const claimLine = claim ? (
-    <span className="flex items-center gap-1 text-xs text-blue-400" title={claim.claimedBy}>
+    <span className="flex items-center gap-1 text-xs text-claim-fg" title={claim.claimedBy}>
       <User className="h-3 w-3 shrink-0" />
       <span className="truncate">
         <span className="opacity-70">Claimed by: </span>
@@ -119,7 +119,7 @@ export function AlertListRow({
       {silenceType === 'expiring' && silence && remaining !== undefined && (
         <>
           <span className="font-normal text-muted-foreground">, </span>
-          <span className={cn('text-xs font-normal', theme === 'light' ? 'text-amber-600' : 'text-yellow-400')} title={`Silence expires in ${formatSilenceDuration(remaining)}`}>
+          <span className={cn('text-xs font-normal', 'text-warning-fg')} title={`Silence expires in ${formatSilenceDuration(remaining)}`}>
             <BellOff className="inline h-3 w-3 align-text-bottom" />
             {' '}{formatSilenceDuration(remaining)}
           </span>
@@ -160,13 +160,13 @@ export function AlertListRow({
       className={cn(
         'cursor-pointer transition-colors hover:bg-accent/50 focus:outline-none focus-visible:outline-none',
         indented && !selected && !claim && (theme === 'light' ? 'bg-background' : 'bg-background/60'),
-        claim && !selected && (theme === 'light' ? 'bg-blue-50 hover:bg-blue-100/80' : 'bg-blue-950/30 hover:bg-blue-950/50'),
+        claim && !selected && 'bg-claim-soft hover:bg-selected',
         isLastInGroup && 'border-b border-border/60',
         isResolved && !noOpacity && 'opacity-50',
         selected && 'bg-accent',
       )}
     >
-      <td className={cn('px-4 py-2 border-l-2', indented && 'pl-10', claim ? 'border-blue-600/70' : 'border-transparent')}>
+      <td className={cn('px-4 py-2 border-l-2', indented && 'pl-10', claim ? 'border-claim-edge' : 'border-transparent')}>
         <div className="flex flex-col gap-0.5">
           {indented ? (
             <>{claimLine}{chipRow}{metaLine}{descLine}</>
@@ -202,7 +202,7 @@ export function AlertListRow({
               type="button"
               onClick={() => onExpireSilence?.(silence)}
               title="Expire silence"
-              className="cursor-pointer rounded border border-border p-1 text-muted-foreground transition-colors hover:border-border/80 hover:text-foreground"
+              className="cursor-pointer rounded-compact border border-border p-1 text-muted-foreground transition-colors hover:border-border/80 hover:text-foreground"
             >
               <BellMinus className="h-3.5 w-3.5" />
             </button>
@@ -212,7 +212,7 @@ export function AlertListRow({
               type="button"
               onClick={() => onCreateSilence?.([alert], silence, true)}
               title="Extend silence"
-              className="cursor-pointer rounded border border-yellow-700/60 p-1 text-yellow-400 transition-colors hover:border-yellow-500"
+              className="cursor-pointer rounded-compact border border-warning-edge p-1 text-warning-fg transition-colors hover:border-warning-solid"
             >
               <RefreshCw className="h-3.5 w-3.5" />
             </button>

@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button'
 import { TruncatableChip } from '@/components/ui/truncatable-chip'
 import { pickIdentifierLabel, tzAbbr } from '@/lib/alertUtils'
 import { cn } from '@/lib/utils'
-import { useSettingsStore } from '@/store/useSettingsStore'
 import type { Silence, EnrichedAlert } from '@/types'
 
 interface SilenceExpireModalProps {
@@ -24,14 +23,13 @@ function MatcherChip({ matcher }: { matcher: Silence['matchers'][number] }) {
     ? matcher.isEqual ? '=~' : '!~'
     : matcher.isEqual ? '=' : '!='
   return (
-    <TruncatableChip className="rounded bg-accent px-1.5 py-0.5 font-mono text-xs">
+    <TruncatableChip className="rounded-compact bg-accent px-1.5 py-0.5 font-mono text-xs">
       {matcher.name}{op}{matcher.value}
     </TruncatableChip>
   )
 }
 
 function SilenceDetail({ silence, allAlerts, onSelectAlert }: { silence: Silence; allAlerts?: EnrichedAlert[]; onSelectAlert?: (fingerprint: string) => void }) {
-  const theme = useSettingsStore((s) => s.theme)
   const isPending = silence.status.state === 'pending'
   const now = Date.now()
   const remaining = new Date(silence.endsAt).getTime() - now
@@ -41,12 +39,12 @@ function SilenceDetail({ silence, allAlerts, onSelectAlert }: { silence: Silence
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2 flex-wrap">
-        <span className="rounded bg-accent px-2 py-0.5 text-xs">{silence.clusterName}</span>
+        <span className="rounded-compact bg-accent px-2 py-0.5 text-xs">{silence.clusterName}</span>
         <span className={cn(
-          'rounded px-2 py-0.5 text-xs font-semibold',
-          silence.status.state === 'active' && (theme === 'light' ? 'bg-green-100 text-green-700' : 'bg-green-900/40 text-green-400'),
-          silence.status.state === 'pending' && (theme === 'light' ? 'bg-slate-200 text-slate-600' : 'bg-slate-800 text-slate-300'),
-          silence.status.state === 'expired' && (theme === 'light' ? 'bg-slate-100 text-slate-500' : 'bg-slate-900 text-slate-500'),
+          'rounded-compact px-2 py-0.5 text-xs font-semibold',
+          silence.status.state === 'active' && 'bg-success-soft text-success-fg',
+          silence.status.state === 'pending' && 'bg-neutral-soft text-neutral-fg',
+          silence.status.state === 'expired' && 'bg-muted text-muted-foreground',
         )}>
           {silence.status.state}
         </span>
@@ -113,7 +111,7 @@ function SilenceDetail({ silence, allAlerts, onSelectAlert }: { silence: Silence
             {affected.map((a) => (
               <div
                 key={a.fingerprint}
-                className={cn('flex items-center gap-2 text-xs rounded px-1 -mx-1 py-0.5', onSelectAlert && 'cursor-pointer hover:bg-accent')}
+                className={cn('flex items-center gap-2 text-xs rounded-compact px-1 -mx-1 py-0.5', onSelectAlert && 'cursor-pointer hover:bg-accent')}
                 onClick={() => onSelectAlert?.(a.fingerprint)}
               >
                 <span className="font-medium text-foreground shrink-0">{a.labels['alertname'] ?? a.fingerprint}</span>
@@ -137,7 +135,7 @@ export function SilenceExpireModal({ silences, allAlerts, open, onConfirm, onCan
   const title = count === 1 ? 'Expire silence?' : `Expire ${count} silences?`
 
   return (
-    <Dialog open={open} onClose={onCancel}>
+    <Dialog open={open} onClose={onCancel} ariaLabel={title}>
       <div className="p-6 space-y-4">
         <div className="space-y-1 pr-6">
           <h2 className="text-base font-semibold flex items-center gap-2">

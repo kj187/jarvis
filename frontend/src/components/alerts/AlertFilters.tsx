@@ -55,7 +55,7 @@ export function AlertFilters({
       {matchers.map((m) => (
         <div
           key={m.id}
-          className="flex items-center gap-1 rounded-full border border-border bg-accent px-2.5 py-1 text-xs"
+          className="flex items-center gap-1 rounded-pill border border-border bg-accent px-2.5 py-1 text-xs"
         >
           <span className="text-muted-foreground">{m.name}</span>
           <span className="font-mono text-accent-foreground">{m.operator}</span>

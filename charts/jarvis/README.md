@@ -21,9 +21,8 @@ helm install jarvis oci://ghcr.io/kj187/charts/jarvis --version <version> -f val
 
 ## Upgrade
 
-```bash
-helm upgrade jarvis oci://ghcr.io/kj187/charts/jarvis --version <version> -f values.yaml
-```
+Follow [Upgrade and rollback](../../docs/upgrade.md) for version selection,
+database backup, the `helm upgrade` command, and rollback ordering.
 
 ## Uninstall
 
@@ -49,14 +48,8 @@ none) — read that section before `helm upgrade` across versions.
 
 ## Verify the chart signature
 
-Charts are signed keylessly with [cosign](https://github.com/sigstore/cosign)
-(GitHub OIDC):
-
-```bash
-cosign verify ghcr.io/kj187/charts/jarvis:<version> \
-  --certificate-identity-regexp="https://github.com/kj187/jarvis/.*" \
-  --certificate-oidc-issuer="https://token.actions.githubusercontent.com"
-```
+Charts are signed keylessly. Use the maintained cosign command and provenance
+checks in [Verify release artifacts](../../docs/verify-release.md#helm-chart).
 
 ## Testing
 
@@ -218,46 +211,11 @@ database:
   existingSecretKey: dsn
 ```
 
-### Internal authentication
+### Authentication
 
-```yaml
-auth:
-  provider: internal
-  secretKey: "$(openssl rand -hex 32)"   # replace with actual generated value
-```
-
-Or with an external Secret (recommended for production):
-
-```bash
-kubectl create secret generic jarvis-auth \
-  --from-literal=secret-key=$(openssl rand -hex 32)
-```
-
-```yaml
-auth:
-  provider: internal
-  existingSecret: jarvis-auth
-```
-
-### OIDC authentication
-
-```bash
-kubectl create secret generic jarvis-auth \
-  --from-literal=secret-key=$(openssl rand -hex 32) \
-  --from-literal=oidc-client-secret=<your-client-secret>
-```
-
-```yaml
-auth:
-  provider: oidc
-  existingSecret: jarvis-auth
-  oidc:
-    issuer: https://keycloak.example.com/realms/myrealm
-    clientId: jarvis
-    redirectUrl: https://jarvis.example.com/auth/oidc/callback
-```
-
-For provider-specific setup (Keycloak, Authentik) see [docs/authentication-user.md](../../docs/authentication-user.md).
+For internal accounts, OIDC, Kubernetes Secret examples, and
+provider-specific setup, see
+[User authentication](../../docs/authentication-user.md#kubernetes--helm).
 
 ### Multiple clusters
 
@@ -274,47 +232,10 @@ clusters:
 
 ### Alertmanager behind an authentication proxy
 
-Per-cluster upstream authentication (OAuth2 client credentials, bearer token, basic auth,
-custom headers) is configured directly under `clusters[].auth`:
-
-```yaml
-clusters:
-  - name: production
-    alertmanagerUrl: https://alertmanager-internal.example.com
-    auth:
-      oauth2:
-        clientId: jarvis-service
-        tokenUrl: https://keycloak.example.com/realms/homelab/protocol/openid-connect/token
-        # clientSecret below is stored in a Secret, never the ConfigMap.
-        clientSecret: <client-secret>
-```
-
-Prefer an existing Secret over inline values in production — the value above ends up in
-plaintext in the release values otherwise:
-
-```bash
-kubectl create secret generic jarvis-upstream-auth \
-  --from-literal=cluster-1-oauth2-client-secret=<client-secret>
-```
-
-```yaml
-clusters:
-  - name: production
-    alertmanagerUrl: https://alertmanager-internal.example.com
-    auth:
-      oauth2:
-        clientId: jarvis-service
-        tokenUrl: https://keycloak.example.com/realms/homelab/protocol/openid-connect/token
-      existingSecret: jarvis-upstream-auth
-```
-
-The other methods (bearer token, basic auth, custom headers) and the full priority order
-when more than one is set for the same cluster are in
-[docs/authentication-alertmanager.md](../../docs/authentication-alertmanager.md).
-
-Chart versions before this one have no `clusters[].auth` values — upstream auth on those is
-configured through `extraEnv` instead, using the numbered `JARVIS_CLUSTER_<n>_*` variables
-directly; see the same doc page for that pattern.
+OAuth2, bearer-token, basic-auth, custom-header, and Secret examples are kept
+in [Alertmanager authentication](../../docs/authentication-alertmanager.md#on-kubernetes-helm).
+That guide also documents the `extraEnv` fallback for chart versions without
+`clusters[].auth` values.
 
 ### Ingress with WebSocket support
 

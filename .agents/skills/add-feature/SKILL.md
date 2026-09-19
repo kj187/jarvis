@@ -54,7 +54,9 @@ tags in Go = camelCase in TypeScript).
 1. Add type in types/index.ts (mirrors Go model exactly)
 2. API wrapper in api/client.ts (if new endpoint)
 3. TanStack Query hook in hooks/useXyz.ts
-4. Write component (frontend checklist in AGENTS.md → Workflow Rules #4)
+4. Write component (frontend checklist in AGENTS.md → Workflow Rules #4); it is a visual
+   change, so load `.agents/skills/design-system/SKILL.md` — semantic tokens only, a
+   primitive per overlay role, both themes, keyboard, states
 5. Playwright functional E2E for the golden path (see docs/testing-e2e.md)
 ```
 

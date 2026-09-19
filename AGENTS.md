@@ -27,8 +27,9 @@ Repository layout:
 - `backend/` — Go backend (`internal/api`, `internal/history`, `internal/alertmanager`, `internal/auth`, `internal/ws`, …)
 - `frontend/` — React app (`src/components`, `src/hooks`, `src/lib`, `src/store`, `e2e/`)
 - `charts/jarvis/` — Helm chart (+ helm-unittest tests under `tests/`, own `CHANGELOG.md`)
-- `docs/` — user-facing documentation (not AI context, except `docs/testing-e2e.md`, `docs/scope.md` and `docs/ai-agents.md`)
+- `docs/` — user-facing documentation (not AI context, except `docs/testing-e2e.md`, `docs/scope.md`, `docs/design-system.md` and `docs/ai-agents.md`)
 - `website/` — VitePress documentation site; renders the repo's own markdown, deployed to GitHub Pages
+- `design/` — brand assets: the vector logo master and its derived variants (`design/README.md`)
 - `scripts/` — E2E runner, mock-OIDC config, manual test-alert/silence fixtures
 - `.agents/` — AI reference files (`architecture.md`, `testing.md`, `lessons.md`) and `skills/` — workflows as [Agent Skills](https://agentskills.io), one `<name>/SKILL.md` each (routed below)
 - `Makefile` — canonical entry for dev stack, demo stack, tests, security scans, fixtures (`make help`)
@@ -47,6 +48,7 @@ adapters and their rules live in `docs/ai-agents.md`.
 | Adding a feature: new endpoint, new component, new WS event, new cluster parameter (TDD checklist) | `.agents/skills/add-feature/SKILL.md` |
 | Branching, committing, opening/merging a PR, fixing CI, changelog entries | `.agents/skills/pr-workflow/SKILL.md` |
 | Judging whether a feature idea fits the project scope (scope gate) | `docs/scope.md` |
+| Visual or UI changes: colours, tokens, typography, radii, focus/contrast/motion, overlays, logo, screenshots, videos, social images | `.agents/skills/design-system/SKILL.md` (the rules: `docs/design-system.md`) |
 | Triaging a GitHub feature-request issue against the scope, drafting a reply | `.agents/skills/scope-triage/SKILL.md` |
 | Writing or running tests, test matrix, test utilities, CI pipeline | `.agents/testing.md` |
 | E2E / screenshot stack: Playwright specs, fixtures, auth modes, `compose.e2e.yml` | `docs/testing-e2e.md` |
@@ -209,12 +211,15 @@ adapters and their rules live in `docs/ai-agents.md`.
    paths: Go tests + golangci-lint incl. gosec (backend), pnpm audit + eslint +
    jscpd (frontend, needs running dev container), helm lint/unittest (charts),
    the changelog check `scripts/check-changelogs.sh`, the agent-context check
-   `scripts/check-agent-context.sh` and a gitleaks secret scan (always).
+   `scripts/check-agent-context.sh`, the design-token drift check
+   `node scripts/design-tokens.mjs --check` and a gitleaks secret scan (always).
    **Never `--no-verify`.**
 4. **Frontend checklist**: `cursor: pointer` on all clickable elements · no
    `console.log` · no `dangerouslySetInnerHTML` · import shared utils from
    `lib/alertUtils.ts` (never re-implement in components) · handle loading
-   and error states.
+   and error states · colours and radii only through semantic tokens (`bg-critical-soft`,
+   `text-muted-foreground`, `border-control`, `rounded-control`, …), never raw palette or radius classes —
+   `node scripts/check-design-drift.mjs` enforces it.
 5. **Backend**: All outbound HTTP calls use `context.WithTimeout` (default
    10s). Error responses never leak internal details.
 6. **Keep the AI context files in sync — part of every change, not optional.**
@@ -238,7 +243,10 @@ adapters and their rules live in `docs/ai-agents.md`.
    | Release process, workflows in `release.yml`, versioning, changelog/release-notes format, social media post rules | `.agents/skills/release/SKILL.md` |
    | Issue-triage workflow, reply guidelines | `.agents/skills/scope-triage/SKILL.md` |
    | Anything under `charts/jarvis/` except `tests/` (templates, values, `Chart.yaml`, chart README) | `charts/jarvis/CHANGELOG.md` → `## [Unreleased]` (rule 13) |
+   | A colour token (app, docs site, video) | `design/tokens.json`, then `node scripts/design-tokens.mjs` — never edit the generated files (`frontend/src/generated/tokens.css`, `website/.vitepress/theme/generated-tokens.css`, `frontend/e2e/video/generated-theme.ts`) |
+   | Logo or other brand asset | `design/assets/` (edit the master, then run `python3 scripts/logo-assets.py`; never edit derived files) |
    | Scope definition, in/out-of-scope boundaries, litmus test | `docs/scope.md` |
+   | Colour/typography/contrast/motion/overlay rules, logo and media guidelines, a token or visual decision | `docs/design-system.md` |
    | Project description, invariants, workflow rules, commit format, repo layout, Task Router | `AGENTS.md` itself |
    | Tool adapter, `scripts/check-agent-context.sh` | `docs/ai-agents.md` |
    | E2E stack, specs, fixtures, auth modes | `docs/testing-e2e.md` |

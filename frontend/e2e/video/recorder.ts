@@ -1,6 +1,7 @@
 import type { Locator, Page } from '@playwright/test'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
+import { backdropPalette, rgba, theme } from './theme'
 
 /**
  * Release-video recorder (.agents/skills/release-video/SKILL.md).
@@ -422,7 +423,7 @@ function cardHtml(c: CardContent, format: VideoFormat, logoB64: string, shotB64:
   body{font-family:Inter,system-ui,sans-serif;color:#f8fafc;-webkit-font-smoothing:antialiased;position:relative}
   .bg{position:absolute;inset:0;background:
       radial-gradient(${square ? '900px 700px at 20% 5%' : '1000px 700px at 12% 0%'},rgba(37,99,235,.38),transparent 62%),
-      radial-gradient(${square ? '900px 800px at 100% 100%' : '900px 800px at 100% 100%'},rgba(124,58,237,.30),transparent 60%),
+      radial-gradient(${square ? '900px 800px at 100% 100%' : '900px 800px at 100% 100%'},${rgba(theme.coral, 0.24)},transparent 60%),
       radial-gradient(600px 400px at 50% 50%,rgba(14,165,233,.07),transparent 70%),#060912}
   .grid{position:absolute;inset:0;background-image:linear-gradient(rgba(148,163,184,.07) 1px,transparent 1px),linear-gradient(90deg,rgba(148,163,184,.07) 1px,transparent 1px);
       background-size:56px 56px;-webkit-mask-image:radial-gradient(ellipse ${square ? '80% 55% at 50% 30%' : '60% 80% at 25% 45%'},#000 20%,transparent 75%)}
@@ -432,14 +433,14 @@ function cardHtml(c: CardContent, format: VideoFormat, logoB64: string, shotB64:
   .eyebrow{display:inline-block;margin-top:${square ? 30 : 44}px;padding:7px 16px;border-radius:999px;font-size:17px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;
       color:#bfdbfe;background:rgba(37,99,235,.18);border:1px solid rgba(96,165,250,.35)}
   h1{margin-top:22px;font-size:${square ? 64 : 62}px;line-height:1.06;font-weight:800;letter-spacing:-.035em;text-wrap:balance;
-      background:linear-gradient(180deg,#fff 30%,#c7d2fe);-webkit-background-clip:text;color:transparent}
+      background:linear-gradient(180deg,#fff 30%,${theme.blueSoft});-webkit-background-clip:text;color:transparent}
   p{margin-top:18px;font-size:${square ? 26 : 24}px;line-height:1.4;color:#94a3b8}
   ul{list-style:none;margin-top:30px;display:${square ? 'flex' : 'grid'};${square ? 'flex-wrap:wrap;gap:12px 26px' : 'gap:14px'}}
   li{display:flex;align-items:center;gap:12px;font-size:${square ? 22 : 23}px;font-weight:500;color:#e2e8f0}
   .tick{display:inline-flex;width:28px;height:28px;border-radius:50%;align-items:center;justify-content:center;color:#60a5fa;background:rgba(59,130,246,.16);border:1px solid rgba(96,165,250,.4)}
   .tick svg{width:15px;height:15px}
   .cta{display:inline-block;margin-top:34px;padding:12px 24px;border-radius:14px;font-size:24px;font-weight:600;color:#fff;
-      background:linear-gradient(135deg,rgba(37,99,235,.9),rgba(124,58,237,.9));box-shadow:0 10px 30px rgba(59,130,246,.35)}
+      background:linear-gradient(135deg,rgba(37,99,235,.9),${rgba(theme.coral, 0.72)});box-shadow:0 10px 30px rgba(59,130,246,.35)}
   .stage{position:absolute;${square ? 'left:110px;right:-150px;top:660px' : 'left:800px;top:150px;width:1100px'}}
   .window{border-radius:16px;overflow:hidden;background:#0b1020;border:1px solid rgba(148,163,184,.22);
       box-shadow:0 50px 120px rgba(0,0,0,.65),0 0 0 1px rgba(0,0,0,.4),0 0 90px rgba(59,130,246,.28)}
@@ -471,14 +472,14 @@ function showcaseHtml(c: CardContent, format: VideoFormat, logoB64: string): str
   *{box-sizing:border-box;margin:0;padding:0}
   html,body{width:${width}px;height:${height}px;overflow:hidden;background:#060912}
   body{font-family:Inter,system-ui,sans-serif;color:#f8fafc;-webkit-font-smoothing:antialiased;position:relative}
-  .bg{position:absolute;inset:0;background:radial-gradient(1000px 700px at 12% 0%,rgba(37,99,235,.34),transparent 62%),radial-gradient(900px 800px at 100% 100%,rgba(124,58,237,.28),transparent 60%),#060912}
+  .bg{position:absolute;inset:0;background:radial-gradient(1000px 700px at 12% 0%,rgba(37,99,235,.34),transparent 62%),radial-gradient(900px 800px at 100% 100%,${rgba(theme.coral, 0.22)},transparent 60%),#060912}
   .grid{position:absolute;inset:0;background-image:linear-gradient(rgba(148,163,184,.06) 1px,transparent 1px),linear-gradient(90deg,rgba(148,163,184,.06) 1px,transparent 1px);background-size:56px 56px;-webkit-mask-image:radial-gradient(ellipse 70% 60% at 30% 30%,#000 20%,transparent 75%)}
   .wrap{position:absolute;left:${square ? 84 : 96}px;right:${square ? 84 : 96}px;top:${square ? 76 : 60}px;bottom:${square ? 84 : 72}px;display:flex;flex-direction:column}
   .body{flex:1;display:flex;flex-direction:column;justify-content:center;padding-bottom:${square ? 20 : 40}px}
   .brand{display:flex;align-items:center;gap:16px;font-size:34px;font-weight:700;color:#cbd5e1}
   .brand img{width:68px;height:68px}
   .eyebrow{align-self:flex-start;padding:7px 16px;border-radius:999px;font-size:17px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#bfdbfe;background:rgba(37,99,235,.18);border:1px solid rgba(96,165,250,.35)}
-  h1{margin-top:20px;font-size:${square ? 64 : 70}px;line-height:1.04;font-weight:800;letter-spacing:-.035em;text-wrap:balance;background:linear-gradient(180deg,#fff 30%,#c7d2fe);-webkit-background-clip:text;color:transparent}
+  h1{margin-top:20px;font-size:${square ? 64 : 70}px;line-height:1.04;font-weight:800;letter-spacing:-.035em;text-wrap:balance;background:linear-gradient(180deg,#fff 30%,${theme.blueSoft});-webkit-background-clip:text;color:transparent}
   .tiles{margin-top:${square ? 40 : 56}px;display:grid;grid-template-columns:${square ? '1fr' : `repeat(${(c.tiles ?? []).length},1fr)`};gap:${square ? 18 : 24}px}
   section{padding:${square ? '22px 26px' : '30px 30px 28px'};border-radius:18px;background:linear-gradient(180deg,rgba(15,23,42,.78),rgba(15,23,42,.55));border:1px solid rgba(148,163,184,.18);box-shadow:0 20px 60px rgba(0,0,0,.35)}
   section h2{font-size:${square ? 28 : 30}px;font-weight:700;letter-spacing:-.02em;color:#fff}
@@ -534,16 +535,16 @@ function chapterHtml(c: CardContent, index: number, titles: string[], format: Vi
   body{font-family:Inter,system-ui,sans-serif;color:#f8fafc;-webkit-font-smoothing:antialiased;position:relative}
   .bg{position:absolute;inset:0;background:
       radial-gradient(900px 650px at ${square ? '15% 20%' : '10% 30%'},rgba(37,99,235,.34),transparent 62%),
-      radial-gradient(900px 800px at 100% 100%,rgba(124,58,237,.26),transparent 60%),#060912}
+      radial-gradient(900px 800px at 100% 100%,${rgba(theme.coral, 0.21)},transparent 60%),#060912}
   .grid{position:absolute;inset:0;background-image:linear-gradient(rgba(148,163,184,.07) 1px,transparent 1px),linear-gradient(90deg,rgba(148,163,184,.07) 1px,transparent 1px);
       background-size:56px 56px;-webkit-mask-image:radial-gradient(ellipse 70% 70% at 30% 45%,#000 20%,transparent 75%)}
   .brand{position:absolute;left:${square ? 84 : 96}px;top:${square ? 76 : 60}px;display:flex;align-items:center;gap:16px;font-size:34px;font-weight:700;color:#cbd5e1}
   .brand img{width:68px;height:68px}
   .copy{position:absolute;left:${square ? 84 : 96}px;right:${square ? 84 : 96}px;top:0;bottom:${square ? 260 : 150}px;display:flex;flex-direction:column;justify-content:center}
   .num{font-size:${square ? 150 : 140}px;font-weight:800;line-height:1;letter-spacing:-.05em;color:transparent;-webkit-text-stroke:2px rgba(147,197,253,.55);
-      background:linear-gradient(180deg,rgba(96,165,250,.35),rgba(124,58,237,.05));-webkit-background-clip:text}
+      background:linear-gradient(180deg,rgba(96,165,250,.35),${rgba(theme.coral, 0.04)});-webkit-background-clip:text}
   h1{margin-top:18px;font-size:${square ? 92 : 96}px;line-height:1.02;font-weight:800;letter-spacing:-.04em;text-wrap:balance;
-      background:linear-gradient(180deg,#fff 35%,#c7d2fe);-webkit-background-clip:text;color:transparent}
+      background:linear-gradient(180deg,#fff 35%,${theme.blueSoft});-webkit-background-clip:text;color:transparent}
   p{margin-top:22px;font-size:${square ? 34 : 34}px;line-height:1.35;color:#94a3b8;max-width:1100px;text-wrap:balance}
   ol{position:absolute;left:${square ? 84 : 96}px;right:${square ? 84 : 96}px;bottom:${square ? 84 : 72}px;list-style:none;display:${square ? 'grid' : 'flex'};${square ? 'grid-template-columns:1fr 1fr;gap:14px' : `gap:${many ? 10 : 14}px`}}
   li{flex:1;min-width:0;display:flex;align-items:center;gap:${many ? 9 : 12}px;padding:${many ? '12px 14px' : '14px 18px'};border-radius:14px;font-size:${many && !square ? 17 : 21}px;font-weight:600;color:#64748b;
@@ -551,7 +552,7 @@ function chapterHtml(c: CardContent, index: number, titles: string[], format: Vi
   li span{overflow:hidden;text-overflow:ellipsis}
   li b{font-size:15px;font-weight:700;color:#475569}
   li.done{color:#94a3b8}li.done b{color:#60a5fa}
-  li.on{color:#fff;background:linear-gradient(135deg,rgba(37,99,235,.55),rgba(124,58,237,.45));border-color:rgba(147,197,253,.55);box-shadow:0 10px 30px rgba(59,130,246,.3)}
+  li.on{color:#fff;background:linear-gradient(135deg,rgba(37,99,235,.55),${rgba(theme.coral, 0.36)});border-color:rgba(147,197,253,.55);box-shadow:0 10px 30px rgba(59,130,246,.3)}
   li.on b{color:#bfdbfe}
   </style></head><body>
   <div class="bg"></div>${backdropHtml('mesh', format, logoB64)}
@@ -651,7 +652,9 @@ function jpegWidth(buf: Buffer): number {
 }
 
 const CARD_FPS = 30
-const BACKDROP_JS = fs.readFileSync(path.resolve(process.cwd(), 'e2e/video/backdrops.js'), 'utf8')
+const BACKDROP_JS =
+  `window.__JARVIS_PALETTE = ${JSON.stringify(backdropPalette)};\n` +
+  fs.readFileSync(path.resolve(process.cwd(), 'e2e/video/backdrops.js'), 'utf8')
 
 /** Canvas + script that animate a card backdrop; the frame loop calls window.__draw(t). */
 function backdropHtml(kind: 'owl' | 'mesh', format: VideoFormat, logoB64: string): string {

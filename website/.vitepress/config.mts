@@ -7,7 +7,7 @@ import { PAGES } from '../scripts/pages.mjs'
 
 const REPO_ROOT = fileURLToPath(new URL('../..', import.meta.url))
 const SITE_URL = 'https://kj187.github.io/jarvis/'
-const SITE_DESCRIPTION = 'The open-source web UI for Prometheus Alertmanager'
+const SITE_DESCRIPTION = 'An Alertmanager Frontend for Day-to-Day Infrastructure Operations'
 
 // repo-relative source path for each synced route, so "Edit this page on
 // GitHub" and "Last updated" point at the real file (docs/features.md),
@@ -41,6 +41,13 @@ export default defineConfig({
   // Strict for every internal link; only the docs' example URLs are exempt.
   ignoreDeadLinks: [/^https?:\/\/localhost/],
 
+  // `make website-dev` runs in a container with the repo bind-mounted from the
+  // host; inotify events from host edits never reach it, so Vite's default
+  // watcher silently misses every change (only a restart picked them up).
+  vite: {
+    server: { watch: { usePolling: true, interval: 300 } },
+  },
+
   markdown: {
     // Shiki has no `env` grammar; `promql` has none either and falls back to
     // plain text on its own (harmless build warning).
@@ -64,7 +71,8 @@ export default defineConfig({
     const url = `${SITE_URL}${route}`
     const title = route ? `${pageData.title} | Jarvis` : 'Jarvis'
     const description = pageData.description || SITE_DESCRIPTION
-    const image = `${SITE_URL}logo.png`
+    // 1200×630, generated from the design tokens and the logo (frontend/e2e/screenshots/none/social-templates.screenshot.spec.ts)
+    const image = `${SITE_URL}assets/social-og.png`
     return [
       ['meta', { property: 'og:type', content: 'website' }],
       ['meta', { property: 'og:site_name', content: 'Jarvis' }],
@@ -72,7 +80,9 @@ export default defineConfig({
       ['meta', { property: 'og:description', content: description }],
       ['meta', { property: 'og:url', content: url }],
       ['meta', { property: 'og:image', content: image }],
-      ['meta', { name: 'twitter:card', content: 'summary' }],
+      ['meta', { property: 'og:image:width', content: '1200' }],
+      ['meta', { property: 'og:image:height', content: '630' }],
+      ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
       ['meta', { name: 'twitter:title', content: title }],
       ['meta', { name: 'twitter:description', content: description }],
       ['meta', { name: 'twitter:image', content: image }],
@@ -97,9 +107,8 @@ export default defineConfig({
   themeConfig: {
     logo: '/logo.png',
     nav: [
-      { text: 'Demo', link: '/demo' },
-      { text: 'Videos', link: '/videos' },
-      { text: 'Deploy', link: '/deploy/compose' },
+      { text: 'Getting Started', link: '/getting-started' },
+      { text: 'Install', link: '/deploy/compose' },
       { text: 'Reference', link: '/reference/features' },
       { text: 'Concepts', link: '/concepts/architecture' },
       {
@@ -114,26 +123,35 @@ export default defineConfig({
 
     sidebar: [
       {
-        text: 'Getting Started',
+        text: 'Start Here',
         items: [
-          { text: 'Try it locally (demo)', link: '/demo' },
-          { text: 'Videos', link: '/videos' },
+          { text: 'Getting Started', link: '/getting-started' },
+          { text: 'Local demo', link: '/demo' },
           { text: 'First steps in the UI', link: '/start/first-steps' },
+          { text: 'Videos', link: '/videos' },
         ],
       },
       {
-        text: 'Tasks',
+        text: 'Install',
         items: [
-          { text: 'Deploy with Compose', link: '/deploy/compose' },
-          { text: 'Deploy on Kubernetes', link: '/deploy/kubernetes' },
+          { text: 'With Compose', link: '/deploy/compose' },
+          { text: 'On Kubernetes', link: '/deploy/kubernetes' },
           { text: 'Behind a proxy / ingress', link: '/deploy/reverse-proxy' },
-          { text: 'Set up user login', link: '/howto/user-auth' },
-          { text: 'Connect a protected Alertmanager', link: '/howto/upstream-auth' },
+          { text: 'Connect Alertmanager', link: '/deploy/alertmanager' },
+          { text: 'Connect a protected Alertmanager', link: '/deploy/upstream-auth' },
+          { text: 'Set up user login', link: '/deploy/user-auth' },
+        ],
+      },
+      {
+        text: 'Operate',
+        items: [
           { text: 'PostgreSQL & HA', link: '/howto/postgres-ha' },
           { text: 'Migrate from SQLite', link: '/howto/migrate-postgres' },
           { text: 'Configure retention', link: '/howto/retention' },
-          { text: 'Set up monitoring', link: '/howto/monitoring' },
-          { text: 'Upgrade', link: '/howto/upgrade' },
+          { text: 'Monitoring & metrics', link: '/reference/metrics' },
+          { text: 'Backup & restore', link: '/howto/backup' },
+          { text: 'Upgrade & rollback', link: '/howto/upgrade' },
+          { text: 'Verify release artifacts', link: '/howto/verify-release' },
         ],
       },
       {
@@ -141,7 +159,7 @@ export default defineConfig({
         items: [
           { text: 'Features', link: '/reference/features' },
           { text: 'Configuration', link: '/reference/configuration' },
-          { text: 'Metrics', link: '/reference/metrics' },
+          { text: 'Monitoring & metrics', link: '/reference/metrics' },
           { text: 'Helm values', link: '/reference/helm-values' },
           { text: 'Compatibility', link: '/reference/compatibility' },
           { text: 'Changelog', link: '/reference/changelog' },
@@ -151,11 +169,11 @@ export default defineConfig({
       {
         text: 'Concepts',
         items: [
+          { text: 'Glossary', link: '/concepts/glossary' },
           { text: 'Architecture', link: '/concepts/architecture' },
           { text: 'Alert lifecycle', link: '/concepts/alert-lifecycle' },
           { text: 'Why SQLite is single-replica', link: '/concepts/sqlite-limits' },
           { text: 'Security model', link: '/concepts/security' },
-          { text: 'Glossary', link: '/concepts/glossary' },
           { text: 'Project scope', link: '/concepts/scope' },
         ],
       },
@@ -171,6 +189,7 @@ export default defineConfig({
         items: [
           { text: 'Contributing', link: '/project/contributing' },
           { text: 'E2E & screenshot testing', link: '/project/testing-e2e' },
+          { text: 'Design system', link: '/project/design-system' },
           { text: 'Working with AI agents', link: '/project/ai-agents' },
           { text: 'Security policy', link: '/project/security-policy' },
           { text: 'Maintainers', link: '/project/maintainers' },

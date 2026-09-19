@@ -10,6 +10,9 @@
 //   - an image under docs/assets/    -> /assets/<file> (public dir, copied alongside)
 //
 // Run: node scripts/sync-content.mjs (from website/), or `pnpm run sync`.
+// With `--watch` it keeps running and re-syncs whenever a source file changes
+// (`--watch-only` skips the initial sync). `pnpm run dev` uses this, so editing
+// docs/ or website/index.md hot-reloads.
 
 import fs from 'node:fs'
 import path from 'node:path'
@@ -147,8 +150,21 @@ This page has moved. Redirecting to [${to}](/${to})…
 `
 }
 
-function main() {
-  fs.rmSync(CONTENT_DIR, { recursive: true, force: true })
+// Writes/copies only when the bytes differ, so a watch re-sync touches just
+// the files that really changed — VitePress' HMR then reloads one page
+// instead of the whole site.
+function writeIfChanged(dest, data) {
+  const buf = Buffer.isBuffer(data) ? data : Buffer.from(data)
+  if (fs.existsSync(dest) && fs.readFileSync(dest).equals(buf)) return
+  fs.mkdirSync(path.dirname(dest), { recursive: true })
+  fs.writeFileSync(dest, buf)
+}
+const copyIfChanged = (src, dest) => writeIfChanged(dest, fs.readFileSync(src))
+
+function main({ clean = true } = {}) {
+  // A watch re-sync must not wipe content/ — VitePress would see every page
+  // vanish and reappear.
+  if (clean) fs.rmSync(CONTENT_DIR, { recursive: true, force: true })
   fs.mkdirSync(CONTENT_DIR, { recursive: true })
   fs.mkdirSync(PUBLIC_DIR, { recursive: true })
   fs.mkdirSync(PUBLIC_ASSETS_DIR, { recursive: true })
@@ -157,9 +173,7 @@ function main() {
   // route may be nested (e.g. 'deploy/compose'), so the target directory
   // isn't guaranteed to exist yet.
   const writeContentFile = (route, text) => {
-    const dest = path.join(CONTENT_DIR, `${route}.md`)
-    fs.mkdirSync(path.dirname(dest), { recursive: true })
-    fs.writeFileSync(dest, text)
+    writeIfChanged(path.join(CONTENT_DIR, `${route}.md`), text)
   }
 
   for (const page of PAGES) {
@@ -191,8 +205,8 @@ function main() {
     for (const file of fs.readdirSync(assetsSrc)) {
       const ext = path.extname(file).toLowerCase()
       if (IMAGE_EXT.has(ext)) {
-        fs.copyFileSync(path.join(assetsSrc, file), path.join(PUBLIC_ASSETS_DIR, file))
-        fs.copyFileSync(path.join(assetsSrc, file), path.join(ASSETS_DIR, file))
+        copyIfChanged(path.join(assetsSrc, file), path.join(PUBLIC_ASSETS_DIR, file))
+        copyIfChanged(path.join(assetsSrc, file), path.join(ASSETS_DIR, file))
       }
     }
   }
@@ -201,14 +215,14 @@ function main() {
   const frontendPublic = path.join(REPO_ROOT, 'frontend', 'public')
   for (const file of ['logo.png', 'favicon.ico', 'favicon-16x16.png', 'favicon-32x32.png', 'apple-touch-icon.png']) {
     const src = path.join(frontendPublic, file)
-    if (fs.existsSync(src)) fs.copyFileSync(src, path.join(PUBLIC_DIR, file))
+    if (fs.existsSync(src)) copyIfChanged(src, path.join(PUBLIC_DIR, file))
   }
 
   // Site-only pages (not synced from any repo doc — hand-authored under
   // website/, just copied into the regenerated content/ dir so VitePress's
   // srcDir has everything in one place).
   for (const file of ['index.md']) {
-    fs.copyFileSync(path.join(WEBSITE_ROOT, file), path.join(CONTENT_DIR, file))
+    copyIfChanged(path.join(WEBSITE_ROOT, file), path.join(CONTENT_DIR, file))
   }
 
   console.log(
@@ -216,4 +230,49 @@ function main() {
   )
 }
 
-main()
+// Everything main() reads: the synced pages, docs/assets, the branding files
+// and website/index.md. Polled instead of fs.watch: inside the container the
+// repo is a bind mount, where inotify events from the host never arrive.
+function sourceSignature() {
+  const files = [
+    ...PAGES.map((p) => path.join(REPO_ROOT, p.src)),
+    path.join(WEBSITE_ROOT, 'index.md'),
+    path.join(REPO_ROOT, 'frontend', 'public'),
+    path.join(REPO_ROOT, 'docs', 'assets'),
+  ]
+  const parts = []
+  for (const f of files) {
+    try {
+      const st = fs.statSync(f)
+      parts.push(`${f}:${st.mtimeMs}:${st.size}`)
+      if (st.isDirectory()) {
+        for (const child of fs.readdirSync(f)) {
+          const cs = fs.statSync(path.join(f, child))
+          parts.push(`${child}:${cs.mtimeMs}:${cs.size}`)
+        }
+      }
+    } catch {
+      parts.push(`${f}:missing`)
+    }
+  }
+  return parts.join('|')
+}
+
+const watchOnly = process.argv.includes('--watch-only') // dev: initial sync already ran
+if (!watchOnly) main()
+
+if (watchOnly || process.argv.includes('--watch')) {
+  let last = sourceSignature()
+  console.log('sync-content: watching docs/ and website/index.md for changes')
+  setInterval(() => {
+    const now = sourceSignature()
+    if (now === last) return
+    last = now
+    try {
+      main({ clean: false })
+    } catch (err) {
+      // A half-saved file or a bad link must not kill the dev server.
+      console.error(`sync-content: ${err.message}`)
+    }
+  }, 1000)
+}

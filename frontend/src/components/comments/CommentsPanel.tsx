@@ -53,7 +53,7 @@ function CommentRow({ comment, fingerprint, clusterName, user, authMode }: Comme
 
   return (
     <>
-      <div data-testid="detail-comment-item" className="rounded border border-border bg-accent/20 p-3">
+      <div data-testid="detail-comment-item" className="rounded-compact border border-border bg-accent/20 p-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span data-testid="detail-comment-author" className="text-xs font-semibold">{comment.authorName}</span>
@@ -151,7 +151,7 @@ export function CommentsPanel({ fingerprint, clusterName }: CommentsPanelProps) 
           <button
             data-testid="comments-jump-latest"
             onClick={() => setPage(1)}
-            className="flex w-full items-center justify-center gap-1.5 rounded border border-link/40 bg-link/10 px-2 py-1.5 text-xs font-medium text-link hover:bg-link/15 cursor-pointer"
+            className="flex w-full items-center justify-center gap-1.5 rounded-compact border border-link/40 bg-link/10 px-2 py-1.5 text-xs font-medium text-link hover:bg-link/15 cursor-pointer"
           >
             <ArrowUp className="h-3 w-3" />
             New comment — jump to latest
@@ -201,7 +201,7 @@ export function CommentsPanel({ fingerprint, clusterName }: CommentsPanelProps) 
       <form onSubmit={handleSubmit} className="mt-3 shrink-0 space-y-2 border-t border-border pt-3">
         {authMode !== 'none' ? (
           user ? (
-            <div className="flex items-center gap-1.5 h-8 px-2 rounded border border-border bg-muted text-xs text-muted-foreground">
+            <div className="flex items-center gap-1.5 h-8 px-2 rounded-compact border border-border bg-muted text-xs text-muted-foreground">
               <span>Commenting as <strong className="text-foreground">{user.username}</strong></span>
             </div>
           ) : (
@@ -222,7 +222,7 @@ export function CommentsPanel({ fingerprint, clusterName }: CommentsPanelProps) 
             data-testid="comment-editor-write-tab"
             onClick={() => setEditorMode('write')}
             className={cn(
-              'cursor-pointer rounded px-2 py-1 font-medium',
+              'cursor-pointer rounded-compact px-2 py-1 font-medium',
               editorMode === 'write' ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground',
             )}
           >
@@ -233,7 +233,7 @@ export function CommentsPanel({ fingerprint, clusterName }: CommentsPanelProps) 
             data-testid="comment-editor-preview-tab"
             onClick={() => setEditorMode('preview')}
             className={cn(
-              'cursor-pointer rounded px-2 py-1 font-medium',
+              'cursor-pointer rounded-compact px-2 py-1 font-medium',
               editorMode === 'preview' ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground',
             )}
           >
@@ -252,7 +252,7 @@ export function CommentsPanel({ fingerprint, clusterName }: CommentsPanelProps) 
             rows={6}
           />
         ) : (
-          <div data-testid="comment-editor-preview" className="min-h-[140px] rounded-md border border-input bg-background px-3 py-2">
+          <div data-testid="comment-editor-preview" className="min-h-[140px] rounded-control border border-control bg-background px-3 py-2">
             {body.trim() ? (
               <Suspense fallback={<p className="text-sm whitespace-pre-wrap">{body}</p>}>
                 <CommentMarkdown body={body} />

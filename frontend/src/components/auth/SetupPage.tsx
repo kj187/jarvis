@@ -11,7 +11,7 @@ export function SetupPage() {
   const [loading, setLoading] = useState(false)
 
   const strength = password.length >= 20 ? 'Strong' : password.length >= 12 ? 'Fair' : 'Weak'
-  const strengthColor = strength === 'Strong' ? 'text-green-500' : strength === 'Fair' ? 'text-yellow-500' : 'text-red-500'
+  const strengthColor = strength === 'Strong' ? 'text-success-fg' : strength === 'Fair' ? 'text-warning-fg' : 'text-critical-fg'
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -39,7 +39,7 @@ export function SetupPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
-      <div data-testid="setup-page-card" className="w-full max-w-sm rounded-lg border border-border bg-card p-8 space-y-6">
+      <div data-testid="setup-page-card" className="w-full max-w-sm rounded-surface border border-border bg-card p-8 space-y-6">
         <div className="text-center space-y-1">
           <h1 className="text-2xl font-bold tracking-tight">Jarvis</h1>
           <p className="text-sm text-muted-foreground">Initial setup</p>

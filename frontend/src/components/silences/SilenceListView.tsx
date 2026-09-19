@@ -24,7 +24,7 @@ export function SilenceListView({ groups, alerts, onEditGroup, onExpireGroup, de
   if (groups.length === 0) return null
 
   return (
-    <div className="overflow-hidden rounded-md border border-border">
+    <div className="overflow-hidden rounded-control border border-border">
       {groups.map((group) => {
         const rep = group.silences[0]
         const isDeleting = group.silences.some((s) => deletingIds.has(s.id))
@@ -89,22 +89,22 @@ export function SilenceListView({ groups, alerts, onEditGroup, onExpireGroup, de
                   <SilenceMatcherChip key={i} matcher={m} />
                 ))}
                 {hiddenMatcherCount > 0 && (
-                  <span className="shrink-0 font-mono text-[11px] text-muted-foreground/60">+{hiddenMatcherCount}</span>
+                  <span className="shrink-0 font-mono text-[11px] text-muted-foreground">+{hiddenMatcherCount}</span>
                 )}
                 {rep.matchers.length === 0 && (
-                  <span className="font-mono text-[11px] text-muted-foreground/60">no matchers</span>
+                  <span className="font-mono text-[11px] text-muted-foreground">no matchers</span>
                 )}
               </div>
-              <div className="mt-0.5 truncate text-[11px] text-muted-foreground/70">{meta}</div>
+              <div className="mt-0.5 truncate text-[11px] text-muted-foreground">{meta}</div>
               {rep.comment && (
-                <div className="truncate text-[11px] italic text-muted-foreground/60">{rep.comment}</div>
+                <div className="truncate text-[11px] italic text-muted-foreground">{rep.comment}</div>
               )}
             </div>
 
             <div className="flex items-center gap-2 py-2">
               <div className="text-right leading-tight">
                 <SilenceRemaining silence={rep} className="block text-[13px]" />
-                <span className="text-[10.5px] tabular-nums text-muted-foreground/60">
+                <span className="text-[10.5px] tabular-nums text-muted-foreground">
                   {format(new Date(rep.endsAt), ROW_DATE_FMT, { locale: enUS })}
                 </span>
               </div>

@@ -1,19 +1,19 @@
 ---
 layout: home
 title: Jarvis
-titleTemplate: The open-source web UI for Prometheus Alertmanager
+titleTemplate: An Alertmanager Frontend for Day-to-Day Infrastructure Operations
 
 hero:
   name: Jarvis
-  text: The working surface for the alert lifecycle
-  tagline: A self-hosted web UI for Prometheus Alertmanager — built for teams that act on alerts, not just watch them.
+  text: An Alertmanager Frontend for <span class="nowrap">Day-to-Day</span> Infrastructure Operations
+  tagline: When the alert disappears but <span class="accent">the questions remain</span>.
   image:
     src: /logo.png
     alt: Jarvis
   actions:
     - theme: brand
-      text: Get started
-      link: /#getting-started
+      text: Getting Started
+      link: /getting-started
     - theme: alt
       text: View on GitHub
       link: https://github.com/kj187/jarvis
@@ -27,7 +27,7 @@ features:
   - icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/></svg>'
     title: Every cluster, live
     details: All your Alertmanager clusters in one realtime view, pushed over WebSocket. Point Jarvis at every member of an HA cluster and it deduplicates the alerts.
-    link: /reference/configuration#alertmanager-ha-clusters
+    link: /deploy/alertmanager#alertmanager-ha-clusters
     linkText: Multi-cluster and HA
   - icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></svg>'
     title: Claim and comment
@@ -53,45 +53,6 @@ features:
 
 <div class="home-showcase">
 
-Silence straight from the card, group by any label, and open an alert for its full
-history, its claim and the team's comments.
-
-[Explore all features](/reference/features) · [Watch the 2½-minute tour on YouTube](https://www.youtube.com/watch?v=gssfmws8B6o) · [All videos](/videos)
-
-## Getting started
-
-One container and two required environment variables — point it at a reachable
-Alertmanager.
-
-```yaml
-services:
-  jarvis:
-    image: ghcr.io/kj187/jarvis:1.12.0
-    ports:
-      - "8080:8080"
-    volumes:
-      - jarvis_data:/data
-    environment:
-      JARVIS_CLUSTER_1_NAME: dev
-      JARVIS_CLUSTER_1_ALERTMANAGER_URL: http://alertmanager:9093
-    restart: unless-stopped
-
-volumes:
-  jarvis_data:
-```
-
-```bash
-podman compose up -d
-```
-
-Then open `http://localhost:8080`. User login — built-in accounts or any OIDC
-provider — is optional.
-[Installation guide](/deploy/compose)
-
-Just looking around, no Alertmanager at hand? [Try the local demo](/demo) instead —
-it starts Jarvis and a throwaway Alertmanager filled with realistic alerts, no
-config needed.
-
 ## Focused by design
 
 Jarvis is the part between an alert firing and a human deciding what to do about it. It
@@ -102,5 +63,7 @@ Every line is held to the same bar as any other production code: static analysis
 vulnerability scans in CI, a strict Content Security Policy and a hardened, read-only
 container.
 [How Jarvis is secured](/concepts/security)
+
+Current release image: `ghcr.io/kj187/jarvis:1.12.0`.
 
 </div>

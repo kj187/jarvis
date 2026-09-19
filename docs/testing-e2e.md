@@ -106,6 +106,7 @@ frontend/
       auth.ts           # dismissNoAuthNotice, ensureInternalAdmin, loginInternal, loginOIDC
       fixtures.ts       # test.extend (auto reset+clear per test), freezeClock, waitForActiveAlerts
       heatmapHistory.ts # fireWithHeatmapHistory() — screenshot-only, see below
+      screenshotData.ts # polished alert fixture + label hiding shared by card-view / home-tour shots
     fixtures/
       alerts.ts         # kubernetesAlerts (4), manyAlerts (~14, for populated screenshots)
     functional/
@@ -113,7 +114,7 @@ frontend/
       internal/         # setup + login
       oidc/             # oidc login + admin-claim mapping
     screenshots/
-      none/             # feature-*, auth-noauth-notice, screenshot
+      none/             # feature-*, auth-noauth-notice, screenshot, social-templates (Open Graph 1200×630, square 1080×1080, slide 1920×1080 → docs/assets/social-*.png, from the design tokens + logo)
       internal/         # auth-setup, auth-login-internal, auth-user-menu, auth-admin-panel, auth-login-page
       oidc/             # oidc-authenticated, auth-login-oidc, screenshot (README hero)
     video/              # demo videos: recorder.ts, build-video.mjs, fonts.conf, release + intro storyboard templates
@@ -124,7 +125,10 @@ frontend/
 The release demo video reuses this stack: `scripts/e2e-run.sh video none` runs
 the storyboard once per format. It is produced only on request — workflow,
 storyboard rules and hand-over in `.agents/skills/release-video/SKILL.md`
-(`make release-video VERSION=X.Y.Z [PROJECT=release|intro]`).
+(`make release-video VERSION=X.Y.Z [PROJECT=release|intro]`). The committed
+release storyboard template also defines the standard cover subtitle; the
+product-intro template defines the full headline and subtitle used on its
+cover.
 
 ### Conventions
 
@@ -200,7 +204,10 @@ storyboard rules and hand-over in `.agents/skills/release-video/SKILL.md`
   every PR and push to `main`, using `COMPOSE_CMD="docker compose"`.
 - **Screenshots are NOT run in CI.** They are a documentation artifact; binary
   PNGs would create noisy diffs and pixel-flake. Regenerate them locally and
-  commit the PNGs when the UI changes.
+  commit the PNGs when the UI changes. Every screenshot is 1440×900 at device
+  scale 2 (`playwright.screenshots.e2e.config.ts`), dark by default; only the hero
+  and overview images also exist as a light pair. The social images use CSS-pixel
+  size (`scale: 'css'`).
 
 ## Adding a new test / screenshot
 
@@ -251,12 +258,14 @@ Quick reference: which spec file covers what. Use this to find the right place f
 
 | Spec file | Groups | What it covers |
 |---|---|---|
-| `app-shell.spec.ts` | A1–A6 | Nav-tabs, theme toggle, mobile hamburger, WS indicator, manual refresh, cluster status in header |
+| `a11y.spec.ts` | — | axe scan (WCAG 2 A/AA + 2.1/2.2 AA, critical and serious) of the Alerts and Silences pages in dark and light, and the reduced-motion rule (decorative animations stop, spinners keep turning). `nested-interactive` is excluded until the alert card's click/keyboard model is reworked |
+| `app-shell.spec.ts` | A1–A12 | Nav-tabs, theme toggle, mobile hamburger, WS indicator, manual refresh, cluster status in header, info popover, keyboard operation of the cluster/user/refresh header popovers (Enter, Escape, focus-out), owl mark before the tabs (also at 375 px), keyboard-reachable info hints (Escape closes the hint, not the sheet) |
 | `card-view.spec.ts` | B1 | Card view renders polled alerts (smoke test) |
 | `alerts-views.spec.ts` | B2–B6, B9 | List↔card toggle, severity ordering, card pagination, fullscreen, resolved view including right-aligned top/footer page navigation |
 | `resolved-fetch.spec.ts` | — | Resolved history is fetched only in resolved mode; initial spinner, error/retry and mode-exit cancellation |
 | `resolved-pagination.spec.ts` | — | Bounded server pages, no legacy full-history fetch, visible stale-page transition and off-page navigation inputs |
 | `alerts-views-extended.spec.ts` | B7–B8, B10 | Responsive column binning, empty state, suppressed/silenced view |
+| `alerts-overview.spec.ts` | — | Alert label breakdown/filtering plus shared modal accessibility: name, focus containment, Escape and focus restoration |
 | `filters.spec.ts` | C1, C10, C10b, C11–C13 | Exact matcher + `?filter=` URL (Alertmanager matcher syntax), state restore from URL, legacy `?matchers=` JSON link restored and rewritten to `?filter=` (C10b), `?q=` search, combined search+chips |
 | `filters-extended.spec.ts` | C2–C8 (C9 removed) | `!=`/`=~`/`!~` operators, regex multi-value, label/value suggestions, label chip → filter, AND matchers, draft→promotion, remove-all |
 | `detail-panel.spec.ts` | D1–D2, D5–D11, G2 | Open/close/URL param, labels/annotations, stats & timeline, claim set/release, comments add/delete, claim note edit, AI prompt, section collapse, extend controls |

@@ -15,7 +15,10 @@ window.JarvisBackdrop = (() => {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296
   }
   const mix = (a, b, k) => a + (b - a) * k
-  const tint = (x, w, alpha) => `rgba(${Math.round(mix(96, 139, x / w))},${Math.round(mix(165, 92, x / w))},${Math.round(mix(250, 246, x / w))},${alpha})`
+  // Left-to-right tint from product blue to a lighter blue; recorder.ts injects the palette (from
+  // design/tokens.json) as window.__JARVIS_PALETTE before this file runs.
+  const PAL = window.__JARVIS_PALETTE
+  const tint = (x, w, alpha) => `rgba(${[0, 1, 2].map((i) => Math.round(mix(PAL.blue[i], PAL.blueLight[i], x / w))).join(',')},${alpha})`
   const wrap = (v, lo, hi) => { const span = hi - lo; return ((((v - lo) % span) + span) % span) + lo }
   const smoother = (u) => { const x = Math.min(1, Math.max(0, u)); return x * x * x * (x * (x * 6 - 15) + 10) }
   const SUBTLE = 0.55

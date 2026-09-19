@@ -174,7 +174,7 @@ export function SilencesPage() {
           <div className="flex items-center gap-1.5">
             <ArrowUpDown className="h-3 w-3 text-muted-foreground" />
             <span className="text-xs text-muted-foreground">Sort:</span>
-            <div className="flex items-center rounded-md border border-border overflow-hidden">
+            <div className="flex items-center rounded-control border border-border overflow-hidden">
               <button
                 onClick={() => setSortBy('expires')}
                 className={`cursor-pointer px-2.5 h-7 text-xs font-medium transition-colors ${
@@ -229,7 +229,7 @@ export function SilencesPage() {
             {showExpired ? 'Hide expired' : 'Show expired'}
           </Button>
           {searchOpen ? (
-            <div className="flex items-center rounded-md border border-border overflow-hidden bg-input h-7">
+            <div className="flex items-center rounded-control border border-control overflow-hidden bg-input h-7">
               <Search className="ml-2 h-3 w-3 text-muted-foreground shrink-0 pointer-events-none" />
               <Input
                 value={filters.search}
@@ -253,7 +253,7 @@ export function SilencesPage() {
               </button>
             </div>
           ) : (
-            <div className="flex items-center rounded-md border border-border overflow-hidden">
+            <div className="flex items-center rounded-control border border-border overflow-hidden">
               <button
                 onClick={toggleSearch}
                 className="cursor-pointer h-7 w-7 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
@@ -264,7 +264,7 @@ export function SilencesPage() {
               </button>
             </div>
           )}
-          <div className="flex items-center rounded-md border border-border overflow-hidden">
+          <div className="flex items-center rounded-control border border-border overflow-hidden">
             <button
               onClick={() => setIsFullscreen(true)}
               className="cursor-pointer h-7 w-7 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
@@ -329,7 +329,7 @@ export function SilencesPage() {
         <div className="fixed inset-y-0 right-0 z-50 flex w-full flex-col border-l border-border bg-card shadow-xl sm:max-w-[760px] lg:max-w-[760px]">
           <button
             onClick={() => { setFormOpen(false); setEditGroup([]) }}
-            className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring cursor-pointer z-10"
+            className="absolute right-4 top-4 rounded-compact opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring cursor-pointer z-10"
             aria-label="Close"
           >
             <X className="h-4 w-4" />

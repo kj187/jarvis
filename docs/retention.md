@@ -1,7 +1,7 @@
 # Data Retention
 
 Jarvis stores every alert lifecycle event, comment, claim, and silence
-action forever by default. On a long-running install this can grow the
+action **forever** by default. On a long-running install this can grow the
 database indefinitely. Data retention gives an admin an **optional**,
 env-var-only way to bound that growth with a background sweep — there is no
 UI or API for it, consistent with the rest of Jarvis's server configuration.

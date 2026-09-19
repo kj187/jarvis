@@ -215,7 +215,7 @@ export function SavedFiltersMenu() {
         data-testid="saved-filters-menu"
         onClick={toggleMenu}
         className={cn(
-          'flex h-7 cursor-pointer items-center rounded-md border border-border text-xs font-medium transition-colors',
+          'flex h-7 cursor-pointer items-center rounded-control border border-border text-xs font-medium transition-colors',
           buttonLabel === null ? 'w-7 justify-center' : 'gap-1.5 px-2',
           status.kind === 'saved' || status.kind === 'modified'
             ? 'bg-accent text-foreground'
@@ -232,7 +232,7 @@ export function SavedFiltersMenu() {
             <span
               data-testid="saved-filters-unsaved-dot"
               aria-hidden="true"
-              className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-amber-500 ring-1 ring-background"
+              className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-pill bg-warning-solid ring-1 ring-background"
             />
           )}
         </span>
@@ -253,14 +253,14 @@ export function SavedFiltersMenu() {
       {open && (
         <div
           data-testid="saved-filters-popover"
-          className="absolute left-0 top-full z-50 mt-1 flex max-h-[min(32rem,calc(100vh-8rem))] w-[32rem] max-w-[calc(100vw-2rem)] flex-col rounded-md border border-border bg-popover p-2 shadow-lg"
+          className="absolute left-0 top-full z-50 mt-1 flex max-h-[min(32rem,calc(100vh-8rem))] w-[32rem] max-w-[calc(100vw-2rem)] flex-col rounded-control border border-border bg-popover p-2 shadow-lg"
         >
           <div className="mb-2 flex shrink-0 items-baseline justify-between gap-2 border-b border-border pb-2">
             <span className="text-[10.5px] font-semibold uppercase tracking-wide text-muted-foreground">
               Saved filters
             </span>
             {savedFilters.length > 0 && (
-              <span className="text-[10px] tabular-nums text-muted-foreground/70">
+              <span className="text-[10px] tabular-nums text-muted-foreground">
                 {savedFilters.length}/{MAX_SAVED_FILTERS}
               </span>
             )}
@@ -297,15 +297,15 @@ export function SavedFiltersMenu() {
                           aria-label={`Rename ${filter.name}`}
                           aria-invalid={showError}
                           className={cn(
-                            'h-7 min-w-0 flex-1 rounded border bg-input px-2 text-xs text-foreground outline-none',
-                            showError ? 'border-destructive' : 'border-border',
+                            'h-7 min-w-0 flex-1 rounded-compact border bg-input px-2 text-xs text-foreground outline-none',
+                            showError ? 'border-destructive' : 'border-control',
                           )}
                         />
                         <button
                           type="button"
                           onClick={commitRename}
                           disabled={renameError !== null}
-                          className="flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded text-muted-foreground hover:bg-accent/60 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+                          className="flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-compact text-muted-foreground hover:bg-accent/60 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
                           aria-label="Confirm rename"
                           title="Save name (Enter)"
                         >
@@ -314,7 +314,7 @@ export function SavedFiltersMenu() {
                         <button
                           type="button"
                           onClick={cancelRename}
-                          className="flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded text-muted-foreground hover:bg-accent/60 hover:text-foreground"
+                          className="flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-compact text-muted-foreground hover:bg-accent/60 hover:text-foreground"
                           aria-label="Cancel rename"
                           title="Cancel (Esc)"
                         >
@@ -334,7 +334,7 @@ export function SavedFiltersMenu() {
                     key={filter.name}
                     data-testid="saved-filter-row"
                     className={cn(
-                      'group flex items-center gap-1 rounded px-1 py-0.5',
+                      'group flex items-center gap-1 rounded-compact px-1 py-0.5',
                       isActive || isBase ? 'bg-accent/60' : 'hover:bg-accent/40',
                     )}
                   >
@@ -344,18 +344,18 @@ export function SavedFiltersMenu() {
                       title={isBase ? `Discard changes and re-apply "${filter.name}": ${summary}` : `Apply "${filter.name}": ${summary}`}
                       aria-label={`Apply saved filter ${filter.name}`}
                       aria-current={isActive ? 'true' : undefined}
-                      className="flex min-w-0 flex-1 cursor-pointer items-center gap-1.5 rounded px-0.5 py-0.5 text-left"
+                      className="flex min-w-0 flex-1 cursor-pointer items-center gap-1.5 rounded-compact px-0.5 py-0.5 text-left"
                     >
                       <span className="flex w-3 shrink-0 justify-center text-primary" aria-hidden="true">
                         {isActive && <Check className="h-3 w-3" />}
-                        {isBase && <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />}
+                        {isBase && <span className="h-1.5 w-1.5 rounded-pill bg-warning-solid" />}
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="flex items-center gap-1.5">
                           <span className={cn('truncate text-xs text-foreground', isActive && 'font-medium')}>
                             {filter.name}
                           </span>
-                          {isBase && <span className="shrink-0 text-[10px] italic text-amber-500">modified</span>}
+                          {isBase && <span className="shrink-0 text-[10px] italic text-warning-fg">modified</span>}
                         </span>
                         <span className="block truncate font-mono text-[10px] text-muted-foreground">{summary}</span>
                       </span>
@@ -370,8 +370,8 @@ export function SavedFiltersMenu() {
                         ? 'Default filter — applied when you open Jarvis without a filter in the link. Click to unset.'
                         : 'Make default — applied when you open Jarvis without a filter in the link'}
                       className={cn(
-                        'flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded hover:bg-accent/60',
-                        filter.isDefault ? 'text-amber-500' : 'text-muted-foreground hover:text-foreground',
+                        'flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded-compact hover:bg-accent/60',
+                        filter.isDefault ? 'text-warning-fg' : 'text-muted-foreground hover:text-foreground',
                       )}
                     >
                       <Star className={cn('h-3.5 w-3.5', filter.isDefault && 'fill-current')} />
@@ -386,7 +386,7 @@ export function SavedFiltersMenu() {
                           type="button"
                           onClick={() => confirmThen('overwrite', filter.name, () => overwriteWithCurrent(filter.name))}
                           aria-label={`Click again to overwrite ${filter.name}`}
-                          className="h-6 shrink-0 cursor-pointer whitespace-nowrap rounded px-1 text-[10px] font-medium text-amber-500 hover:bg-accent/60"
+                          className="h-6 shrink-0 cursor-pointer whitespace-nowrap rounded-compact px-1 text-[10px] font-medium text-warning-fg hover:bg-accent/60"
                         >
                           Overwrite?
                         </button>
@@ -396,7 +396,7 @@ export function SavedFiltersMenu() {
                           onClick={() => confirmThen('overwrite', filter.name, () => overwriteWithCurrent(filter.name))}
                           aria-label={`Update ${filter.name} with current filter`}
                           title={`Replace "${filter.name}" with the current filter`}
-                          className="flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded text-muted-foreground hover:bg-accent/60 hover:text-foreground"
+                          className="flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded-compact text-muted-foreground hover:bg-accent/60 hover:text-foreground"
                         >
                           <RefreshCw className="h-3.5 w-3.5" />
                         </button>
@@ -408,7 +408,7 @@ export function SavedFiltersMenu() {
                       onClick={() => startRename(filter)}
                       aria-label={`Rename ${filter.name}`}
                       title="Rename"
-                      className="flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded text-muted-foreground hover:bg-accent/60 hover:text-foreground"
+                      className="flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded-compact text-muted-foreground hover:bg-accent/60 hover:text-foreground"
                     >
                       <Pencil className="h-3.5 w-3.5" />
                     </button>
@@ -418,7 +418,7 @@ export function SavedFiltersMenu() {
                         type="button"
                         onClick={() => handleDelete(filter.name)}
                         aria-label={`Click again to delete ${filter.name}`}
-                        className="h-6 shrink-0 cursor-pointer whitespace-nowrap rounded px-1 text-[10px] font-medium text-destructive hover:bg-accent/60"
+                        className="h-6 shrink-0 cursor-pointer whitespace-nowrap rounded-compact px-1 text-[10px] font-medium text-destructive hover:bg-accent/60"
                       >
                         Delete?
                       </button>
@@ -428,7 +428,7 @@ export function SavedFiltersMenu() {
                         onClick={() => handleDelete(filter.name)}
                         aria-label={`Delete ${filter.name}`}
                         title="Delete"
-                        className="flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded text-muted-foreground hover:bg-accent/60 hover:text-destructive"
+                        className="flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded-compact text-muted-foreground hover:bg-accent/60 hover:text-destructive"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
@@ -443,7 +443,7 @@ export function SavedFiltersMenu() {
             {syncFailed && (
               <p
                 data-testid="saved-filters-sync-error"
-                className="rounded border border-destructive/40 bg-destructive/10 px-2 py-1 text-[10.5px] leading-snug text-destructive"
+                className="rounded-compact border border-destructive/40 bg-destructive/10 px-2 py-1 text-[10.5px] leading-snug text-destructive"
               >
                 Couldn't save to your account — changes are only kept in this browser for now.
               </p>
@@ -469,7 +469,7 @@ export function SavedFiltersMenu() {
                   type="button"
                   onClick={() => overwriteWithCurrent(status.base.name)}
                   aria-label={`Save changes to ${status.base.name}`}
-                  className="flex h-7 w-full cursor-pointer items-center justify-center gap-1.5 rounded bg-primary px-2 text-xs font-medium text-primary-foreground hover:bg-primary/90"
+                  className="flex h-7 w-full cursor-pointer items-center justify-center gap-1.5 rounded-compact bg-primary px-2 text-xs font-medium text-primary-foreground hover:bg-primary/90"
                 >
                   <RefreshCw className="h-3 w-3" />
                   <span className="truncate">Save changes to "{status.base.name}"</span>
@@ -502,15 +502,15 @@ export function SavedFiltersMenu() {
                       aria-label="Saved filter name"
                       aria-invalid={newNameError !== null}
                       className={cn(
-                        'h-7 min-w-0 flex-1 rounded border bg-input px-2 text-xs text-foreground outline-none placeholder:text-muted-foreground',
-                        newNameError ? 'border-destructive' : 'border-border',
+                        'h-7 min-w-0 flex-1 rounded-compact border bg-input px-2 text-xs text-foreground outline-none placeholder:text-muted-foreground',
+                        newNameError ? 'border-destructive' : 'border-control',
                       )}
                     />
                     <button
                       type="submit"
                       disabled={trimmedNewName === '' || newNameError !== null}
                       className={cn(
-                        'h-7 shrink-0 cursor-pointer rounded px-2 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-40',
+                        'h-7 shrink-0 cursor-pointer rounded-compact px-2 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-40',
                         status.kind === 'unsaved'
                           ? 'bg-primary text-primary-foreground hover:bg-primary/90'
                           : 'border border-border text-foreground hover:bg-accent/40',
