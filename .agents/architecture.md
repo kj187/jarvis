@@ -1313,7 +1313,7 @@ index.css             → self-hosted Inter (`public/fonts/inter-variable-latin.
     │   │                        expired-silence shown as an inline muted line, not a banner;
     │   │                        claim = one blue line above the identity line ("Claimed by:
     │   │                        <shortClaimant> · <relative time>"), padded box only with a note,
-    │   │                        + a blue left accent on the claimed entry;
+    │   │                        + a blue right accent (4 px) on the claimed entry;
     │   │                        FiringSparkline: dezent HeatmapCellsRow under the timestamp row —
     │   │                        fetches 30d, keeps only the most recent 14 buckets (fewer/bigger
     │   │                        cells read better at card width); always rendered, even with zero

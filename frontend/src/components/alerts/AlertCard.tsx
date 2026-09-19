@@ -110,9 +110,9 @@ function AlertEntry({
       onKeyDown={(e) => e.key === 'Enter' && onClick(makeAlertSelectionKeyForAlert(alert), groupKeys)}
       className={cn(
         'group relative flex cursor-pointer items-start gap-1 px-3 py-3.5 transition-colors focus:outline-none focus-visible:outline-none',
-        // Claimed entries carry a blue left accent — "someone's on it", scannable
+        // Claimed entries carry a blue right accent — "someone's on it", scannable
         // in a large group — not the old grey tint that read as "deprioritised".
-        claim ? 'border-l-2 border-claim-edge bg-claim-soft hover:bg-selected' : 'hover:bg-accent/20',
+        claim ? 'border-r-4 border-claim-edge bg-claim-soft hover:bg-selected' : 'hover:bg-accent/20',
         isSelected && !claim && 'bg-selected hover:bg-info-soft',
         isSelected && claim && 'bg-info-soft',
       )}
@@ -124,7 +124,7 @@ function AlertEntry({
         {claim && (
           claim.note ? (
             <div className={cn(
-              'mb-2 flex items-start gap-2 rounded-compact border-l-2 border-claim-edge bg-claim-soft px-2 py-1.5 text-xs text-claim-fg',
+              'mb-2 flex items-start gap-2 rounded-compact border-r-4 border-claim-edge bg-claim-soft px-2 py-1.5 text-xs text-claim-fg',
             )}>
               <User className="mt-0.5 h-3 w-3 shrink-0 text-claim-solid" />
               <div className="min-w-0 flex-1">

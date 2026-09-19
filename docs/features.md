@@ -16,7 +16,7 @@ The card view is the default landing page and the primary interface for active a
 - Labels shared by every alert in a group render once, as a quiet strip above the entries; each entry then leads with its own distinguishing labels (the first one emphasized) instead of repeating the common ones — clickable to instantly add a label filter
 - How long the alert has been firing (e.g. "firing for 2h 14m")
 - A 14-day firing sparkline under the timestamp — see [Firing Heatmap](#firing-heatmap)
-- Claim line — "Claimed by: \<name\> · \<time\>" above the entry, with a blue left accent, if anyone has claimed it
+- Claim line — "Claimed by: \<name\> · \<time\>" above the entry, with a blue right accent, if anyone has claimed it
 
 **Actions available directly on the card:**
 - **Silence / Fast-Silence** — a persistent bell icon in a narrow column on the right of each alert entry (and one for the whole group, in the card header) opens a menu with the full silence form and one-click Fast-Silence durations — see [Fast-Silence](#fast-silence)
@@ -309,7 +309,7 @@ The detail panel is the central hub for working with a single alert. It slides i
 - Other team members can see who has claimed an alert on both the card and list view
 - Unclaim at any time
 
-When an alert is claimed, the owner's name appears as a chip in the detail panel header, and as a "Claimed by: \<name\> · \<time\>" line with a blue left accent on the alert card and list row. The claim history is recorded in the History tab.
+When an alert is claimed, the owner's name appears as a chip in the detail panel header, and as a "Claimed by: \<name\> · \<time\>" line with a blue accent on the alert card (right edge) and list row (left edge). The claim history is recorded in the History tab.
 
 ![Alert Detail Panel — Claimed](assets/feature-detail-claimed.png)
 
