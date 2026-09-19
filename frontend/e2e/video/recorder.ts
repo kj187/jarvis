@@ -1,7 +1,8 @@
 import type { Locator, Page } from '@playwright/test'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
-import { backdropPalette, rgba, theme } from './theme'
+import { palette } from './generated-theme'
+import { backdropPalette, rgba } from './theme'
 
 /**
  * Release-video recorder (.agents/skills/release-video/SKILL.md).
@@ -323,30 +324,16 @@ export class VideoRecorder {
     // zooming, so they stay sharp and never zoom out of frame.
     for (let i = 0; i < this.captions.length; i++) {
       const c = this.captions[i]
-      await this.page.setContent(`<body style="margin:0;background:transparent"><div id="c" style="display:inline-block;margin:24px;background:rgba(10,14,24,.92);border:1.5px solid rgba(96,165,250,.5);color:#f3f4f6;border-radius:18px;padding:16px 34px;font:700 40px/1.2 Inter,system-ui,sans-serif;letter-spacing:-.01em;text-align:center;white-space:nowrap;box-shadow:0 12px 40px rgba(0,0,0,.45)">${escapeHtml(c.title)}${c.sub ? `<div style="font-weight:400;font-size:25px;color:#9ca3af;margin-top:6px;letter-spacing:0">${escapeHtml(c.sub)}</div>` : ''}</div></body>`)
+      await this.page.setContent(`<body style="margin:0;background:transparent"><div id="c" style="display:inline-block;margin:24px;background:${rgba(palette.card, 0.94)};border:1.5px solid ${rgba(palette.blue, 0.5)};color:${palette.foreground};border-radius:18px;padding:16px 34px;font:700 40px/1.2 Inter,system-ui,sans-serif;letter-spacing:-.01em;text-align:center;white-space:nowrap;box-shadow:0 12px 40px rgba(0,0,0,.45)">${escapeHtml(c.title)}${c.sub ? `<div style="font-weight:400;font-size:25px;color:${palette.mutedForeground};margin-top:6px;letter-spacing:0">${escapeHtml(c.sub)}</div>` : ''}</div></body>`)
       await this.page.locator('#c').screenshot({ path: path.join(this.outDir, `cap${i}.png`), omitBackground: true })
     }
     const logoB64 = (await (await this.page.request.get('/logo.png')).body()).toString('base64')
     const chapterTitles = this.cards.filter((c) => c.chapter !== undefined).map((c) => c.content.title)
     const cardFrames: number[] = []
     if (this.cards.length > 0) {
-      // Leave the app's origin first: setContent keeps the current document's
-      // Content-Security-Policy, and Jarvis's strict CSP blocks the backdrop's inline script —
-      // the cover needs the backdrop too, so this must happen before it, not just before the loop.
-      const { outWidth, outHeight, width } = this.dims
-      await this.page.goto('about:blank')
-      await this.page.setViewportSize({ width: outWidth, height: outHeight })
-
-      // Cover image (thumbnail, both formats): the opening card as a still, with the
-      // app screenshot in front of the Owl mesh frozen at its assembled end state
-      // (ASSEMBLE=2.1s + max per-node delay 0.5s in backdrops.js — t=2.6 is fully settled),
-      // same look as the video's own first/last card, not the plain static gradient alone.
-      await this.page.setContent(cardHtml(this.cards[0].content, this.format, logoB64, this.appShot, 'owl', true))
-      await this.page.evaluate((z) => { document.documentElement.style.zoom = String(z) }, outWidth / width)
-      await this.page.evaluate(() => document.fonts.ready)
-      await this.page.waitForFunction(() => (window as unknown as { __draw?: unknown }).__draw !== undefined)
-      await this.page.evaluate((t) => (window as unknown as { __draw: (t: number) => void }).__draw(t), 2.6)
-      await this.page.screenshot({ path: path.join(this.outDir, 'cover.png') })
+      // renderCover leaves the app's origin (CSP) and sizes the viewport to the output; the cards reuse both.
+      const { outWidth, width } = this.dims
+      await this.renderCover(this.cards[0].content, logoB64)
 
       // In the video every card is an animated frame sequence at output size:
       // the first and last card assemble the owl, all others drift the neural mesh.
@@ -390,6 +377,40 @@ export class VideoRecorder {
     }, null, 2))
   }
 
+  /**
+   * Renders only the cover still (cover.png + cover.jpg, output size) from the app's current state —
+   * no screencast, no video. Refreshes the thumbnails after a UI or design change without a re-recording
+   * (storyboard copy that stops after its seeding: e2e/_video/<project>-cover.video.ts).
+   */
+  async cover(content: CardContent): Promise<void> {
+    fs.mkdirSync(this.outDir, { recursive: true })
+    await this.page.addStyleTag({ content: '#vid-cursor{display:none!important}' })
+    this.appShot = (await this.page.screenshot({ type: 'jpeg', quality: 88 })).toString('base64')
+    const logoB64 = (await (await this.page.request.get('/logo.png')).body()).toString('base64')
+    await this.renderCover(content, logoB64)
+  }
+
+  /**
+   * Cover image (thumbnail, both formats): the opening card as a still, with the app screenshot in
+   * front of the Owl mesh frozen at its assembled end state (ASSEMBLE=2.1s + max per-node delay 0.5s
+   * in backdrops.js — t=2.6 is fully settled), so the cover matches the video's own first card, not
+   * the plain static gradient alone. Leaves the app's origin first: setContent keeps the current
+   * document's Content-Security-Policy, and Jarvis's strict CSP blocks the backdrop's inline script.
+   */
+  private async renderCover(content: CardContent, logoB64: string): Promise<void> {
+    const { outWidth, outHeight, width } = this.dims
+    await this.page.goto('about:blank')
+    await this.page.setViewportSize({ width: outWidth, height: outHeight })
+    await this.page.setContent(cardHtml(content, this.format, logoB64, this.appShot, 'owl', true))
+    await this.page.evaluate((z) => { document.documentElement.style.zoom = String(z) }, outWidth / width)
+    await this.page.evaluate(() => document.fonts.ready)
+    await this.page.waitForFunction(() => (window as unknown as { __draw?: unknown }).__draw !== undefined)
+    await this.page.evaluate((t) => (window as unknown as { __draw: (t: number) => void }).__draw(t), 2.6)
+    await this.page.screenshot({ path: path.join(this.outDir, 'cover.png') })
+    // JPEG at output size (CSS pixels), well under YouTube's 2 MB thumbnail limit.
+    await this.page.screenshot({ path: path.join(this.outDir, 'cover.jpg'), type: 'jpeg', quality: 92, scale: 'css' })
+  }
+
   /** Box of the rendered content — a stretched (flex-1, full-width) element shrinks to what it shows. */
   private async contentBoxOf(locators: Locator[]): Promise<Box> {
     const boxes = await Promise.all(locators.map((l) => l.evaluate((el) => {
@@ -412,43 +433,65 @@ export class VideoRecorder {
 
 // ── Title card design (intro, outro, cover) ──────────────────────────────────
 
+/**
+ * Card colours, from the design guide (docs/design-system.md): the neutral dark surface from the
+ * tokens, product-blue glow top left, coral glow bottom right and one coral rule under the headline —
+ * the same recipe as the social images. Shared by every card and the cover.
+ */
+const CARD_LOOK = {
+  base: palette.background,
+  glowBlue: rgba(palette.blue, 0.26),
+  glowCoral: rgba(palette.coral, 0.16),
+  text: palette.foreground,
+  muted: palette.mutedForeground,
+  accent: palette.blue,
+  accentSoft: rgba(palette.blue, 0.14),
+  accentEdge: rgba(palette.blue, 0.4),
+  coral: palette.coral,
+  grid: rgba(palette.border, 0.5),
+  panel: rgba(palette.card, 0.78),
+  panelEdge: palette.border,
+  window: palette.card,
+} as const
+
 function cardHtml(c: CardContent, format: VideoFormat, logoB64: string, shotB64: string, backdrop: 'owl' | 'mesh' | null, showScreenshot = backdrop === null): string {
   if (c.tiles?.length) return showcaseHtml(c, format, logoB64)
   const { width, height } = VIDEO_FORMATS[format]
   const square = format === 'square'
+  const k = CARD_LOOK
   const features = (c.features ?? []).map((f) => `<li><span class="tick"><svg viewBox="0 0 16 16"><path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>${escapeHtml(f)}</li>`).join('')
   return `<!doctype html><html><head><style>
   *{box-sizing:border-box;margin:0;padding:0}
-  html,body{width:${width}px;height:${height}px;overflow:hidden;background:#060912}
-  body{font-family:Inter,system-ui,sans-serif;color:#f8fafc;-webkit-font-smoothing:antialiased;position:relative}
+  html,body{width:${width}px;height:${height}px;overflow:hidden;background:${k.base}}
+  body{font-family:Inter,system-ui,sans-serif;color:${k.text};-webkit-font-smoothing:antialiased;position:relative}
   .bg{position:absolute;inset:0;background:
-      radial-gradient(${square ? '900px 700px at 20% 5%' : '1000px 700px at 12% 0%'},rgba(37,99,235,.38),transparent 62%),
-      radial-gradient(${square ? '900px 800px at 100% 100%' : '900px 800px at 100% 100%'},${rgba(theme.coral, 0.24)},transparent 60%),
-      radial-gradient(600px 400px at 50% 50%,rgba(14,165,233,.07),transparent 70%),#060912}
-  .grid{position:absolute;inset:0;background-image:linear-gradient(rgba(148,163,184,.07) 1px,transparent 1px),linear-gradient(90deg,rgba(148,163,184,.07) 1px,transparent 1px);
+      radial-gradient(${square ? '900px 700px at 20% 5%' : '1000px 700px at 12% 0%'},${k.glowBlue},transparent 62%),
+      radial-gradient(900px 800px at 100% 100%,${k.glowCoral},transparent 60%),${k.base}}
+  .grid{position:absolute;inset:0;background-image:linear-gradient(${k.grid} 1px,transparent 1px),linear-gradient(90deg,${k.grid} 1px,transparent 1px);
       background-size:56px 56px;-webkit-mask-image:radial-gradient(ellipse ${square ? '80% 55% at 50% 30%' : '60% 80% at 25% 45%'},#000 20%,transparent 75%)}
   .copy{position:absolute;${square ? 'left:84px;right:84px;top:84px' : 'left:96px;top:0;bottom:0;width:640px;display:flex;flex-direction:column;justify-content:center'}}
   .brand{display:flex;align-items:center;gap:18px;font-size:42px;font-weight:700;letter-spacing:-.02em}
   .brand img{width:88px;height:88px}
   .eyebrow{display:inline-block;margin-top:${square ? 30 : 44}px;padding:7px 16px;border-radius:999px;font-size:17px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;
-      color:#bfdbfe;background:rgba(37,99,235,.18);border:1px solid rgba(96,165,250,.35)}
+      color:${k.accent};background:${k.accentSoft};border:1px solid ${k.accentEdge}}
   h1{margin-top:22px;font-size:${square ? 64 : 62}px;line-height:1.06;font-weight:800;letter-spacing:-.035em;text-wrap:balance;
-      background:linear-gradient(180deg,#fff 30%,${theme.blueSoft});-webkit-background-clip:text;color:transparent}
-  p{margin-top:18px;font-size:${square ? 26 : 24}px;line-height:1.4;color:#94a3b8}
+      color:${k.text}}
+  .rule{width:${square ? 84 : 96}px;height:6px;border-radius:99px;background:${k.coral};margin-top:24px}
+  p{margin-top:18px;font-size:${square ? 26 : 24}px;line-height:1.4;color:${k.muted}}
+  .rule + p{margin-top:22px}
   ul{list-style:none;margin-top:30px;display:${square ? 'flex' : 'grid'};${square ? 'flex-wrap:wrap;gap:12px 26px' : 'gap:14px'}}
-  li{display:flex;align-items:center;gap:12px;font-size:${square ? 22 : 23}px;font-weight:500;color:#e2e8f0}
-  .tick{display:inline-flex;width:28px;height:28px;border-radius:50%;align-items:center;justify-content:center;color:#60a5fa;background:rgba(59,130,246,.16);border:1px solid rgba(96,165,250,.4)}
+  li{display:flex;align-items:center;gap:12px;font-size:${square ? 22 : 23}px;font-weight:500;color:${k.text}}
+  .tick{display:inline-flex;width:28px;height:28px;border-radius:50%;align-items:center;justify-content:center;color:${k.accent};background:${k.accentSoft};border:1px solid ${k.accentEdge}}
   .tick svg{width:15px;height:15px}
   .cta{display:inline-block;margin-top:34px;padding:12px 24px;border-radius:14px;font-size:24px;font-weight:600;color:#fff;
-      background:linear-gradient(135deg,rgba(37,99,235,.9),${rgba(theme.coral, 0.72)});box-shadow:0 10px 30px rgba(59,130,246,.35)}
+      background:${k.coral};box-shadow:0 10px 30px ${rgba(palette.coral, 0.3)}}
   .stage{position:absolute;${square ? 'left:110px;right:-150px;top:660px' : 'left:800px;top:150px;width:1100px'}}
-  .window{border-radius:16px;overflow:hidden;background:#0b1020;border:1px solid rgba(148,163,184,.22);
-      box-shadow:0 50px 120px rgba(0,0,0,.65),0 0 0 1px rgba(0,0,0,.4),0 0 90px rgba(59,130,246,.28)}
-  .bar{height:34px;display:flex;align-items:center;gap:8px;padding:0 14px;background:#111827;border-bottom:1px solid rgba(148,163,184,.14)}
-  .bar i{width:11px;height:11px;border-radius:50%;background:#334155}
-  .bar i:nth-child(1){background:#ef4444aa}.bar i:nth-child(2){background:#f59e0baa}.bar i:nth-child(3){background:#22c55eaa}
+  .window{border-radius:16px;overflow:hidden;background:${k.window};border:1px solid ${k.panelEdge};
+      box-shadow:0 50px 120px rgba(0,0,0,.65),0 0 0 1px rgba(0,0,0,.4),0 0 90px ${rgba(palette.blue, 0.2)}}
+  .bar{height:34px;display:flex;align-items:center;gap:8px;padding:0 14px;background:${k.window};border-bottom:1px solid ${k.panelEdge}}
+  .bar i{width:11px;height:11px;border-radius:50%;background:${k.panelEdge}}
   .window img{display:block;width:100%}
-  .fade{position:absolute;inset:auto 0 0 0;height:${square ? 260 : 180}px;background:linear-gradient(transparent,#060912)}
+  .fade{position:absolute;inset:auto 0 0 0;height:${square ? 260 : 180}px;background:linear-gradient(transparent,${k.base})}
   </style></head><body>
   <div class="bg"></div>
   ${backdrop ? backdropHtml(backdrop, format, logoB64) : ''}
@@ -457,6 +500,7 @@ function cardHtml(c: CardContent, format: VideoFormat, logoB64: string, shotB64:
     <div class="brand"><img src="data:image/png;base64,${logoB64}" alt="">Jarvis</div>
     ${c.eyebrow ? `<div><span class="eyebrow">${escapeHtml(c.eyebrow)}</span></div>` : ''}
     <h1>${escapeHtml(c.title).replace(/-/g, '‑')}</h1>
+    <div class="rule"></div>
     ${c.subtitle ? `<p>${escapeHtml(c.subtitle)}</p>` : ''}
     ${features ? `<ul>${features}</ul>` : ''}
     ${c.cta ? `<div><span class="cta">${escapeHtml(c.cta)}</span></div>` : ''}
@@ -467,24 +511,25 @@ function cardHtml(c: CardContent, format: VideoFormat, logoB64: string, shotB64:
 function showcaseHtml(c: CardContent, format: VideoFormat, logoB64: string): string {
   const { width, height } = VIDEO_FORMATS[format]
   const square = format === 'square'
+  const k = CARD_LOOK
   const tiles = (c.tiles ?? []).map((t) => `<section><h2>${escapeHtml(t.title)}</h2><p>${escapeHtml(t.text)}</p>${t.code ? `<code>${escapeHtml(t.code)}</code>` : ''}</section>`).join('')
   return `<!doctype html><html><head><style>
   *{box-sizing:border-box;margin:0;padding:0}
-  html,body{width:${width}px;height:${height}px;overflow:hidden;background:#060912}
-  body{font-family:Inter,system-ui,sans-serif;color:#f8fafc;-webkit-font-smoothing:antialiased;position:relative}
-  .bg{position:absolute;inset:0;background:radial-gradient(1000px 700px at 12% 0%,rgba(37,99,235,.34),transparent 62%),radial-gradient(900px 800px at 100% 100%,${rgba(theme.coral, 0.22)},transparent 60%),#060912}
-  .grid{position:absolute;inset:0;background-image:linear-gradient(rgba(148,163,184,.06) 1px,transparent 1px),linear-gradient(90deg,rgba(148,163,184,.06) 1px,transparent 1px);background-size:56px 56px;-webkit-mask-image:radial-gradient(ellipse 70% 60% at 30% 30%,#000 20%,transparent 75%)}
+  html,body{width:${width}px;height:${height}px;overflow:hidden;background:${k.base}}
+  body{font-family:Inter,system-ui,sans-serif;color:${k.text};-webkit-font-smoothing:antialiased;position:relative}
+  .bg{position:absolute;inset:0;background:radial-gradient(1000px 700px at 12% 0%,${k.glowBlue},transparent 62%),radial-gradient(900px 800px at 100% 100%,${k.glowCoral},transparent 60%),${k.base}}
+  .grid{position:absolute;inset:0;background-image:linear-gradient(${k.grid} 1px,transparent 1px),linear-gradient(90deg,${k.grid} 1px,transparent 1px);background-size:56px 56px;-webkit-mask-image:radial-gradient(ellipse 70% 60% at 30% 30%,#000 20%,transparent 75%)}
   .wrap{position:absolute;left:${square ? 84 : 96}px;right:${square ? 84 : 96}px;top:${square ? 76 : 60}px;bottom:${square ? 84 : 72}px;display:flex;flex-direction:column}
   .body{flex:1;display:flex;flex-direction:column;justify-content:center;padding-bottom:${square ? 20 : 40}px}
-  .brand{display:flex;align-items:center;gap:16px;font-size:34px;font-weight:700;color:#cbd5e1}
+  .brand{display:flex;align-items:center;gap:16px;font-size:34px;font-weight:700;color:${k.text}}
   .brand img{width:68px;height:68px}
-  .eyebrow{align-self:flex-start;padding:7px 16px;border-radius:999px;font-size:17px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#bfdbfe;background:rgba(37,99,235,.18);border:1px solid rgba(96,165,250,.35)}
-  h1{margin-top:20px;font-size:${square ? 64 : 70}px;line-height:1.04;font-weight:800;letter-spacing:-.035em;text-wrap:balance;background:linear-gradient(180deg,#fff 30%,${theme.blueSoft});-webkit-background-clip:text;color:transparent}
+  .eyebrow{align-self:flex-start;padding:7px 16px;border-radius:999px;font-size:17px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:${k.accent};background:${k.accentSoft};border:1px solid ${k.accentEdge}}
+  h1{margin-top:20px;font-size:${square ? 64 : 70}px;line-height:1.04;font-weight:800;letter-spacing:-.035em;text-wrap:balance;color:${k.text}}
   .tiles{margin-top:${square ? 40 : 56}px;display:grid;grid-template-columns:${square ? '1fr' : `repeat(${(c.tiles ?? []).length},1fr)`};gap:${square ? 18 : 24}px}
-  section{padding:${square ? '22px 26px' : '30px 30px 28px'};border-radius:18px;background:linear-gradient(180deg,rgba(15,23,42,.78),rgba(15,23,42,.55));border:1px solid rgba(148,163,184,.18);box-shadow:0 20px 60px rgba(0,0,0,.35)}
-  section h2{font-size:${square ? 28 : 30}px;font-weight:700;letter-spacing:-.02em;color:#fff}
-  section p{margin-top:10px;font-size:${square ? 20 : 21}px;line-height:1.45;color:#94a3b8;text-wrap:pretty}
-  section code{display:block;margin-top:${square ? 12 : 18}px;padding:10px 14px;border-radius:10px;font:500 ${square ? 15 : 16}px/1.4 'JetBrains Mono',ui-monospace,monospace;color:#bfdbfe;background:rgba(2,6,23,.7);border:1px solid rgba(96,165,250,.25);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  section{padding:${square ? '22px 26px' : '30px 30px 28px'};border-radius:18px;background:${k.panel};border:1px solid ${k.panelEdge};box-shadow:0 20px 60px rgba(0,0,0,.35)}
+  section h2{font-size:${square ? 28 : 30}px;font-weight:700;letter-spacing:-.02em;color:${k.text}}
+  section p{margin-top:10px;font-size:${square ? 20 : 21}px;line-height:1.45;color:${k.muted};text-wrap:pretty}
+  section code{display:block;margin-top:${square ? 12 : 18}px;padding:10px 14px;border-radius:10px;font:500 ${square ? 15 : 16}px/1.4 'JetBrains Mono',ui-monospace,monospace;color:${k.accent};background:${rgba(palette.background, 0.7)};border:1px solid ${k.accentEdge};white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   </style></head><body>
   <div class="bg"></div>${backdropHtml('mesh', format, logoB64)}
   <div class="wrap">
@@ -526,34 +571,35 @@ function youtubeChapters(chapters: Array<{ at: number; title: string }>, duratio
 function chapterHtml(c: CardContent, index: number, titles: string[], format: VideoFormat, logoB64: string): string {
   const { width, height } = VIDEO_FORMATS[format]
   const square = format === 'square'
+  const k = CARD_LOOK
   // More than four chapters: a denser progress strip so titles still fit.
   const many = titles.length > 4
   const steps = titles.map((t, i) => `<li class="${i === index ? 'on' : i < index ? 'done' : ''}"><b>${String(i + 1).padStart(2, '0')}</b><span>${escapeHtml(t)}</span></li>`).join('')
   return `<!doctype html><html><head><style>
   *{box-sizing:border-box;margin:0;padding:0}
-  html,body{width:${width}px;height:${height}px;overflow:hidden;background:#060912}
-  body{font-family:Inter,system-ui,sans-serif;color:#f8fafc;-webkit-font-smoothing:antialiased;position:relative}
+  html,body{width:${width}px;height:${height}px;overflow:hidden;background:${k.base}}
+  body{font-family:Inter,system-ui,sans-serif;color:${k.text};-webkit-font-smoothing:antialiased;position:relative}
   .bg{position:absolute;inset:0;background:
-      radial-gradient(900px 650px at ${square ? '15% 20%' : '10% 30%'},rgba(37,99,235,.34),transparent 62%),
-      radial-gradient(900px 800px at 100% 100%,${rgba(theme.coral, 0.21)},transparent 60%),#060912}
-  .grid{position:absolute;inset:0;background-image:linear-gradient(rgba(148,163,184,.07) 1px,transparent 1px),linear-gradient(90deg,rgba(148,163,184,.07) 1px,transparent 1px);
+      radial-gradient(900px 650px at ${square ? '15% 20%' : '10% 30%'},${k.glowBlue},transparent 62%),
+      radial-gradient(900px 800px at 100% 100%,${k.glowCoral},transparent 60%),${k.base}}
+  .grid{position:absolute;inset:0;background-image:linear-gradient(${k.grid} 1px,transparent 1px),linear-gradient(90deg,${k.grid} 1px,transparent 1px);
       background-size:56px 56px;-webkit-mask-image:radial-gradient(ellipse 70% 70% at 30% 45%,#000 20%,transparent 75%)}
-  .brand{position:absolute;left:${square ? 84 : 96}px;top:${square ? 76 : 60}px;display:flex;align-items:center;gap:16px;font-size:34px;font-weight:700;color:#cbd5e1}
+  .brand{position:absolute;left:${square ? 84 : 96}px;top:${square ? 76 : 60}px;display:flex;align-items:center;gap:16px;font-size:34px;font-weight:700;color:${k.text}}
   .brand img{width:68px;height:68px}
   .copy{position:absolute;left:${square ? 84 : 96}px;right:${square ? 84 : 96}px;top:0;bottom:${square ? 260 : 150}px;display:flex;flex-direction:column;justify-content:center}
-  .num{font-size:${square ? 150 : 140}px;font-weight:800;line-height:1;letter-spacing:-.05em;color:transparent;-webkit-text-stroke:2px rgba(147,197,253,.55);
-      background:linear-gradient(180deg,rgba(96,165,250,.35),${rgba(theme.coral, 0.04)});-webkit-background-clip:text}
+  .num{font-size:${square ? 150 : 140}px;font-weight:800;line-height:1;letter-spacing:-.05em;color:transparent;-webkit-text-stroke:2px ${rgba(palette.blue, 0.55)};
+      background:linear-gradient(180deg,${rgba(palette.blue, 0.35)},${rgba(palette.coral, 0.04)});-webkit-background-clip:text}
   h1{margin-top:18px;font-size:${square ? 92 : 96}px;line-height:1.02;font-weight:800;letter-spacing:-.04em;text-wrap:balance;
-      background:linear-gradient(180deg,#fff 35%,${theme.blueSoft});-webkit-background-clip:text;color:transparent}
-  p{margin-top:22px;font-size:${square ? 34 : 34}px;line-height:1.35;color:#94a3b8;max-width:1100px;text-wrap:balance}
+      color:${k.text}}
+  p{margin-top:22px;font-size:${square ? 34 : 34}px;line-height:1.35;color:${k.muted};max-width:1100px;text-wrap:balance}
   ol{position:absolute;left:${square ? 84 : 96}px;right:${square ? 84 : 96}px;bottom:${square ? 84 : 72}px;list-style:none;display:${square ? 'grid' : 'flex'};${square ? 'grid-template-columns:1fr 1fr;gap:14px' : `gap:${many ? 10 : 14}px`}}
-  li{flex:1;min-width:0;display:flex;align-items:center;gap:${many ? 9 : 12}px;padding:${many ? '12px 14px' : '14px 18px'};border-radius:14px;font-size:${many && !square ? 17 : 21}px;font-weight:600;color:#64748b;
-      background:rgba(15,23,42,.6);border:1px solid rgba(148,163,184,.14);white-space:nowrap;overflow:hidden}
+  li{flex:1;min-width:0;display:flex;align-items:center;gap:${many ? 9 : 12}px;padding:${many ? '12px 14px' : '14px 18px'};border-radius:14px;font-size:${many && !square ? 17 : 21}px;font-weight:600;color:${k.muted};
+      background:${k.panel};border:1px solid ${k.panelEdge};white-space:nowrap;overflow:hidden}
   li span{overflow:hidden;text-overflow:ellipsis}
-  li b{font-size:15px;font-weight:700;color:#475569}
-  li.done{color:#94a3b8}li.done b{color:#60a5fa}
-  li.on{color:#fff;background:linear-gradient(135deg,rgba(37,99,235,.55),${rgba(theme.coral, 0.36)});border-color:rgba(147,197,253,.55);box-shadow:0 10px 30px rgba(59,130,246,.3)}
-  li.on b{color:#bfdbfe}
+  li b{font-size:15px;font-weight:700;color:${k.muted}}
+  li.done{color:${k.muted}}li.done b{color:${k.accent}}
+  li.on{color:${k.text};background:linear-gradient(135deg,${rgba(palette.blue, 0.3)},${rgba(palette.coral, 0.25)});border-color:${rgba(palette.blue, 0.55)};box-shadow:0 10px 30px ${rgba(palette.blue, 0.2)}}
+  li.on b{color:${k.text}}
   </style></head><body>
   <div class="bg"></div>${backdropHtml('mesh', format, logoB64)}
   <div class="brand"><img src="data:image/png;base64,${logoB64}" alt="">Jarvis</div>
