@@ -38,7 +38,7 @@ test('B8 empty state icon shown when no alerts', async ({ page }) => {
 
   await page.goto('/?state=active')
 
-  const emptyState = page.locator('[aria-label="No alerts"]')
+  const emptyState = page.getByRole('status').filter({ hasText: 'No alerts' })
   await expect(emptyState).toBeVisible({ timeout: 10_000 })
 })
 

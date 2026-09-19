@@ -108,3 +108,20 @@ describe.each([
     expect(ratio).toBeGreaterThanOrEqual(4.5)
   })
 })
+
+// ── secondary text on every surface ──────────────────────────────────────────
+// muted-foreground is meaningful text (labels, meta lines); it sits on cards, inputs, chips and hover
+// fills, so it must reach 4.5:1 on all of them, not only on the page background.
+const TEXT_SURFACES = ['background', 'card', 'header', 'input', 'muted', 'accent', 'secondary', 'popover']
+
+describe('muted-foreground text contrast (WCAG AA 4.5:1)', () => {
+  it.each(TEXT_SURFACES)('dark muted-foreground vs %s', (surface) => {
+    expect(contrast(token(darkBlock, 'muted-foreground'), token(darkBlock, surface))).toBeGreaterThanOrEqual(4.5)
+  })
+
+  it.each(TEXT_SURFACES)('light muted-foreground vs %s', (surface) => {
+    // light overrides only some tokens; resolve each surface from the light block, else the dark default
+    const src = new RegExp(`--color-${surface}:`).test(lightBlock) ? lightBlock : darkBlock
+    expect(contrast(token(lightBlock, 'muted-foreground'), token(src, surface))).toBeGreaterThanOrEqual(4.5)
+  })
+})

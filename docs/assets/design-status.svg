@@ -6,7 +6,7 @@
   <text x="32" y="44" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="22" font-weight="700" fill="#e6eaf2" text-anchor="start">Status roles</text>
   <text x="32" y="70" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="400" fill="#9aa4b5" text-anchor="start">Text on a tinted fill with an edge, plus a solid for dots and stripes. Text is at least 4.5:1 on its fill.</text>
   <rect x="32.0" y="96" width="440.0" height="440" rx="12" fill="#1d1f26" stroke="#2a2f3a" stroke-width="1"/>
-  <text x="52.0" y="124" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" fill="#7d8a9b" text-anchor="start">Dark</text>
+  <text x="52.0" y="124" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" fill="#949fad" text-anchor="start">Dark</text>
   <text x="52.0" y="166" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" fill="#dfe6ec" text-anchor="start">critical</text>
   <rect x="162.0" y="144" width="110" height="32" rx="6" fill="#dc2828" fill-opacity="0.2" stroke="#ba1c1c" stroke-width="1"/>
   <text x="217.0" y="165" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#f87272" text-anchor="middle">Critical</text>
@@ -43,7 +43,7 @@
   <circle cx="294.0" cy="490" r="6" fill="#61a6fa"/>
   <rect x="312.0" y="475" width="4" height="30" rx="2" fill="#61a6fa"/>
   <rect x="488.0" y="96" width="440.0" height="440" rx="12" fill="#ffffff" stroke="#2a2f3a" stroke-width="1"/>
-  <text x="508.0" y="124" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" fill="#666d7a" text-anchor="start">Light</text>
+  <text x="508.0" y="124" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" fill="#5d636f" text-anchor="start">Light</text>
   <text x="508.0" y="166" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" fill="#171c26" text-anchor="start">critical</text>
   <rect x="618.0" y="144" width="110" height="32" rx="6" fill="#fee1e1" fill-opacity="1.0" stroke="#fca6a6" stroke-width="1"/>
   <text x="673.0" y="165" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#ba1c1c" text-anchor="middle">Critical</text>

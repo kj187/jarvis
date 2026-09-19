@@ -41,7 +41,7 @@
   <text x="723.5" y="268" font-family="ui-monospace, 'SF Mono', Menlo, Consolas, monospace" font-size="12" font-weight="400" fill="#f4f6fa" text-anchor="start" opacity="0.92">#6c7689</text>
   <rect x="32" y="292" width="896" height="64" rx="10" fill="#14161a" stroke="#3a4050" stroke-width="1"/>
   <text x="52" y="332" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="600" fill="#dfe6ec" text-anchor="start">foreground</text>
-  <text x="182" y="332" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="400" fill="#7d8a9b" text-anchor="start">muted-foreground</text>
+  <text x="182" y="332" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="400" fill="#949fad" text-anchor="start">muted-foreground</text>
   <text x="372" y="332" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="600" fill="#61a6fa" text-anchor="start">link</text>
   <rect x="462" y="306" width="110" height="36" rx="7" fill="none" stroke="#5593f7" stroke-width="2"/>
   <text x="517" y="330" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" fill="#5593f7" text-anchor="middle">ring</text>
@@ -82,7 +82,7 @@
   <text x="723.5" y="560" font-family="ui-monospace, 'SF Mono', Menlo, Consolas, monospace" font-size="12" font-weight="400" fill="#f4f6fa" text-anchor="start" opacity="0.92">#7a8599</text>
   <rect x="32" y="584" width="896" height="64" rx="10" fill="#eeeff2" stroke="#3a4050" stroke-width="1"/>
   <text x="52" y="624" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="600" fill="#171c26" text-anchor="start">foreground</text>
-  <text x="182" y="624" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="400" fill="#666d7a" text-anchor="start">muted-foreground</text>
+  <text x="182" y="624" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="400" fill="#5d636f" text-anchor="start">muted-foreground</text>
   <text x="372" y="624" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="600" fill="#134cc9" text-anchor="start">link</text>
   <rect x="462" y="598" width="110" height="36" rx="7" fill="none" stroke="#1450d2" stroke-width="2"/>
   <text x="517" y="622" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" fill="#1450d2" text-anchor="middle">ring</text>

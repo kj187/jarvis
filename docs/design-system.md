@@ -145,16 +145,17 @@ boundaries and state indicators. Measured from the tokens:
 | Pair | Dark | Light |
 |---|---|---|
 | `foreground` on `background` | 14.4 : 1 | 14.9 : 1 |
-| `muted-foreground` on `background` | 5.2 : 1 | 4.5 : 1 |
-| `muted-foreground` on `card` | 4.7 : 1 | 5.2 : 1 |
+| `muted-foreground` on `background` | 6.8 : 1 | 5.2 : 1 |
+| `muted-foreground` on `card` | 6.1 : 1 | 6.0 : 1 |
+| `muted-foreground` on `input`, `muted`, `accent` | ≥ 4.5 : 1 | ≥ 4.5 : 1 |
 | `link` on `background` | 7.2 : 1 | 6.3 : 1 |
 | `ring` on `background` / `card` | 6.0 / 5.4 : 1 | 5.9 / 6.8 : 1 |
 | `control` on `background` / `card` | 3.9 / 3.6 : 1 | 3.2 / 3.7 : 1 |
 | any role's `-fg` on its `-soft` | ≥ 4.5 : 1 | ≥ 4.5 : 1 |
 
 - **MUST** keep `muted-foreground` at full strength for text that carries
-  meaning. It sits at 4.5 : 1 in light; stacking `/60` or `/70` opacity on top
-  drops it below AA. Opacity is for decoration only (separators, placeholders,
+  meaning. It reaches 4.5 : 1 on every surface it sits on, including inputs, chips
+  and hover fills; stacking `/60` or `/70` opacity on top drops it below AA. Opacity is for decoration only (separators, placeholders,
   hover-revealed affordances, disabled states).
 - **MUST** give the edge of a text field or select at least 3 : 1 — use
   `border-control`. Cards, header and tables keep the quiet `border`, because
@@ -162,8 +163,9 @@ boundaries and state indicators. Measured from the tokens:
 - **MUST** give icon-only controls (pin, drag handle, info hint) and the off
   state of a toggle at least 3 : 1. A button with a visible text label does not
   need a high-contrast edge; the label identifies it.
-- `frontend/src/lib/themeTokens.test.ts` asserts the focus ring, the field edge
-  and every role's text contrast in both themes. Add new token pairs there.
+- `frontend/src/lib/themeTokens.test.ts` asserts the focus ring, the field edge,
+  `muted-foreground` on every surface and every role's text contrast in both
+  themes. Add new token pairs there.
 
 Semi-transparent combinations outside the tokens (`bg-foreground/95`) are not
 covered by that test; measure them in the browser on the rendered result.
@@ -277,8 +279,9 @@ Baseline **WCAG 2.2 AA**.
 - Interactive targets are at least 24 px; 44 px is the goal on touch.
 - The layout survives 200 % zoom at a 1280 px viewport.
 
-Automated: the token contrast test and the keyboard end-to-end flows for
-dialogs, the header popovers and info hints. Not automatable and done by hand:
+Automated: the token contrast test, an axe scan of the Alerts and Silences pages in both themes,
+the reduced-motion rule, and the keyboard end-to-end flows for dialogs, the header popovers and
+info hints. Not automatable and done by hand:
 a screen-reader pass (VoiceOver or NVDA) over navigation, filters, the detail
 panel and the silence dialog.
 
@@ -337,6 +340,8 @@ separate implementation (`website/.vitepress/theme/`).
   ramp are the only allow-listed data visualisation.
 - `frontend/src/lib/themeTokens.test.ts` — contrast of the focus ring, the field
   edge and every status role, in both themes.
+- `frontend/e2e/functional/none/a11y.spec.ts` — axe on the main pages in both
+  themes and the reduced-motion rule.
 - `frontend/e2e/functional/none/app-shell.spec.ts`, `alerts-overview.spec.ts`
   and `alert-ack.spec.ts` — keyboard behaviour of the header popovers, info
   hints, dialogs and the Fast-Silence menu.

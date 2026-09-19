@@ -258,6 +258,7 @@ Quick reference: which spec file covers what. Use this to find the right place f
 
 | Spec file | Groups | What it covers |
 |---|---|---|
+| `a11y.spec.ts` | — | axe scan (WCAG 2 A/AA + 2.1/2.2 AA, critical and serious) of the Alerts and Silences pages in dark and light, and the reduced-motion rule (decorative animations stop, spinners keep turning). `nested-interactive` is excluded until the alert card's click/keyboard model is reworked |
 | `app-shell.spec.ts` | A1–A12 | Nav-tabs, theme toggle, mobile hamburger, WS indicator, manual refresh, cluster status in header, info popover, keyboard operation of the cluster/user/refresh header popovers (Enter, Escape, focus-out), owl mark before the tabs (also at 375 px), keyboard-reachable info hints (Escape closes the hint, not the sheet) |
 | `card-view.spec.ts` | B1 | Card view renders polled alerts (smoke test) |
 | `alerts-views.spec.ts` | B2–B6, B9 | List↔card toggle, severity ordering, card pagination, fullscreen, resolved view including right-aligned top/footer page navigation |

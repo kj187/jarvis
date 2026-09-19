@@ -7,24 +7,24 @@
   <text x="32" y="70" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="400" fill="#9aa4b5" text-anchor="start">Field edge and focus ring ≥ 3:1, visible off-state track, muted text at full strength.</text>
   <use href="#img0" transform="translate(872 14) scale(0.14583)"/>
   <rect x="32" y="96" width="896" height="170" rx="12" fill="#1d1f26" stroke="#2a2f3a" stroke-width="1"/>
-  <text x="52" y="122" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" fill="#7d8a9b" text-anchor="start">Dark</text>
-  <text x="52" y="150" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#7d8a9b" text-anchor="start">Field</text>
+  <text x="52" y="122" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" fill="#949fad" text-anchor="start">Dark</text>
+  <text x="52" y="150" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#949fad" text-anchor="start">Field</text>
   <rect x="52" y="160" width="170" height="36" rx="6" fill="#14161a" stroke="#6c7689" stroke-width="1"/>
-  <text x="64" y="184" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="400" fill="#7d8a9b" text-anchor="start">Search alerts…</text>
-  <text x="242" y="150" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#7d8a9b" text-anchor="start">Field, focused</text>
+  <text x="64" y="184" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="400" fill="#949fad" text-anchor="start">Search alerts…</text>
+  <text x="242" y="150" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#949fad" text-anchor="start">Field, focused</text>
   <rect x="242" y="160" width="170" height="36" rx="6" fill="#14161a" stroke="#6c7689" stroke-width="1"/>
   <rect x="241" y="159" width="172" height="38" rx="7" fill="none" stroke="#5593f7" stroke-width="2"/>
   <text x="254" y="184" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="400" fill="#dfe6ec" text-anchor="start">severity=critical</text>
-  <text x="432" y="150" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#7d8a9b" text-anchor="start">Toggle off / on</text>
+  <text x="432" y="150" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#949fad" text-anchor="start">Toggle off / on</text>
   <rect x="432" y="168" width="44" height="24" rx="12" fill="#6c7689"/>
   <rect x="436" y="172" width="16" height="16" rx="8" fill="#14161a"/>
   <rect x="486" y="168" width="44" height="24" rx="12" fill="#f8fafc"/>
   <rect x="510" y="172" width="16" height="16" rx="8" fill="#14161a"/>
-  <text x="554" y="150" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#7d8a9b" text-anchor="start">Text</text>
+  <text x="554" y="150" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#949fad" text-anchor="start">Text</text>
   <text x="554" y="174" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" fill="#dfe6ec" text-anchor="start">foreground</text>
-  <text x="554" y="194" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="400" fill="#7d8a9b" text-anchor="start">muted, meaningful</text>
-  <text x="554" y="214" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="400" fill="#7d8a9b" text-anchor="start" opacity="0.45">decorative only</text>
-  <text x="52" y="232" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#7d8a9b" text-anchor="start">Buttons</text>
+  <text x="554" y="194" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="400" fill="#949fad" text-anchor="start">muted, meaningful</text>
+  <text x="554" y="214" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="400" fill="#949fad" text-anchor="start" opacity="0.45">decorative only</text>
+  <text x="52" y="232" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#949fad" text-anchor="start">Buttons</text>
   <rect x="118" y="214" width="120" height="36" rx="6" fill="#f8fafc"/>
   <text x="178" y="237" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="600" fill="#0f1729" text-anchor="middle">Create silence</text>
   <rect x="248" y="214" width="80" height="36" rx="6" fill="none" stroke="#343842" stroke-width="1"/>
@@ -33,24 +33,24 @@
   <rect x="336" y="212" width="124" height="40" rx="8" fill="none" stroke="#5593f7" stroke-width="2"/>
   <text x="398" y="237" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="600" fill="#0f1729" text-anchor="middle">Focused</text>
   <rect x="32" y="280" width="896" height="170" rx="12" fill="#ffffff" stroke="#2a2f3a" stroke-width="1"/>
-  <text x="52" y="306" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" fill="#666d7a" text-anchor="start">Light</text>
-  <text x="52" y="334" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#666d7a" text-anchor="start">Field</text>
+  <text x="52" y="306" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" fill="#5d636f" text-anchor="start">Light</text>
+  <text x="52" y="334" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#5d636f" text-anchor="start">Field</text>
   <rect x="52" y="344" width="170" height="36" rx="6" fill="#eeeff2" stroke="#7a8599" stroke-width="1"/>
-  <text x="64" y="368" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="400" fill="#666d7a" text-anchor="start">Search alerts…</text>
-  <text x="242" y="334" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#666d7a" text-anchor="start">Field, focused</text>
+  <text x="64" y="368" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="400" fill="#5d636f" text-anchor="start">Search alerts…</text>
+  <text x="242" y="334" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#5d636f" text-anchor="start">Field, focused</text>
   <rect x="242" y="344" width="170" height="36" rx="6" fill="#eeeff2" stroke="#7a8599" stroke-width="1"/>
   <rect x="241" y="343" width="172" height="38" rx="7" fill="none" stroke="#1450d2" stroke-width="2"/>
   <text x="254" y="368" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="400" fill="#171c26" text-anchor="start">severity=critical</text>
-  <text x="432" y="334" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#666d7a" text-anchor="start">Toggle off / on</text>
+  <text x="432" y="334" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#5d636f" text-anchor="start">Toggle off / on</text>
   <rect x="432" y="352" width="44" height="24" rx="12" fill="#7a8599"/>
   <rect x="436" y="356" width="16" height="16" rx="8" fill="#eeeff2"/>
   <rect x="486" y="352" width="44" height="24" rx="12" fill="#1f2b47"/>
   <rect x="510" y="356" width="16" height="16" rx="8" fill="#eeeff2"/>
-  <text x="554" y="334" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#666d7a" text-anchor="start">Text</text>
+  <text x="554" y="334" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#5d636f" text-anchor="start">Text</text>
   <text x="554" y="358" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" fill="#171c26" text-anchor="start">foreground</text>
-  <text x="554" y="378" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="400" fill="#666d7a" text-anchor="start">muted, meaningful</text>
-  <text x="554" y="398" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="400" fill="#666d7a" text-anchor="start" opacity="0.45">decorative only</text>
-  <text x="52" y="416" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#666d7a" text-anchor="start">Buttons</text>
+  <text x="554" y="378" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="400" fill="#5d636f" text-anchor="start">muted, meaningful</text>
+  <text x="554" y="398" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="400" fill="#5d636f" text-anchor="start" opacity="0.45">decorative only</text>
+  <text x="52" y="416" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#5d636f" text-anchor="start">Buttons</text>
   <rect x="118" y="398" width="120" height="36" rx="6" fill="#1f2b47"/>
   <text x="178" y="421" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="600" fill="#ffffff" text-anchor="middle">Create silence</text>
   <rect x="248" y="398" width="80" height="36" rx="6" fill="none" stroke="#ced2d9" stroke-width="1"/>

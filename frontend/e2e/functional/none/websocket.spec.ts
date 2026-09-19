@@ -10,7 +10,7 @@ test('J2 alerts_update WS event updates the UI without page reload', async ({ pa
   await expect(page.locator('[title="WebSocket connected"]').first()).toBeVisible({ timeout: 10_000 })
 
   // No alerts yet — empty state
-  await expect(page.locator('[aria-label="No alerts"]')).toBeVisible({ timeout: 5_000 })
+  await expect(page.getByRole('status').filter({ hasText: 'No alerts' })).toBeVisible({ timeout: 5_000 })
 
   // Fire alerts — poll will deliver them via WS update
   await am.fire(kubernetesAlerts)

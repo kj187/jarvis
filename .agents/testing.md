@@ -331,7 +331,9 @@ to `src/lib/**` only:
   (background/card/header/input/muted/accent) and `--color-control` (text-field
   edge, `border-control`) against background/card/header/input, in dark and
   light (WCAG 2.2 SC 1.4.11 / 2.4.11). Outside the coverage scope; extend it
-  for further token pairs.
+  for further token pairs. Also asserts `--color-muted-foreground` >= 4.5:1 on every
+  surface and 4.5:1 text contrast for every status role. Browser-level checks live in
+  `e2e/functional/none/a11y.spec.ts` (axe on Alerts and Silences, both themes; reduced motion).
 - `frontend/src/lib/alertUtils.test.ts` — example-based tests for every
   exported function (formatting/escaping helpers, matching/state functions),
   including the byte-mirrored Resolved-filter corpus from

@@ -5,7 +5,7 @@ export const palette = {
   background: '#14161a',
   card: '#1d1f26',
   foreground: '#dfe6ec',
-  mutedForeground: '#7d8a9b',
+  mutedForeground: '#949fad',
   border: '#343842',
   blue: '#61a6fa',
   coral: '#de6254',
