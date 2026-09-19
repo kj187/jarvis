@@ -27,6 +27,27 @@ test.describe('One-click Fast-Silence', () => {
     await clearAllAMSilences()
   })
 
+  test('the menu stays on screen when hover is followed by a focus event', async ({ page, am, jarvis }) => {
+    await dismissNoAuthNotice(page)
+    await am.fire(kubernetesAlerts)
+    await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, kubernetesAlerts.length)
+    await page.goto('/?state=active')
+
+    const trigger = page.getByLabel('Silence options for this alert').first()
+    await trigger.hover() // mouseenter opens the menu
+    await trigger.focus() // a following focus event must not re-park it off-screen
+
+    const openForm = page.getByTestId('alert-ack-open-form')
+    await expect(openForm).toBeVisible()
+    // The menu is parked off-screen for a frame and then aligned over the trigger; the bug left it
+    // parked for good, so "on screen within a moment" is the assertion.
+    const viewport = page.viewportSize()!
+    await expect(async () => {
+      const box = await openForm.boundingBox()
+      expect(box && box.x >= 0 && box.y >= 0 && box.x + box.width <= viewport.width && box.y + box.height <= viewport.height).toBe(true)
+    }).toPass({ timeout: 3000 })
+  })
+
   test('Fast-Silence in detail panel silences exactly that alert with a Fast-Silence comment', async ({ page, am, jarvis }) => {
     await dismissNoAuthNotice(page)
     await am.fire(kubernetesAlerts)

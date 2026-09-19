@@ -174,27 +174,38 @@ export function AckButton({
     )
   }, [onCreateSilence])
 
+  // Mirrors `menuOpen` for the event handlers below, which must not re-position an open menu: for the
+  // "Silence…" variant `position()` parks the menu off-screen until a layout effect aligns it, and that
+  // effect only runs when `menuOpen` flips. A hover followed by a focus/click event used to reset the
+  // position of an already-open menu and leave it invisible off-screen.
+  const menuOpenRef = useRef(false)
+  const setOpen = useCallback((open: boolean) => {
+    menuOpenRef.current = open // updated synchronously, before any following event handler runs
+    setMenuOpen(open)
+  }, [])
+
   const openMenu = useCallback(() => {
     clearTimeout(closeTimer.current)
+    if (menuOpenRef.current) return
     position()
-    setMenuOpen(true)
-  }, [position])
+    setOpen(true)
+  }, [position, setOpen])
 
   const scheduleClose = useCallback(() => {
     clearTimeout(closeTimer.current)
-    closeTimer.current = setTimeout(() => setMenuOpen(false), MENU_CLOSE_MS)
-  }, [])
+    closeTimer.current = setTimeout(() => setOpen(false), MENU_CLOSE_MS)
+  }, [setOpen])
 
   useEffect(() => {
     if (!menuOpen) return
-    const close = () => setMenuOpen(false)
+    const close = () => setOpen(false)
     window.addEventListener('scroll', close, true)
     window.addEventListener('resize', close)
     return () => {
       window.removeEventListener('scroll', close, true)
       window.removeEventListener('resize', close)
     }
-  }, [menuOpen])
+  }, [menuOpen, setOpen])
 
   // Runs before paint once the (off-screen) menu is in the DOM: measures
   // where its own Bell icon actually landed and shifts the whole menu so that
@@ -238,7 +249,7 @@ export function AckButton({
     e.stopPropagation()
     durationRef.current = minutes
     clearTimeout(closeTimer.current)
-    setMenuOpen(false)
+    setOpen(false)
     execute()
   }
 
@@ -250,11 +261,11 @@ export function AckButton({
     e.stopPropagation()
     if (menuOpen) return
     position()
-    setMenuOpen(true)
+    setOpen(true)
   }
 
   const handleKeyDown = (e: KeyboardEvent) => {
-    if (e.key === 'Escape') setMenuOpen(false)
+    if (e.key === 'Escape') setOpen(false)
   }
 
   const Chevron = menuOpen ? ChevronUp : ChevronDown
@@ -358,7 +369,7 @@ export function AckButton({
                 onClick={(e) => {
                   e.stopPropagation()
                   clearTimeout(closeTimer.current)
-                  setMenuOpen(false)
+                  setOpen(false)
                   onCreateSilence(alerts)
                 }}
                 className="flex w-full flex-row-reverse items-center gap-2 rounded-surface bg-link/10 px-2.5 py-2 text-left text-[13px] font-semibold text-link transition-colors hover:bg-link/15 cursor-pointer"
