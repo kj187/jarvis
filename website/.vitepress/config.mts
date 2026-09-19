@@ -71,7 +71,8 @@ export default defineConfig({
     const url = `${SITE_URL}${route}`
     const title = route ? `${pageData.title} | Jarvis` : 'Jarvis'
     const description = pageData.description || SITE_DESCRIPTION
-    const image = `${SITE_URL}logo.png`
+    // 1200×630, generated from the design tokens and the logo (frontend/e2e/screenshots/none/social-templates.screenshot.spec.ts)
+    const image = `${SITE_URL}assets/social-og.png`
     return [
       ['meta', { property: 'og:type', content: 'website' }],
       ['meta', { property: 'og:site_name', content: 'Jarvis' }],
@@ -79,7 +80,9 @@ export default defineConfig({
       ['meta', { property: 'og:description', content: description }],
       ['meta', { property: 'og:url', content: url }],
       ['meta', { property: 'og:image', content: image }],
-      ['meta', { name: 'twitter:card', content: 'summary' }],
+      ['meta', { property: 'og:image:width', content: '1200' }],
+      ['meta', { property: 'og:image:height', content: '630' }],
+      ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
       ['meta', { name: 'twitter:title', content: title }],
       ['meta', { name: 'twitter:description', content: description }],
       ['meta', { name: 'twitter:image', content: image }],

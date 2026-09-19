@@ -114,7 +114,7 @@ frontend/
       internal/         # setup + login
       oidc/             # oidc login + admin-claim mapping
     screenshots/
-      none/             # feature-*, auth-noauth-notice, screenshot
+      none/             # feature-*, auth-noauth-notice, screenshot, social-templates (Open Graph 1200×630, square 1080×1080, slide 1920×1080 → docs/assets/social-*.png, from the design tokens + logo)
       internal/         # auth-setup, auth-login-internal, auth-user-menu, auth-admin-panel, auth-login-page
       oidc/             # oidc-authenticated, auth-login-oidc, screenshot (README hero)
     video/              # demo videos: recorder.ts, build-video.mjs, fonts.conf, release + intro storyboard templates
@@ -204,7 +204,10 @@ cover.
   every PR and push to `main`, using `COMPOSE_CMD="docker compose"`.
 - **Screenshots are NOT run in CI.** They are a documentation artifact; binary
   PNGs would create noisy diffs and pixel-flake. Regenerate them locally and
-  commit the PNGs when the UI changes.
+  commit the PNGs when the UI changes. Every screenshot is 1440×900 at device
+  scale 2 (`playwright.screenshots.e2e.config.ts`), dark by default; only the hero
+  and overview images also exist as a light pair. The social images use CSS-pixel
+  size (`scale: 'css'`).
 
 ## Adding a new test / screenshot
 
