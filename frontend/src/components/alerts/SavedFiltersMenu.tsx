@@ -222,7 +222,6 @@ export function SavedFiltersMenu() {
             : 'text-muted-foreground hover:text-foreground hover:bg-accent/40',
         )}
         aria-expanded={open}
-        aria-haspopup="true"
         aria-label="Saved filters"
         title={buttonTitle}
       >

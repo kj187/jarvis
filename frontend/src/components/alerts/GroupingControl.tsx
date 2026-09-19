@@ -86,7 +86,6 @@ export function GroupingControl({ alerts, enabled, onToggleEnabled }: GroupingCo
           enabled ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-accent/40',
         )}
         aria-expanded={open}
-        aria-haspopup="true"
         title="Grouping"
       >
         <Layers className="h-3 w-3" />

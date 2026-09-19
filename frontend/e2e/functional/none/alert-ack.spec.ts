@@ -64,7 +64,7 @@ test.describe('One-click Fast-Silence', () => {
     await detailPanel.getByTestId('alert-ack-button').click()
     const menu = page.getByTestId('alert-ack-menu')
     await expect(menu).toBeVisible()
-    await menu.getByRole('menuitem', { name: '30m', exact: true }).click()
+    await menu.getByRole('button', { name: '30m', exact: true }).click()
 
     // A silence with the auto "Fast-Silence for …" comment (default 30 min) is created,
     // and its matchers only contain REAL alert labels — no pseudo-labels (@receiver,

@@ -1329,6 +1329,9 @@ index.css             → self-hosted Inter (`public/fonts/inter-variable-latin.
     │   │                        first + every label present on the currently visible (non-resolved)
     │   │                        alerts, each annotated with its distinct-value count.
     │   ├── AlertCard.tsx      → card + claim info + count badge + silence/detail actions + Fast-Silence (hover);
+    │   │                        an entry is a plain container, never role="button" (it holds real
+    │   │                        buttons); the whole surface stays mouse-clickable, the keyboard/AT
+    │   │                        path is the named "Open details" button in the action rail;
     │   │                        common labels (shared by the whole group) render as a quiet
     │   │                        LabelChip strip above the entries; multi-alert groups: each entry
     │   │                        leads with an identity line (position pill `n/total` + its
@@ -1484,7 +1487,11 @@ index.css             → self-hosted Inter (`public/fonts/inter-variable-latin.
     │   │                        for both the detail-panel heatmap and the card sparkline
     │   ├── AckButton.tsx      → one-click Fast-Silence (short-lived exact-match silence); active-only
     │   │                        (getEffectiveAlertState), auth-gated (useProtectedAction); hover/focus
-    │   │                        popover menu (the `silenceDurations` setting, default 5m…1w) picks the duration;
+    │   │                        popover (role="group" of plain buttons — never role="menu": no roving
+    │   │                        focus, and the options sit inside a heading/grid wrapper) with the
+    │   │                        `silenceDurations` setting (default 5m…1w) picking the duration;
+    │   │                        own createPortal + positioning rather than ui/popover.tsx, so Tab does
+    │   │                        not reach the options (known gap; ExtendSilenceMenu shows the fix);
     │   │                        transient Silenced/Failed feedback; used by AlertCard + AlertDetailPanel
     │   ├── AlertBadge.tsx     → severity badge
     │   ├── AlertFilters.tsx   → label matcher chips + state dropdown

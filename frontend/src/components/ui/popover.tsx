@@ -21,9 +21,13 @@ interface PopoverProps {
   className?: string
   /** Panel classes: position, width, surface. */
   panelClassName?: string
-  /** `region` (default) for interactive content, `tooltip` for a plain hint. */
-  role?: 'region' | 'tooltip' | 'menu' | 'dialog'
-  /** Accessible name of the panel (needed for `region`/`dialog`). */
+  /**
+   * `region` (default) for interactive content, `group` for a small set of related controls,
+   * `tooltip` for a plain hint. Deliberately no `menu`: that role promises arrow-key roving
+   * focus and owned `menuitem` children, which this primitive does not implement.
+   */
+  role?: 'region' | 'tooltip' | 'group' | 'dialog'
+  /** Accessible name of the panel (needed for `region`/`group`/`dialog`). */
   label?: string
   /** Also open when focus enters (hint-style popovers). Menus open on activation instead. */
   openOnFocus?: boolean

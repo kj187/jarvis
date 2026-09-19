@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { Bell, BellOff, Check, ChevronDown, ChevronRight, ChevronUp, Loader2, TriangleAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -110,6 +110,7 @@ export function AckButton({
   const closeTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const triggerRef = useRef<HTMLDivElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
+  const panelId = useId()
   const menuIconRef = useRef<SVGSVGElement>(null)
   const alignedRef = useRef(false)
   const silenceDurations = useSettingsStore((s) => s.silenceDurations)
@@ -287,7 +288,7 @@ export function AckButton({
           <button
             type="button"
             data-testid="alert-ack-button"
-            aria-haspopup="menu"
+            aria-controls={panelId}
             aria-expanded={menuOpen}
             aria-label={silenceLabel}
             onClick={openOnClick}
@@ -309,7 +310,7 @@ export function AckButton({
           <button
             type="button"
             data-testid="alert-ack-button"
-            aria-haspopup="menu"
+            aria-controls={panelId}
             aria-expanded={menuOpen}
             aria-label="Fast-Silence this alert"
             onClick={openOnClick}
@@ -332,7 +333,7 @@ export function AckButton({
             variant="outline"
             size="sm"
             data-testid="alert-ack-button"
-            aria-haspopup="menu"
+            aria-controls={panelId}
             aria-expanded={menuOpen}
             aria-label="Fast-Silence this alert"
             onClick={openOnClick}
@@ -356,7 +357,12 @@ export function AckButton({
         createPortal(
           <div
             ref={menuRef}
-            role="menu"
+            id={panelId}
+            // A named group of ordinary buttons, not role="menu": that role promises
+            // arrow-key navigation and owned menuitem children, and the options here sit
+            // inside a heading/grid wrapper. Claiming it would misannounce the popover.
+            role="group"
+            aria-label={silenceLabel}
             data-testid="alert-ack-menu"
             onMouseEnter={() => clearTimeout(closeTimer.current)}
             onMouseLeave={scheduleClose}
@@ -366,7 +372,6 @@ export function AckButton({
             {onCreateSilence && (
               <button
                 type="button"
-                role="menuitem"
                 data-testid="alert-ack-open-form"
                 onClick={(e) => {
                   e.stopPropagation()
@@ -398,8 +403,7 @@ export function AckButton({
                     <button
                       key={minutes}
                       type="button"
-                      role="menuitem"
-                      data-testid="alert-ack-option"
+                            data-testid="alert-ack-option"
                       onClick={pick(minutes)}
                       className="flex items-center justify-center rounded-surface border border-border bg-card px-1 py-1.5 text-xs font-semibold tabular-nums text-foreground transition-colors hover:border-link/40 hover:bg-link/10 hover:text-link cursor-pointer"
                     >

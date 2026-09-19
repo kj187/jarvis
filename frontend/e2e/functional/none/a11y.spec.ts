@@ -34,10 +34,6 @@ async function openInTheme(page: Page, theme: 'dark' | 'light', activePage: 'ale
 async function scan(page: Page) {
   const results = await new AxeBuilder({ page })
     .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
-    // Known, tracked structural issue (tmp/design-ci-review.md → Offene Punkte): the alert card is a
-    // role="button" that contains real buttons. Fixing it means reworking the card's click/keyboard
-    // model, so it is excluded here until that is done — every other rule stays on.
-    .disableRules(['nested-interactive'])
     .analyze()
   return results.violations
     .filter((v) => v.impact === 'critical' || v.impact === 'serious')
@@ -68,6 +64,56 @@ for (const theme of ['dark', 'light'] as const) {
     expect(await scan(page)).toEqual([])
   })
 }
+
+test('A13 the alert card opens from the keyboard through a named button, not a role="button" wrapper', async ({ page, am, jarvis }) => {
+  await dismissNoAuthNotice(page)
+  await am.fire(kubernetesAlerts)
+  await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, kubernetesAlerts.length)
+  await page.goto('/?state=active')
+
+  const card = page.getByTestId('alert-card').first()
+  await expect(card).toBeVisible()
+
+  // The wrapper is a plain container again: a role="button" here would swallow the
+  // nested action buttons into one flattened accessible name (axe: nested-interactive).
+  await expect(card).not.toHaveAttribute('role', 'button')
+  await expect(card).not.toHaveAttribute('tabindex', '0')
+
+  // The card's own affordance is a real button, so the panel is reachable without a mouse.
+  const open = card.getByRole('button', { name: /^Open details for / })
+  await open.focus()
+  await expect(open).toBeFocused()
+  await page.keyboard.press('Enter')
+  await expect(page.getByTestId('detail-panel')).toBeVisible()
+})
+
+test('A14 the fast-silence popover is a named group of plain buttons, not an ARIA menu', async ({ page, am, jarvis }) => {
+  await dismissNoAuthNotice(page)
+  await am.fire(kubernetesAlerts)
+  await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, kubernetesAlerts.length)
+  await page.goto('/?state=active')
+
+  const trigger = page.getByTestId('alert-ack-button').first()
+  await expect(trigger).toBeVisible()
+  await trigger.focus()
+
+  const menu = page.getByTestId('alert-ack-menu')
+  await expect(menu).toBeVisible()
+
+  // role="menu"/"menuitem" promises arrow-key navigation and owned menuitem children that this
+  // popover does not implement — and its options sit inside a heading/grid wrapper, so they
+  // are not even owned children. A named group of ordinary buttons is the honest markup.
+  await expect(menu).not.toHaveAttribute('role', 'menu')
+  await expect(menu).toHaveAttribute('role', 'group')
+  await expect(menu).toHaveAttribute('aria-label', /.+/)
+  await expect(menu.getByTestId('alert-ack-option').first()).not.toHaveAttribute('role', 'menuitem')
+
+  // Markup contract only. The panel is portaled to <body>, so Tab does not reach its options —
+  // the popover opens on focus but cannot be used from the keyboard. Fixing that means moving
+  // AckButton onto the Popover primitive, which keeps the panel inside the trigger's subtree
+  // (ExtendSilenceMenu already works that way inside these same card entries); the keyboard
+  // assertions land with that change.
+})
 
 test('reduced motion stops decorative animations but keeps spinners turning', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' })
