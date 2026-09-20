@@ -335,7 +335,10 @@ to `src/lib/**` only:
   for further token pairs. Also asserts `--color-muted-foreground` >= 4.5:1 on every
   surface and 4.5:1 text contrast for every status role. Browser-level checks live in
   `e2e/functional/none/a11y.spec.ts` (axe on Alerts and Silences, both themes, no rule
-  excluded; keyboard path into the alert card; reduced motion).
+  excluded; keyboard path into the alert card and through the Fast-Silence popover; Enter
+  inside a list row; reduced motion). `alert-ack.spec.ts` additionally asserts that the
+  "Silence…" entry's bell sits within 2px of the trigger's bell — measured layout, not just
+  "on screen".
 - `frontend/src/lib/alertUtils.test.ts` — example-based tests for every
   exported function (formatting/escaping helpers, matching/state functions),
   including the byte-mirrored Resolved-filter corpus from

@@ -750,7 +750,9 @@ export function AlertListView({
                         tabIndex={0}
                         data-testid="alert-group-row"
                         onClick={() => toggleGroup(groupKey)}
-                        onKeyDown={(e) => e.key === 'Enter' && toggleGroup(groupKey)}
+                        // Only when the row itself has focus: Enter on a button inside it ("Silence group")
+                        // bubbles up to here and must not also toggle the group behind that button's action.
+                        onKeyDown={(e) => e.key === 'Enter' && e.target === e.currentTarget && toggleGroup(groupKey)}
                         className={cn(
                           'cursor-pointer transition-colors',
                           theme === 'light'

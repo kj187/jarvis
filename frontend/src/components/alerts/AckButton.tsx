@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
-import { createPortal } from 'react-dom'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent } from 'react'
 import { Bell, BellOff, Check, ChevronDown, ChevronRight, ChevronUp, Loader2, TriangleAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Popover } from '@/components/ui/popover'
 import { useAckAlert, useGroupAckAlert } from '@/hooks/useSilences'
 import { useProtectedAction } from '@/hooks/useProtectedAction'
 import { getEffectiveAlertState } from '@/lib/alertUtils'
@@ -66,8 +66,6 @@ type FeedbackState = 'idle' | 'done' | 'error'
 
 /** How long the transient success/error label stays visible after a pick. */
 const FEEDBACK_MS = 2500
-/** Grace period before the hover menu closes, so the pointer can cross the gap. */
-const MENU_CLOSE_MS = 140
 /** Vertical gap between the trigger and the menu. */
 const GAP = 6
 /** Fixed menu width (`w-60` below) — also used to decide whether it still fits right-aligned to the trigger's left edge. */
@@ -76,14 +74,21 @@ const MENU_WIDTH_ESTIMATE = 240
 const OFFSCREEN = -9999
 
 /**
- * One-click Fast-Silence button with a duration menu. Hovering (or clicking /
- * focusing) the button opens a small popover listing the durations from
+ * One-click Fast-Silence button with a duration popover. Hovering, clicking or
+ * pressing Enter/Space on the button opens a small popover listing the durations from
  * the `silenceDurations` setting (default 5m … 1w; instance and user configurable); clicking one
  * creates a short-lived exact-match silence for exactly this alert for that
  * duration — no form, no modal. The comment reflects the chosen duration. The
  * menu always opens *below* the button. If `onCreateSilence` is passed, the
  * menu also gains a "Silence…" entry above the durations that opens the full
  * pre-filled form instead — one bell, one hover target, both paths.
+ *
+ * The panel is a child of the trigger's `Popover` (not portaled to `<body>`), so Tab
+ * walks from the trigger straight into it and Escape returns focus — the same shape
+ * as `ExtendSilenceMenu`. It is `position: fixed`, so the `overflow-hidden` cards and
+ * table cells that host it cannot clip it. Focusing the trigger does not open it:
+ * with several cards on a page a keyboard user would otherwise have to tab through
+ * every open panel to get past each one.
  *
  * Rendered only when at least one target alert's effective state is `active`
  * (invariant #3), unless `requireActive={false}`. Auth is gated via
@@ -107,10 +112,8 @@ export function AckButton({
   const [menuOpen, setMenuOpen] = useState(false)
   const [coords, setCoords] = useState<{ top: number; left?: number; right?: number }>({ top: 0, left: 0 })
   const feedbackTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
-  const closeTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
-  const triggerRef = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLSpanElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
-  const panelId = useId()
   const menuIconRef = useRef<SVGSVGElement>(null)
   const alignedRef = useRef(false)
   const silenceDurations = useSettingsStore((s) => s.silenceDurations)
@@ -121,13 +124,7 @@ export function AckButton({
     onOpenChange?.(menuOpen || isPending || feedback !== 'idle')
   }, [menuOpen, isPending, feedback, onOpenChange])
 
-  useEffect(
-    () => () => {
-      clearTimeout(feedbackTimer.current)
-      clearTimeout(closeTimer.current)
-    },
-    [],
-  )
+  useEffect(() => () => clearTimeout(feedbackTimer.current), [])
 
   const flash = useCallback((state: FeedbackState) => {
     setFeedback(state)
@@ -187,17 +184,18 @@ export function AckButton({
     setMenuOpen(open)
   }, [])
 
-  const openMenu = useCallback(() => {
-    clearTimeout(closeTimer.current)
-    if (menuOpenRef.current) return
-    position()
-    setOpen(true)
-  }, [position, setOpen])
-
-  const scheduleClose = useCallback(() => {
-    clearTimeout(closeTimer.current)
-    closeTimer.current = setTimeout(() => setOpen(false), MENU_CLOSE_MS)
-  }, [setOpen])
+  // Popover reports every hover-enter as `open = true`, including while already open, so opening is
+  // idempotent (see `menuOpenRef`): only the closed → open transition positions the panel.
+  const handleOpenChange = useCallback(
+    (next: boolean) => {
+      if (next) {
+        if (menuOpenRef.current) return
+        position()
+      }
+      setOpen(next)
+    },
+    [position, setOpen],
+  )
 
   useEffect(() => {
     if (!menuOpen) return
@@ -251,171 +249,135 @@ export function AckButton({
   const pick = (minutes: number) => (e: MouseEvent) => {
     e.stopPropagation()
     durationRef.current = minutes
-    clearTimeout(closeTimer.current)
     setOpen(false)
     execute()
-  }
-
-  // Idempotent open rather than a toggle: on non-touch devices the preceding
-  // `mouseenter` (via `openMenu`) has typically already opened the menu by the
-  // time this fires, so a toggle would immediately close what hover just
-  // opened. Closing happens via Escape, blur, or picking a duration instead.
-  const openOnClick = (e: MouseEvent) => {
-    e.stopPropagation()
-    if (menuOpen) return
-    position()
-    setOpen(true)
-  }
-
-  const handleKeyDown = (e: KeyboardEvent) => {
-    if (e.key === 'Escape') setOpen(false)
   }
 
   const Chevron = menuOpen ? ChevronUp : ChevronDown
 
   return (
-    <>
-      <div
-        ref={triggerRef}
+    // The anchor stops clicks from reaching a clickable host (the whole AlertCard entry opens the detail panel).
+    <span ref={triggerRef} className="inline-flex" onClick={(e) => e.stopPropagation()}>
+      <Popover
+        open={menuOpen}
+        onOpenChange={handleOpenChange}
+        // A named group of ordinary buttons, not role="menu": that role promises arrow-key
+        // navigation and owned menuitem children, and the options here sit inside a
+        // heading/grid wrapper. Claiming it would misannounce the popover.
+        role="group"
+        label={silenceLabel}
         className="inline-flex"
-        onMouseEnter={openMenu}
-        onMouseLeave={scheduleClose}
-        onFocus={openMenu}
-        onBlur={scheduleClose}
-        onKeyDown={handleKeyDown}
+        panelClassName="fixed z-[100] w-60 rounded-overlay border border-border bg-popover p-2 shadow-xl"
+        panelProps={{ style: { top: coords.top, left: coords.left, right: coords.right }, 'data-testid': 'alert-ack-menu' }}
+        panelRef={menuRef}
+        trigger={({ props }) =>
+          variant === 'icon' ? (
+            <button
+              type="button"
+              data-testid="alert-ack-button"
+              aria-label={silenceLabel}
+              disabled={isPending}
+              className={cn(
+                'inline-flex h-6 w-6 items-center justify-center rounded-compact transition-colors cursor-pointer disabled:opacity-50',
+                feedback === 'error'
+                  ? 'text-destructive'
+                  : feedback === 'done'
+                    ? 'text-success-fg'
+                    : subtle
+                      ? 'text-muted-foreground/80 hover:bg-accent hover:text-foreground'
+                      : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+              )}
+              {...props}
+            >
+              {icon('h-3.5 w-3.5')}
+            </button>
+          ) : variant === 'card' ? (
+            <button
+              type="button"
+              data-testid="alert-ack-button"
+              aria-label="Fast-Silence this alert"
+              disabled={isPending}
+              className={cn(
+                'inline-flex items-center gap-1 rounded-compact border px-1.5 py-0.5 text-[10px] font-medium cursor-pointer disabled:opacity-50',
+                feedback === 'error'
+                  ? 'border-destructive/40 bg-card text-destructive'
+                  : feedback === 'done'
+                    ? 'border-success-edge bg-card text-success-fg'
+                    : 'border-border bg-card text-muted-foreground hover:bg-accent hover:text-foreground',
+              )}
+              {...props}
+            >
+              {icon('h-3 w-3')}
+              {label}
+              <Chevron className="h-3 w-3 opacity-60" />
+            </button>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              data-testid="alert-ack-button"
+              aria-label="Fast-Silence this alert"
+              disabled={isPending}
+              className={
+                feedback === 'error'
+                  ? 'text-destructive'
+                  : feedback === 'done'
+                    ? 'text-success-fg'
+                    : undefined
+              }
+              {...props}
+            >
+              {icon('h-3.5 w-3.5')}
+              {label}
+              <Chevron className="h-3.5 w-3.5 opacity-60" />
+            </Button>
+          )
+        }
       >
-        {variant === 'icon' ? (
+        {onCreateSilence && (
           <button
             type="button"
-            data-testid="alert-ack-button"
-            aria-controls={panelId}
-            aria-expanded={menuOpen}
-            aria-label={silenceLabel}
-            onClick={openOnClick}
-            disabled={isPending}
-            className={cn(
-              'inline-flex h-6 w-6 items-center justify-center rounded-compact transition-colors cursor-pointer disabled:opacity-50',
-              feedback === 'error'
-                ? 'text-destructive'
-                : feedback === 'done'
-                  ? 'text-success-fg'
-                  : subtle
-                    ? 'text-muted-foreground/80 hover:bg-accent hover:text-foreground'
-                    : 'text-muted-foreground hover:bg-accent hover:text-foreground',
-            )}
+            data-testid="alert-ack-open-form"
+            onClick={(e) => {
+              e.stopPropagation()
+              setOpen(false)
+              onCreateSilence(alerts)
+            }}
+            className="flex w-full flex-row-reverse items-center gap-2 rounded-surface bg-link/10 px-2.5 py-2 text-left text-[13px] font-semibold text-link transition-colors hover:bg-link/15 cursor-pointer"
           >
-            {icon('h-3.5 w-3.5')}
+            <Bell ref={menuIconRef} className="h-4 w-4 shrink-0" />
+            <ChevronRight className="h-3.5 w-3.5 shrink-0 opacity-60" />
+            <span className="min-w-0 flex-1">
+              Silence…
+              <span className="block text-[11px] font-medium opacity-70">Open full form</span>
+            </span>
           </button>
-        ) : variant === 'card' ? (
-          <button
-            type="button"
-            data-testid="alert-ack-button"
-            aria-controls={panelId}
-            aria-expanded={menuOpen}
-            aria-label="Fast-Silence this alert"
-            onClick={openOnClick}
-            disabled={isPending}
-            className={cn(
-              'inline-flex items-center gap-1 rounded-compact border px-1.5 py-0.5 text-[10px] font-medium cursor-pointer disabled:opacity-50',
-              feedback === 'error'
-                ? 'border-destructive/40 bg-card text-destructive'
-                : feedback === 'done'
-                  ? 'border-success-edge bg-card text-success-fg'
-                  : 'border-border bg-card text-muted-foreground hover:bg-accent hover:text-foreground',
-            )}
-          >
-            {icon('h-3 w-3')}
-            {label}
-            <Chevron className="h-3 w-3 opacity-60" />
-          </button>
-        ) : (
-          <Button
-            variant="outline"
-            size="sm"
-            data-testid="alert-ack-button"
-            aria-controls={panelId}
-            aria-expanded={menuOpen}
-            aria-label="Fast-Silence this alert"
-            onClick={openOnClick}
-            disabled={isPending}
-            className={
-              feedback === 'error'
-                ? 'text-destructive'
-                : feedback === 'done'
-                  ? 'text-success-fg'
-                  : undefined
-            }
-          >
-            {icon('h-3.5 w-3.5')}
-            {label}
-            <Chevron className="h-3.5 w-3.5 opacity-60" />
-          </Button>
         )}
-      </div>
-
-      {menuOpen &&
-        createPortal(
-          <div
-            ref={menuRef}
-            id={panelId}
-            // A named group of ordinary buttons, not role="menu": that role promises
-            // arrow-key navigation and owned menuitem children, and the options here sit
-            // inside a heading/grid wrapper. Claiming it would misannounce the popover.
-            role="group"
-            aria-label={silenceLabel}
-            data-testid="alert-ack-menu"
-            onMouseEnter={() => clearTimeout(closeTimer.current)}
-            onMouseLeave={scheduleClose}
-            className="fixed z-[100] w-60 rounded-overlay border border-border bg-popover p-2 shadow-xl"
-            style={{ top: coords.top, left: coords.left, right: coords.right }}
-          >
-            {onCreateSilence && (
-              <button
-                type="button"
-                data-testid="alert-ack-open-form"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  clearTimeout(closeTimer.current)
-                  setOpen(false)
-                  onCreateSilence(alerts)
-                }}
-                className="flex w-full flex-row-reverse items-center gap-2 rounded-surface bg-link/10 px-2.5 py-2 text-left text-[13px] font-semibold text-link transition-colors hover:bg-link/15 cursor-pointer"
-              >
-                <Bell ref={menuIconRef} className="h-4 w-4 shrink-0" />
-                <ChevronRight className="h-3.5 w-3.5 shrink-0 opacity-60" />
-                <span className="min-w-0 flex-1">
-                  Silence…
-                  <span className="block text-[11px] font-medium opacity-70">Open full form</span>
-                </span>
-              </button>
-            )}
-            {activeAlerts.length > 0 && (
-              <>
-                <div className={cn('flex items-center gap-2 px-0.5', onCreateSilence && 'mb-1.5 mt-2')}>
-                  <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    {onCreateSilence && <span className="text-muted-foreground">or </span>}
-                    {alerts.length > 1 ? `Fast-Silence ${activeAlerts.length} alerts` : 'Fast-Silence'}
-                  </span>
-                  <div className="h-px flex-1 bg-border" />
-                </div>
-                <div className="grid grid-cols-4 gap-1">
-                  {silenceDurations.map((minutes) => (
-                    <button
-                      key={minutes}
-                      type="button"
-                            data-testid="alert-ack-option"
-                      onClick={pick(minutes)}
-                      className="flex items-center justify-center rounded-surface border border-border bg-card px-1 py-1.5 text-xs font-semibold tabular-nums text-foreground transition-colors hover:border-link/40 hover:bg-link/10 hover:text-link cursor-pointer"
-                    >
-                      {formatDurationChoice(minutes)}
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>,
-          document.body,
+        {activeAlerts.length > 0 && (
+          <>
+            <div className={cn('flex items-center gap-2 px-0.5', onCreateSilence && 'mb-1.5 mt-2')}>
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                {onCreateSilence && <span className="text-muted-foreground">or </span>}
+                {alerts.length > 1 ? `Fast-Silence ${activeAlerts.length} alerts` : 'Fast-Silence'}
+              </span>
+              <div className="h-px flex-1 bg-border" />
+            </div>
+            <div className="grid grid-cols-4 gap-1">
+              {silenceDurations.map((minutes) => (
+                <button
+                  key={minutes}
+                  type="button"
+                  data-testid="alert-ack-option"
+                  onClick={pick(minutes)}
+                  className="flex items-center justify-center rounded-surface border border-border bg-card px-1 py-1.5 text-xs font-semibold tabular-nums text-foreground transition-colors hover:border-link/40 hover:bg-link/10 hover:text-link cursor-pointer"
+                >
+                  {formatDurationChoice(minutes)}
+                </button>
+              ))}
+            </div>
+          </>
         )}
-    </>
+      </Popover>
+    </span>
   )
 }

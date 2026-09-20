@@ -48,6 +48,29 @@ test.describe('One-click Fast-Silence', () => {
     }).toPass({ timeout: 3000 })
   })
 
+  test('the "Silence…" entry\'s bell sits exactly over the trigger\'s bell', async ({ page, am, jarvis }) => {
+    await dismissNoAuthNotice(page)
+    await am.fire(kubernetesAlerts)
+    await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, kubernetesAlerts.length)
+    await page.goto('/?state=active')
+
+    // One bell, one hover target: the menu opens so that its own bell lands on the trigger's, and
+    // the pointer that opened it is already resting on the first entry. Deliberate, measured layout
+    // — "somewhere on screen" (the test above) would not notice it drifting.
+    const trigger = page.getByLabel('Silence options for this alert').first()
+    await trigger.hover()
+    const menuBell = page.getByTestId('alert-ack-open-form').locator('svg').first()
+    await expect(menuBell).toBeVisible()
+
+    await expect(async () => {
+      const t = await trigger.locator('svg').first().boundingBox()
+      const m = await menuBell.boundingBox()
+      expect(t && m).toBeTruthy()
+      expect(Math.abs(t!.x + t!.width / 2 - (m!.x + m!.width / 2))).toBeLessThanOrEqual(2)
+      expect(Math.abs(t!.y + t!.height / 2 - (m!.y + m!.height / 2))).toBeLessThanOrEqual(2)
+    }).toPass({ timeout: 3000 })
+  })
+
   test('Fast-Silence in detail panel silences exactly that alert with a Fast-Silence comment', async ({ page, am, jarvis }) => {
     await dismissNoAuthNotice(page)
     await am.fire(kubernetesAlerts)

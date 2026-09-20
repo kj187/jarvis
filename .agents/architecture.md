@@ -1382,7 +1382,11 @@ index.css             → self-hosted Inter (`public/fonts/inter-variable-latin.
     │   │                        shown read-only as a blue "Claimed by: <shortClaimant>
     │   │                        · <time>" line above the chips; row actions = one AckButton (icon
     │   │                        variant, menu = Silence form + Fast-Silence durations) + contextual
-    │   │                        expire/extend icon
+    │   │                        expire/extend icon; the row is `tabIndex=0` and opens on Enter, but
+    │   │                        only when the row itself is the event target — Enter bubbling up from a
+    │   │                        button inside it must not also open the detail panel (`e.target ===
+    │   │                        e.currentTarget`; the group row in AlertListView.tsx follows the same
+    │   │                        rule for its "Silence group" buttons)
     │   ├── AlertDetailPanel.tsx → slide-over: labels/annotations + link buttons, stats & timeline,
     │   │                          claim (useClaimController) is one click for the common case —
     │   │                          claims immediately with whatever name is already known (logged-in
@@ -1502,12 +1506,18 @@ index.css             → self-hosted Inter (`public/fonts/inter-variable-latin.
     │   │                        react-refresh/only-export-components stays clean) — single source
     │   │                        for both the detail-panel heatmap and the card sparkline
     │   ├── AckButton.tsx      → one-click Fast-Silence (short-lived exact-match silence); active-only
-    │   │                        (getEffectiveAlertState), auth-gated (useProtectedAction); hover/focus
-    │   │                        popover (role="group" of plain buttons — never role="menu": no roving
-    │   │                        focus, and the options sit inside a heading/grid wrapper) with the
-    │   │                        `silenceDurations` setting (default 5m…1w) picking the duration;
-    │   │                        own createPortal + positioning rather than ui/popover.tsx, so Tab does
-    │   │                        not reach the options (known gap; ExtendSilenceMenu shows the fix);
+    │   │                        (getEffectiveAlertState), auth-gated (useProtectedAction); a
+    │   │                        `ui/popover.tsx` popover (role="group" of plain buttons — never
+    │   │                        role="menu": no roving focus, and the options sit inside a heading/grid
+    │   │                        wrapper) with the `silenceDurations` setting (default 5m…1w) picking the
+    │   │                        duration. Opens on hover, tap or Enter/Space — not on focus, so tabbing
+    │   │                        through a page of cards does not open a panel per card. The panel is a
+    │   │                        child of the trigger's Popover (not portaled), so Tab walks into it and
+    │   │                        Escape returns focus; it is `position: fixed` so overflow-hidden cards
+    │   │                        cannot clip it. With `onCreateSilence` (card view) a layout effect
+    │   │                        measures the panel and shifts it so its own bell lands on the trigger's
+    │   │                        (`alert-ack.spec.ts` asserts the alignment to within 2px). The trigger's
+    │   │                        anchor span stops click propagation to the host (AlertCard entry).
     │   │                        transient Silenced/Failed feedback; used by AlertCard + AlertDetailPanel
     │   ├── AlertBadge.tsx     → severity badge
     │   ├── AlertFilters.tsx   → label matcher chips + state dropdown
