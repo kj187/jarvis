@@ -262,7 +262,10 @@ adapters and their rules live in `docs/ai-agents.md`.
 7. **Done-gate — never report work as complete untested.** Before presenting
    non-documentation work as finished: run the targeted tests for what you
    changed (`go test ./internal/<pkg>/...`; frontend changes additionally
-   `pnpm build`). For larger or cross-cutting changes run `make test-all`.
+   `pnpm build`). For larger or cross-cutting changes run `make test-all`, or
+   `make verify` when you need the full picture — it adds the PostgreSQL-backed
+   tests (otherwise silently skipped) and a production-image smoke test, and
+   reports skipped steps as skipped rather than passed (`.agents/testing.md`).
    If a check cannot be run or fails for pre-existing reasons, say so
    explicitly with the command and output — do not claim green.
 8. **Releases**: Never trigger a release without an explicit user request.
@@ -342,4 +345,5 @@ make up                 # = podman compose -f compose.dev.yml up
 # Fast test feedback (full matrix and E2E commands → .agents/testing.md)
 cd backend && go test ./...
 make test-all
+make verify             # full working-tree check: every CI gate + PostgreSQL tests + prod image smoke test
 ```

@@ -73,7 +73,7 @@ the documentation website.
    implementation (see [AGENTS.md](AGENTS.md#workflow-rules--always-follow)).
 4. Run the full test suite locally before opening the PR:
    ```bash
-   make test-all
+   make verify      # every CI gate, plus PostgreSQL tests and a production-image smoke test
    ```
 5. Open the PR against `main`. Use a Conventional Commit title
    (e.g. `feat(silences): add template export`) and fill in the PR template.
@@ -105,6 +105,10 @@ without a sign-off.
 ## Testing
 
 ```bash
+make verify          # full working-tree check — everything below, plus the PostgreSQL-backed
+                     # tests (otherwise skipped silently) and a production-image smoke test.
+                     # FAST=1 skips the image build. A step that cannot run is reported as
+                     # skipped, never as passed.
 make test-all        # backend (go test -race) + frontend E2E + helm lint + helm unittest
 make test-backend    # go test -race ./...
 make test-frontend   # functional E2E across all auth modes (none + internal + oidc)

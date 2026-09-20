@@ -13,7 +13,7 @@ DEMO_AM_URL        = http://localhost:$(DEMO_AM_PORT)
         up-alertmanager-ha down-alertmanager-ha \
         up-postgres down-postgres \
         demo-up demo-seed demo-resolve demo-reset demo-down \
-        test-all test-backend test-frontend test-frontend-unit fuzz-backend \
+        verify test-all test-backend test-frontend test-frontend-unit fuzz-backend \
         helm-lint helm-test \
         lint gosec govulncheck audit security-all check-agent-context \
         scan scan-history scan-staged scan-all \
@@ -100,6 +100,9 @@ demo-down: ## Remove the demo stack completely — containers and its data volum
 	$(DEMO_ENV) $(COMPOSE_DEMO) down -v
 
 # ── Tests ──────────────────────────────────────────────────────────────────────
+
+verify: ## Verify the working tree end-to-end: every CI gate + PostgreSQL tests + prod image smoke test (FAST=1 skips the image)
+	@FAST=$(FAST) scripts/verify.sh
 
 test-all: test-backend test-frontend-unit test-frontend helm-lint helm-test ## Run all tests (backend + frontend + helm)
 
