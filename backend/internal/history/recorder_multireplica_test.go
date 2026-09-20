@@ -295,4 +295,3 @@ func TestMultiReplica_FollowerTrigger_ForwardsToLeader(t *testing.T) {
 		return false
 	})
 }
-

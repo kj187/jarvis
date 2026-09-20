@@ -14,12 +14,12 @@ import (
 
 // Config holds all application configuration.
 type Config struct {
-	Port           string
-	LogLevel       string
-	PollInterval   time.Duration
+	Port         string
+	LogLevel     string
+	PollInterval time.Duration
 	// DBDSN is the database connection string. Starts with "postgres://" or
 	// "postgresql://" for PostgreSQL; anything else is treated as a SQLite file path.
-	DBDSN          string
+	DBDSN string
 	// DBMaxOpenConns caps the PostgreSQL connection pool per pod (idle
 	// connections are kept up to the same cap). Ignored for SQLite, which is
 	// always single-connection. Size it so pods × DBMaxOpenConns stays well

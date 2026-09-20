@@ -14,11 +14,11 @@ import (
 
 // OIDCProvider implements OIDC Authorization Code Flow with PKCE.
 type OIDCProvider struct {
-	verifier    *gooidc.IDTokenVerifier
-	oauth2Cfg   oauth2.Config
-	users       *users.Store
-	adminClaim  string // claim name that signals admin role (e.g. "groups", "cognito:groups")
-	adminValue  string // value inside adminClaim that grants admin (e.g. "Administrator")
+	verifier   *gooidc.IDTokenVerifier
+	oauth2Cfg  oauth2.Config
+	users      *users.Store
+	adminClaim string // claim name that signals admin role (e.g. "groups", "cognito:groups")
+	adminValue string // value inside adminClaim that grants admin (e.g. "Administrator")
 }
 
 // NewOIDCProvider creates an OIDCProvider by discovering the OIDC issuer metadata.
