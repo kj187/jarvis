@@ -60,7 +60,10 @@ func main() {
 		os.Exit(1)
 	}
 	defer func() { _ = database.Close() }()
-	logger.Info("database connected", "dialect", dialect, "dsn", db.RedactDSN(cfg.DBDSN), "max_open_conns", cfg.DBMaxOpenConns)
+	// Stats() is the effective pool, not the configured one: SQLite always
+	// caps at a single writer (Critical Invariant #8), so logging
+	// cfg.DBMaxOpenConns here would claim a pool size SQLite never uses.
+	logger.Info("database connected", "dialect", dialect, "dsn", db.RedactDSN(cfg.DBDSN), "max_open_conns", database.Stats().MaxOpenConnections)
 
 	if err := db.Migrate(database, dialect); err != nil {
 		logger.Error("migrate database", "err", err)
