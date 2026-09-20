@@ -20,6 +20,11 @@
 #      or tool-only syntax — tool details belong in docs/ai-agents.md.
 #   6. Every docs/*.md file is registered in website/scripts/pages.mjs, so a
 #      new doc can't go silently unpublished (.agents/skills/website/SKILL.md).
+#   7. The backend and frontend resolved-filter conformance fixtures are
+#      byte-identical.
+#   8. Every critical-invariant number cited in code or docs exists in
+#      AGENTS.md, so a renumbered or never-merged invariant can't leave
+#      dangling references (docs/ai-agents.md).
 
 set -euo pipefail
 
@@ -140,6 +145,18 @@ frontend_filter_fixture="frontend/src/lib/testdata/resolved-filter-conformance.j
 if ! cmp -s "$backend_filter_fixture" "$frontend_filter_fixture"; then
   fail "$backend_filter_fixture and $frontend_filter_fixture must be byte-identical"
 fi
+
+# ── 8. Cited critical-invariant numbers exist in AGENTS.md ──────────────────
+inv_max="$(sed -n '/^## Critical Invariants/,/^## Workflow Rules/p' AGENTS.md | grep -c '^[0-9]\+\. ' || true)"
+while IFS=: read -r file line ref; do
+  [ -n "$ref" ] || continue
+  n="${ref##*#}"
+  case "$n" in
+    '' | *[!0-9]*) fail "$file:$line cites 'Invariant #$n', which is not a number" ;;
+    *) { [ "$n" -ge 1 ] && [ "$n" -le "$inv_max" ]; } \
+         || fail "$file:$line cites Invariant #$n, but AGENTS.md lists only $inv_max" ;;
+  esac
+done <<< "$(grep -rnoiE 'invariant #[0-9A-Za-z]+' AGENTS.md CONTRIBUTING.md .agents docs backend frontend/src frontend/e2e frontend/eslint.config.js 2>/dev/null || true)"
 
 if [ "$errors" -gt 0 ]; then
   exit 1

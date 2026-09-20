@@ -47,6 +47,33 @@ Notes from verifying the setup:
   symlink or one-line import, a row in the table above, and its entry in
   `SYMLINK_ADAPTERS`/`FILE_ADAPTERS` in `scripts/check-agent-context.sh`.
 
+## Critical invariants: ownership and lifecycle
+
+The invariant list in `AGENTS.md` is a contract, not a wish list. Who does
+what:
+
+| Step | Who | Rule |
+|---|---|---|
+| Propose | Author (human or agent) | In the PR that fixes or introduces the behaviour, never as a follow-up: one entry, a code anchor (the function or file the rule lives in) and a test that fails when it is broken, all in the same commit. |
+| Decide | Maintainer | At the PR gate. Without an explicit go the entry does not land. |
+| Review | Reviewer | Checks a diff against the whole list, not only the invariants the author mentions. With a single maintainer this is the merge gate itself. |
+| Keep current | Author of any change that touches the behaviour | Same commit: update the entry, the anchor comment and the documents named in `AGENTS.md` → Workflow Rules #6. |
+| Retire | Maintainer | Never delete. Keep the number and mark the entry `Retired: <reason>`. |
+
+What qualifies: breaking it corrupts data, opens a security hole or causes a
+production incident, **and** the rule is not obvious from the code next to
+it. Debugging insight without such a consequence belongs in
+`.agents/lessons.md`, a single-file convention in a code comment.
+
+Numbers are permanent identifiers. Code comments, lessons and tests cite
+them (`Invariant #<n>`), so they are never renumbered or reused. Working
+labels from a design or bug-hunt phase (for example "D5") must be replaced by
+the final number before merge.
+
+`scripts/check-agent-context.sh` fails when a cited invariant number does not
+exist in `AGENTS.md`. It cannot tell whether the rule is still true; that
+stays a review duty.
+
 ## Enforcement
 
 `scripts/check-agent-context.sh` runs in the pre-commit hook, in the CI job
@@ -55,4 +82,5 @@ with the Agent Skills reference validator, checks the adapters, keeps
 `AGENTS.md` within its size limit with all mentioned paths existing, and
 rejects tool names or tool-only syntax in `AGENTS.md` and `.agents/`. It also
 keeps the backend and frontend copies of the resolved-filter conformance
-fixture byte-identical so both language implementations test the same cases.
+fixture byte-identical so both language implementations test the same cases,
+and rejects citations of a critical invariant number that does not exist.
