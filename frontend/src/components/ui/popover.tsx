@@ -33,6 +33,8 @@ interface PopoverProps {
   openOnFocus?: boolean
   /** Extra attributes on the panel, e.g. a `data-testid`. */
   panelProps?: React.HTMLAttributes<HTMLDivElement> & { [data: `data-${string}`]: string }
+  /** Ref to the panel element, for callers that measure it (e.g. to align it over its trigger). */
+  panelRef?: React.Ref<HTMLDivElement>
 }
 
 /**
@@ -52,6 +54,7 @@ export function Popover({
   label,
   openOnFocus = false,
   panelProps,
+  panelRef,
 }: PopoverProps) {
   const panelId = React.useId()
   const pop = useHoverPopover(open, onOpenChange)
@@ -61,6 +64,7 @@ export function Popover({
       {trigger({ props: { ...pop.triggerProps, 'aria-controls': panelId }, panelId, open })}
       {open && (
         <div
+          ref={panelRef}
           id={panelId}
           role={role}
           aria-label={label}

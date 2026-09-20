@@ -157,7 +157,9 @@ export function AlertListRow({
       tabIndex={0}
       data-testid="alert-list-row"
       onClick={() => onClick(makeAlertSelectionKeyForAlert(alert))}
-      onKeyDown={(e) => e.key === 'Enter' && onClick(makeAlertSelectionKeyForAlert(alert))}
+      // Only when the row itself has focus: Enter on a button inside it (Fast-Silence, a label chip)
+      // bubbles up to here and must not also open the detail panel behind that button's own action.
+      onKeyDown={(e) => e.key === 'Enter' && e.target === e.currentTarget && onClick(makeAlertSelectionKeyForAlert(alert))}
       className={cn(
         'cursor-pointer transition-colors hover:bg-accent/50 focus:outline-none focus-visible:outline-none',
         indented && !selected && !claim && (theme === 'light' ? 'bg-background' : 'bg-background/60'),

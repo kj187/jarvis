@@ -96,6 +96,7 @@ test('A14 the fast-silence popover is a named group of plain buttons, not an ARI
   const trigger = page.getByTestId('alert-ack-button').first()
   await expect(trigger).toBeVisible()
   await trigger.focus()
+  await page.keyboard.press('Enter')
 
   const menu = page.getByTestId('alert-ack-menu')
   await expect(menu).toBeVisible()
@@ -107,12 +108,84 @@ test('A14 the fast-silence popover is a named group of plain buttons, not an ARI
   await expect(menu).toHaveAttribute('role', 'group')
   await expect(menu).toHaveAttribute('aria-label', /.+/)
   await expect(menu.getByTestId('alert-ack-option').first()).not.toHaveAttribute('role', 'menuitem')
+})
 
-  // Markup contract only. The panel is portaled to <body>, so Tab does not reach its options —
-  // the popover opens on focus but cannot be used from the keyboard. Fixing that means moving
-  // AckButton onto the Popover primitive, which keeps the panel inside the trigger's subtree
-  // (ExtendSilenceMenu already works that way inside these same card entries); the keyboard
-  // assertions land with that change.
+test('A15 the fast-silence popover is operable from the keyboard: Tab reaches the options, Escape returns focus', async ({ page, am, jarvis }) => {
+  await dismissNoAuthNotice(page)
+  await am.fire(kubernetesAlerts)
+  await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, kubernetesAlerts.length)
+  await page.goto('/?state=active')
+
+  const trigger = page.getByTestId('alert-ack-button').first()
+  await expect(trigger).toBeVisible()
+  await expect(trigger).toHaveAttribute('aria-expanded', 'false')
+
+  // Merely tabbing onto the trigger must not open the popover: with several cards on the page a
+  // keyboard user would otherwise have to tab through every open panel to get past each one.
+  await trigger.focus()
+  await expect(page.getByTestId('alert-ack-menu')).toBeHidden()
+
+  await page.keyboard.press('Enter')
+  const menu = page.getByTestId('alert-ack-menu')
+  await expect(menu).toBeVisible()
+  await expect(trigger).toHaveAttribute('aria-expanded', 'true')
+
+  // The panel lives inside the trigger's subtree, so Tab walks straight into it: first the
+  // "Silence…" entry, then the duration options.
+  await page.keyboard.press('Tab')
+  await expect(menu.getByTestId('alert-ack-open-form')).toBeFocused()
+  await page.keyboard.press('Tab')
+  await expect(menu.getByTestId('alert-ack-option').first()).toBeFocused()
+
+  // Escape closes it and hands focus back to the trigger.
+  await page.keyboard.press('Escape')
+  await expect(menu).toBeHidden()
+  await expect(trigger).toBeFocused()
+  await expect(trigger).toHaveAttribute('aria-expanded', 'false')
+
+  // Enter toggles it shut again from the keyboard.
+  await page.keyboard.press('Enter')
+  await expect(menu).toBeVisible()
+  await page.keyboard.press('Enter')
+  await expect(menu).toBeHidden()
+})
+
+test('A16 in the list view Enter on a button inside a group or alert row acts on that button only', async ({ page, am, jarvis }) => {
+  await dismissNoAuthNotice(page)
+  await am.fire(kubernetesAlerts)
+  await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, kubernetesAlerts.length)
+  await page.goto('/?state=active')
+  await page.getByTitle('List View').click()
+
+  // The list groups by alertname: alert rows only exist once their group row is expanded.
+  const groupRow = page.getByTestId('alert-group-row').first()
+  await expect(groupRow).toBeVisible()
+  await expect(page.getByTestId('alert-list-row')).toHaveCount(0)
+
+  // A group row expands on Enter, and it holds real buttons ("Silence group"). Enter on such a
+  // button must not also toggle the group behind it — one key press, one action.
+  await groupRow.getByRole('button', { name: 'Silence group' }).focus()
+  await page.keyboard.press('Enter')
+  await expect(page.getByTestId('alert-list-row')).toHaveCount(0)
+
+  // The group row itself still expands from the keyboard when it is the focused element.
+  await page.keyboard.press('Escape')
+  await groupRow.focus()
+  await page.keyboard.press('Enter')
+  const row = page.getByTestId('alert-list-row').first()
+  await expect(row).toBeVisible()
+
+  // Same for an alert row: its Fast-Silence trigger sits inside it, and the row opens the detail
+  // panel on Enter. A key press on that button must not also reach the row.
+  await row.getByTestId('alert-ack-button').focus()
+  await page.keyboard.press('Enter')
+  await expect(page.getByTestId('alert-ack-menu')).toBeVisible()
+  await expect(page.getByTestId('detail-panel')).toBeHidden()
+
+  await page.keyboard.press('Escape')
+  await row.focus()
+  await page.keyboard.press('Enter')
+  await expect(page.getByTestId('detail-panel')).toBeVisible()
 })
 
 test('reduced motion stops decorative animations but keeps spinners turning', async ({ page }) => {
