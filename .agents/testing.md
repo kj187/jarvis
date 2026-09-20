@@ -58,6 +58,8 @@ helm lint charts/jarvis/           # Static chart validation
 helm unittest charts/jarvis/       # Unit tests (deployment, configmap, secret, ingress, servicemonitor, rbac, pdb)
 
 # ── Everything via Makefile ──────────────────────────────────
+make verify                        # full working-tree verification — see "make verify" below
+make verify FAST=1                 # same, without the production image build + smoke test
 make test-all                      # backend + frontend + helm lint + helm unittest
 make test-backend                  # go test -race ./...
 make fuzz-backend                  # Go native fuzz targets (FUZZTIME=30s per target)
@@ -111,6 +113,39 @@ make demo-resolve                  # resolve them — they move to the Resolved 
 make demo-reset                    # down -v + up: empty Jarvis, repeatable demo
 make demo-down                     # down -v: containers and the volume both gone
 ```
+
+## `make verify` — full working-tree verification
+
+`scripts/verify.sh` is the single answer to "is this branch clean and does
+Jarvis still work?". It runs every gate CI runs, plus the two a local
+`make test-all` does **not** cover:
+
+- **PostgreSQL-backed tests.** `go test` skips the leader-election, WS-fanout
+  and PostgreSQL history tests silently when `JARVIS_TEST_POSTGRES_DSN` is
+  unset, so a green local run says nothing about the HA path (`internal/fanout`
+  drops from 66% to 1.8% coverage, `internal/leader` from 67% to 25%). The
+  script starts a throwaway PostgreSQL, exports the DSN, and stops it again.
+- **The production image.** `//go:build prod` + `embed.FS` on distroless is
+  built in CI only at release time (`release.yml`). The script builds it,
+  boots it against the test Alertmanager, and asserts `/health` reports ok,
+  `/` serves the embedded frontend, and `/api/v1/alerts` returns JSON.
+
+It also checks that the local Go toolchain is at least the version `ci.yml`
+pins — an older one makes `govulncheck` report standard-library CVEs the
+released image never has (the Containerfile tracks `golang:1.26-alpine`).
+
+**A step that cannot run is SKIPPED, never PASSED.** Silent skips are exactly
+what makes a green run misleading, so skipped steps are listed separately and
+downgrade the verdict. Exit codes: `0` VERIFIED, `1` FAILED, `2` INCOMPLETE
+(everything that ran passed, but not everything ran).
+
+The frontend steps need the dev container (`make up`); without it they are
+reported as skipped rather than passing. Container engine is overridable:
+`CONTAINER_CMD="docker" COMPOSE_CMD="docker compose" make verify`.
+
+`make verify` complements the pre-commit hook and CI, it does not replace
+them: it does not run the E2E suites (`make test-frontend`, ~8 min per auth
+mode) or the gitleaks history scan.
 
 ## Memory performance baselines
 
@@ -514,7 +549,7 @@ troubleshooting are documented in **`docs/testing-e2e.md`**.
 
 | Staged paths | Checks |
 |---|---|
-| `backend/**` | `go test ./... -count=1 -timeout 60s` + golangci-lint (incl. gosec; govulncheck runs in CI only) |
+| `backend/**` | `go test ./... -count=1 -timeout 60s` + golangci-lint (incl. gosec and the gofmt formatter; govulncheck runs in CI only) |
 | `frontend/**` | `pnpm audit --audit-level=high` + `pnpm lint` (eslint) + `pnpm test:unit:coverage` (Vitest + 100% coverage gate, `lib/alertUtils.ts`) + `pnpm duplication` (jscpd) — executed **inside the running dev container** (`jarvis_frontend_1`); hook fails if the container is not running |
 | `charts/**` | `helm lint` + `helm unittest` |
 | always | `scripts/check-changelogs.sh` — chart changes (outside `tests/`) must update `charts/jarvis/CHANGELOG.md`; every chart-changelog version section starts with a non-empty `### Breaking Changes`; changed `.github/release-notes/*.md` contain a Breaking Changes heading (a no-op when none of those paths are staged) |
@@ -553,7 +588,9 @@ backend:
     misrepresent frontend coverage. Status checks configured in codecov.yml: project auto ±1%,
     patch 70% ±5% — thresholds absorb goroutine-timing coverage noise from -race runs)
   - govulncheck ./...
-  - golangci-lint run   # includes gosec (enabled in .golangci.yml)
+  - golangci-lint run   # includes gosec and the gofmt formatter (both enabled in .golangci.yml) —
+                        # golangci-lint is the only Go gate here, so formatting is unchecked
+                        # anywhere else; that is how struct-alignment drift once accumulated
   - fuzz targets, 20s each, `-parallel 2` (FuzzRedactDSN, FuzzParseNullableTimeString,
     FuzzParseSecretKey, FuzzValidateSilenceMatchers, FuzzSanitizeAMMessage) — the worker cap
     stops a loaded runner from failing the run with "context deadline exceeded" (not a finding)

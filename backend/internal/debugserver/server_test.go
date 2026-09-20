@@ -28,16 +28,16 @@ func TestNew_EmptyAddrDisabled(t *testing.T) {
 
 func TestNew_RejectsInvalidAddrs(t *testing.T) {
 	cases := []string{
-		"localhost:6060",         // hostname, not a literal IP
-		"0.0.0.0:6060",           // wildcard
-		"10.0.0.1:6060",          // non-loopback IP
-		"[fe80::1%eth0]:6060",    // zone ID
-		"127.0.0.1:0",            // port 0 not allowed in production config
-		"127.0.0.1:70000",        // port out of range
-		"127.0.0.1",              // missing port
-		"127.0.0.1:abc",          // non-numeric port
-		"[::1]",                  // missing port, IPv6
-		"example.com:6060",       // hostname
+		"localhost:6060",      // hostname, not a literal IP
+		"0.0.0.0:6060",        // wildcard
+		"10.0.0.1:6060",       // non-loopback IP
+		"[fe80::1%eth0]:6060", // zone ID
+		"127.0.0.1:0",         // port 0 not allowed in production config
+		"127.0.0.1:70000",     // port out of range
+		"127.0.0.1",           // missing port
+		"127.0.0.1:abc",       // non-numeric port
+		"[::1]",               // missing port, IPv6
+		"example.com:6060",    // hostname
 	}
 	for _, addr := range cases {
 		t.Run(addr, func(t *testing.T) {

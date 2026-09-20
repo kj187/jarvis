@@ -15,15 +15,15 @@ import (
 
 // User represents a Jarvis user account.
 type User struct {
-	ID          string
-	Username    string
-	Email       string
+	ID           string
+	Username     string
+	Email        string
 	PasswordHash string // bcrypt; empty for OIDC-only users
-	Role        string // "user" | "admin"
-	Provider    string // "internal" | "oidc"
-	OIDCSub     string
-	CreatedAt   time.Time
-	LastLoginAt *time.Time
+	Role         string // "user" | "admin"
+	Provider     string // "internal" | "oidc"
+	OIDCSub      string
+	CreatedAt    time.Time
+	LastLoginAt  *time.Time
 }
 
 // CreateUser holds the fields required to create a new user.

@@ -6,8 +6,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/labstack/echo/v4"
 	"github.com/kj187/jarvis/backend/internal/auth"
+	"github.com/labstack/echo/v4"
 )
 
 func setupEcho(t *testing.T) *echo.Echo {

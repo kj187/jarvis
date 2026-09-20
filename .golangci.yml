@@ -1,5 +1,12 @@
 version: "2"
 
+# Formatting was unchecked until struct-alignment drift had accumulated across
+# seven files: golangci-lint is the only Go gate in CI and the pre-commit hook,
+# and it does not check formatting unless the formatter is enabled here.
+formatters:
+  enable:
+    - gofmt
+
 linters:
   enable:
     - gosec
