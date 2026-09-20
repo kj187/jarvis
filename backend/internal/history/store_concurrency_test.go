@@ -9,7 +9,7 @@ import (
 	"github.com/kj187/jarvis/backend/internal/models"
 )
 
-// TestRecordStatusChange_ConcurrentSQLite exercises D5: goroutines racing a
+// TestRecordStatusChange_ConcurrentSQLite exercises Invariant #16: goroutines racing a
 // status transition for the same episode through one Store. SQLite's
 // single-writer connection (SetMaxOpenConns(1)) already serializes
 // transactions at the connection-pool level, so this asserts the outcome is
@@ -20,7 +20,7 @@ func TestRecordStatusChange_ConcurrentSQLite(t *testing.T) {
 	runConcurrentResolveRace(t, []*Store{s, s})
 }
 
-// TestRecordStatusChange_ConcurrentPostgres is the regression test for D5:
+// TestRecordStatusChange_ConcurrentPostgres is the regression test for Invariant #16:
 // without pg_advisory_xact_lock, N Stores backed by separate connections can
 // all read the same "last event" before any of them commits, and all decide
 // to insert — producing duplicate resolved rows for one episode. Two racing

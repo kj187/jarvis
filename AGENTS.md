@@ -59,7 +59,7 @@ adapters and their rules live in `docs/ai-agents.md`.
 | Release demo video (YouTube), release-notes video block — **only on request** (asked upfront in Phase 0 of the release skill) | `.agents/skills/release-video/SKILL.md` |
 | Security audit, new-code security checklist, security tooling | `.agents/skills/security-check/SKILL.md` |
 | Debugging surprising behavior — check before re-deriving a known gotcha | `.agents/lessons.md` |
-| Tool adapters, agent-context check | `docs/ai-agents.md` |
+| Tool adapters, agent-context check, invariant lifecycle | `docs/ai-agents.md` |
 
 ## Critical Invariants — NEVER break
 
@@ -256,7 +256,10 @@ adapters and their rules live in `docs/ai-agents.md`.
    | Who-talks-to-whom topology: upstream calls, stores, WS events, poll flow | `docs/diagrams/*.mmd` + re-render via `make diagrams` |
 
    A new **critical invariant** discovered during work goes into
-   `AGENTS.md → Critical Invariants`. Before finishing any task, ask yourself:
+   `AGENTS.md → Critical Invariants` — proposed by the author in the same PR,
+   accepted by the maintainer at the PR gate. Numbers are permanent IDs cited
+   from code and docs: never renumber or reuse one; retire an entry in place.
+   Criteria and lifecycle → `docs/ai-agents.md`. Before finishing any task, ask yourself:
    "would a fresh AI session still find correct information in these files?"
    If not, fix them first.
 7. **Done-gate — never report work as complete untested.** Before presenting

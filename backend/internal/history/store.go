@@ -121,7 +121,7 @@ func (s *Store) query(ctx context.Context, query string, args ...interface{}) (*
 const txTimeout = 30 * time.Second
 
 // withTx runs fn inside a transaction, committing on success and rolling
-// back on error or panic. Critical Invariant #D5: RecordStatusChange's
+// back on error or panic. Critical Invariant #16: RecordStatusChange's
 // read-last → grace-delete → insert → count-update sequence must be atomic,
 // so a demoted leader mid-sequence during failover can't interleave with the
 // newly promoted leader's write of the same episode.
@@ -249,7 +249,7 @@ func (s *Store) RecordStatusChange(
 		created bool
 	)
 	err := s.withTx(ctx, func(ctx context.Context, tx *sql.Tx) error {
-		// D5: serialize concurrent writers for this episode. PostgreSQL only —
+		// Invariant #16: serialize concurrent writers for this episode. PostgreSQL only —
 		// SQLite is already single-writer via SetMaxOpenConns(1), so a second
 		// transaction can't even begin until this one commits or rolls back.
 		if s.dialect == idb.DialectPostgres {
