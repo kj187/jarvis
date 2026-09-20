@@ -42,13 +42,15 @@ func BenchmarkMemoryBroadcast(b *testing.B) {
 			b.Run(fmt.Sprintf("clients=%d/alerts=%d", clients, alerts), func(b *testing.B) {
 				hub := NewHub(nil, nil, nil)
 				for i := 0; i < clients; i++ {
-					client := &Client{hub: hub, send: make(chan []byte, clientBuffer)}
+					client := newClient(hub, nil)
 					hub.clients[client] = struct{}{}
-					// Drain so the client queue (capacity clientBuffer) never
-					// overflows — Hub.Run now closes the conn on overflow,
-					// which these fake clients (no real websocket) don't have.
+					// Drain so the queue never overflows — Hub.Run closes the conn
+					// on a full discrete backlog, which these fake clients (no real
+					// websocket) don't have. The benchmark broadcasts alerts_update,
+					// which coalesces into one slot rather than accumulating.
 					go func(c *Client) {
-						for range c.send {
+						for range c.signal {
+							c.drain()
 						}
 					}(client)
 				}

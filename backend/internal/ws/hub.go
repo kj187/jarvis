@@ -18,19 +18,38 @@ const (
 	pongWait       = 60 * time.Second
 	pingPeriod     = 54 * time.Second
 	maxMessageSize = 512 * 1024 // 512 KB
-	// clientBuffer/globalBroadcastBuffer are message counts, not a byte
-	// budget: different queued alerts_update versions each keep their own
-	// backing array reachable, so a deep queue of large snapshots is a real
-	// memory hold, not just backpressure (P4, tmp/memory.md §8.2).
-	clientBuffer          = 4
+	// A queued alerts_update keeps its own copy of the whole alert list
+	// reachable, so several of them per client is a real memory hold, not just
+	// backpressure (P4, tmp/memory.md §8.2). The bound for them is therefore
+	// one: a newer snapshot supersedes the queued one and replaces it in place
+	// (Client.enqueue), so the memory ceiling is lower than the old queue of
+	// clientBuffer snapshots while nothing is lost — the client is guaranteed
+	// the newest list, which is all a snapshot promises.
+	//
+	// Discrete events (claim_set, comment_added, …) are deltas, not snapshots:
+	// merging or dropping one leaves that tab wrong until the next poll, so
+	// they are queued individually. They are small — a fingerprint, a cluster
+	// name, a claimant — so the bound that matters for them is "deep enough
+	// that a burst of real incident activity fits", not a byte budget.
+	// Snapshots need no count: at most one is ever pending per client, held in
+	// a single slot that a newer one overwrites.
+	discreteBuffer        = 32
 	globalBroadcastBuffer = 16
 )
+
+// outbound is one encoded envelope on its way to the clients, tagged with
+// whether it is an alerts_update snapshot (which supersedes a pending one)
+// rather than a discrete event (which must not be merged away).
+type outbound struct {
+	envelope []byte
+	snapshot bool
+}
 
 // Hub manages all active WebSocket connections.
 type Hub struct {
 	mu         sync.RWMutex
 	clients    map[*Client]struct{}
-	broadcast  chan []byte
+	broadcast  chan outbound
 	unregister chan *Client
 	logger     *slog.Logger
 	upgrader   websocket.Upgrader
@@ -50,7 +69,7 @@ func NewHub(allowedOrigins []string, logger *slog.Logger, m *metrics.Metrics) *H
 
 	h := &Hub{
 		clients:    make(map[*Client]struct{}),
-		broadcast:  make(chan []byte, globalBroadcastBuffer),
+		broadcast:  make(chan outbound, globalBroadcastBuffer),
 		unregister: make(chan *Client, 16),
 		logger:     logger,
 		metrics:    m,
@@ -83,17 +102,15 @@ func (h *Hub) Run() {
 			h.mu.Lock()
 			if _, ok := h.clients[client]; ok {
 				delete(h.clients, client)
-				close(client.send)
+				client.closeSend()
 			}
 			h.mu.Unlock()
 
-		case message := <-h.broadcast:
+		case msg := <-h.broadcast:
 			var overflowed []*Client
 			h.mu.RLock()
 			for client := range h.clients {
-				select {
-				case client.send <- message:
-				default:
+				if !client.enqueue(msg.envelope, msg.snapshot) {
 					overflowed = append(overflowed, client)
 				}
 			}
@@ -101,22 +118,24 @@ func (h *Hub) Run() {
 			if len(overflowed) == 0 {
 				continue
 			}
-			// A full client queue means the client is too slow to keep up —
-			// disconnect it instead of silently dropping the message, so a
-			// stuck client doesn't keep holding stale, large queued payloads
-			// (P4, tmp/memory.md §8.2). readPump's own unregister on the
-			// resulting read error is idempotent (Run's unregister case checks
-			// map membership before closing send again).
+			// Only a client whose discrete backlog is full lands here, and those
+			// are deltas that cannot be merged away — it is genuinely not
+			// draining, so disconnect it rather than silently lose events. It
+			// reconnects and refetches. Snapshots never reach this path: they
+			// coalesce into one slot, so a burst of them no longer costs a
+			// healthy client its connection (P4, tmp/memory.md §8.2).
+			// readPump's own unregister on the resulting read error is
+			// idempotent, as is closeSend.
 			h.mu.Lock()
 			for _, client := range overflowed {
 				if _, ok := h.clients[client]; ok {
 					delete(h.clients, client)
-					close(client.send)
+					client.closeSend()
 				}
 			}
 			h.mu.Unlock()
 			for _, client := range overflowed {
-				h.logger.Warn("disconnecting slow ws client")
+				h.logger.Warn("disconnecting ws client with a full discrete backlog")
 				_ = client.conn.Close()
 			}
 		}
@@ -180,7 +199,7 @@ func (h *Hub) BroadcastTyped(eventType string, envelope []byte) {
 	if h.metrics != nil {
 		h.metrics.WSBroadcastsTotal.WithLabelValues(metricEventType(eventType)).Inc()
 	}
-	h.broadcast <- envelope
+	h.broadcast <- outbound{envelope: envelope, snapshot: eventType == models.WSTypeAlertsUpdate}
 }
 
 // metricEventType maps eventType to itself if it's one of the known WS event
@@ -203,7 +222,7 @@ func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request) {
 		h.logger.Error("ws upgrade", "err", err)
 		return
 	}
-	client := &Client{hub: h, conn: conn, send: make(chan []byte, clientBuffer)}
+	client := newClient(h, conn)
 	// Register synchronously: the browser considers the socket open as soon as
 	// the 101 handshake completes, so a broadcast fired right after connect
 	// (e.g. claim_set) must already see this client. Routing registration
@@ -237,7 +256,83 @@ func (h *Hub) upgraderHandler() http.Handler {
 type Client struct {
 	hub  *Hub
 	conn *websocket.Conn
-	send chan []byte
+
+	mu sync.Mutex
+	// queue holds pending envelopes in broadcast order. At most one of them is
+	// an alerts_update snapshot, at snapshotIdx (-1 when none is pending): a
+	// newer snapshot overwrites that slot rather than appending, so the client
+	// never holds two alert lists and the order relative to discrete events is
+	// preserved. discrete counts the non-snapshot entries against discreteBuffer.
+	queue       [][]byte
+	snapshotIdx int
+	discrete    int
+	closed      bool
+	// signal wakes writePump; buffered(1), so a burst coalesces into one wake-up.
+	signal chan struct{}
+}
+
+func newClient(h *Hub, conn *websocket.Conn) *Client {
+	return &Client{hub: h, conn: conn, snapshotIdx: -1, signal: make(chan struct{}, 1)}
+}
+
+// enqueue queues one envelope for this client. It reports false only when the
+// client is genuinely not draining — its discrete backlog is full — which is the
+// caller's cue to disconnect it. A snapshot never overflows: it replaces any
+// pending one.
+func (c *Client) enqueue(envelope []byte, isSnapshot bool) bool {
+	c.mu.Lock()
+	if c.closed {
+		c.mu.Unlock()
+		return true
+	}
+	switch {
+	case isSnapshot && c.snapshotIdx >= 0:
+		c.queue[c.snapshotIdx] = envelope
+	case isSnapshot:
+		c.queue = append(c.queue, envelope)
+		c.snapshotIdx = len(c.queue) - 1
+	case c.discrete >= discreteBuffer:
+		c.mu.Unlock()
+		return false
+	default:
+		c.queue = append(c.queue, envelope)
+		c.discrete++
+	}
+	c.mu.Unlock()
+	c.wake()
+	return true
+}
+
+// drain hands writePump everything queued so far and reports whether the client
+// has been closed, so the pump can send the close frame after the last message.
+func (c *Client) drain() ([][]byte, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	msgs := c.queue
+	c.queue = nil
+	c.snapshotIdx = -1
+	c.discrete = 0
+	return msgs, c.closed
+}
+
+// closeSend marks the client closed and wakes its pump. Idempotent: both the hub
+// loop's unregister case and an overflow disconnect may reach the same client.
+func (c *Client) closeSend() {
+	c.mu.Lock()
+	if c.closed {
+		c.mu.Unlock()
+		return
+	}
+	c.closed = true
+	c.mu.Unlock()
+	c.wake()
+}
+
+func (c *Client) wake() {
+	select {
+	case c.signal <- struct{}{}:
+	default:
+	}
 }
 
 // readPump keeps reading from the WebSocket to process pong messages and
@@ -272,13 +367,17 @@ func (c *Client) writePump() {
 	}()
 	for {
 		select {
-		case message, ok := <-c.send:
-			_ = c.conn.SetWriteDeadline(time.Now().Add(writeWait))
-			if !ok {
-				_ = c.conn.WriteMessage(websocket.CloseMessage, []byte{})
-				return
+		case <-c.signal:
+			messages, closed := c.drain()
+			for _, message := range messages {
+				_ = c.conn.SetWriteDeadline(time.Now().Add(writeWait))
+				if err := c.conn.WriteMessage(websocket.TextMessage, message); err != nil {
+					return
+				}
 			}
-			if err := c.conn.WriteMessage(websocket.TextMessage, message); err != nil {
+			if closed {
+				_ = c.conn.SetWriteDeadline(time.Now().Add(writeWait))
+				_ = c.conn.WriteMessage(websocket.CloseMessage, []byte{})
 				return
 			}
 

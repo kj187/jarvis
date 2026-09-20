@@ -961,3 +961,38 @@ hours before the edit). Vite's HMR works because it polls.
 verify the new behaviour directly (e.g. `curl -si localhost:8080/auth/oidc/start?popup=1`
 shows `|popup` in the `jarvis_oidc_state` cookie). When "the fix does nothing",
 compare `air`'s last build time in `podman logs jarvis_backend_1` with your edit.
+
+## A bounded per-client WS queue disconnects *healthy* clients, not just stuck ones
+
+**Symptom**: `TestHub_SlowClientDisconnectedOnQueueOverflow` failed
+intermittently in CI and 6 of 10 runs locally — on unmodified `main`, with a
+zero-line Go diff. The failure was never the slow client: the *healthy* one was
+dropped with `close 1006` while reading the burst.
+
+**Cause**: `Hub.Run` classified "this client's queue is full right now" as "this
+client is too slow" and disconnected it. But the hub enqueues with plain channel
+sends (nanoseconds) while a client's `writePump` must do a real socket write per
+message (microseconds). With a queue bounded at 4 messages, *any* burst of 5+
+outran *every* client, healthy or not. Adding a concurrent reader to the test
+did not help (19 of 20 runs still failed), which is what ruled out "the test is
+racing by construction" and proved it was the production rule. In production
+that means a burst — several claims during an incident plus an `alerts_update` —
+disconnects every open tab at once, and each reconnect runs a full
+`qc.invalidateQueries()`.
+
+**Also note**: the case the disconnect existed for was already covered. A truly
+stuck socket fails `writePump`'s `writeWait` (10s) deadline and is torn down
+anyway; the overflow path only freed memory sooner.
+
+**Fix**: split the two message kinds instead of counting them together.
+`alerts_update` is a snapshot, so at most one is queued per client and a newer
+one overwrites it in place — which serves the original memory concern better
+(one alert list per client, not four). Discrete events are deltas that must not
+be merged, so they get their own, deeper bound (`discreteBuffer`, 32) because
+they are small. Only a full *discrete* backlog now means "not draining".
+
+**General rule**: a queue bound expressed as a message count conflates two
+different things — memory pressure (driven by payload *size*) and liveness
+(driven by whether the consumer *progresses*). Bound the big, self-superseding
+payloads by replacing them, and judge liveness on messages that cannot be merged
+away.

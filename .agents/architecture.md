@@ -870,15 +870,31 @@ handled the HTTP request and must still reach every other pod's WS clients.
   (`{"type":"alerts_update","payload":{"alerts":`+array+`}}`), never a second
   `json.Marshal` of the alert list; the `broadcaster` interface `Recorder`
   depends on gained this method alongside `BroadcastJSON`. The global
-  broadcast queue shrank 256→16 and each client's queue 64→4 (message counts,
-  not bytes — several queued large `alerts_update` versions each keep their
-  own backing array reachable). `Hub.Run` now disconnects a client whose
-  queue is full instead of silently dropping its message: the client is
-  removed from `clients` and its `send` channel closed under the hub's
+  broadcast queue shrank 256→16.
+- Per-client queueing (`Client.enqueue`/`drain`, replacing the old
+  `send chan []byte`): the queue is a slice guarded by the client's own mutex,
+  with `signal chan struct{}` (buffered 1) waking `writePump`, which drains
+  everything pending in one pass. **`alerts_update` is coalesced**: at most one
+  is ever queued per client (`snapshotIdx`), and a newer one overwrites that
+  slot in place, keeping its position relative to discrete events. A snapshot
+  carries the whole list, so the newest supersedes any pending one — this is
+  what P4's memory concern was actually about (several large alert lists per
+  client), and the ceiling is now one instead of four. **Discrete events**
+  (`claim_set`, `claim_released`, `comment_added`, `silences_update`) are
+  deltas and are never merged or dropped; they are bounded separately by
+  `discreteBuffer` (32) because they are small. `BroadcastTyped` tags each
+  envelope as snapshot-or-not (`outbound`) so the hub loop knows which rule
+  applies, including for fanout bytes arriving via `BroadcastRaw`.
+- `Hub.Run` disconnects a client only when its **discrete** backlog is full —
+  genuinely not draining, and those events cannot be merged away. It is removed
+  from `clients` and `closeSend()` (idempotent) is called under the hub's
   exclusive lock, then its socket is closed after the lock is released
   (immediately unblocking a writer stuck on a slow `conn.Write`, rather than
   waiting out `writeWait`) — the browser's existing reconnect-and-refetch
-  recovers full state.
+  recovers full state. A snapshot burst can no longer trigger this: before
+  coalescing, the hub enqueued far faster than any client could write to its
+  socket, so any burst past the queue bound disconnected *every* connected
+  client at once, each then reconnecting and refetching (`.agents/lessons.md`).
 - Receiving side: `api.HandleFanoutMessage(hub, alertStore)` (re-broadcasts
   bytes unchanged) and `api.HandleFanoutRef(store, alertStore, hub, logger)`
   (switches on `ref.Type`: `comment_added` → `store.GetComment`, `claim_set`/
