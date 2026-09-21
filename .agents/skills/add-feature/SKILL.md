@@ -8,7 +8,8 @@ description: TDD workflow and checklist for adding a new backend endpoint, front
 TDD workflow + conventions checklist for new features. Base rules (TDD in the
 same commit, type sync, commit format, critical invariants) live in the root
 `AGENTS.md` — this file adds the step-by-step detail. For the data model, API
-surface, and component tree, load `.agents/architecture.md`.
+surface, and component tree, load `.agents/architecture.md` (index) and the
+topic file it names.
 
 ---
 
@@ -51,14 +52,19 @@ tags in Go = camelCase in TypeScript).
 ## Frontend — New Component
 
 ```
-1. Add type in types/index.ts (mirrors Go model exactly)
-2. API wrapper in api/client.ts (if new endpoint)
-3. TanStack Query hook in hooks/useXyz.ts
-4. Write component (frontend checklist in AGENTS.md → Workflow Rules #4); it is a visual
-   change, so load `.agents/skills/design-system/SKILL.md` — semantic tokens only, a
-   primitive per overlay role, both themes, keyboard, states
-5. Playwright functional E2E for the golden path (see docs/testing-e2e.md)
+1. Add type in types/index.ts (mirrors Go model exactly) and, if the feature
+   needs a new endpoint, its wrapper in api/client.ts — declarations only
+2. Write the failing test first, from the behaviour you want: hook/lib unit
+   test, component test, or (for the golden path) a Playwright functional E2E
+   (docs/testing-e2e.md). Run it and observe it fail (Red) for the right reason
+3. Implement to green: TanStack Query hook in hooks/useXyz.ts, then the
+   component (frontend checklist in AGENTS.md → Workflow Rules #4); it is a
+   visual change, so load `.agents/skills/design-system/SKILL.md` — semantic
+   tokens only, a primitive per overlay role, both themes, keyboard, states
+4. Run the test again (Green), then `pnpm build`
 ```
+
+Implementation and its tests land in the **same commit**.
 
 ### WS Events for New Features
 
@@ -86,7 +92,7 @@ Also define the new `WSType` constant in `ws/hub.go` and register it in
    (record event) — reusable
 2. Frontend: `SilenceForm.tsx` reusable for create / edit / extend / recreate
 3. Silence UI states (`pending` / `suppressed` / `expiring` / `expired`) are
-   documented in `.agents/architecture.md` — all handled in
+   documented in `.agents/architecture/frontend-state.md` — all handled in
    `getEffectiveAlertState`
 
 ---
@@ -123,8 +129,8 @@ missing update ships as stale documentation.
    register it: entry in `website/scripts/pages.mjs` **and** a sidebar link
    in `website/.vitepress/config.mts`. Without both it is invisible on the
    site, and links to it break the build.
-3. **AI context** → the doc-sync table in `AGENTS.md` → Workflow Rules #6
-   (new endpoint/model/env var/component → `.agents/architecture.md`, and
-   so on).
+3. **AI context** → the mapping in `.agents/doc-sync.md` (AGENTS.md →
+   Workflow Rules #6): new endpoint/model/env var (a new page, store or hook family for the component tree) → the matching
+   file under `.agents/architecture/`, and so on.
 4. `make website` must stay green — it fails on dead internal links.
 

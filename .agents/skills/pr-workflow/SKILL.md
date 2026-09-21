@@ -70,7 +70,7 @@ is missing here goes live as stale documentation.
   `website/.vitepress/config.mts`.
 - Does the PR touch `website/` itself? Then `make website` must pass (it
   fails on dead internal links) and the website skill gets updated.
-- The doc-sync table in `AGENTS.md` → Workflow Rules #6 covers the rest
+- The mapping in `.agents/doc-sync.md` (AGENTS.md → Workflow Rules #6) covers the rest
   (architecture, testing, skills, chart changelog, diagrams).
 
 ---
