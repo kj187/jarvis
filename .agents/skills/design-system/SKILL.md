@@ -70,4 +70,5 @@ Never edit a generated file (`generated/tokens.css`, `generated-tokens.css`, `ge
 ## 6. Keep the docs in step
 
 A visual rule change updates `docs/design-system.md`; a new primitive or token file updates
-`.agents/architecture.md`; new checks update `.agents/testing.md` (AGENTS.md → Workflow Rule 6).
+`.agents/architecture/frontend-tree.md` or `frontend-components.md`; new checks update `.agents/testing.md`
+(mapping: `.agents/doc-sync.md`, AGENTS.md → Workflow Rule 6).

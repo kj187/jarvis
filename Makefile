@@ -148,7 +148,7 @@ audit: ## pnpm audit — CVEs in frontend dependencies (requires dev container r
 
 security-all: gosec govulncheck audit ## Run all security tools (gosec + govulncheck + audit)
 
-check-agent-context: ## AI agent context: skills, tool adapters and AGENTS.md stay tool-agnostic
+check-agent-context: ## Validate agent context: adapters, skills, AGENTS.md, paths, fixtures, invariants
 	scripts/check-agent-context.sh
 
 # ── Secret scanning ────────────────────────────────────────────────────────────

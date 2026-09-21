@@ -69,8 +69,8 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # ratchet:actions/checkout@v7.0.1
-      # Skills, tool adapters and AGENTS.md stay tool-agnostic
-      # (docs/ai-agents.md). Same script as the pre-commit hook.
+      # Agent context guards: adapters thin, skills valid, AGENTS.md size,
+      # path refs, fixtures match, invariants — see scripts/check-agent-context.sh.
       - name: Check agent context
         run: scripts/check-agent-context.sh
       # Generated colour tokens (app, docs site, video) must match design/tokens.json.

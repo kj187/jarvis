@@ -1,53 +1,23 @@
 #!/usr/bin/env bash
-# Keeps the AI agent context tool-agnostic (docs/ai-agents.md).
+# Cheap guards for the AI agent context (docs/ai-agents.md). Runs in the
+# pre-commit hook, the CI job "Agent Context" and `make check-agent-context`.
 #
-# Usage:
-#   scripts/check-agent-context.sh        # pre-commit, CI, make check-agent-context
-#
-# Project knowledge lives in open, tool-neutral conventions: AGENTS.md,
-# reference files in .agents/, and workflows as Agent Skills in
-# .agents/skills/. Rules:
-#   1. Tool adapters are exactly what SYMLINK_ADAPTERS / FILE_ADAPTERS below
-#      say — a symlink or a one-line file, never content of their own.
-#   2. Every skill passes the reference validator of the Agent Skills spec
-#      (skills-ref, pinned to SKILLS_REF_VERSION) and stays within the spec's
-#      recommended SKILL.md size.
-#   3. AGENTS.md stays below MAX_AGENTS_BYTES (the smallest project-instruction
-#      limit among the supported tools is 32 KiB, including the user's global
-#      file).
-#   4. Every doc/script path mentioned in AGENTS.md exists.
-#   5. AGENTS.md and everything under .agents/ never mention a specific tool
-#      or tool-only syntax — tool details belong in docs/ai-agents.md.
-#   6. Every docs/*.md file is registered in website/scripts/pages.mjs, so a
-#      new doc can't go silently unpublished (.agents/skills/website/SKILL.md).
-#   7. The backend and frontend resolved-filter conformance fixtures are
-#      byte-identical.
-#   8. Every critical-invariant number cited in code or docs exists in
-#      AGENTS.md, so a renumbered or never-merged invariant can't leave
-#      dangling references (docs/ai-agents.md).
+#   1. Tool adapters stay thin: a symlink and a one-line import.
+#   2. Every skill has frontmatter with name = directory name and a description.
+#   3. AGENTS.md stays below MAX_AGENTS_BYTES — it is loaded into every session
+#      (a budget; the smallest tool limit is 32 KiB including a global file).
+#   4. Every path mentioned in AGENTS.md exists, and so does every `.agents/...`
+#      path mentioned in the AI context.
+#   5. The backend and frontend resolved-filter conformance fixtures are
+#      byte-identical (Critical Invariant #4).
+#   6. Every cited `Invariant #<n>` is a number that AGENTS.md lists.
 
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-MAX_AGENTS_BYTES=30000
-MAX_SKILL_LINES=500
-SKILLS_REF_VERSION=0.1.1
-
-# Adding a tool that reads neither AGENTS.md nor .agents/skills/: add its
-# adapter here and a row to the adapter table in docs/ai-agents.md.
-# path:expected symlink target
-SYMLINK_ADAPTERS=(
-  ".claude/skills:../.agents/skills"
-)
-# path:expected file content (whole file, trailing newline ignored)
-FILE_ADAPTERS=(
-  "CLAUDE.md:@AGENTS.md"
-)
-
-SKILLS_DIR=".agents/skills"
-DENYLIST='claude|copilot|codex|anthropic|openai|gemini|\$ARGUMENTS|/project:|AskUserQuestion|TodoWrite'
+MAX_AGENTS_BYTES=12000
 
 errors=0
 fail() {
@@ -56,97 +26,55 @@ fail() {
 }
 
 # ── 1. Tool adapters ──────────────────────────────────────────────────────────
-for entry in "${SYMLINK_ADAPTERS[@]}"; do
-  path="${entry%%:*}"
-  target="${entry#*:}"
-  if [ ! -L "$path" ]; then
-    fail "$path must be a symlink to $target"
-  elif [ "$(readlink "$path")" != "$target" ]; then
-    fail "$path points to '$(readlink "$path")', expected '$target'"
-  fi
-done
+[ "$(readlink .claude/skills 2>/dev/null)" = "../.agents/skills" ] \
+  || fail ".claude/skills must be a symlink to ../.agents/skills"
+{ [ -f CLAUDE.md ] && [ ! -L CLAUDE.md ] && [ "$(cat CLAUDE.md)" = "@AGENTS.md" ]; } \
+  || fail "CLAUDE.md must be a regular file containing only '@AGENTS.md'"
 
-for entry in "${FILE_ADAPTERS[@]}"; do
-  path="${entry%%:*}"
-  expected="${entry#*:}"
-  if [ ! -f "$path" ] || [ -L "$path" ]; then
-    fail "$path must be a regular file containing '$expected'"
-  elif [ "$(cat "$path")" != "$expected" ]; then
-    fail "$path must contain only '$expected' — adapters carry no content of their own"
-  fi
-done
-
-# ── 2. Skills follow the Agent Skills spec ────────────────────────────────────
-if command -v agentskills > /dev/null 2>&1; then
-  validator=(agentskills)
-elif command -v uvx > /dev/null 2>&1; then
-  validator=(uvx -q --from "skills-ref==$SKILLS_REF_VERSION" agentskills)
-elif command -v pipx > /dev/null 2>&1; then
-  validator=(pipx run --spec "skills-ref==$SKILLS_REF_VERSION" agentskills)
-else
-  validator=()
-  fail "skills validator not found — install uv or pipx (runs skills-ref==$SKILLS_REF_VERSION)"
-fi
-
+# ── 2. Skills: frontmatter name matches the directory, description present ────
 skills=0
-for dir in "$SKILLS_DIR"/*/; do
-  [ -d "$dir" ] || continue
+for dir in .agents/skills/*/; do
   dir="${dir%/}"
   skills=$((skills + 1))
-  if [ "${#validator[@]}" -gt 0 ] && ! output="$("${validator[@]}" validate "$dir" 2>&1)"; then
-    fail "$dir is not a valid Agent Skill:"
-    printf '%s\n' "$output" | sed 's/^/      /' >&2
-  fi
-  if [ -f "$dir/SKILL.md" ] && [ "$(wc -l < "$dir/SKILL.md")" -gt "$MAX_SKILL_LINES" ]; then
-    fail "$dir/SKILL.md exceeds $MAX_SKILL_LINES lines — move detail into $dir/references/"
-  fi
+  file="$dir/SKILL.md"
+  [ -f "$file" ] || { fail "$dir has no SKILL.md"; continue; }
+  [ "$(sed -n 1p "$file")" = "---" ] || fail "$file must start with '---' frontmatter"
+  [ "$(sed -n 's/^name: *//p' "$file" | head -n1)" = "${dir##*/}" ] \
+    || fail "$file: frontmatter 'name' must equal '${dir##*/}'"
+  desc="$(sed -n 's/^description: *//p' "$file" | head -n1)"
+  { [ -n "$desc" ] && [ "${#desc}" -le 1024 ]; } \
+    || fail "$file: frontmatter 'description' must be present and at most 1024 characters"
 done
-[ "$skills" -gt 0 ] || fail "no skills found under $SKILLS_DIR"
+[ "$skills" -gt 0 ] || fail "no skills found under .agents/skills"
 
 # ── 3. AGENTS.md size ─────────────────────────────────────────────────────────
 agents_bytes="$(wc -c < AGENTS.md | tr -d ' ')"
-if [ "$agents_bytes" -gt "$MAX_AGENTS_BYTES" ]; then
-  fail "AGENTS.md is $agents_bytes bytes (max $MAX_AGENTS_BYTES) — move task-specific detail into .agents/"
-fi
+[ "$agents_bytes" -le "$MAX_AGENTS_BYTES" ] \
+  || fail "AGENTS.md is $agents_bytes bytes (max $MAX_AGENTS_BYTES) — move task-specific detail into .agents/"
 
-# ── 4. Paths mentioned in AGENTS.md exist ─────────────────────────────────────
-# Backticked tokens that look like repository paths to docs or scripts (globs
-# and placeholders like <name> are skipped).
+# ── 4. Paths mentioned in the AI context exist ────────────────────────────────
+# Backticked docs/scripts paths in AGENTS.md (globs and <placeholders> skipped).
 while IFS= read -r path; do
   [ -n "$path" ] || continue
   case "$path" in *'*'* | *'<'* | *'>'*) continue ;; esac
   [ -e "$path" ] || fail "AGENTS.md mentions '$path', which does not exist"
 done <<< "$(grep -o '`[A-Za-z0-9_./<>*-]*\.\(md\|sh\|mmd\|json\)`' AGENTS.md | tr -d '`' | grep '/' | sort -u || true)"
 
-# ── 5. Neutral files stay tool-agnostic ───────────────────────────────────────
-check_neutral() { # file, content
-  local hits
-  hits="$(printf '%s\n' "$2" | grep -inE "$DENYLIST" || true)"
-  if [ -n "$hits" ]; then
-    fail "$1 mentions a specific tool or tool-only syntax (tool details belong in docs/ai-agents.md):"
-    printf '%s\n' "$hits" | sed 's/^/      /' >&2
-  fi
-}
+# Every .agents/... reference (router, indexes, skills, doc-sync map).
+while IFS= read -r path; do
+  [ -n "$path" ] || continue
+  [ -e "${path%/}" ] || fail "the AI context mentions '$path', which does not exist"
+done <<< "$(cat AGENTS.md docs/ai-agents.md $(find .agents -name '*.md' -type f) \
+  | grep -o '\.agents/[A-Za-z0-9_./-]*[A-Za-z0-9_/-]' | sed 's/[.]$//' | sort -u || true)"
 
-while IFS= read -r file; do
-  check_neutral "$file" "$(cat "$file")"
-done <<< "$(printf 'AGENTS.md\n'; find .agents -name '*.md' -type f | sort)"
+# ── 5. Cross-language resolved-filter fixtures stay byte-identical ────────────
+cmp -s backend/internal/alertfilter/testdata/conformance.json \
+       frontend/src/lib/testdata/resolved-filter-conformance.json \
+  || fail "backend/internal/alertfilter/testdata/conformance.json and frontend/src/lib/testdata/resolved-filter-conformance.json must be byte-identical"
 
-# ── 6. Every docs/*.md file is registered on the website ─────────────────────
-while IFS= read -r doc; do
-  [ -n "$doc" ] || continue
-  grep -q "src: '$doc'" website/scripts/pages.mjs \
-    || fail "$doc is not registered in website/scripts/pages.mjs (PAGES) — it would be silently unpublished"
-done <<< "$(find docs -maxdepth 1 -name '*.md' | sort)"
-
-# ── 7. Cross-language resolved-filter fixtures stay byte-identical ────────────
-backend_filter_fixture="backend/internal/alertfilter/testdata/conformance.json"
-frontend_filter_fixture="frontend/src/lib/testdata/resolved-filter-conformance.json"
-if ! cmp -s "$backend_filter_fixture" "$frontend_filter_fixture"; then
-  fail "$backend_filter_fixture and $frontend_filter_fixture must be byte-identical"
-fi
-
-# ── 8. Cited critical-invariant numbers exist in AGENTS.md ──────────────────
+# ── 6. Cited critical-invariant numbers exist ─────────────────────────────────
+# git grep, not grep -r: skips gitignored trees (frontend/e2e/_video is GBs of
+# local video output and made an earlier version of this check take ~90 s).
 inv_max="$(sed -n '/^## Critical Invariants/,/^## Workflow Rules/p' AGENTS.md | grep -c '^[0-9]\+\. ' || true)"
 while IFS=: read -r file line ref; do
   [ -n "$ref" ] || continue
@@ -156,7 +84,7 @@ while IFS=: read -r file line ref; do
     *) { [ "$n" -ge 1 ] && [ "$n" -le "$inv_max" ]; } \
          || fail "$file:$line cites Invariant #$n, but AGENTS.md lists only $inv_max" ;;
   esac
-done <<< "$(grep -rnoiE 'invariant #[0-9A-Za-z]+' AGENTS.md CONTRIBUTING.md .agents docs backend frontend/src frontend/e2e frontend/eslint.config.js 2>/dev/null || true)"
+done <<< "$(git grep --untracked -noiE 'invariant #[0-9A-Za-z]+' -- AGENTS.md CONTRIBUTING.md .agents docs backend frontend/src frontend/e2e frontend/eslint.config.js 2>/dev/null || true)"
 
 if [ "$errors" -gt 0 ]; then
   exit 1

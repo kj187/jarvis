@@ -5,166 +5,78 @@ description: Run all Jarvis security tools (gosec, govulncheck, golangci-lint, p
 
 # Jarvis — Security Check
 
-On-demand security review — everything the pre-commit hook does, runnable
-manually. Also useful before a release or after larger changes. The
-user-facing description of the security measures built into the application is
-`docs/security.md`; this file is the agent-facing checklist and tooling
-reference.
-
----
+On-demand security review, runnable manually — before a release or after
+larger changes. The user-facing description of the application's security
+measures is `docs/security.md`; this file is the agent-facing tooling
+reference and checklist for what no tool enforces.
 
 ## Run Tools
 
 ```bash
-# Go Backend
 cd backend
+gosec ./...             # hardcoded credentials, SQL injection, path traversal, weak crypto
+govulncheck ./...       # dependencies against the Go Vulnerability DB (CI only in the hook flow)
+golangci-lint run       # linter suite incl. gosec, errcheck, bodyclose, noctx (.golangci.yml)
+go mod verify           # module checksums against go.sum
+go test -race ./...     # data races
+make fuzz-backend       # native fuzzing, FUZZTIME=30s per target; crash inputs land in
+                        # internal/<pkg>/testdata/fuzz/ and run as seeds in every `go test`
+cd ../frontend && pnpm audit
 
-gosec ./...             # Security scanner: hardcoded credentials, SQL injection,
-                        # path traversal, weak crypto, insecure random, etc.
-
-govulncheck ./...       # CVE check: dependencies against Go Vulnerability DB
-
-golangci-lint run       # Linter suite: errcheck, bodyclose, noctx, staticcheck, unused, ...
-
-go mod verify           # Verify module checksums against go.sum
-
-go test -race ./...     # Race detector — surfaces data races
-
-make fuzz-backend       # Go native fuzzing (FUZZTIME=30s per target):
-                        #   FuzzRedactDSN (internal/db) — password never leaks into logs
-                        #   FuzzParseNullableTimeString (internal/history) — no panics
-                        #   FuzzParseSecretKey (internal/config) — no panics/errors
-                        # Saved crash inputs land in internal/<pkg>/testdata/fuzz/
-                        # and run as regression seeds in every normal `go test`.
-
-# Frontend
-cd frontend
-pnpm audit              # Check frontend deps for known CVEs
-
-# Secret scanning (gitleaks, config: .gitleaks.toml — runs via podman)
-make scan               # scan all source files
-make scan-history       # scan full git history
-make scan-staged        # scan staged changes (mirrors pre-commit behavior)
-make scan-all           # all three
-
-# Everything at once
+make scan | scan-history | scan-staged | scan-all   # gitleaks (.gitleaks.toml, via podman)
 make security-all       # gosec + govulncheck + pnpm audit
 ```
 
-Automation split: the **pre-commit hook** (`.githooks/pre-commit`) runs Go
-tests, golangci-lint (which includes gosec via `.golangci.yml`), pnpm audit,
-and gitleaks. govulncheck runs **only in CI** (`.github/workflows/ci.yml`) —
-its result depends on the vulnerability DB, not on staged changes. If any
-hook step fails, the commit is aborted — never use `--no-verify`.
+Automation split: the pre-commit hook runs Go tests, golangci-lint, pnpm audit
+and gitleaks; **govulncheck runs only in CI** (its result depends on the
+vulnerability DB, not on staged changes). Never use `--no-verify`.
 
----
+## Checklist for new code
 
-## Container Checklist
+`gosec`, `errcheck`, `bodyclose`, `noctx` and `no-console` already enforce
+hardcoded secrets, unchecked errors, unclosed bodies, HTTP calls without a
+context and SQL string building. Left for review:
 
-```dockerfile
-# The following must be present in the Containerfile:
-FROM gcr.io/distroless/static-debian12   # Distroless — no shell
-USER nonroot:nonroot                      # Non-root user
-```
+- Error responses never leak internal details (`c.JSON(500, "internal error")`).
+- Fingerprint parameters are validated (`[a-f0-9]{16}`); pagination has
+  `limit` ≤ 100 and `offset` ≥ 0.
+- Frontend: no `dangerouslySetInnerHTML`, no `eval()`, `target="_blank"` links
+  carry `rel="noopener noreferrer"` (none of these is lint-enforced).
+- `.env` is not committed; `.env.example` holds placeholders only.
+- `JARVIS_ALLOWED_ORIGINS` is set without a wildcard; `JARVIS_DB_DSN` points to
+  a persistent volume or real DB host and is never logged raw
+  (`db.RedactDSN()`).
+- Container: the `Containerfile` stays distroless with `USER nonroot:nonroot`;
+  `compose.yml` keeps `no-new-privileges`, `cap_drop: ALL`, `read_only: true`
+  with a `tmpfs` for `/tmp`.
 
-```yaml
-# compose.yml security options:
-security_opt:
-  - no-new-privileges:true
-cap_drop:
-  - ALL
-read_only: true
-tmpfs:
-  - /tmp
-```
+## Metrics endpoint
 
----
-
-## New Code Checklist
-
-### Go
-
-- [ ] No hardcoded secrets/credentials (gosec G-codes)
-- [ ] HTTP client calls have `context.WithTimeout` (gosec G114 / noctx linter)
-- [ ] HTTP response body is closed (`defer resp.Body.Close()`) (bodyclose linter)
-- [ ] Error responses do not leak internal details (`c.JSON(500, "internal error")`)
-- [ ] Fingerprint parameter validated: format `[a-f0-9]{16}`
-- [ ] Pagination parameters: `limit` ≤ 100, `offset` ≥ 0
-- [ ] SQL queries use only prepared statements (parameterized queries) — no string concatenation
-- [ ] All `error` returns are checked (errcheck linter)
-- [ ] `go mod verify` passes cleanly
-- [ ] `.env` not committed to git
-
-### Frontend
-
-- [ ] No `dangerouslySetInnerHTML`
-- [ ] No `eval()` or dynamic script execution
-- [ ] External links have `rel="noopener noreferrer"` (when using `target="_blank"`)
-- [ ] TypeScript `strict: true` — no implicit `any`
-- [ ] `pnpm audit` shows no critical CVEs
-
-### Configuration
-
-- [ ] `JARVIS_ALLOWED_ORIGINS` is set (no wildcard `*`)
-- [ ] `.env.example` contains only placeholders, no real values
-- [ ] `JARVIS_DB_DSN` points to a persistent volume (SQLite) or a real DB host (PostgreSQL), not a tmp directory — and is never logged raw (`db.RedactDSN()`)
-
----
-
-## Metrics Endpoint
-
-`GET /metrics` is intentionally public — it bypasses `full_protect`, same as
-`/health` (see `isSkippedPath` in `internal/api/setup_handler.go`). It leaks
-only aggregate counts and configured cluster names, never alertnames, labels,
-or annotations. If that trade-off is ever unacceptable for a given
+`GET /metrics` is intentionally public: it is registered outside the protected
+`apiV1` group in `internal/api/router.go` and bypasses `full_protect`, like
+`/health`. It leaks only aggregate counts and configured cluster names, never
+alertnames, labels or annotations. If that trade-off is unacceptable for a
 deployment, the mitigation is network policy / ingress rules, not app auth.
 
----
+## Debug/pprof server
 
-## Debug/pprof Server
+`internal/debugserver` (`heap`/`allocs`/`goroutine` only) is opt-in: no port
+opens unless `JARVIS_PPROF_ADDR` is set, and `debugserver.New` rejects anything
+but a literal loopback IP plus port at startup. Decision to keep: never add a
+Kubernetes Service, Ingress or container port for it — access is
+`kubectl port-forward` to a specific pod. Operator usage:
+`docs/troubleshooting.md#memory-profiling-jarvis_pprof_addr`.
 
-`internal/debugserver` is opt-in production diagnostics (`heap`/`allocs`/
-`goroutine` profiles), disabled by default — no port opens unless
-`JARVIS_PPROF_ADDR` is explicitly set. It never shares anything with the main
-Echo router or `http.DefaultServeMux`: its own `http.NewServeMux`, exposing
-exactly three GET routes, nothing else (no index, `cmdline`, CPU profile, or
-`trace`). `debugserver.New` rejects anything but a literal loopback IP (`127.0.0.1`
-or `::1`) plus a numeric port 1..65535 at startup — a hostname, `0.0.0.0`, a
-non-loopback IP, a zone ID, or port 0 is a fatal config error, not a silent
-no-op. No Kubernetes Service/Ingress/container port should ever be added for
-it; access is via `kubectl port-forward` to a specific pod only. A single
-semaphore caps profiling at one concurrent request (429 otherwise) — there is
-no server-side queue. See `docs/troubleshooting.md#memory-profiling-jarvis_pprof_addr`
-for the operator-facing usage.
+## CORS and WebSocket origin
 
----
+The `Origin` header is validated for both HTTP CORS and the WebSocket upgrade
+against `cfg.AllowedOrigins` (Critical Invariant #11). Never use an
+unconditional `return true` in `upgrader.CheckOrigin` (`internal/ws/hub.go`):
+today a missing `Origin` (non-browser client) is allowed, an empty allow-list
+means same-origin only, otherwise the allow-list decides.
 
-## CORS + WebSocket Origin
-
-The backend validates the `Origin` header for both HTTP CORS and the WebSocket
-upgrade against `cfg.AllowedOrigins` (Critical Invariant #11 in `AGENTS.md`).
-Never use an unconditional `return true` in `upgrader.CheckOrigin`.
-
-In `full_protect` mode the `/ws` route is additionally wrapped with
-`auth.RequireAuth` (`internal/api/router.go`): the origin check alone does not
-gate non-browser clients (no `Origin` header ⇒ allowed), and `/ws` streams the
-full alert snapshot plus claim/comment events — exactly the data
-`full_protect` protects. The JWT session cookie rides on the upgrade request,
-so no WS-specific auth plumbing exists.
-
-Actual behavior in `internal/ws/hub.go`:
-
-```go
-CheckOrigin: func(r *http.Request) bool {
-    origin := r.Header.Get("Origin")
-    if origin == "" {
-        return true // no Origin header — non-browser clients cannot trigger CSRF
-    }
-    if len(allowedOrigins) == 0 {
-        // Same-origin only when no allow-list is configured.
-        return origin == "http://"+r.Host || origin == "https://"+r.Host
-    }
-    _, ok := originSet[origin] // allow-list lookup
-    return ok
-},
-```
+Because a missing `Origin` passes, the origin check alone does not gate
+non-browser clients. In `full_protect` mode `/ws` is therefore also wrapped in
+`auth.RequireAuth` (`internal/api/router.go`) — it streams the full alert
+snapshot plus claim and comment events. The session cookie rides on the upgrade
+request, so no WS-specific auth exists.
