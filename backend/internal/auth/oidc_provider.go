@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 
 	gooidc "github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
@@ -14,15 +15,15 @@ import (
 
 // OIDCProvider implements OIDC Authorization Code Flow with PKCE.
 type OIDCProvider struct {
-	verifier   *gooidc.IDTokenVerifier
-	oauth2Cfg  oauth2.Config
-	users      *users.Store
-	adminClaim string // claim name that signals admin role (e.g. "groups", "cognito:groups")
-	adminValue string // value inside adminClaim that grants admin (e.g. "Administrator")
+	verifier    *gooidc.IDTokenVerifier
+	oauth2Cfg   oauth2.Config
+	users       *users.Store
+	groupsClaim string // ID-token claim carrying the user's groups (e.g. "groups", "cognito:groups"); "" = not read
+	adminValue  string // group inside groupsClaim that grants the admin role (e.g. "Administrator")
 }
 
 // NewOIDCProvider creates an OIDCProvider by discovering the OIDC issuer metadata.
-func NewOIDCProvider(ctx context.Context, issuer, clientID, clientSecret, redirectURL string, scopes []string, store *users.Store, adminClaim, adminValue string) (*OIDCProvider, error) {
+func NewOIDCProvider(ctx context.Context, issuer, clientID, clientSecret, redirectURL string, scopes []string, store *users.Store, groupsClaim, adminValue string) (*OIDCProvider, error) {
 	provider, err := gooidc.NewProvider(ctx, issuer)
 	if err != nil {
 		return nil, fmt.Errorf("oidc discovery: %w", err)
@@ -46,11 +47,11 @@ func NewOIDCProvider(ctx context.Context, issuer, clientID, clientSecret, redire
 	verifier := provider.Verifier(&gooidc.Config{ClientID: clientID})
 
 	return &OIDCProvider{
-		verifier:   verifier,
-		oauth2Cfg:  cfg,
-		users:      store,
-		adminClaim: adminClaim,
-		adminValue: adminValue,
+		verifier:    verifier,
+		oauth2Cfg:   cfg,
+		users:       store,
+		groupsClaim: groupsClaim,
+		adminValue:  adminValue,
 	}, nil
 }
 
@@ -108,8 +109,9 @@ func (p *OIDCProvider) Exchange(ctx context.Context, code, codeVerifier string) 
 		username = claims.Sub
 	}
 
-	role := p.resolveRole(rawClaims)
-	dbUser, err := p.users.UpsertOIDCUser(ctx, claims.Sub, username, claims.Email, role)
+	groups := claimStrings(rawClaims, p.groupsClaim)
+	role := p.resolveRole(groups)
+	dbUser, err := p.users.UpsertOIDCUser(ctx, claims.Sub, username, claims.Email, role, groups)
 	if err != nil {
 		return nil, fmt.Errorf("upsert oidc user: %w", err)
 	}
@@ -132,28 +134,36 @@ func (p *OIDCProvider) Info() ProviderInfo {
 	return ProviderInfo{Mode: "oidc", LoginURL: "/auth/oidc/start"}
 }
 
-// resolveRole returns "admin" when adminClaim/adminValue are configured and the
-// claim contains the expected value, otherwise "user".
-// Handles both string and []any claim types (Keycloak groups, Cognito cognito:groups).
-func (p *OIDCProvider) resolveRole(claims map[string]any) string {
-	if p.adminClaim == "" || p.adminValue == "" {
+// resolveRole returns "admin" when adminValue is configured and the user is in
+// that group, otherwise "user".
+func (p *OIDCProvider) resolveRole(groups []string) string {
+	if p.adminValue == "" {
 		return "user"
 	}
-	raw, ok := claims[p.adminClaim]
-	if !ok {
-		return "user"
-	}
-	switch v := raw.(type) {
-	case string:
-		if v == p.adminValue {
-			return "admin"
-		}
-	case []any:
-		for _, item := range v {
-			if s, ok := item.(string); ok && s == p.adminValue {
-				return "admin"
-			}
-		}
+	if slices.Contains(groups, p.adminValue) {
+		return "admin"
 	}
 	return "user"
+}
+
+// claimStrings returns the string values of the named claim: a string claim
+// yields one value, an array yields its string items (Keycloak groups, Cognito
+// cognito:groups). Anything else, an absent claim and an unset name yield nil.
+func claimStrings(claims map[string]any, name string) []string {
+	if name == "" {
+		return nil
+	}
+	switch v := claims[name].(type) {
+	case string:
+		return []string{v}
+	case []any:
+		var out []string
+		for _, item := range v {
+			if s, ok := item.(string); ok {
+				out = append(out, s)
+			}
+		}
+		return out
+	}
+	return nil
 }

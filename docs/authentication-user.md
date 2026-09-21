@@ -37,7 +37,7 @@ JARVIS_AUTH_PROVIDER=internal
 JARVIS_SECRET_KEY=<min 32 random bytes>
 ```
 
-On first access, Jarvis redirects to `/setup` where you create the initial admin account. Additional users are managed via the admin panel at `/admin/users`.
+On first access, Jarvis redirects to `/setup` where you create the initial admin account. Additional users are managed under **Administration** in the user menu.
 
 Generate a secret key:
 
@@ -81,7 +81,7 @@ When `JARVIS_AUTH_PROVIDER` is `internal` or `oidc`, `JARVIS_AUTH_MODE` determin
 
 The full reference (defaults, which are required per provider, descriptions)
 is in [Configuration → User authentication](configuration.md#user-authentication).
-`JARVIS_OIDC_ADMIN_CLAIM` / `JARVIS_OIDC_ADMIN_VALUE` are explained further
+`JARVIS_OIDC_GROUPS_CLAIM` / `JARVIS_OIDC_ADMIN_VALUE` are explained further
 under [Role Mapping](#role-mapping) below.
 
 ---
@@ -112,15 +112,15 @@ Whenever something needs a session, the login modal opens **on top of the page y
 
 A modal you dismiss simply drops the pending action.
 
-### Admin Panel
+### Administration
 
-Admins can manage users at `/admin/users`:
+Admins manage users under **Administration** in the user menu (API: `/api/v1/admin/users`):
 
 - Create new users (role: `user` or `admin`)
 - Reset passwords
 - Delete users
 
-The admin panel is only accessible to users with the `admin` role. Open it from the user menu in the header (top right corner).
+The panel is only accessible to users with the `admin` role. Open it from the user menu in the header (top right corner).
 
 ![User menu](assets/auth-user-menu.png)
 
@@ -174,18 +174,29 @@ rights.
 from the ID token on every login:
 
 ```env
-JARVIS_OIDC_ADMIN_CLAIM=groups
+JARVIS_OIDC_GROUPS_CLAIM=groups
 JARVIS_OIDC_ADMIN_VALUE=jarvis-admins
 ```
 
 The claim may be a single string or a list — Keycloak's `groups` and
 Cognito's `cognito:groups` both work. A user whose claim contains the
-configured value becomes `admin`, everyone else stays `user`. Because this is
+configured group becomes `admin`, everyone else stays `user`. Because this is
 evaluated at each login, revoking the group in the identity provider takes
 effect the next time the user signs in.
 
-**Manually.** With no claim mapping configured, an existing admin promotes the
-user in the admin panel after their first login.
+**Seeing your groups.** With `JARVIS_OIDC_GROUPS_CLAIM` set, the *Account* panel (your name in the user menu)
+lists your name, role and the groups the identity provider reported, plus when
+that was. Jarvis stores the groups at each login, so a change in the identity
+provider shows up only after you sign in again — the sessions below last
+24 hours. If someone reports a missing alert, ask them for this list.
+
+> **Upgrading from 1.x:** `JARVIS_OIDC_ADMIN_CLAIM` was renamed to
+> `JARVIS_OIDC_GROUPS_CLAIM`, with no alias. The old variable is ignored, so
+> rename it before upgrading or every SSO user becomes a plain `user` at the next login.
+
+**Not by hand.** An SSO user's role is set from the token at every login, so a
+promotion made in the admin panel lasts only until that user signs in again.
+Without a claim mapping every SSO user is a plain `user`.
 
 ---
 
@@ -219,7 +230,7 @@ to the browser's own settings without touching the account's.
 | Role | Capabilities |
 |------|-------------|
 | `user` | Read alerts, create/delete own claims and comments, create silences |
-| `admin` | All `user` capabilities + manage users via `/admin/users` |
+| `admin` | All `user` capabilities + manage users under **Administration** |
 
 ---
 
@@ -292,7 +303,7 @@ For a full values reference see [charts/jarvis/README.md](../charts/jarvis/READM
 - The `/setup` endpoint is automatically disabled once any user account exists.
 - All cookies are `HttpOnly` — the session token is not readable by JavaScript.
 - `SameSite=Lax` prevents CSRF on cross-site form submissions.
-- The admin panel (`/admin/users`) requires the `admin` role and is protected by `RequireAdmin` middleware.
+- The Administration panel and its API (`/api/v1/admin/*`) require the `admin` role and are protected by `RequireAdmin` middleware.
 
 For vulnerability reporting and supported versions, see the
 [Security Policy](../SECURITY.md).

@@ -178,6 +178,125 @@ func TestGetAuthMe_Authenticated(t *testing.T) {
 	}
 }
 
+// newOIDCAuthServer builds a server whose config names the groups claim, plus
+// an OIDC user already stored with the given groups (as a login would leave it).
+func newOIDCAuthServer(t *testing.T, groupsClaim string, groups []string) (*Server, *auth.User) {
+	t.Helper()
+	srv, userStore := newAuthServer(t)
+	srv.cfg.AuthProvider = "oidc"
+	srv.cfg.OIDCGroupsClaim = groupsClaim
+	stored, err := userStore.UpsertOIDCUser(context.Background(), "sub-1", "dana", "dana@example.com", "user", groups)
+	if err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+	if err := userStore.UpdateLastLogin(context.Background(), stored.ID); err != nil {
+		t.Fatalf("last login: %v", err)
+	}
+	// Exactly what ValidateToken yields: the session JWT carries no e-mail.
+	return srv, &auth.User{ID: stored.ID, Username: stored.Username, Role: stored.Role, Provider: "oidc"}
+}
+
+func getMe(t *testing.T, srv *Server, u *auth.User) map[string]any {
+	t.Helper()
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/auth/me", nil)
+	rec := httptest.NewRecorder()
+	c := echo.New().NewContext(req, rec)
+	c.Set(auth.ContextKey, u)
+	if err := srv.getAuthMe(c); err != nil {
+		t.Fatalf("getAuthMe: %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+	var body map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	return body
+}
+
+func TestGetAuthMe_OIDCReturnsGroupsWhenClaimConfigured(t *testing.T) {
+	srv, u := newOIDCAuthServer(t, "cognito:groups", []string{"frontend", "Operator"})
+
+	body := getMe(t, srv, u)
+
+	if body["groupsClaim"] != "cognito:groups" {
+		t.Errorf("groupsClaim = %v, want cognito:groups", body["groupsClaim"])
+	}
+	groups, _ := body["groups"].([]any)
+	if len(groups) != 2 || groups[0] != "frontend" || groups[1] != "Operator" {
+		t.Errorf("groups = %v, want [frontend Operator]", body["groups"])
+	}
+	if body["email"] != "dana@example.com" {
+		t.Errorf("email = %v, want dana@example.com", body["email"])
+	}
+	if s, _ := body["lastLoginAt"].(string); s == "" {
+		t.Errorf("lastLoginAt missing: %v", body)
+	}
+}
+
+func TestGetAuthMe_OIDCUserWithoutGroupsGetsEmptyList(t *testing.T) {
+	srv, u := newOIDCAuthServer(t, "groups", nil)
+
+	body := getMe(t, srv, u)
+
+	groups, ok := body["groups"].([]any)
+	if !ok || len(groups) != 0 {
+		t.Errorf("groups = %#v, want an empty list (claim configured, user has none)", body["groups"])
+	}
+}
+
+func TestGetAuthMe_OIDCWithoutClaimConfiguredHidesGroups(t *testing.T) {
+	srv, u := newOIDCAuthServer(t, "", []string{"frontend"})
+
+	body := getMe(t, srv, u)
+
+	if _, present := body["groups"]; present {
+		t.Errorf("groups must be absent when JARVIS_OIDC_GROUPS_CLAIM is not set: %v", body)
+	}
+	if _, present := body["groupsClaim"]; present {
+		t.Errorf("groupsClaim must be absent when not configured: %v", body)
+	}
+	if body["email"] != "dana@example.com" {
+		t.Errorf("email = %v, want dana@example.com (from the stored user, not the token)", body["email"])
+	}
+}
+
+// The groups are cosmetic: a database hiccup must never turn /auth/me into a
+// non-200 — the frontend reads that as "signed out" and would drop a valid session.
+func TestGetAuthMe_OIDCLookupFailureStillReturnsTheSession(t *testing.T) {
+	srv, u := newOIDCAuthServer(t, "groups", []string{"frontend"})
+	broken, dialect, err := idb.Open(":memory:")
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	_ = broken.Close() // every query on this handle now fails
+	srv.userStore = users.NewStore(broken, dialect)
+
+	body := getMe(t, srv, u)
+
+	if body["username"] != "dana" || body["role"] != "user" || body["provider"] != "oidc" {
+		t.Errorf("session fields missing: %v", body)
+	}
+	for _, k := range []string{"groups", "groupsClaim", "email", "lastLoginAt"} {
+		if _, present := body[k]; present {
+			t.Errorf("%s must be omitted when the lookup failed: %v", k, body)
+		}
+	}
+}
+
+func TestGetAuthMe_InternalUserHasNoGroupFields(t *testing.T) {
+	srv, _ := newAuthServer(t)
+	srv.cfg.OIDCGroupsClaim = "groups" // irrelevant for a local account
+	body := getMe(t, srv, &auth.User{ID: "u1", Username: "carol", Role: "admin", Provider: "internal"})
+
+	for _, k := range []string{"groups", "groupsClaim", "lastLoginAt"} {
+		if _, present := body[k]; present {
+			t.Errorf("%s must be absent for an internal user: %v", k, body)
+		}
+	}
+}
+
 func TestGetAuthMe_Unauthenticated(t *testing.T) {
 	srv, _ := newAuthServer(t)
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/auth/me", nil)

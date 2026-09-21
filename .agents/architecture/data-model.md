@@ -34,7 +34,7 @@ User types live **outside** `models.go`:
 
 - `internal/users/store.go` — DB `User` (ID, Username, Email, PasswordHash
   (bcrypt, empty for OIDC-only), Role `user|admin`, Provider `internal|oidc`,
-  OIDCSub, CreatedAt, LastLoginAt) + `CreateUser`.
+  OIDCSub, Groups (IdP groups as of the last SSO login), CreatedAt, LastLoginAt) + `CreateUser`.
 - `internal/auth/provider.go` — session `User` (ID, Username, Email, Role,
   Provider) and `ProviderInfo` (mode, loginUrl, setupRequired, authMode,
   runbookBaseUrl — returned by `GET /auth/info`).
@@ -122,6 +122,7 @@ CREATE TABLE IF NOT EXISTS users (
     role          TEXT NOT NULL DEFAULT 'user',      -- user | admin
     provider      TEXT NOT NULL DEFAULT 'internal',  -- internal | oidc
     oidc_sub      TEXT UNIQUE,
+    oidc_groups   TEXT NOT NULL DEFAULT '[]',  -- JSON array of the IdP groups at the last SSO login (added via ALTER)
     created_at    DATETIME NOT NULL,
     last_login_at DATETIME
 );

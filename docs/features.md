@@ -504,7 +504,9 @@ Open the Settings panel from the **user-menu** button in the top-right of the he
 
 Logging in never costs you your place: when a write needs a session — because you were not logged in, or the session expired while you worked — the login opens on top of the current page and the action you started (for example creating a silence you just filled in) completes right after. With SSO the login runs in a popup so the page stays untouched. Details in [User Authentication](authentication-user.md).
 
-Settings and the theme toggle are always there either way; Login only appears signed out, Logout (and Admin, for admins) only signed in. In auth mode `none` there is no Login entry at all — see [User Authentication](authentication-user.md).
+**Account (SSO).** Signed in with SSO, your name at the top of that menu opens an **Account** dialog: username, e-mail, role and — when the operator has set [`JARVIS_OIDC_GROUPS_CLAIM`](configuration.md#jarvis_oidc_groups_claim) — the groups the identity provider reported. A **Copy** button puts the groups on the clipboard, handy when you are asked which groups you are in. They are the groups of your last login: a change in the identity provider applies after you sign in again.
+
+Settings and the theme toggle are always there either way; Login only appears signed out, Logout (and Administration, for admins) only signed in. In auth mode `none` there is no Login entry at all — see [User Authentication](authentication-user.md).
 
 #### Available settings
 

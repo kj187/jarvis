@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/labstack/echo/v4"
 
@@ -28,17 +29,49 @@ func (s *Server) getAuthInfo(c echo.Context) error {
 }
 
 // GET /auth/me — returns the authenticated user or 401.
+//
+// The session token carries no e-mail or groups, so an SSO user's record is read
+// from the database: e-mail always, and — when the instance names a groups claim
+// (JARVIS_OIDC_GROUPS_CLAIM) — the claim name, the groups stored at the last
+// login and that login's time, so the Account dialog can show what the IdP told
+// Jarvis. Only the caller's own record is ever returned. These extras are
+// cosmetic: when the lookup fails the session fields are still returned, because
+// any non-200 makes the frontend treat a valid session as signed out.
 func (s *Server) getAuthMe(c echo.Context) error {
 	u := auth.UserFromContext(c)
 	if u == nil {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 	}
-	return c.JSON(http.StatusOK, map[string]string{
+	body := map[string]any{
 		"id":       u.ID,
 		"username": u.Username,
 		"role":     u.Role,
 		"provider": u.Provider,
-	})
+	}
+	if u.Provider == "oidc" {
+		stored, err := s.userStore.GetByID(c.Request().Context(), u.ID)
+		if err != nil {
+			slog.Error("auth/me: load user record", "err", err)
+			stored = nil
+		}
+		if stored != nil {
+			if stored.Email != "" {
+				body["email"] = stored.Email
+			}
+			if s.cfg.OIDCGroupsClaim != "" {
+				groups := stored.Groups
+				if groups == nil {
+					groups = []string{}
+				}
+				body["groupsClaim"] = s.cfg.OIDCGroupsClaim
+				body["groups"] = groups
+				if stored.LastLoginAt != nil {
+					body["lastLoginAt"] = stored.LastLoginAt.UTC().Format(time.RFC3339)
+				}
+			}
+		}
+	}
+	return c.JSON(http.StatusOK, body)
 }
 
 // loginRequest is the JSON body for POST /auth/login.

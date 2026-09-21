@@ -563,3 +563,54 @@ func TestLoad_DBMaxOpenConns_Invalid(t *testing.T) {
 
 // Ensure test cleanup resets env properly via t.Setenv.
 var _ = os.Setenv
+
+func TestLoad_OIDCGroupsClaim(t *testing.T) {
+	t.Setenv("JARVIS_OIDC_GROUPS_CLAIM", "cognito:groups")
+	t.Setenv("JARVIS_OIDC_ADMIN_VALUE", "Operator")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	if cfg.OIDCGroupsClaim != "cognito:groups" {
+		t.Errorf("OIDCGroupsClaim = %q, want cognito:groups", cfg.OIDCGroupsClaim)
+	}
+	if cfg.OIDCAdminValue != "Operator" {
+		t.Errorf("OIDCAdminValue = %q, want Operator", cfg.OIDCAdminValue)
+	}
+}
+
+// JARVIS_OIDC_ADMIN_CLAIM was renamed to JARVIS_OIDC_GROUPS_CLAIM without an
+// alias: the old variable is ignored, never read as a fallback.
+func TestLoad_OIDCAdminClaimIsNoLongerRead(t *testing.T) {
+	t.Setenv("JARVIS_OIDC_GROUPS_CLAIM", "")
+	t.Setenv("JARVIS_OIDC_ADMIN_CLAIM", "groups")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	if cfg.OIDCGroupsClaim != "" {
+		t.Errorf("OIDCGroupsClaim = %q, want empty (old variable must not act as an alias)", cfg.OIDCGroupsClaim)
+	}
+}
+
+func TestWarnings_AdminGroupWithoutClaim(t *testing.T) {
+	cases := []struct {
+		name string
+		cfg  Config
+		want int
+	}{
+		{"oidc, admin group but no claim: nobody can become admin", Config{AuthProvider: "oidc", OIDCAdminValue: "Operator"}, 1},
+		{"oidc, claim and admin group", Config{AuthProvider: "oidc", OIDCGroupsClaim: "groups", OIDCAdminValue: "Operator"}, 0},
+		{"oidc, no admin group", Config{AuthProvider: "oidc", OIDCGroupsClaim: "groups"}, 0},
+		{"admin group set but provider is not oidc", Config{AuthProvider: "internal", OIDCAdminValue: "Operator"}, 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.cfg.Warnings(); len(got) != tc.want {
+				t.Fatalf("Warnings() = %v, want %d entries", got, tc.want)
+			}
+		})
+	}
+}

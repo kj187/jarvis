@@ -116,6 +116,10 @@ updated_at DATETIME NOT NULL DEFAULT (datetime('now'))
 			return fmt.Errorf("migrate sqlite: %w", err)
 		}
 	}
+	// IdP groups of an SSO user as of the last login (JSON array, '[]' for none).
+	if err := addColumnIfNotExistsSQLite(database, "users", "oidc_groups", "TEXT NOT NULL DEFAULT '[]'"); err != nil {
+		return err
+	}
 	// Add user_id column to alert_comments (nullable, for ownership checks by ID).
 	// SQLite does not support ADD COLUMN IF NOT EXISTS; use the helper.
 	if err := addColumnIfNotExistsSQLite(database, "alert_comments", "user_id", "TEXT"); err != nil {

@@ -202,8 +202,15 @@ export interface SilenceEvent {
 export interface AuthUser {
   id: string
   username: string
+  email?: string
   role: 'user' | 'admin'
   provider: 'internal' | 'oidc'
+  /** SSO only, and only when JARVIS_OIDC_GROUPS_CLAIM is set: the ID-token claim the groups come from. */
+  groupsClaim?: string
+  /** SSO only, only with `groupsClaim`: the groups the IdP reported at the last login (may be empty). */
+  groups?: string[]
+  /** SSO only, only with `groupsClaim`: time of that login (RFC 3339) — the groups are as fresh as this. */
+  lastLoginAt?: string
 }
 
 export interface ProviderInfo {
