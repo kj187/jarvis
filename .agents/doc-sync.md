@@ -43,7 +43,7 @@ these files, and remove such a copied value when you find it.
 | Security tooling, auth/origin behavior | `.agents/skills/security-check/SKILL.md` |
 | Feature-workflow conventions (validation rules, type-sync, checklists) | `.agents/skills/add-feature/SKILL.md` |
 | Branch/PR/CI/merge workflow, changelog rules for PRs | `.agents/skills/pr-workflow/SKILL.md` |
-| Release process, workflows in `release.yml`, versioning, changelog/release-notes format, social media post rules | `.agents/skills/release/SKILL.md` |
+| Release process, workflows in `release.yml` and `release-notes-refresh.yml`, versioning, changelog/release-notes format, social media post rules | `.agents/skills/release/SKILL.md` |
 | Issue-triage workflow, reply guidelines | `.agents/skills/scope-triage/SKILL.md` |
 | Anything under `charts/jarvis/` except `tests/` (templates, values, `Chart.yaml`, chart README) | `charts/jarvis/CHANGELOG.md` → `## [Unreleased]` (Workflow Rules #13) |
 | A colour token (app, docs site, video) | `design/tokens.json`, then `node scripts/design-tokens.mjs` — never edit the generated files (`frontend/src/generated/tokens.css`, `website/.vitepress/theme/generated-tokens.css`, `frontend/e2e/video/generated-theme.ts`) |

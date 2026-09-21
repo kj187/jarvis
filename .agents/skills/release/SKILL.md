@@ -113,7 +113,12 @@ Record the decision; it drives two later steps (step 10a and step 13).
 10. **Write curated release notes** to `.github/release-notes/vX.Y.Z.md`.
    The release workflow uses this file as the release body and **appends**
    the artifact sections itself (image digest, cosign/attestation verify,
-   Helm install, SBOM) — do **not** include those in the notes file.
+   Helm install, SBOM) — do **not** include those in the notes file, and
+   do **not** include the marker `<!-- jarvis:artifacts -->` (it is reserved
+   and causes the workflow to abort). An empty or whitespace-only file counts
+   as missing — for release candidates without a notes file, the workflow
+   falls back to an auto-generated commit list; for stable releases, the job
+   fails.
    - `vX.0.0` (first or new major) → Template A below
    - otherwise → Template B below
 10a. **Video & social posts** (video only if Phase 0 was yes; social posts
@@ -455,6 +460,13 @@ Only on explicit request, for validating a batch of changes before a real
 release: tag `vX.Y.Z-rc.N`, publish as a GitHub pre-release, no changelog
 entry and no `latest` tag. The full flow is in
 `.agents/skills/release/references/release-candidates.md`.
+
+**Note:** If the release notes need correction after tagging, use the
+**"Refresh release notes"** manual workflow (`.github/workflows/release-notes-refresh.yml`,
+Actions → Refresh release notes → Run workflow) to update them on the
+existing release without re-tagging. The workflow reads the notes from
+`main` and replaces only the notes part of the release body, leaving all
+artifacts and settings untouched.
 
 ---
 

@@ -1,0 +1,96 @@
+name: Refresh release notes
+
+# Manual trigger: rewrites only the notes part of an existing GitHub Release
+# body from .github/release-notes/<version>.md on main (a release candidate
+# uses the file of its base version). The artifact sections written by the
+# release workflow (image, digest, cosign, SBOM, Helm) stay untouched. The
+# assets are not touched, and the prerelease flag and the "latest" pointer are
+# checked before and after the edit (see the refresh step). No new tag, no
+# image build. Releases created before the body carried the
+# `<!-- jarvis:artifacts -->` marker are refused, never guessed at.
+# Logic and tests: scripts/release-body.sh and scripts/test-release-body.sh.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing release tag, e.g. v1.13.0 or v1.13.0-rc.2'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-notes-refresh-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    name: Refresh release notes
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # edit the release body
+    env:
+      TAG: ${{ inputs.tag }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+
+    steps:
+      # The notes file is read from main. Fail loudly on any other ref instead
+      # of skipping the job, which would look like a green run without effect.
+      - name: Require main
+        run: |
+          if [ "${GITHUB_REF}" != "refs/heads/main" ]; then
+            echo "::error::Refresh release notes only runs from main (dispatched on ${GITHUB_REF}): the notes are read from main."
+            exit 1
+          fi
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # ratchet:actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Validate tag
+        run: scripts/release-body.sh validate-tag "${TAG}"
+
+      # Only the body may change. --prerelease is not passed, and --latest is
+      # passed explicitly (scripts/release-body.sh latest-flag) so an omitted
+      # make_latest can never move the "latest" pointer. isPrerelease and the
+      # release GitHub reports as latest are read before and after the edit,
+      # and any change fails the run. Only HTTP 404 (no release at all) counts
+      # as "none": every other API error stops the run, before the edit when
+      # it happens before it.
+      - name: Refresh release body
+        run: |
+          latest_tag() {
+            local out err
+            err="$(mktemp)"
+            if out="$(gh api "repos/${GH_REPO}/releases/latest" --jq .tag_name 2>"${err}")"; then
+              if [ -z "${out}" ] || [ "${out}" = "null" ]; then
+                echo "::error::The latest release lookup returned no tag name." >&2
+                exit 1
+              fi
+              echo "${out}"
+            elif grep -q 'HTTP 404' "${err}"; then
+              echo none
+            else
+              echo "::error::Could not read the latest release: $(cat "${err}")" >&2
+              exit 1
+            fi
+          }
+          is_prerelease() { gh release view "${TAG}" --json isPrerelease --jq .isPrerelease; }
+
+          # --template prints the stored body byte for byte (--jq would append a newline).
+          gh release view "${TAG}" --json body --template '{{.body}}' > existing-body.md
+          scripts/release-body.sh refresh "${TAG}" existing-body.md > new-body.md
+
+          prerelease_before="$(is_prerelease)"
+          latest_before="$(latest_tag)"
+          latest_flag="$(scripts/release-body.sh latest-flag "${prerelease_before}" "${latest_before}" "${TAG}")"
+
+          gh release edit "${TAG}" --notes-file new-body.md "${latest_flag}"
+
+          prerelease_after="$(is_prerelease)"
+          latest_after="$(latest_tag)"
+          scripts/release-body.sh verify-unchanged "${prerelease_before}" "${latest_before}" "${prerelease_after}" "${latest_after}"
+          echo "Refreshed the notes of ${TAG} from ${GITHUB_SHA} (prerelease=${prerelease_after}, latest=${latest_after})." >> "${GITHUB_STEP_SUMMARY}"

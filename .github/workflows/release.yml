@@ -28,6 +28,15 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # ratchet:actions/checkout@v7.0.1
 
+      # Fail on a tag the release body logic cannot handle (anything but
+      # vX.Y.Z or vX.Y.Z-rc.N, e.g. v1.2.3-beta.1) before the image is pushed
+      # and signed. The GitHub Release job validates the same tag much later,
+      # when the image is already public.
+      - name: Validate release tag
+        env:
+          TAG: ${{ github.ref_name }}
+        run: scripts/release-body.sh validate-tag "${TAG}"
+
       - name: Docker metadata
         id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # ratchet:docker/metadata-action@v6.2.0
@@ -150,131 +159,38 @@ jobs:
       - name: Sign SBOM (keyless, GitHub OIDC)
         run: cosign sign-blob --yes --bundle sbom.spdx.json.sigstore.json sbom.spdx.json
 
+      # Body = notes + artifact sections, split by an HTML comment marker that
+      # the manual "Refresh release notes" workflow relies on. Notes come from
+      # .github/release-notes/<version>.md (mandatory for stable releases; a
+      # release candidate uses its base version's file when present and falls
+      # back to a commit list otherwise). Logic and tests: scripts/release-body.sh
+      # and scripts/test-release-body.sh.
       - name: Build release body
+        env:
+          TAG: ${{ github.ref_name }}
+          DIGEST: ${{ needs.build-and-push.outputs.digest }}
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          DIGEST="${{ needs.build-and-push.outputs.digest }}"
           CHART_VERSION=$(awk '/^version:/{print $2}' charts/jarvis/Chart.yaml)
-
-          # Pre-releases (tag contains a hyphen, e.g. v1.7.0-rc.1) never get
-          # curated notes or a CHANGELOG section — those are only generated
-          # for real releases, so an RC leaves no trace in either once the
-          # real release follows. Summarize commits since the last stable
-          # tag instead.
-          if [[ "${GITHUB_REF_NAME}" == *-* ]]; then
-            PREV_STABLE=$(git tag --list 'v*' | grep -Ev -- '-' | sort -V | tail -1)
-            {
-              printf '## Pre-release build\n\n'
-              printf 'Release candidate for the upcoming stable release. Not published as `latest`.\n\n'
-              if [ -n "${PREV_STABLE}" ]; then
-                printf '**Commits since %s:**\n\n' "${PREV_STABLE}"
-                git log "${PREV_STABLE}..${GITHUB_REF_NAME}" --pretty='- %s (%h)'
-              fi
-            } > release-body.md
-          else
-            # Curated release notes are mandatory for stable releases (they
-            # carry the explicit Breaking Changes section) — fail instead of
-            # silently falling back to the generated CHANGELOG section.
-            NOTES_FILE=".github/release-notes/${GITHUB_REF_NAME}.md"
-            if [ ! -f "${NOTES_FILE}" ]; then
-              echo "::error::${NOTES_FILE} is missing — every stable release needs curated notes (.agents/skills/release/SKILL.md)."
-              exit 1
-            fi
-            cp "${NOTES_FILE}" release-body.md
-          fi
-
-          cat >> release-body.md <<'EOF'
-
-          ---
-
-          ## Container image
-
-          ```shell
-          docker pull ghcr.io/kj187/jarvis:@VERSION@
-          ```
-
-          Digest: `@DIGEST@`
-
-          ### Verify image signature (cosign)
-
-          ```shell
-          cosign verify ghcr.io/kj187/jarvis@@DIGEST@ \
-            --certificate-identity-regexp="https://github.com/kj187/jarvis/.*" \
-            --certificate-oidc-issuer="https://token.actions.githubusercontent.com"
-          ```
-
-          ### Verify build provenance (GitHub attestation)
-
-          ```shell
-          gh attestation verify oci://ghcr.io/kj187/jarvis:@VERSION@ --repo kj187/jarvis
-          ```
-          EOF
-
-          if [[ "${GITHUB_REF_NAME}" == *-* ]]; then
-            cat >> release-body.md <<'EOF'
-
-          ## Helm chart
-
-          Release candidates don't publish a chart. To test this RC on Kubernetes, install the current chart with the RC image:
-
-          ```shell
-          helm install jarvis oci://ghcr.io/kj187/charts/jarvis --version @CHART_VERSION@ --set image.tag=@VERSION@
-          ```
-          EOF
-          else
-            cat >> release-body.md <<'EOF'
-
-          ## Helm chart
-
-          ```shell
-          helm install jarvis oci://ghcr.io/kj187/charts/jarvis --version @CHART_VERSION@
-          ```
-
-          Chart changes and breaking changes: [charts/jarvis/CHANGELOG.md](https://github.com/kj187/jarvis/blob/@TAG@/charts/jarvis/CHANGELOG.md)
-
-          ### Verify chart signature (cosign)
-
-          ```shell
-          cosign verify ghcr.io/kj187/charts/jarvis:@CHART_VERSION@ \
-            --certificate-identity-regexp="https://github.com/kj187/jarvis/.*" \
-            --certificate-oidc-issuer="https://token.actions.githubusercontent.com"
-          ```
-          EOF
-          fi
-
-          cat >> release-body.md <<'EOF'
-
-          ## SBOM
-
-          The SPDX SBOM is attached to this release (`sbom.spdx.json`) together with its keyless signature bundle (`sbom.spdx.json.sigstore.json`), and also embedded in the image manifest (`docker buildx imagetools inspect`).
-
-          ```shell
-          cosign verify-blob sbom.spdx.json \
-            --bundle sbom.spdx.json.sigstore.json \
-            --certificate-identity-regexp="https://github.com/kj187/jarvis/.*" \
-            --certificate-oidc-issuer="https://token.actions.githubusercontent.com"
-          ```
-          EOF
-
-          sed -i "s|@VERSION@|${VERSION}|g; s|@DIGEST@|${DIGEST}|g; s|@CHART_VERSION@|${CHART_VERSION}|g; s|@TAG@|${GITHUB_REF_NAME}|g" release-body.md
+          scripts/release-body.sh build "${TAG}" "${DIGEST}" "${CHART_VERSION}" > release-body.md
           cat release-body.md
 
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
         run: |
           # Releases are immutable: if one already exists for this tag, fail
           # instead of silently overwriting it (delete manually if intended).
           # Pre-release tags (contain a hyphen, e.g. v1.7.0-rc.1) are marked
           # --prerelease instead of --latest, so they never override the
           # "latest" pointer for the real release that follows.
-          if [[ "${GITHUB_REF_NAME}" == *-* ]]; then
+          if [[ "${TAG}" == *-* ]]; then
             STABILITY_FLAG="--prerelease"
           else
             STABILITY_FLAG="--latest"
           fi
-          gh release create "${{ github.ref_name }}" \
-            --title "${{ github.ref_name }}" \
+          gh release create "${TAG}" \
+            --title "${TAG}" \
             --notes-file release-body.md \
             --verify-tag \
             "${STABILITY_FLAG}" \

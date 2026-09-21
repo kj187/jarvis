@@ -15,7 +15,7 @@ DEMO_AM_URL        = http://localhost:$(DEMO_AM_PORT)
         demo-up demo-seed demo-resolve demo-reset demo-down \
         verify test-all test-backend test-frontend test-frontend-unit fuzz-backend \
         helm-lint helm-test \
-        lint gosec govulncheck audit security-all check-agent-context \
+        lint gosec govulncheck audit security-all check-agent-context test-scripts \
         scan scan-history scan-staged scan-all \
         build \
         e2e-build e2e-down e2e e2e-mode e2e-screenshots e2e-screenshot release-video \
@@ -150,6 +150,9 @@ security-all: gosec govulncheck audit ## Run all security tools (gosec + govulnc
 
 check-agent-context: ## Validate agent context: adapters, skills, AGENTS.md, paths, fixtures, invariants
 	scripts/check-agent-context.sh
+
+test-scripts: ## Test the release body script (scripts/release-body.sh); no network needed
+	scripts/test-release-body.sh
 
 # ── Secret scanning ────────────────────────────────────────────────────────────
 
