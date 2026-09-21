@@ -49,7 +49,7 @@ for all users. However, read access remains available in `write_protect` mode. A
 in the database. Complete the initial setup immediately after deployment, or restrict network access to this
 endpoint until setup is complete.
 
-**`POST /api/v1/poll`**: This endpoint is public (no authentication, no rate limit). A hostile client
+**`POST /api/v1/poll`**: This endpoint needs no authentication (unless `JARVIS_AUTH_MODE=full_protect`) and has no rate limit. A hostile client
 can hammer it and keep the Alertmanager poll loop running constantly. Read-only access is available in
 `write_protect` mode; this endpoint affects performance only, not data integrity.
 

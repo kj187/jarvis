@@ -99,7 +99,7 @@ and **[Upgrading](https://kj187.github.io/jarvis/howto/upgrade)**; every environ
 listed in **[Configuration reference](https://kj187.github.io/jarvis/reference/configuration)**.
 
 **Important**: Jarvis is an internal tool designed for deployment behind a VPN or authentication proxy,
-not for direct public internet exposure. See [Security model](https://kj187.github.io/jarvis/reference/security)
+not for direct public internet exposure. See [Security model](https://kj187.github.io/jarvis/concepts/security)
 for deployment assumptions and threat model.
 
 ## Compatibility
