@@ -20,6 +20,7 @@ import type {
   ResolvedAlertsPage,
   LabelMatcher,
 } from '@/types'
+import { LoginError } from '@/lib/loginError'
 
 const BASE = '/api/v1'
 
@@ -292,7 +293,7 @@ export function postLogin(username: string, password: string): Promise<{ user: A
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
     body: JSON.stringify({ username, password }),
   }).then(async (r) => {
-    if (!r.ok) throw new Error('invalid credentials')
+    if (!r.ok) throw new LoginError(r.status)
     return r.json() as Promise<{ user: AuthUser }>
   })
 }

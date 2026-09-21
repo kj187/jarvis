@@ -98,6 +98,10 @@ upgrade notes are in **[Kubernetes deployment](https://kj187.github.io/jarvis/de
 and **[Upgrading](https://kj187.github.io/jarvis/howto/upgrade)**; every environment variable is
 listed in **[Configuration reference](https://kj187.github.io/jarvis/reference/configuration)**.
 
+**Important**: Jarvis is an internal tool designed for deployment behind a VPN or authentication proxy,
+not for direct public internet exposure. See [Security model](https://kj187.github.io/jarvis/concepts/security)
+for deployment assumptions and threat model.
+
 ## Compatibility
 
 Jarvis uses the Alertmanager HTTP API v2 exclusively — introduced in
