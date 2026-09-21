@@ -24,7 +24,8 @@ import (
 
 // loginRateLimiter returns the one rate limit Jarvis applies: a single global
 // bucket for POST /auth/login, shared by all clients (0.5 req/s = 30/min,
-// burst 10).
+// burst 10). The bucket is per process: with several replicas (PostgreSQL HA)
+// each pod has its own.
 //
 // It is global on purpose. Jarvis is an internal tool behind a VPN or auth
 // proxy, and behind a proxy the client IP is not reliable (X-Forwarded-For is

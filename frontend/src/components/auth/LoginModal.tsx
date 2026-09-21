@@ -4,6 +4,7 @@ import { X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { postLogin } from '@/api/client'
+import { loginErrorMessage } from '@/lib/loginError'
 import { startSsoLogin } from '@/lib/ssoLogin'
 import { useAuthStore } from '@/store/authStore'
 
@@ -37,8 +38,8 @@ export function LoginModal({ open, onClose, dismissible = true }: LoginModalProp
     try {
       const result = await postLogin(username, password)
       setUser(result.user)
-    } catch {
-      setError('Invalid username or password.')
+    } catch (err) {
+      setError(loginErrorMessage(err))
     } finally {
       setLoading(false)
     }
