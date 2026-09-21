@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"embed"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -20,6 +21,7 @@ import (
 	"github.com/kj187/jarvis/backend/internal/settings"
 	"github.com/kj187/jarvis/backend/internal/users"
 	"github.com/kj187/jarvis/backend/internal/ws"
+	"github.com/labstack/echo/v4"
 )
 
 func newTestRouter(t *testing.T, origins []string) *httptest.Server {
@@ -28,6 +30,15 @@ func newTestRouter(t *testing.T, origins []string) *httptest.Server {
 }
 
 func newTestRouterWithDB(t *testing.T, origins []string) (*httptest.Server, *sql.DB) {
+	t.Helper()
+	e, database := newTestEchoWithDB(t, origins)
+	return httptest.NewServer(e), database
+}
+
+// newTestEchoWithDB builds the router in auth mode "none" and returns the Echo
+// instance itself, so tests can drive it via ServeHTTP with a chosen
+// RemoteAddr and headers.
+func newTestEchoWithDB(t *testing.T, origins []string) (*echo.Echo, *sql.DB) {
 	t.Helper()
 	database, dialect, err := idb.Open(":memory:")
 	if err != nil {
@@ -47,7 +58,7 @@ func newTestRouterWithDB(t *testing.T, origins []string) (*httptest.Server, *sql
 	cfg := &config.Config{AllowedOrigins: origins}
 
 	e := NewRouter(alertStore, history.NewSilenceStore(), store, hub, registry, cfg, embed.FS{}, &fakeTriggerer{}, auth.NoneProvider{}, userStore, settings.NewStore(database, dialect), metrics.New("test"), fanout.NoopFanout{})
-	return httptest.NewServer(e), database
+	return e, database
 }
 
 // TestRoutes verifies that all registered routes return 200.
@@ -181,6 +192,13 @@ func TestSetupRoute_NotRegisteredInNoneMode(t *testing.T) {
 
 func newTestRouterWithAuthMode(t *testing.T, authMode string) *httptest.Server {
 	t.Helper()
+	return httptest.NewServer(newTestEchoInternal(t, authMode))
+}
+
+// newTestEchoInternal builds the router with the internal auth provider and
+// returns the Echo instance for ServeHTTP-driven tests.
+func newTestEchoInternal(t *testing.T, authMode string) *echo.Echo {
+	t.Helper()
 	database, dialect, err := idb.Open(":memory:")
 	if err != nil {
 		t.Fatalf("open db: %v", err)
@@ -204,8 +222,7 @@ func newTestRouterWithAuthMode(t *testing.T, authMode string) *httptest.Server {
 		SecretKey:    []byte("aaaabbbbccccddddeeeeffffgggghhhh"),
 	}
 
-	e := NewRouter(alertStore, history.NewSilenceStore(), store, hub, registry, cfg, embed.FS{}, &fakeTriggerer{}, provider, userStore, settings.NewStore(database, dialect), metrics.New("test"), fanout.NoopFanout{})
-	return httptest.NewServer(e)
+	return NewRouter(alertStore, history.NewSilenceStore(), store, hub, registry, cfg, embed.FS{}, &fakeTriggerer{}, provider, userStore, settings.NewStore(database, dialect), metrics.New("test"), fanout.NoopFanout{})
 }
 
 func TestMetricsRoute_ExposesBuildInfo(t *testing.T) {
@@ -339,5 +356,83 @@ func TestWebSocket_WriteProtectStaysPublic(t *testing.T) {
 	_ = resp.Body.Close()
 	if resp.StatusCode == http.StatusUnauthorized {
 		t.Errorf("GET /ws in write_protect = 401, want handler reached (e.g. 400 bad handshake)")
+	}
+}
+
+// serveFrom sends one request through the router as if it came from the given
+// peer address, optionally with a spoofed X-Forwarded-For header.
+func serveFrom(e *echo.Echo, method, path, body, remoteAddr, xff string) int {
+	req := httptest.NewRequestWithContext(context.Background(), method, path, strings.NewReader(body))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	req.RemoteAddr = remoteAddr
+	if xff != "" {
+		req.Header.Set(echo.HeaderXForwardedFor, xff)
+	}
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	return rec.Code
+}
+
+// TestLoginRateLimit_IsGlobal: the login limit has one shared bucket, no
+// matter which peer address or X-Forwarded-For value a request carries. A
+// per-client bucket would be bypassable by rotating X-Forwarded-For.
+// A malformed body answers 400 before any bcrypt work, so the test does not
+// depend on hashing time. The bounds tolerate token refill during a slow run
+// (-race): at least the burst passes, and most of the excess is rejected.
+func TestLoginRateLimit_IsGlobal(t *testing.T) {
+	e := newTestEchoInternal(t, "write_protect")
+
+	const total = 60
+	passed, limited := 0, 0
+	for i := 0; i < total; i++ {
+		code := serveFrom(e, http.MethodPost, "/auth/login", "{",
+			fmt.Sprintf("10.0.%d.%d:4000", i/250, i%250+1),
+			fmt.Sprintf("203.0.113.%d", i+1))
+		switch code {
+		case http.StatusBadRequest:
+			passed++
+		case http.StatusTooManyRequests:
+			limited++
+		default:
+			t.Fatalf("request %d: status = %d, want 400 or 429", i, code)
+		}
+	}
+	if passed < 10 {
+		t.Errorf("passed = %d, want >= burst 10", passed)
+	}
+	if limited < total/2 {
+		t.Errorf("limited = %d of %d, want >= %d (shared bucket across all clients)", limited, total, total/2)
+	}
+}
+
+// TestNoPerIPRateLimits: Jarvis is an internal tool; only /auth/login is
+// rate limited. Poll, setup and the write endpoints must never answer 429.
+func TestNoPerIPRateLimits(t *testing.T) {
+	none, _ := newTestEchoWithDB(t, nil)
+	internal := newTestEchoInternal(t, "write_protect")
+
+	const n = 30
+	cases := []struct {
+		name         string
+		e            *echo.Echo
+		method, path string
+	}{
+		{"poll", none, http.MethodPost, "/api/v1/poll"},
+		{"setup", internal, http.MethodPost, "/setup"},
+		{"comment", none, http.MethodPost, "/api/v1/alerts/abc/comments"},
+		{"claim", none, http.MethodPost, "/api/v1/alerts/abc/claim"},
+		{"silence", none, http.MethodPost, "/api/v1/silences"},
+		{"silence template", none, http.MethodPost, "/api/v1/silence-templates"},
+		{"settings", none, http.MethodPut, "/api/v1/settings"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			for i := 0; i < n; i++ {
+				// Same peer every time: the old per-IP limiters keyed on it.
+				if code := serveFrom(tc.e, tc.method, tc.path, "{", "192.0.2.10:5000", ""); code == http.StatusTooManyRequests {
+					t.Fatalf("request %d: 429, want no rate limit", i)
+				}
+			}
+		})
 	}
 }

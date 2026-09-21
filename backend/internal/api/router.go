@@ -10,7 +10,6 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
-	"golang.org/x/time/rate"
 
 	"github.com/kj187/jarvis/backend/internal/auth"
 	"github.com/kj187/jarvis/backend/internal/cluster"
@@ -23,19 +22,29 @@ import (
 	"github.com/kj187/jarvis/backend/internal/ws"
 )
 
-// rateLimiter returns a per-IP rate limiter middleware for the given rate and burst.
-// rate is in requests per second; burst is the maximum burst size.
-func rateLimiter(r rate.Limit, burst int) echo.MiddlewareFunc {
+// loginRateLimiter returns the one rate limit Jarvis applies: a single global
+// bucket for POST /auth/login, shared by all clients (0.5 req/s = 30/min,
+// burst 10).
+//
+// It is global on purpose. Jarvis is an internal tool behind a VPN or auth
+// proxy, and behind a proxy the client IP is not reliable (X-Forwarded-For is
+// caller-controlled), so a per-IP key would either be bypassable or need
+// trusted-proxy configuration. The constant key needs neither.
+//
+// Trade-off: an attacker who can reach the login endpoint can use up the
+// bucket and block logins for as long as the attack lasts. Reading stays
+// possible in write_protect mode. Nothing else is rate limited.
+func loginRateLimiter() echo.MiddlewareFunc {
 	return middleware.RateLimiterWithConfig(middleware.RateLimiterConfig{
 		Store: middleware.NewRateLimiterMemoryStoreWithConfig(
 			middleware.RateLimiterMemoryStoreConfig{
-				Rate:      r,
-				Burst:     burst,
+				Rate:      0.5,
+				Burst:     10,
 				ExpiresIn: 5 * time.Minute,
 			},
 		),
-		IdentifierExtractor: func(c echo.Context) (string, error) {
-			return c.RealIP(), nil
+		IdentifierExtractor: func(echo.Context) (string, error) {
+			return "login", nil
 		},
 		DenyHandler: func(c echo.Context, id string, err error) error {
 			return echo.NewHTTPError(http.StatusTooManyRequests, "rate limit exceeded")
@@ -149,12 +158,12 @@ func NewRouter(
 	// ── Auth & Setup ──────────────────────────────────────────────────────────
 	// GET /setup is served by the SPA catch-all (index.html); no explicit route needed.
 	if authProvider.Mode() == "internal" {
-		e.POST("/setup", srv.postSetup, rateLimiter(0.1, 3))
+		e.POST("/setup", srv.postSetup)
 	}
 
 	authGroup := e.Group("/auth")
 	authGroup.GET("/info", srv.getAuthInfo)
-	authGroup.POST("/login", srv.postLogin, rateLimiter(0.2, 5))
+	authGroup.POST("/login", srv.postLogin, loginRateLimiter())
 	authGroup.POST("/logout", srv.postLogout)
 	authGroup.GET("/me", srv.getAuthMe, auth.RequireAuth(authProvider))
 	authGroup.GET("/oidc/start", srv.getOIDCStart)
@@ -185,44 +194,34 @@ func NewRouter(
 	apiV1.GET("/alerts/:fingerprint/heatmap", srv.getAlertHeatmap)
 	apiV1.GET("/alerts/:fingerprint/silence-events", srv.getSilenceEvents)
 
-	// Rate limiters:
-	//   writeRL  — 30 req/min per IP for all mutating operations
-	//   pollRL   — 1 req/5s  per IP for /poll (matches the minimum client poll interval)
-	writeRL := rateLimiter(0.5, 10)                // 0.5 req/s = 30/min, burst 10
-	pollRL := rateLimiter(pollRLRate, pollRLBurst) // prod: 0.2 req/s = 1/5s, burst 2 (relaxed in e2e builds)
-	// Settings writes come bundled while a user clicks through the Settings
-	// sheet, and multiple users behind one NAT share an IP — looser than
-	// writeRL so normal use never gets throttled.
-	settingsRL := rateLimiter(2, 20) // 120 req/min per IP, burst 20
-
 	requireAuth := auth.RequireAuth(authProvider)
 
 	apiV1.GET("/alerts/:fingerprint/comments", srv.getComments)
-	apiV1.POST("/alerts/:fingerprint/comments", srv.addComment, requireAuth, writeRL)
-	apiV1.DELETE("/alerts/:fingerprint/comments/:id", srv.deleteComment, requireAuth, writeRL)
+	apiV1.POST("/alerts/:fingerprint/comments", srv.addComment, requireAuth)
+	apiV1.DELETE("/alerts/:fingerprint/comments/:id", srv.deleteComment, requireAuth)
 
 	apiV1.GET("/alerts/:fingerprint/claim", srv.getClaim)
-	apiV1.POST("/alerts/:fingerprint/claim", srv.setClaim, requireAuth, writeRL)
-	apiV1.PATCH("/alerts/:fingerprint/claim/note", srv.updateClaimNote, requireAuth, writeRL)
-	apiV1.DELETE("/alerts/:fingerprint/claim", srv.releaseClaim, requireAuth, writeRL)
+	apiV1.POST("/alerts/:fingerprint/claim", srv.setClaim, requireAuth)
+	apiV1.PATCH("/alerts/:fingerprint/claim/note", srv.updateClaimNote, requireAuth)
+	apiV1.DELETE("/alerts/:fingerprint/claim", srv.releaseClaim, requireAuth)
 	apiV1.GET("/alerts/:fingerprint/claims/history", srv.getClaimHistory)
 
 	apiV1.GET("/silences", srv.getSilences)
-	apiV1.POST("/silences", srv.createSilence, requireAuth, writeRL)
-	apiV1.DELETE("/silences/:id", srv.deleteSilence, requireAuth, writeRL)
+	apiV1.POST("/silences", srv.createSilence, requireAuth)
+	apiV1.DELETE("/silences/:id", srv.deleteSilence, requireAuth)
 
 	apiV1.GET("/silence-templates", srv.getSilenceTemplates)
-	apiV1.POST("/silence-templates", srv.createSilenceTemplate, requireAuth, writeRL)
-	apiV1.PUT("/silence-templates/:id", srv.updateSilenceTemplate, requireAuth, writeRL)
-	apiV1.DELETE("/silence-templates/:id", srv.deleteSilenceTemplate, requireAuth, writeRL)
+	apiV1.POST("/silence-templates", srv.createSilenceTemplate, requireAuth)
+	apiV1.PUT("/silence-templates/:id", srv.updateSilenceTemplate, requireAuth)
+	apiV1.DELETE("/silence-templates/:id", srv.deleteSilenceTemplate, requireAuth)
 
-	apiV1.POST("/poll", srv.triggerPoll, pollRL)
+	apiV1.POST("/poll", srv.triggerPoll)
 
 	apiV1.GET("/clusters", srv.getClusters)
 
 	apiV1.GET("/settings", srv.getSettings, auth.OptionalAuth(authProvider))
-	apiV1.PUT("/settings", srv.putSettings, requireAuth, settingsRL)
-	apiV1.DELETE("/settings", srv.deleteSettings, requireAuth, settingsRL)
+	apiV1.PUT("/settings", srv.putSettings, requireAuth)
+	apiV1.DELETE("/settings", srv.deleteSettings, requireAuth)
 
 	// ── E2E test routes (only when built with -tags e2e; no-op otherwise) ─────
 	srv.registerTestRoutes(apiV1)
@@ -230,7 +229,7 @@ func NewRouter(
 	// ── Admin (requires auth + admin role) ───────────────────────────────────
 	admin := apiV1.Group("/admin", auth.RequireAdmin(authProvider))
 	admin.GET("/users", srv.listUsers)
-	admin.POST("/users", srv.createUser, rateLimiter(0.5, 5))
+	admin.POST("/users", srv.createUser)
 	admin.PATCH("/users/:id", srv.updateUser)
 	admin.DELETE("/users/:id", srv.deleteUser)
 
