@@ -25,8 +25,8 @@ NAME="${3:-}"
 
 SHARD_ARG=""
 if [ -n "${E2E_SHARD:-}" ]; then
-  [[ "$E2E_SHARD" =~ ^[1-9][0-9]*/[1-9][0-9]*$ ]] \
-    || { echo "ERROR: E2E_SHARD must look like 1/3 (got '${E2E_SHARD}')" >&2; exit 1; }
+  [[ "$E2E_SHARD" =~ ^([1-9][0-9]*)/([1-9][0-9]*)$ ]] && [ "${BASH_REMATCH[1]}" -le "${BASH_REMATCH[2]}" ] \
+    || { echo "ERROR: E2E_SHARD must look like 1/3 with index <= total (got '${E2E_SHARD}')" >&2; exit 1; }
   SHARD_ARG=" --shard=${E2E_SHARD}"
 fi
 

@@ -244,6 +244,7 @@ jobs:
           RESULTS: ${{ join(needs.*.result, ' ') }}
         run: |
           echo "backend job results: ${RESULTS}"
+          [ -n "${RESULTS}" ] || { echo "::error::no backend job results"; exit 1; }
           for r in ${RESULTS}; do
             [ "$r" = "success" ] || { echo "::error::a backend job did not succeed (${r})"; exit 1; }
           done

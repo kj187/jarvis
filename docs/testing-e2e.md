@@ -194,7 +194,7 @@ cover.
 |---|---|---|
 | Before pushing a UI/API change | `make e2e` | All 3 modes, in sequence. Same tests as CI (which runs them as parallel jobs). ~few min. |
 | Iterating on one mode | `make e2e-mode MODE=internal` | Fast feedback. |
-| Reproducing one CI shard | `E2E_SHARD=2/4 make e2e-mode MODE=none` | Runs only that Playwright shard (`--shard=2/4`) of the mode's suite. |
+| Reproducing one CI shard | `E2E_SHARD=2/4 make e2e-mode MODE=none` | Runs only that Playwright shard (`--shard=2/4`) of the mode's suite. Never run two shards at the same time in the same checkout (fixed container and network names and ports, `down -v` at start). |
 | You changed a screen and a doc image is stale | `make e2e-screenshot NAME=<id> [MODE=<m>]` | Regenerate just that PNG, commit it. |
 | Refreshing all docs images | `make e2e-screenshots` | Cycles all modes. |
 | Stack stuck / port in use | `make e2e-down` | Force `down -v`. |

@@ -42,7 +42,8 @@ jobs:
         env:
           COMPOSE_CMD: docker compose
           E2E_SHARD: ${{ matrix.shard }}
-        run: make e2e-mode MODE=${{ matrix.mode }}
+          MODE: ${{ matrix.mode }}
+        run: make e2e-mode MODE="$MODE"
 
       - name: Upload Playwright report on failure
         if: failure()
@@ -67,4 +68,5 @@ jobs:
           RESULT: ${{ needs.e2e-shard.result }}
         run: |
           echo "e2e-shard result: ${RESULT}"
+          [ -n "${RESULT}" ] || { echo "::error::no e2e-shard result"; exit 1; }
           [ "${RESULT}" = "success" ] || { echo "::error::E2E shards did not all succeed (${RESULT})"; exit 1; }

@@ -241,6 +241,10 @@ e2e:                 # "Functional E2E (all auth modes)" — aggregator, needs e
                      # fails on any result but success. Required status check name of `protect-main`
 ```
 
+Every new `backend-*` job and every new E2E matrix variant must be added to the `needs` of
+its aggregator (`e2e-shard` is already the whole matrix); otherwise the required check stays green
+without it.
+
 Renaming or splitting a job that carries a required check name (`Backend`,
 `Functional E2E (all auth modes)`, …) needs an aggregator with the old name, or the
 ruleset changes with it; otherwise the check stays "Expected" and blocks every merge.
