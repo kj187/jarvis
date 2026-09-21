@@ -38,9 +38,11 @@ pre-release):
    `.github/release-notes/vX.Y.Z.md` (the job fails without it — no silent
    CHANGELOG fallback), then appends image pull + digest, cosign verify,
    `gh attestation verify`, Helm install + chart CHANGELOG link + chart cosign
-   verify, and SBOM verify. Pre-release tags get an auto-generated
-   commit-log body and an `image.tag` override hint instead of the chart
-   section — see the Release Candidates section in `SKILL.md`.
+   verify, and SBOM verify. Pre-release tags use the notes file
+   (`.github/release-notes/vX.Y.Z.md`, base version without `-rc.N`) when it
+   exists and is not empty; otherwise fall back to an auto-generated
+   commit-log body. Either way, they get an `image.tag` override hint instead
+   of the chart section — see the Release Candidates section in `SKILL.md`.
 4. Create the GitHub Release via `gh release create --notes-file
    release-body.md --verify-tag` with `sbom.spdx.json` +
    `sbom.spdx.json.sigstore.json` as assets — `--latest` for a real release,

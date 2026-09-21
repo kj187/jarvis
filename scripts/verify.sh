@@ -182,6 +182,7 @@ fi
 section "Repository gates"
 
 step "agent context" scripts/check-agent-context.sh
+step "release body script" scripts/test-release-body.sh
 
 changelog_check() {
   local base; base="$(git merge-base origin/main HEAD 2>/dev/null)" || return 0
