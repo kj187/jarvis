@@ -42,6 +42,8 @@ as products of their own.
 
 Jarvis deliberately does **not**:
 
+- **Public internet exposure** — Jarvis is an internal tool and should be deployed behind a VPN or
+  authentication proxy, not directly exposed to the internet
 - **Create alerts or define alerting rules** — detecting problems is the
   monitoring system's job (Prometheus rules, etc.)
 - **Measure or graph anything** — Jarvis is not a metrics dashboard and not a

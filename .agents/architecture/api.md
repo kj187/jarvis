@@ -8,8 +8,8 @@ Part of the architecture reference — start at `.agents/architecture.md` (index
 
 Auth column: **None** = public · **Auth** = `RequireAuth` (valid JWT) · **Admin** = `RequireAdmin` (role=admin).
 When `JARVIS_AUTH_MODE=full_protect`, **all** `/api/v1/*` routes additionally require auth (the `full_protect?`
-marker below). Write routes are rate-limited (`writeRL` = 30/min, burst 10); `/poll` is limited to 1 req/5s
-(relaxed in `-tags e2e` builds).
+marker below). Rate limit: one global bucket for `POST /auth/login` only (0.5 req/s = 30/min, burst 10),
+per-process (each pod's own bucket on PostgreSQL HA).
 
 **Cluster scoping**: all `/alerts/:fingerprint/*` routes accept `?cluster=<name>` —
 the same fingerprint can exist in multiple clusters, so history, stats, comments,
@@ -24,7 +24,7 @@ CORS from `JARVIS_ALLOWED_ORIGINS` (credentials allowed).
 GET    /health                                   None        → { status: "ok" }
 GET    /metrics                                  None        → Prometheus exposition format (see internal/metrics below)
 GET    /auth/info                                None        → { mode, loginUrl, setupRequired, runbookBaseUrl }
-POST   /auth/login                               None  (RL)  Body: { username, password } → user + Set-Cookie
+POST   /auth/login                               None  (RL)  Body: { username, password } → user + Set-Cookie  (global 30/min rate limit)
 POST   /auth/logout                              None        → clears session cookie
 GET    /auth/me                                  Auth        → User
 GET    /auth/oidc/start                          None        → 302 redirect to OIDC issuer (PKCE). Optional ?popup=1 (login in a
@@ -34,7 +34,7 @@ GET    /auth/oidc/start                          None        → 302 redirect to
 #                                                              Both ride in the state cookie (`state|verifier[|popup|r:<b64url>]`,
 #                                                              oidc_flow.go) — the callback re-validates, a forged cookie falls back to /
 GET    /auth/oidc/callback                       None        → exchanges code, sets cookie, 302 → landing target (/ | popup-done | return_to)
-POST   /setup                                    None  (RL)  Body: { username, password } (internal mode only; 403 if users exist)
+POST   /setup                                    None        Body: { username, password } (internal mode only; 403 if users exist)
 
 # ── WebSocket ────────────────────────────────────────────────────────────────
 WS     /ws                                       full_protect?  (origin checked against JARVIS_ALLOWED_ORIGINS;
@@ -146,7 +146,7 @@ PUT    /api/v1/silence-templates/:id             Auth  (write)  Body: { name, ma
 DELETE /api/v1/silence-templates/:id             Auth  (write)
 
 # ── Poll / Clusters ──────────────────────────────────────────────────────────
-POST   /api/v1/poll                              None  (RL)   → triggers an immediate Alertmanager poll
+POST   /api/v1/poll                              None        → triggers an immediate Alertmanager poll
 GET    /api/v1/clusters                          full_protect?  → []ClusterInfo
 #        health from the cached per-member up-state of the last poll (Cluster.MemberUpStates) —
 #        never live-pings AM; members without poll state yet count as healthy (writeOrder optimism)
@@ -161,16 +161,15 @@ GET    /api/v1/settings                          full_protect?  → { user: {...
 #        config.ParseSilenceDurations); {} when none is set.
 #        Served to anonymous callers too (the frontend reads it in local mode). Reads the DB and the
 #        parsed Config only — never calls Alertmanager (Invariant #13), never cached, not leader-gated.
-PUT    /api/v1/settings                          Auth  (RL)   Body: the settings object (sparse; whole row replaced,
+PUT    /api/v1/settings                          Auth        Body: the settings object (sparse; whole row replaced,
 #        last write wins, no merge/versioning) — 400 on non-object JSON or a body > 16 KiB.
 #        The backend never inspects individual keys (see user_settings above) — validation is
-#        shape/size only. settingsRL = 120 req/min per IP, burst 20 (looser than writeRL: settings
-#        writes are debounced client-side but still bursty, and a NAT can share one IP).
-DELETE /api/v1/settings                          Auth  (RL)   deletes the row — the server side of "Reset to defaults"
+#        shape/size only.
+DELETE /api/v1/settings                          Auth        deletes the row — the server side of "Reset to defaults"
 
 # ── Admin (auth + role=admin) ────────────────────────────────────────────────
 GET    /api/v1/admin/users                       Admin        → []User
-POST   /api/v1/admin/users                       Admin (RL)   Body: { username, password, role }
+POST   /api/v1/admin/users                       Admin        Body: { username, password, role }
 PATCH  /api/v1/admin/users/:id                   Admin        Body: { role }  (cannot change own role)
 DELETE /api/v1/admin/users/:id                   Admin        (cannot delete self)
 
@@ -219,7 +218,7 @@ consumed snapshot.
 - **JWT**: HMAC-SHA256 signed with `JARVIS_SECRET_KEY`; claims `sub, username, email, role, provider, exp, iat`; delivered as secure HttpOnly cookie.
 - **OIDC**: `/auth/oidc/start` (PKCE + state cookie) → issuer → `/auth/oidc/callback` (state CSRF check, ID-token verify, `UpsertOIDCUser` by `sub`). Admin role from `JARVIS_OIDC_ADMIN_CLAIM` == `JARVIS_OIDC_ADMIN_VALUE`. The frontend runs it in a popup (`lib/ssoLogin.ts` `startSsoLogin`, `?popup=1`) so page state survives; popup-blocked and the full-page `LoginPage` use `?return_to=`.
 - **Login never navigates (frontend)**: anything needing a session calls `authStore.requestLogin()` → the single `LoginPrompt`. `api/client.ts` `request()` also replays a write once after a 401 → login (session expired mid-task); a 401 on a GET only calls `expireSession()` (no dialog from background polls). The backend forces the actor (createdBy/claimedBy/authorName/by) to the session user in every auth mode ≠ none, so an action queued before login and run after it is safe with a stale client-side user.
-- **Rate limits**: `/setup` 6/min · `/auth/login` 12/min · writes 30/min · `/poll` 1/5s · `/admin/users` 30/min.
+- **Rate limit**: one global bucket for `POST /auth/login` (0.5 req/s = 30/min, burst 10, per-process).
 - **Admin guards**: cannot change own role; cannot delete self.
 
 ---

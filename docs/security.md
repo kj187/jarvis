@@ -2,8 +2,12 @@
 
 ## Overview
 
-Jarvis ships with built-in authentication (see [authentication-user.md](authentication-user.md)).
-It assumes deployment behind a trusted reverse proxy (e.g. Traefik, nginx) for TLS termination.
+Jarvis is an **internal tool** and is not designed for public internet exposure. It should be deployed
+behind a VPN or a frontend authentication proxy (e.g. Traefik Forward Auth, oauth2-proxy) that validates
+the caller before the request reaches Jarvis.
+
+Given this deployment model, Jarvis ships with built-in authentication (see [authentication-user.md](authentication-user.md))
+as a secondary layer. It assumes deployment behind a trusted reverse proxy (e.g. Traefik, nginx) for TLS termination.
 This document describes the security measures built into the application itself.
 
 ## HTTP Security (Echo Middleware)
@@ -30,6 +34,24 @@ in [Running behind a proxy](reverse-proxy.md).
 Request bodies are limited to **1 MB**.
 
 ---
+
+## Deployment Assumptions
+
+Jarvis' internal-tool deployment model has the following security implications:
+
+**Rate limiting**: The only rate limit is on `POST /auth/login` — a single global bucket
+(30 req/min, burst 10) shared across all clients. On PostgreSQL HA, each pod has its own bucket.
+An attacker with network access to the login endpoint can exhaust this bucket and block logins
+for all users. However, read access remains available in `write_protect` mode. All other endpoints
+(`/poll`, `/setup`, write routes, admin endpoints) have no rate limits.
+
+**`POST /setup`**: This endpoint is open (no authentication, no rate limit) as long as no admin user exists
+in the database. Complete the initial setup immediately after deployment, or restrict network access to this
+endpoint until setup is complete.
+
+**`POST /api/v1/poll`**: This endpoint is public (no authentication, no rate limit). A hostile client
+can hammer it and keep the Alertmanager poll loop running constantly. Read-only access is available in
+`write_protect` mode; this endpoint affects performance only, not data integrity.
 
 ## Input Validation
 
