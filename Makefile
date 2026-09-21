@@ -217,7 +217,7 @@ e2e: ## Run the functional suite across ALL auth modes (none + internal + oidc)
 	$(E2E_RUN) test internal
 	$(E2E_RUN) test oidc
 
-e2e-mode: ## Run the functional suite for ONE mode: make e2e-mode MODE=oidc
+e2e-mode: ## Run the functional suite for ONE mode: make e2e-mode MODE=oidc [E2E_SHARD=1/3]
 	$(E2E_RUN) test $(MODE)
 
 e2e-screenshots: ## Regenerate ALL screenshots across all modes into docs/assets/
