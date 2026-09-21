@@ -9,6 +9,11 @@
 #
 #   <mode> = none | internal | oidc
 #
+# Optional: E2E_SHARD=<i>/<n> (e.g. 1/3) runs only that Playwright shard of the
+# functional suite (action "test"). CI uses it to split the "none" suite across
+# parallel jobs; every shard boots its own stack, so run shards on separate hosts
+# (the stack binds fixed host ports 8085/8086).
+#
 # Brings the stack up fresh, waits until it is ready, runs Playwright inside the
 # official playwright container, then always tears the stack down (ephemeral).
 
@@ -17,6 +22,13 @@ set -euo pipefail
 ACTION="${1:?usage: e2e-run.sh <test|screenshots|screenshot|video> <mode> [name]}"
 MODE="${2:?mode required: none|internal|oidc}"
 NAME="${3:-}"
+
+SHARD_ARG=""
+if [ -n "${E2E_SHARD:-}" ]; then
+  [[ "$E2E_SHARD" =~ ^[1-9][0-9]*/[1-9][0-9]*$ ]] \
+    || { echo "ERROR: E2E_SHARD must look like 1/3 (got '${E2E_SHARD}')" >&2; exit 1; }
+  SHARD_ARG=" --shard=${E2E_SHARD}"
+fi
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
@@ -86,9 +98,9 @@ PW_SETUP='corepack enable && pnpm install --frozen-lockfile'
 
 case "$ACTION" in
   test)
-    echo "==> [${MODE}] running functional suite (${E2E_TEST_DIR})"
+    echo "==> [${MODE}] running functional suite (${E2E_TEST_DIR})${E2E_SHARD:+, shard ${E2E_SHARD}}"
     "${COMPOSE[@]}" run --rm e2e-playwright \
-      sh -c "${PW_SETUP} && pnpm exec playwright test --config playwright.e2e.config.ts"
+      sh -c "${PW_SETUP} && pnpm exec playwright test --config playwright.e2e.config.ts${SHARD_ARG}"
     ;;
   screenshots)
     echo "==> [${MODE}] generating screenshots (${E2E_SCREENSHOT_DIR})"

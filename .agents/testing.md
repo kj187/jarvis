@@ -48,7 +48,7 @@ pnpm build                         # tsc -b && vite build (type-check + build)
 
 # ── Functional E2E via Makefile (isolated container stack) ───
 make e2e                           # functional suite across all auth modes (none + internal + oidc)
-make e2e-mode MODE=oidc            # functional suite for ONE mode
+make e2e-mode MODE=oidc            # functional suite for ONE mode; E2E_SHARD=2/4 limits it to one Playwright shard (as CI does)
 make e2e-screenshots               # regenerate all docs screenshots
 make e2e-screenshot NAME=card-view # regenerate ONE screenshot
 make release-video VERSION=1.13.0  # release demo video (TTS → record → render), only on request; PROJECT=intro for the product video —
@@ -192,7 +192,10 @@ dco:                 # PR-only: every commit must carry a Signed-off-by trailer 
 secrets:             # gitleaks secret scanning
 agent-context:       # scripts/check-agent-context.sh (same rules as the pre-commit hook)
 
-backend:
+# Backend runs as three parallel jobs on separate runners (the PostgreSQL tests never share a
+# runner with the fuzz targets — see .agents/lessons/testing-and-e2e.md). All three set up Go with
+# cache-dependency-path: backend/go.sum (go.mod lives in backend/, not the repo root).
+backend-test:        # "Backend Tests"
   - services.postgres: postgres:17 container, health-checked; JARVIS_TEST_POSTGRES_DSN set for the
     test step so every PostgreSQL-gated test (internal/history) runs on every PR, not just locally
   - go test -v -race -coverprofile=coverage.out ./... | go-junit-report → report.xml
@@ -202,13 +205,19 @@ backend:
     backend-only by design — frontend vitest coverage measures only lib/alertUtils.ts and would
     misrepresent frontend coverage. Status checks configured in codecov.yml: project auto ±1%,
     patch 70% ±5% — thresholds absorb goroutine-timing coverage noise from -race runs)
+backend-lint:        # "Backend Lint and Vulnerabilities"
   - govulncheck ./...
   - golangci-lint run   # includes gosec and the gofmt formatter (both enabled in .golangci.yml) —
                         # golangci-lint is the only Go gate here, so formatting is unchecked
                         # anywhere else; that is how struct-alignment drift once accumulated
+backend-fuzz:        # "Backend Fuzz" (no PostgreSQL service)
   - fuzz targets, 20s each, `-parallel 2` (FuzzRedactDSN, FuzzParseNullableTimeString,
-    FuzzParseSecretKey, FuzzValidateSilenceMatchers, FuzzSanitizeAMMessage) — the worker cap
-    stops a loaded runner from failing the run with "context deadline exceeded" (not a finding)
+    FuzzParseSecretKey, FuzzValidateSilenceMatchers, FuzzSanitizeAMMessage), run one after another —
+    the worker cap stops a loaded runner from failing the run with "context deadline exceeded" (not
+    a finding). Never add a job that runs them in parallel with each other or with the tests.
+backend:             # "Backend" — aggregator, needs the three jobs above, `if: always()`, fails on
+                     # any result but success. The name is a required status check of the
+                     # `protect-main` ruleset, so it must stay (as must the E2E aggregator below)
 
 frontend:
   - pnpm audit --audit-level=high
@@ -225,9 +234,17 @@ helm:
 ### `.github/workflows/e2e.yml`
 
 ```yaml
-e2e:
-  - make e2e          # Functional suite across none + internal + oidc
+e2e-shard:           # matrix, one runner and one isolated stack each (fixed host ports, so never
+                     # two stacks on one runner), `make e2e-mode MODE=<mode> [E2E_SHARD=i/n]`:
+                     #   none 1/4 … 4/4 (Playwright --shard), internal, oidc
+e2e:                 # "Functional E2E (all auth modes)" — aggregator, needs e2e-shard, `if: always()`,
+                     # fails on any result but success. Required status check name of `protect-main`
 ```
+
+Renaming or splitting a job that carries a required check name (`Backend`,
+`Functional E2E (all auth modes)`, …) needs an aggregator with the old name, or the
+ruleset changes with it; otherwise the check stays "Expected" and blocks every merge.
+Never add a workflow-level `paths` filter to `ci.yml` / `e2e.yml` for the same reason.
 
 ### `.github/workflows/codeql.yml`
 

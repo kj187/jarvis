@@ -12,24 +12,59 @@ permissions:
 # Functional E2E across all three auth modes (none / internal / oidc) against
 # the isolated stack (compose.e2e.yml). Screenshots are NOT generated in CI —
 # they are a documentation artifact regenerated manually (see docs/testing-e2e.md).
+#
+# The suite shares one stack per mode and resets it before every test, so it
+# cannot be parallelised inside one stack. It is split across runners instead:
+# the "none" suite in four Playwright shards, "internal" and "oidc" one job
+# each. Every job boots its own stack (fixed host ports, so never two on one
+# runner). The aggregator job at the end keeps the required status check name
+# "Functional E2E (all auth modes)" of the `protect-main` ruleset.
 jobs:
-  e2e:
-    name: Functional E2E (all auth modes)
+  e2e-shard:
+    name: E2E (${{ matrix.name }})
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: 'none 1/4', mode: none, shard: '1/4', report: none-1 }
+          - { name: 'none 2/4', mode: none, shard: '2/4', report: none-2 }
+          - { name: 'none 3/4', mode: none, shard: '3/4', report: none-3 }
+          - { name: 'none 4/4', mode: none, shard: '4/4', report: none-4 }
+          - { name: 'internal', mode: internal, shard: '', report: internal }
+          - { name: 'oidc', mode: oidc, shard: '', report: oidc }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # ratchet:actions/checkout@v7.0.1
 
-      - name: Run functional E2E (none + internal + oidc)
+      - name: Run functional E2E (${{ matrix.name }})
         env:
           COMPOSE_CMD: docker compose
-        run: make e2e
+          E2E_SHARD: ${{ matrix.shard }}
+        run: make e2e-mode MODE=${{ matrix.mode }}
 
       - name: Upload Playwright report on failure
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # ratchet:actions/upload-artifact@v7.0.1
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.report }}
           path: frontend/playwright-report/
           retention-days: 7
+
+  # Aggregator: keeps the required check name. `if: always()` makes it run (and
+  # fail) when a shard failed or was cancelled; a skipped or missing shard would
+  # otherwise leave the check "Expected" or pass it silently.
+  e2e:
+    name: Functional E2E (all auth modes)
+    runs-on: ubuntu-latest
+    needs: [e2e-shard]
+    if: always()
+    permissions: {}
+    steps:
+      - name: Require all E2E shards to succeed
+        env:
+          RESULT: ${{ needs.e2e-shard.result }}
+        run: |
+          echo "e2e-shard result: ${RESULT}"
+          [ "${RESULT}" = "success" ] || { echo "::error::E2E shards did not all succeed (${RESULT})"; exit 1; }

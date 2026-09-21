@@ -8,7 +8,7 @@
 ## TL;DR
 
 ```bash
-make e2e                              # functional tests, ALL 3 auth modes (CI runs this)
+make e2e                              # functional tests, ALL 3 auth modes in sequence (CI runs the same modes as parallel jobs)
 make e2e-mode MODE=oidc               # functional tests, ONE mode
 make e2e-screenshots                  # regenerate ALL doc screenshots (all modes)
 make e2e-screenshot NAME=feature-card-view    # regenerate ONE screenshot (MODE=none default)
@@ -192,16 +192,24 @@ cover.
 
 | Situation | Command | Notes |
 |---|---|---|
-| Before pushing a UI/API change | `make e2e` | All 3 modes. Same as CI. ~few min. |
+| Before pushing a UI/API change | `make e2e` | All 3 modes, in sequence. Same tests as CI (which runs them as parallel jobs). ~few min. |
 | Iterating on one mode | `make e2e-mode MODE=internal` | Fast feedback. |
+| Reproducing one CI shard | `E2E_SHARD=2/4 make e2e-mode MODE=none` | Runs only that Playwright shard (`--shard=2/4`) of the mode's suite. |
 | You changed a screen and a doc image is stale | `make e2e-screenshot NAME=<id> [MODE=<m>]` | Regenerate just that PNG, commit it. |
 | Refreshing all docs images | `make e2e-screenshots` | Cycles all modes. |
 | Stack stuck / port in use | `make e2e-down` | Force `down -v`. |
 
 ### What runs in CI
 
-- **`make e2e` (functional, all modes)** runs in `.github/workflows/e2e.yml` on
-  every PR and push to `main`, using `COMPOSE_CMD="docker compose"`.
+- **The functional suite (all modes)** runs in `.github/workflows/e2e.yml` on
+  every PR and push to `main`, using `COMPOSE_CMD="docker compose"`. The modes
+  run as parallel jobs on separate runners, each with its own stack: `none` in
+  four Playwright shards (`E2E_SHARD=i/4`), `internal` and `oidc` one job each,
+  all through `make e2e-mode`. One stack per mode is shared and reset before
+  every test, so the suite parallelises across stacks, never across workers in
+  one stack. The aggregator job `Functional E2E (all auth modes)` is the
+  required status check and fails if any shard fails. `make e2e` remains the
+  local equivalent (all modes in sequence).
 - **Screenshots are NOT run in CI.** They are a documentation artifact; binary
   PNGs would create noisy diffs and pixel-flake. Regenerate them locally and
   commit the PNGs when the UI changes. Every screenshot is 1440×900 at device
