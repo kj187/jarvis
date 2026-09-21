@@ -3,7 +3,7 @@ import { ensureInternalAdmin, loginInternal, INTERNAL_ADMIN } from '../../suppor
 
 async function openAdminPanel(page: import('@playwright/test').Page) {
   await page.getByTestId('user-menu').click()
-  await page.getByRole('button', { name: 'Admin' }).click()
+  await page.getByRole('button', { name: 'Administration' }).click()
   const dialog = page.getByRole('dialog', { name: 'User Management' })
   await expect(dialog).toBeVisible({ timeout: 8_000 })
   return dialog

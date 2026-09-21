@@ -111,8 +111,8 @@ frontend/
       alerts.ts         # kubernetesAlerts (4), manyAlerts (~14, for populated screenshots)
     functional/
       none/             # card-view, no-auth-notice
-      internal/         # setup + login
-      oidc/             # oidc login + admin-claim mapping
+      internal/         # setup + login, no Account entry for local accounts
+      oidc/             # oidc login + admin-group mapping, Account panel (groups claim)
     screenshots/
       none/             # feature-*, auth-noauth-notice, screenshot, social-templates (Open Graph 1200×630, square 1080×1080, slide 1920×1080 → docs/assets/social-*.png, from the design tokens + logo)
       internal/         # auth-setup, auth-login-internal, auth-user-menu, auth-admin-panel, auth-login-page
@@ -239,7 +239,7 @@ cover.
 | `E2E_ALERTMANAGER_URL` | compose | Alertmanager URL (`http://e2e-alertmanager:9093`). |
 | `E2E_TEST_DIR` / `E2E_SCREENSHOT_DIR` | `e2e-run.sh` | Spec folder for the current mode. |
 | `E2E_AUTH_PROVIDER` / `E2E_AUTH_MODE` | `e2e-run.sh` | Jarvis auth config per mode. |
-| `E2E_OIDC_*` | `e2e-run.sh` | OIDC issuer/client/redirect/admin-claim (oidc mode). |
+| `E2E_OIDC_*` | `e2e-run.sh` | OIDC issuer/client/redirect/groups-claim/admin-group (oidc mode). |
 | `SCREENSHOTS_DIR` | compose | Where PNGs are written (`../docs/assets`). |
 
 ## Troubleshooting
@@ -298,13 +298,15 @@ Quick reference: which spec file covers what. Use this to find the right place f
 |---|---|---|
 | `login.spec.ts` | I2, I4, I6 | First-run setup + login happy path, write_protect login modal on write attempt, retry flow after modal login |
 | `session-resume.spec.ts` | R1–R2 | Login (up front or after a mid-task session expiry → `401`) opens over the page and the interrupted silence Create completes; Preview stays enabled logged out |
-| `admin.spec.ts` | I10–I14 | Admin panel user list, add-user password validation, role change, delete confirm flow, self-row guards |
+| `admin.spec.ts` | I10–I14 | Administration panel user list, add-user password validation, role change, delete confirm flow, self-row guards |
+| `account-menu.spec.ts` | U4 | A local account gets no Account entry in the user menu |
 
 ### Mode: `oidc`
 
 | Spec file | Groups | What it covers |
 |---|---|---|
 | `login.spec.ts` | I3, I8–I9 | Full PKCE flow against mock IdP, admin-claim mapping, write_protect SSO modal on write attempt |
+| `account.spec.ts` | U1–U3 | `/auth/me` reports the groups from `JARVIS_OIDC_GROUPS_CLAIM`; the user-menu name opens the Account sheet (user, e-mail, Admin badge, groups); Settings no longer carries account details |
 | `sso-resume.spec.ts` | S1–S3 | SSO in a popup keeps the silence form and completes the Create; `return_to` returns a full-page login to its page and never leaves the origin |
 
 ### Known gaps (candidates for future cycles)

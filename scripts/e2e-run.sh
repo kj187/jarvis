@@ -43,7 +43,7 @@ OIDC_HOST_URL="http://localhost:8086"
 # ── Per-mode environment (consumed by compose variable substitution) ──────────
 export E2E_AUTH_PROVIDER E2E_AUTH_MODE
 export E2E_OIDC_ISSUER E2E_OIDC_CLIENT_ID E2E_OIDC_CLIENT_SECRET \
-       E2E_OIDC_REDIRECT_URL E2E_OIDC_ADMIN_CLAIM E2E_OIDC_ADMIN_VALUE
+       E2E_OIDC_REDIRECT_URL E2E_OIDC_GROUPS_CLAIM E2E_OIDC_ADMIN_VALUE
 export E2E_TEST_DIR E2E_SCREENSHOT_DIR
 
 case "$MODE" in
@@ -57,7 +57,7 @@ case "$MODE" in
     E2E_OIDC_CLIENT_ID="jarvis-e2e"
     E2E_OIDC_CLIENT_SECRET="e2e-secret"
     E2E_OIDC_REDIRECT_URL="http://e2e-jarvis:8080/auth/oidc/callback"
-    E2E_OIDC_ADMIN_CLAIM="groups"
+    E2E_OIDC_GROUPS_CLAIM="groups"
     E2E_OIDC_ADMIN_VALUE="Administrator" ;;
   *)
     echo "ERROR: unknown mode '$MODE' (use none|internal|oidc)" >&2; exit 1 ;;

@@ -134,6 +134,10 @@ func main() {
 		claimReleaseDelay = min
 	}
 
+	for _, w := range cfg.Warnings() {
+		logger.Warn(w)
+	}
+
 	// ── Auth Provider ─────────────────────────────────────────────────────────
 	var authProvider auth.Provider
 	switch cfg.AuthProvider {
@@ -144,7 +148,7 @@ func main() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		oidcProvider, err := auth.NewOIDCProvider(ctx, cfg.OIDCIssuer, cfg.OIDCClientID,
 			cfg.OIDCClientSecret, cfg.OIDCRedirectURL, cfg.OIDCScopes, userStore,
-			cfg.OIDCAdminClaim, cfg.OIDCAdminValue)
+			cfg.OIDCGroupsClaim, cfg.OIDCAdminValue)
 		cancel()
 		if err != nil {
 			logger.Error("oidc provider init", "err", err)

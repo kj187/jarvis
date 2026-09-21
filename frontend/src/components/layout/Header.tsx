@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { Wifi, WifiOff, RefreshCw, Plus, Settings, LogIn, LogOut, Shield, Sun, Moon, Menu, X, CircleUserRound, Info } from 'lucide-react'
+import { Wifi, WifiOff, RefreshCw, Plus, Settings, LogIn, LogOut, Shield, Sun, Moon, Menu, X, CircleUserRound, Info, UserRound } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Avatar } from '@/components/ui/avatar'
 import { Sheet } from '@/components/ui/sheet'
@@ -8,6 +8,7 @@ import { SilenceForm } from '@/components/silences/SilenceForm'
 import { SilenceTemplateTab } from '@/components/silences/SilenceTemplateTab'
 import { SettingsSheet } from '@/components/settings/SettingsSheet'
 import { UserManagement } from '@/components/admin/UserManagement'
+import { AccountSheet } from '@/components/account/AccountSheet'
 import { useUIStore } from '@/store/uiStore'
 import { useAuthStore } from '@/store/authStore'
 import { useSettingsStore } from '@/store/useSettingsStore'
@@ -135,7 +136,10 @@ export function Header() {
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const [infoOpen, setInfoOpen] = useState(false)
   const [adminOpen, setAdminOpen] = useState(false)
+  const [accountOpen, setAccountOpen] = useState(false)
   const { user, isAuthenticated, logout, providerInfo, requestLogin } = useAuthStore()
+  // A session that ends while the sheet is open must not reopen it after the next login.
+  if (!user && accountOpen) setAccountOpen(false)
   const theme = useSettingsStore((s) => s.theme)
   const updateSettings = useSettingsStore((s) => s.update)
   const version = useVersion()
@@ -397,12 +401,21 @@ export function Header() {
               </button>
             )}
           >
-            {isAuthenticated && user && (
+            {isAuthenticated && user && (user.provider === 'oidc' ? (
+              <button
+                className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-left text-foreground hover:bg-accent/60 cursor-pointer border-b border-border"
+                data-testid="account-menu"
+                aria-label={`Account of ${user.username}`}
+                onClick={() => { setUserMenuOpen(false); setAccountOpen(true) }}
+              >
+                <UserRound className="h-3.5 w-3.5 shrink-0" /><span className="truncate">{user.username}</span>
+              </button>
+            ) : (
               <div className="px-3 py-2 text-xs font-medium text-foreground border-b border-border">{user.username}</div>
-            )}
+            ))}
             {isAuthenticated && user && user.role === 'admin' && (
               <button className="w-full flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-accent/60 cursor-pointer border-b border-border" onClick={() => { setUserMenuOpen(false); setAdminOpen(true) }}>
-                <Shield className="h-3.5 w-3.5" />Admin
+                <Shield className="h-3.5 w-3.5" />Administration
               </button>
             )}
             <button className="w-full flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-accent/60 cursor-pointer" onClick={() => { setUserMenuOpen(false); setSettingsVisibility(true) }}>
@@ -488,12 +501,21 @@ export function Header() {
           {/* User menu expanded (mobile) */}
           {userMenuOpen && (
             <div className="border border-border rounded-control bg-card">
-              {isAuthenticated && user && (
+              {isAuthenticated && user && (user.provider === 'oidc' ? (
+                <button
+                  className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-left text-foreground hover:bg-accent/60 cursor-pointer border-b border-border"
+                  data-testid="account-menu"
+                  aria-label={`Account of ${user.username}`}
+                  onClick={() => { setUserMenuOpen(false); setAccountOpen(true); setMenuOpen(false) }}
+                >
+                  <UserRound className="h-3.5 w-3.5 shrink-0" /><span className="truncate">{user.username}</span>
+                </button>
+              ) : (
                 <div className="px-3 py-2 text-xs font-medium text-foreground border-b border-border">{user.username}</div>
-              )}
+              ))}
               {isAuthenticated && user && user.role === 'admin' && (
                 <button className="w-full flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-accent/60 cursor-pointer border-b border-border" onClick={() => { setUserMenuOpen(false); setAdminOpen(true); setMenuOpen(false) }}>
-                  <Shield className="h-3.5 w-3.5" />Admin
+                  <Shield className="h-3.5 w-3.5" />Administration
                 </button>
               )}
               <button className="w-full flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-accent/60 cursor-pointer" onClick={() => { setUserMenuOpen(false); setSettingsVisibility(true); setMenuOpen(false) }}>
@@ -564,6 +586,10 @@ export function Header() {
       open={settingsOpen}
       onClose={() => setSettingsVisibility(false)}
     />
+
+    {user?.provider === 'oidc' && (
+      <AccountSheet open={accountOpen} onClose={() => setAccountOpen(false)} user={user} />
+    )}
 
     <Sheet open={adminOpen} onClose={() => setAdminOpen(false)} ariaLabel="User Management">
       <div className="p-5 pt-10">

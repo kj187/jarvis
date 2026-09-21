@@ -46,8 +46,8 @@ type Config struct {
 	OIDCClientSecret string
 	OIDCRedirectURL  string
 	OIDCScopes       []string
-	OIDCAdminClaim   string // claim name that controls admin role (e.g. "groups", "cognito:groups")
-	OIDCAdminValue   string // value inside that claim that grants admin (e.g. "Administrator")
+	OIDCGroupsClaim  string // ID-token claim that carries the user's groups (e.g. "groups", "cognito:groups"); empty = groups are not read
+	OIDCAdminValue   string // group inside that claim that grants the admin role (e.g. "Administrator")
 
 	Retention RetentionConfig
 
@@ -57,6 +57,16 @@ type Config struct {
 	// frontend falls back to its built-in defaults, and a user's own list always
 	// wins over both.
 	SilenceDurations []int
+}
+
+// Warnings lists configuration that is valid but almost certainly not what the
+// operator meant; main logs each one at startup.
+func (c *Config) Warnings() []string {
+	var w []string
+	if c.AuthProvider == "oidc" && c.OIDCAdminValue != "" && c.OIDCGroupsClaim == "" {
+		w = append(w, "JARVIS_OIDC_ADMIN_VALUE is set but JARVIS_OIDC_GROUPS_CLAIM is not: no group is read from the token, so nobody becomes admin")
+	}
+	return w
 }
 
 // RetentionConfig holds the data-retention sweep settings. All Days fields
@@ -261,7 +271,7 @@ func Load() (*Config, error) {
 		OIDCClientSecret: getEnv("JARVIS_AUTH_OIDC_CLIENT_SECRET", ""),
 		OIDCRedirectURL:  getEnv("JARVIS_AUTH_OIDC_REDIRECT_URL", ""),
 		OIDCScopes:       oidcScopes,
-		OIDCAdminClaim:   getEnv("JARVIS_OIDC_ADMIN_CLAIM", ""),
+		OIDCGroupsClaim:  getEnv("JARVIS_OIDC_GROUPS_CLAIM", ""),
 		OIDCAdminValue:   getEnv("JARVIS_OIDC_ADMIN_VALUE", ""),
 		Retention:        retention,
 

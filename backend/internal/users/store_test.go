@@ -2,6 +2,8 @@ package users_test
 
 import (
 	"context"
+	"os"
+	"strings"
 	"testing"
 
 	"github.com/kj187/jarvis/backend/internal/db"
@@ -81,7 +83,7 @@ func TestUpsertOIDCUser(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
 
-	u1, err := s.UpsertOIDCUser(ctx, "sub-123", "charlie", "charlie@example.com", "user")
+	u1, err := s.UpsertOIDCUser(ctx, "sub-123", "charlie", "charlie@example.com", "user", nil)
 	if err != nil {
 		t.Fatalf("upsert: %v", err)
 	}
@@ -90,7 +92,7 @@ func TestUpsertOIDCUser(t *testing.T) {
 	}
 
 	// Second upsert returns same record.
-	u2, err := s.UpsertOIDCUser(ctx, "sub-123", "charlie", "charlie@example.com", "user")
+	u2, err := s.UpsertOIDCUser(ctx, "sub-123", "charlie", "charlie@example.com", "user", nil)
 	if err != nil {
 		t.Fatalf("upsert2: %v", err)
 	}
@@ -99,7 +101,7 @@ func TestUpsertOIDCUser(t *testing.T) {
 	}
 
 	// Role update on re-login.
-	u3, err := s.UpsertOIDCUser(ctx, "sub-123", "charlie", "charlie@example.com", "admin")
+	u3, err := s.UpsertOIDCUser(ctx, "sub-123", "charlie", "charlie@example.com", "admin", nil)
 	if err != nil {
 		t.Fatalf("upsert3: %v", err)
 	}
@@ -120,7 +122,7 @@ func TestUpsertOIDCUser_UsernameCollision(t *testing.T) {
 		t.Fatalf("create internal user: %v", err)
 	}
 
-	u, err := s.UpsertOIDCUser(ctx, "oidc-sub-1", "julian.kleinhans", "julian@example.com", "user")
+	u, err := s.UpsertOIDCUser(ctx, "oidc-sub-1", "julian.kleinhans", "julian@example.com", "user", nil)
 	if err != nil {
 		t.Fatalf("upsert oidc user: %v", err)
 	}
@@ -185,5 +187,139 @@ func TestList(t *testing.T) {
 	}
 	if len(list) != 2 {
 		t.Fatalf("list len = %d, want 2", len(list))
+	}
+}
+
+func TestUpsertOIDCUser_StoresGroups(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	u, err := s.UpsertOIDCUser(ctx, "sub-g", "dana", "dana@example.com", "user", []string{"frontend", "Operator"})
+	if err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+	if got := strings.Join(u.Groups, ","); got != "frontend,Operator" {
+		t.Fatalf("groups on create = %q, want %q", got, "frontend,Operator")
+	}
+
+	got, err := s.GetByID(ctx, u.ID)
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if strings.Join(got.Groups, ",") != "frontend,Operator" {
+		t.Fatalf("groups after reload = %v, want [frontend Operator]", got.Groups)
+	}
+}
+
+func TestUpsertOIDCUser_GroupsFollowTheIdPOnEveryLogin(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	u, err := s.UpsertOIDCUser(ctx, "sub-g", "dana", "", "user", []string{"frontend", "sre"})
+	if err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+
+	// The IdP dropped "sre" and added "backend": the next login must replace the set.
+	u2, err := s.UpsertOIDCUser(ctx, "sub-g", "dana", "", "user", []string{"frontend", "backend"})
+	if err != nil {
+		t.Fatalf("upsert2: %v", err)
+	}
+	if u2.ID != u.ID {
+		t.Fatalf("expected the same user, got %q vs %q", u.ID, u2.ID)
+	}
+	reloaded, _ := s.GetByID(ctx, u.ID)
+	if strings.Join(reloaded.Groups, ",") != "frontend,backend" {
+		t.Fatalf("groups after re-login = %v, want [frontend backend]", reloaded.Groups)
+	}
+
+	// Losing every group must clear them, not keep the stale set.
+	if _, err := s.UpsertOIDCUser(ctx, "sub-g", "dana", "", "user", nil); err != nil {
+		t.Fatalf("upsert3: %v", err)
+	}
+	reloaded, _ = s.GetByID(ctx, u.ID)
+	if len(reloaded.Groups) != 0 {
+		t.Fatalf("groups after losing all = %v, want empty", reloaded.Groups)
+	}
+}
+
+func TestGroups_InternalUserHasNone(t *testing.T) {
+	s := newTestStore(t)
+	u, err := s.Create(context.Background(), &users.CreateUser{
+		Username: "erin", PasswordHash: "$2a$12$hash", Role: "user", Provider: "internal",
+	})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if len(u.Groups) != 0 {
+		t.Fatalf("groups = %v, want empty", u.Groups)
+	}
+}
+
+// The oidc_groups column is added by an ALTER on both dialects; on PostgreSQL
+// that path only runs against a real server, so it is env-gated like the other
+// PostgreSQL tests (CI sets JARVIS_TEST_POSTGRES_DSN).
+func TestUpsertOIDCUser_Groups_PostgreSQL(t *testing.T) {
+	dsn := os.Getenv("JARVIS_TEST_POSTGRES_DSN")
+	if dsn == "" {
+		t.Skip("JARVIS_TEST_POSTGRES_DSN not set — skipping PostgreSQL-backed test")
+	}
+	database, dialect, err := db.Open(dsn)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	t.Cleanup(func() { _ = database.Close() })
+	// Twice: the migration must be idempotent on an already-migrated database.
+	for i := 0; i < 2; i++ {
+		if err := db.Migrate(database, dialect); err != nil {
+			t.Fatalf("migrate #%d: %v", i+1, err)
+		}
+	}
+	s := users.NewStore(database, dialect)
+	ctx := context.Background()
+	sub := "pg-groups-" + t.Name()
+	t.Cleanup(func() { _, _ = database.ExecContext(ctx, `DELETE FROM users WHERE oidc_sub = $1`, sub) })
+
+	u, err := s.UpsertOIDCUser(ctx, sub, "pg-groups-user", "", "user", []string{"a", "b"})
+	if err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+	if _, err := s.UpsertOIDCUser(ctx, sub, "pg-groups-user", "", "user", []string{"b", "c"}); err != nil {
+		t.Fatalf("upsert2: %v", err)
+	}
+	got, err := s.GetByID(ctx, u.ID)
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if strings.Join(got.Groups, ",") != "b,c" {
+		t.Fatalf("groups = %v, want [b c]", got.Groups)
+	}
+}
+
+func TestUpsertOIDCUser_EmailFollowsTheIdPOnLogin(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	u, err := s.UpsertOIDCUser(ctx, "sub-m", "gina", "gina@old.example", "user", nil)
+	if err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+
+	// The IdP now reports a new address: the stored one must follow.
+	if _, err := s.UpsertOIDCUser(ctx, "sub-m", "gina", "gina@new.example", "user", nil); err != nil {
+		t.Fatalf("upsert2: %v", err)
+	}
+	got, _ := s.GetByID(ctx, u.ID)
+	if got.Email != "gina@new.example" {
+		t.Fatalf("email = %q, want gina@new.example", got.Email)
+	}
+
+	// A token without an e-mail claim must not wipe the address we already know.
+	if _, err := s.UpsertOIDCUser(ctx, "sub-m", "gina", "", "user", nil); err != nil {
+		t.Fatalf("upsert3: %v", err)
+	}
+	got, _ = s.GetByID(ctx, u.ID)
+	if got.Email != "gina@new.example" {
+		t.Fatalf("email after an empty claim = %q, want it kept", got.Email)
 	}
 }

@@ -3,8 +3,10 @@ package users
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -22,8 +24,11 @@ type User struct {
 	Role         string // "user" | "admin"
 	Provider     string // "internal" | "oidc"
 	OIDCSub      string
-	CreatedAt    time.Time
-	LastLoginAt  *time.Time
+	// Groups are the values of the IdP's groups claim as of the user's last
+	// SSO login (empty for internal users and when no claim is configured).
+	Groups      []string
+	CreatedAt   time.Time
+	LastLoginAt *time.Time
 }
 
 // CreateUser holds the fields required to create a new user.
@@ -34,6 +39,7 @@ type CreateUser struct {
 	Role         string
 	Provider     string
 	OIDCSub      string
+	Groups       []string
 }
 
 // Store handles all database operations for the users table.
@@ -70,13 +76,17 @@ func (s *Store) rebind(query string) string {
 func (s *Store) scanUser(row interface{ Scan(...any) error }) (*User, error) {
 	var u User
 	var email, passwordHash, oidcSub sql.NullString
+	var groupsJSON string
 	var lastLoginAt sql.NullTime
 	err := row.Scan(
 		&u.ID, &u.Username, &email, &passwordHash,
-		&u.Role, &u.Provider, &oidcSub, &u.CreatedAt, &lastLoginAt,
+		&u.Role, &u.Provider, &oidcSub, &groupsJSON, &u.CreatedAt, &lastLoginAt,
 	)
 	if err != nil {
 		return nil, err
+	}
+	if err := json.Unmarshal([]byte(groupsJSON), &u.Groups); err != nil {
+		return nil, fmt.Errorf("users: decode oidc_groups: %w", err)
 	}
 	u.Email = email.String
 	u.PasswordHash = passwordHash.String
@@ -88,18 +98,35 @@ func (s *Store) scanUser(row interface{ Scan(...any) error }) (*User, error) {
 	return &u, nil
 }
 
-const selectCols = `id, username, email, password_hash, role, provider, oidc_sub, created_at, last_login_at`
+const selectCols = `id, username, email, password_hash, role, provider, oidc_sub, oidc_groups, created_at, last_login_at`
+
+// encodeGroups serialises a group list for the oidc_groups column; nil and
+// empty both store '[]' so the column is never NULL.
+func encodeGroups(groups []string) (string, error) {
+	if len(groups) == 0 {
+		return "[]", nil
+	}
+	b, err := json.Marshal(groups)
+	if err != nil {
+		return "", fmt.Errorf("users: encode oidc_groups: %w", err)
+	}
+	return string(b), nil
+}
 
 // Create inserts a new user and returns the created record.
 func (s *Store) Create(ctx context.Context, cu *CreateUser) (*User, error) {
 	id := uuid.New().String()
 	now := time.Now().UTC()
-	q := s.rebind(`INSERT INTO users (id, username, email, password_hash, role, provider, oidc_sub, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+	groupsJSON, err := encodeGroups(cu.Groups)
+	if err != nil {
+		return nil, err
+	}
+	q := s.rebind(`INSERT INTO users (id, username, email, password_hash, role, provider, oidc_sub, oidc_groups, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 	email := sql.NullString{String: cu.Email, Valid: cu.Email != ""}
 	ph := sql.NullString{String: cu.PasswordHash, Valid: cu.PasswordHash != ""}
 	oidcSub := sql.NullString{String: cu.OIDCSub, Valid: cu.OIDCSub != ""}
-	if _, err := s.db.ExecContext(ctx, q, id, cu.Username, email, ph, cu.Role, cu.Provider, oidcSub, now); err != nil {
+	if _, err := s.db.ExecContext(ctx, q, id, cu.Username, email, ph, cu.Role, cu.Provider, oidcSub, groupsJSON, now); err != nil {
 		return nil, fmt.Errorf("users.Create: %w", err)
 	}
 	return s.GetByID(ctx, id)
@@ -136,9 +163,10 @@ func (s *Store) GetByOIDCSub(ctx context.Context, sub string) (*User, error) {
 }
 
 // UpsertOIDCUser creates or updates an OIDC user by subject claim.
-// role must be "admin" or "user"; it is applied on every login so OIDC group
-// changes are reflected without manual intervention.
-func (s *Store) UpsertOIDCUser(ctx context.Context, sub, username, email, role string) (*User, error) {
+// role must be "admin" or "user"; role, groups and a non-empty e-mail are applied
+// on every login so changes in the IdP are reflected without manual intervention
+// (they take effect at the next login, never mid-session).
+func (s *Store) UpsertOIDCUser(ctx context.Context, sub, username, email, role string, groups []string) (*User, error) {
 	existing, err := s.GetByOIDCSub(ctx, sub)
 	if err != nil {
 		return nil, err
@@ -149,6 +177,18 @@ func (s *Store) UpsertOIDCUser(ctx context.Context, sub, username, email, role s
 				return nil, err
 			}
 			existing.Role = role
+		}
+		if email != "" && existing.Email != email {
+			if err := s.updateEmail(ctx, existing.ID, email); err != nil {
+				return nil, err
+			}
+			existing.Email = email
+		}
+		if !slices.Equal(existing.Groups, groups) {
+			if err := s.updateGroups(ctx, existing.ID, groups); err != nil {
+				return nil, err
+			}
+			existing.Groups = groups
 		}
 		return existing, nil
 	}
@@ -166,7 +206,30 @@ func (s *Store) UpsertOIDCUser(ctx context.Context, sub, username, email, role s
 		Role:     role,
 		Provider: "oidc",
 		OIDCSub:  sub,
+		Groups:   groups,
 	})
+}
+
+// updateEmail replaces the stored e-mail address of a user.
+func (s *Store) updateEmail(ctx context.Context, id, email string) error {
+	q := s.rebind(`UPDATE users SET email = ? WHERE id = ?`)
+	if _, err := s.db.ExecContext(ctx, q, email, id); err != nil {
+		return fmt.Errorf("users.updateEmail: %w", err)
+	}
+	return nil
+}
+
+// updateGroups replaces the stored IdP group set of a user.
+func (s *Store) updateGroups(ctx context.Context, id string, groups []string) error {
+	groupsJSON, err := encodeGroups(groups)
+	if err != nil {
+		return err
+	}
+	q := s.rebind(`UPDATE users SET oidc_groups = ? WHERE id = ?`)
+	if _, err := s.db.ExecContext(ctx, q, groupsJSON, id); err != nil {
+		return fmt.Errorf("users.updateGroups: %w", err)
+	}
+	return nil
 }
 
 func (s *Store) nextAvailableUsername(ctx context.Context, base string) (string, error) {
