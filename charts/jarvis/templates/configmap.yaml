@@ -18,6 +18,24 @@ data:
   {{- if .Values.config.silenceDurations }}
   JARVIS_SILENCE_DURATIONS: {{ .Values.config.silenceDurations | quote }}
   {{- end }}
+  {{- if .Values.config.retention.days }}
+  JARVIS_RETENTION_DAYS: {{ .Values.config.retention.days | quote }}
+  {{- end }}
+  {{- if .Values.config.retention.eventsDays }}
+  JARVIS_RETENTION_EVENTS_DAYS: {{ .Values.config.retention.eventsDays | quote }}
+  {{- end }}
+  {{- if .Values.config.retention.claimsDays }}
+  JARVIS_RETENTION_CLAIMS_DAYS: {{ .Values.config.retention.claimsDays | quote }}
+  {{- end }}
+  {{- if .Values.config.retention.silenceEventsDays }}
+  JARVIS_RETENTION_SILENCE_EVENTS_DAYS: {{ .Values.config.retention.silenceEventsDays | quote }}
+  {{- end }}
+  {{- if .Values.config.retention.commentsDays }}
+  JARVIS_RETENTION_COMMENTS_DAYS: {{ .Values.config.retention.commentsDays | quote }}
+  {{- end }}
+  {{- if .Values.config.retention.sweepInterval }}
+  JARVIS_RETENTION_SWEEP_INTERVAL: {{ .Values.config.retention.sweepInterval | quote }}
+  {{- end }}
   JARVIS_AUTH_PROVIDER: {{ .Values.auth.provider | quote }}
   {{- if .Values.auth.mode }}
   JARVIS_AUTH_MODE: {{ .Values.auth.mode | quote }}
@@ -27,6 +45,12 @@ data:
   JARVIS_AUTH_OIDC_CLIENT_ID: {{ .Values.auth.oidc.clientId | quote }}
   JARVIS_AUTH_OIDC_REDIRECT_URL: {{ .Values.auth.oidc.redirectUrl | quote }}
   JARVIS_AUTH_OIDC_SCOPES: {{ .Values.auth.oidc.scopes | quote }}
+  {{- if .Values.auth.oidc.groupsClaim }}
+  JARVIS_OIDC_GROUPS_CLAIM: {{ .Values.auth.oidc.groupsClaim | quote }}
+  {{- end }}
+  {{- if .Values.auth.oidc.adminValue }}
+  JARVIS_OIDC_ADMIN_VALUE: {{ .Values.auth.oidc.adminValue | quote }}
+  {{- end }}
   {{- end }}
   {{- range $i, $cluster := .Values.clusters }}
   {{- $n := add $i 1 }}
