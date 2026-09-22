@@ -129,6 +129,21 @@ config:
   # each between 1m and 365d. Empty keeps the built-in defaults. Users can still
   # override them for themselves in Settings. Example: "15m,1h,4h,1d,1w,30d"
   silenceDurations: ""
+  # Data-retention sweep. Fully opt-in — everything here is unset by default,
+  # which disables the sweep entirely and keeps history forever, matching the
+  # backend's own default. See docs/configuration.md for the full semantics
+  # (inheritance, comments never inheriting, sweep behavior).
+  retention:
+    # Fallback age limit in days for every history type. Unset disables the sweep.
+    days: ""
+    # Per-type overrides in days. Each inherits `days` when unset, except
+    # comments, which never inherits and defaults to kept forever.
+    eventsDays: ""
+    claimsDays: ""
+    silenceEventsDays: ""
+    commentsDays: ""
+    # How often the sweep runs, e.g. "12h". Empty uses the backend default.
+    sweepInterval: ""
 
 # Alertmanager cluster configuration.
 # At least one cluster is required. Add additional clusters by appending entries.
@@ -207,6 +222,13 @@ auth:
     # Example: https://jarvis.example.com/auth/oidc/callback
     redirectUrl: ""
     scopes: "openid,profile,email"
+    # ID-token claim that carries the user's groups, e.g. "groups" or
+    # "cognito:groups". Jarvis stores them at each login and shows them in
+    # the Account panel of the user menu. Without it groups are not read.
+    groupsClaim: ""
+    # The group in groupsClaim that makes a user an admin, e.g. "jarvis-admins".
+    # Needs groupsClaim; without both, every OIDC user gets the "user" role.
+    adminValue: ""
 
 # Database configuration.
 database:

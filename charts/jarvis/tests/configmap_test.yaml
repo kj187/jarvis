@@ -45,6 +45,49 @@ tests:
           path: data.JARVIS_SILENCE_DURATIONS
           value: "15m,1h,30d"
 
+  - it: omits all JARVIS_RETENTION_* by default
+    asserts:
+      - notExists:
+          path: data.JARVIS_RETENTION_DAYS
+      - notExists:
+          path: data.JARVIS_RETENTION_EVENTS_DAYS
+      - notExists:
+          path: data.JARVIS_RETENTION_CLAIMS_DAYS
+      - notExists:
+          path: data.JARVIS_RETENTION_SILENCE_EVENTS_DAYS
+      - notExists:
+          path: data.JARVIS_RETENTION_COMMENTS_DAYS
+      - notExists:
+          path: data.JARVIS_RETENTION_SWEEP_INTERVAL
+
+  - it: renders JARVIS_RETENTION_* when config.retention is set
+    set:
+      config.retention.days: "90"
+      config.retention.eventsDays: "180"
+      config.retention.claimsDays: "365"
+      config.retention.silenceEventsDays: "30"
+      config.retention.commentsDays: "0"
+      config.retention.sweepInterval: "6h"
+    asserts:
+      - equal:
+          path: data.JARVIS_RETENTION_DAYS
+          value: "90"
+      - equal:
+          path: data.JARVIS_RETENTION_EVENTS_DAYS
+          value: "180"
+      - equal:
+          path: data.JARVIS_RETENTION_CLAIMS_DAYS
+          value: "365"
+      - equal:
+          path: data.JARVIS_RETENTION_SILENCE_EVENTS_DAYS
+          value: "30"
+      - equal:
+          path: data.JARVIS_RETENTION_COMMENTS_DAYS
+          value: "0"
+      - equal:
+          path: data.JARVIS_RETENTION_SWEEP_INTERVAL
+          value: "6h"
+
   - it: sets JARVIS_DB_MAX_OPEN_CONNS to 10 by default
     asserts:
       - equal:
@@ -106,6 +149,8 @@ tests:
       auth.oidc.clientId: jarvis
       auth.oidc.redirectUrl: https://jarvis.example.com/auth/oidc/callback
       auth.oidc.scopes: openid,profile,email
+      auth.oidc.groupsClaim: cognito:groups
+      auth.oidc.adminValue: Operator
     asserts:
       - equal:
           path: data.JARVIS_AUTH_OIDC_ISSUER
@@ -119,6 +164,12 @@ tests:
       - equal:
           path: data.JARVIS_AUTH_OIDC_SCOPES
           value: openid,profile,email
+      - equal:
+          path: data.JARVIS_OIDC_GROUPS_CLAIM
+          value: cognito:groups
+      - equal:
+          path: data.JARVIS_OIDC_ADMIN_VALUE
+          value: Operator
 
   - it: omits OIDC config when auth.oidc.issuer is empty
     asserts:
@@ -126,6 +177,20 @@ tests:
           path: data.JARVIS_AUTH_OIDC_ISSUER
       - notExists:
           path: data.JARVIS_AUTH_OIDC_CLIENT_ID
+      - notExists:
+          path: data.JARVIS_OIDC_GROUPS_CLAIM
+      - notExists:
+          path: data.JARVIS_OIDC_ADMIN_VALUE
+
+  - it: omits JARVIS_OIDC_GROUPS_CLAIM and JARVIS_OIDC_ADMIN_VALUE when unset but issuer is set
+    set:
+      auth.provider: oidc
+      auth.oidc.issuer: https://keycloak.example.com/realms/myrealm
+    asserts:
+      - notExists:
+          path: data.JARVIS_OIDC_GROUPS_CLAIM
+      - notExists:
+          path: data.JARVIS_OIDC_ADMIN_VALUE
 
   - it: generates JARVIS_CLUSTER_1_* for default cluster
     asserts:

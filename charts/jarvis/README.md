@@ -109,6 +109,12 @@ Tests cover four suites (`deployment`, `configmap`, `secret`, `ingress`) and run
 | `config.runbookBaseURL` | string | `""` | Base URL prepended to runbook label values |
 | `config.allowedOrigins` | string | `""` | Comma-separated allowed CORS/WebSocket origins |
 | `config.silenceDurations` | string | `""` | Instance default durations of the Fast-Silence and Extend-silence menus, e.g. `15m,1h,4h,1d,1w,30d` (`m`/`h`/`d`/`w`/`y`, max 12, 1m–365d). Empty = built-in defaults; users can override it in Settings |
+| `config.retention.days` | string | `""` | Fallback retention age (days) for every history type. Empty disables the sweep entirely |
+| `config.retention.eventsDays` | string | `""` | Retention override (days) for alert lifecycle events; inherits `days` when unset |
+| `config.retention.claimsDays` | string | `""` | Retention override (days) for released claims; inherits `days` when unset |
+| `config.retention.silenceEventsDays` | string | `""` | Retention override (days) for silence events; inherits `days` when unset |
+| `config.retention.commentsDays` | string | `""` | Retention (days) for comments; never inherits `days` — only an explicit value enables deletion |
+| `config.retention.sweepInterval` | string | `""` | How often the retention sweep runs, e.g. `12h`. Empty uses the backend default |
 | `clusters` | list | see below | Alertmanager cluster list (at least one required) |
 | `clusters[].name` | string | `default` | Display name for the cluster |
 | `clusters[].alertmanagerUrl` | string | `http://alertmanager:9093` | Internal Alertmanager URL |
@@ -139,6 +145,8 @@ Tests cover four suites (`deployment`, `configmap`, `secret`, `ingress`) and run
 | `auth.oidc.clientSecret` | string | `""` | OIDC client secret (stored in Secret, not ConfigMap) |
 | `auth.oidc.redirectUrl` | string | `""` | OIDC redirect URL (must match provider config) |
 | `auth.oidc.scopes` | string | `openid,profile,email` | Comma-separated OIDC scopes |
+| `auth.oidc.groupsClaim` | string | `""` | ID-token claim carrying the user's groups, e.g. `cognito:groups` |
+| `auth.oidc.adminValue` | string | `""` | Group in `groupsClaim` that grants the admin role; needs `groupsClaim` |
 | `persistence.enabled` | bool | `false` | Enable PVC for SQLite storage (single-replica recommended) |
 | `persistence.storageClass` | string | `""` | StorageClass name |
 | `persistence.accessMode` | string | `ReadWriteOnce` | PVC access mode |
