@@ -17,6 +17,7 @@ import (
 	"github.com/kj187/jarvis/backend/internal/db"
 	"github.com/kj187/jarvis/backend/internal/debugserver"
 	"github.com/kj187/jarvis/backend/internal/fanout"
+	"github.com/kj187/jarvis/backend/internal/globalsettings"
 	"github.com/kj187/jarvis/backend/internal/history"
 	"github.com/kj187/jarvis/backend/internal/leader"
 	"github.com/kj187/jarvis/backend/internal/metrics"
@@ -114,6 +115,10 @@ func main() {
 	store := history.NewStore(database, dialect)
 	userStore := users.NewStore(database, dialect)
 	settingsStore := settings.NewStore(database, dialect)
+	// globalSettingsStore: generic admin-settings foundation (RBAC
+	// label-scoped-access plan, Phase 0). No section is registered yet — a
+	// later phase (e.g. "access") calls globalSettingsStore.Register here.
+	globalSettingsStore := globalsettings.NewStore(database, dialect)
 
 	// Grace Period (Critical Invariant #1) must absorb at least one missed
 	// poll: at 60s flat, a poll interval configured ≥ 60s could never let a
@@ -179,7 +184,7 @@ func main() {
 	sweeper := retention.NewSweeper(store, cfg.Retention, logger, m, el)
 
 	// ── HTTP Router ───────────────────────────────────────────────────────────
-	router := api.NewRouter(alertStore, silenceStore, store, hub, registry, cfg, static.StaticFiles, recorder, authProvider, userStore, settingsStore, m, wsFanout)
+	router := api.NewRouter(alertStore, silenceStore, store, hub, registry, cfg, static.StaticFiles, recorder, authProvider, userStore, settingsStore, globalSettingsStore, m, wsFanout)
 
 	server := &http.Server{
 		Addr:         ":" + cfg.Port,

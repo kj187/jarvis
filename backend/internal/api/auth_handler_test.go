@@ -16,6 +16,7 @@ import (
 	"github.com/kj187/jarvis/backend/internal/config"
 	idb "github.com/kj187/jarvis/backend/internal/db"
 	"github.com/kj187/jarvis/backend/internal/fanout"
+	"github.com/kj187/jarvis/backend/internal/globalsettings"
 	"github.com/kj187/jarvis/backend/internal/history"
 	"github.com/kj187/jarvis/backend/internal/metrics"
 	"github.com/kj187/jarvis/backend/internal/settings"
@@ -46,8 +47,9 @@ func newAuthServer(t *testing.T) (*Server, *users.Store) {
 	registry := cluster.NewRegistry(nil)
 	cfg := &config.Config{AuthProvider: "internal", SecretKey: testSecretKey}
 	settingsStore := settings.NewStore(database, dialect)
+	globalSettingsStore := globalsettings.NewStore(database, dialect)
 
-	return NewServer(alertStore, history.NewSilenceStore(), store, hub, registry, cfg, nil, provider, userStore, settingsStore, fanout.NoopFanout{}), userStore
+	return NewServer(alertStore, history.NewSilenceStore(), store, hub, registry, cfg, nil, provider, userStore, settingsStore, globalSettingsStore, fanout.NoopFanout{}), userStore
 }
 
 func createTestUser(t *testing.T, store *users.Store, username, password, role string) *users.User {

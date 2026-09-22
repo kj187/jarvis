@@ -19,6 +19,7 @@ import (
 	"github.com/kj187/jarvis/backend/internal/config"
 	idb "github.com/kj187/jarvis/backend/internal/db"
 	"github.com/kj187/jarvis/backend/internal/fanout"
+	"github.com/kj187/jarvis/backend/internal/globalsettings"
 	"github.com/kj187/jarvis/backend/internal/history"
 	"github.com/kj187/jarvis/backend/internal/metrics"
 	"github.com/kj187/jarvis/backend/internal/settings"
@@ -245,6 +246,7 @@ func TestGetSettings_RealHTTPRoundTrip(t *testing.T) {
 
 	userStore := users.NewStore(database, dialect)
 	settingsStore := settings.NewStore(database, dialect)
+	globalSettingsStore := globalsettings.NewStore(database, dialect)
 	provider := auth.NewInternalProvider(userStore)
 	alertStore := &history.AlertStore{}
 	store := history.NewStore(database, dialect)
@@ -253,7 +255,7 @@ func TestGetSettings_RealHTTPRoundTrip(t *testing.T) {
 	registry := cluster.NewRegistry(nil)
 	cfg := &config.Config{AuthProvider: "internal", SecretKey: testSecretKey}
 
-	e := NewRouter(alertStore, history.NewSilenceStore(), store, hub, registry, cfg, embed.FS{}, &fakeTriggerer{}, provider, userStore, settingsStore, metrics.New("settings-roundtrip-test"), fanout.NoopFanout{})
+	e := NewRouter(alertStore, history.NewSilenceStore(), store, hub, registry, cfg, embed.FS{}, &fakeTriggerer{}, provider, userStore, settingsStore, globalSettingsStore, metrics.New("settings-roundtrip-test"), fanout.NoopFanout{})
 	ts := httptest.NewServer(e)
 	defer ts.Close()
 

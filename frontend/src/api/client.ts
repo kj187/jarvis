@@ -16,6 +16,8 @@ import type {
   AuthUser,
   ProviderInfo,
   AdminUser,
+  GlobalSetting,
+  GlobalSettingSections,
   SettingsResponse,
   ResolvedAlertsPage,
   LabelMatcher,
@@ -318,6 +320,20 @@ export function updateAdminUser(id: string, role: string): Promise<AdminUser> {
 
 export function deleteAdminUser(id: string): Promise<void> {
   return request<void>(`/admin/users/${id}`, { method: 'DELETE' })
+}
+
+// ── Global settings (admin-settings foundation) ─────────────────────────────
+
+export function fetchGlobalSettingsSections(): Promise<GlobalSettingSections> {
+  return request<GlobalSettingSections>('/admin/settings')
+}
+
+export function fetchGlobalSetting(section: string): Promise<GlobalSetting> {
+  return request<GlobalSetting>(`/admin/settings/${section}`)
+}
+
+export function putGlobalSetting(section: string, value: unknown): Promise<void> {
+  return request<void>(`/admin/settings/${section}`, { method: 'PUT', body: JSON.stringify(value) })
 }
 
 // ── Setup ─────────────────────────────────────────────────────────────────────

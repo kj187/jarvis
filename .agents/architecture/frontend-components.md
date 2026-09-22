@@ -463,6 +463,9 @@ components/
     │   ├── NoAuthNotice.tsx   → banner in mode "none" (dismiss persisted)
     │   └── SetupPage.tsx      → first-run admin creation
     └── admin/
-        └── UserManagement.tsx → user table, add user, change role, delete (confirm), "(you)" badge
+        ├── UserManagement.tsx  → user table, add user, change role, delete (confirm), "(you)" badge
+        └── GlobalSettings.tsx  → admin-settings foundation (Phase 0 of the RBAC label-scoped-access
+                                  plan): lists registered sections via GET /api/v1/admin/settings,
+                                  empty state when none are registered yet. No section-specific form.
 ```
 

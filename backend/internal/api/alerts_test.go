@@ -20,6 +20,7 @@ import (
 	"github.com/kj187/jarvis/backend/internal/config"
 	idb "github.com/kj187/jarvis/backend/internal/db"
 	"github.com/kj187/jarvis/backend/internal/fanout"
+	"github.com/kj187/jarvis/backend/internal/globalsettings"
 	"github.com/kj187/jarvis/backend/internal/history"
 	"github.com/kj187/jarvis/backend/internal/metrics"
 	"github.com/kj187/jarvis/backend/internal/models"
@@ -53,12 +54,13 @@ func newTestServerFixture(t testing.TB) (*Server, *history.AlertStore, *history.
 	store := history.NewStore(database, dialect)
 	userStore := users.NewStore(database, dialect)
 	settingsStore := settings.NewStore(database, dialect)
+	globalSettingsStore := globalsettings.NewStore(database, dialect)
 	hub := ws.NewHub(nil, nil, metrics.New("test"))
 	go hub.Run()
 	registry := cluster.NewRegistry(nil)
 	cfg := &config.Config{}
 
-	return NewServer(alertStore, history.NewSilenceStore(), store, hub, registry, cfg, nil, auth.NoneProvider{}, userStore, settingsStore, fanout.NoopFanout{}), alertStore, store, database
+	return NewServer(alertStore, history.NewSilenceStore(), store, hub, registry, cfg, nil, auth.NoneProvider{}, userStore, settingsStore, globalSettingsStore, fanout.NoopFanout{}), alertStore, store, database
 }
 
 type boundedWriteRecorder struct {

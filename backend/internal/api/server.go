@@ -10,6 +10,7 @@ import (
 	"github.com/kj187/jarvis/backend/internal/cluster"
 	"github.com/kj187/jarvis/backend/internal/config"
 	"github.com/kj187/jarvis/backend/internal/fanout"
+	"github.com/kj187/jarvis/backend/internal/globalsettings"
 	"github.com/kj187/jarvis/backend/internal/history"
 	"github.com/kj187/jarvis/backend/internal/settings"
 	"github.com/kj187/jarvis/backend/internal/users"
@@ -26,17 +27,18 @@ type pollTriggerer interface {
 
 // Server holds shared dependencies for all API handlers.
 type Server struct {
-	alertStore    *history.AlertStore
-	silenceStore  *history.SilenceStore
-	store         *history.Store
-	hub           *ws.Hub
-	registry      *cluster.Registry
-	cfg           *config.Config
-	pollTrigger   pollTriggerer
-	authProvider  auth.Provider
-	userStore     *users.Store
-	settingsStore *settings.Store
-	fanout        fanout.Fanout
+	alertStore          *history.AlertStore
+	silenceStore        *history.SilenceStore
+	store               *history.Store
+	hub                 *ws.Hub
+	registry            *cluster.Registry
+	cfg                 *config.Config
+	pollTrigger         pollTriggerer
+	authProvider        auth.Provider
+	userStore           *users.Store
+	settingsStore       *settings.Store
+	globalSettingsStore *globalsettings.Store
+	fanout              fanout.Fanout
 }
 
 // NewServer creates a new Server with the given dependencies.
@@ -51,20 +53,22 @@ func NewServer(
 	authProvider auth.Provider,
 	userStore *users.Store,
 	settingsStore *settings.Store,
+	globalSettingsStore *globalsettings.Store,
 	f fanout.Fanout,
 ) *Server {
 	return &Server{
-		alertStore:    alertStore,
-		silenceStore:  silenceStore,
-		store:         store,
-		hub:           hub,
-		registry:      registry,
-		cfg:           cfg,
-		pollTrigger:   pollTrigger,
-		authProvider:  authProvider,
-		userStore:     userStore,
-		settingsStore: settingsStore,
-		fanout:        f,
+		alertStore:          alertStore,
+		silenceStore:        silenceStore,
+		store:               store,
+		hub:                 hub,
+		registry:            registry,
+		cfg:                 cfg,
+		pollTrigger:         pollTrigger,
+		authProvider:        authProvider,
+		userStore:           userStore,
+		settingsStore:       settingsStore,
+		globalSettingsStore: globalSettingsStore,
+		fanout:              f,
 	}
 }
 

@@ -138,6 +138,9 @@ func TestMigrate_TablesExist(t *testing.T) {
 		"alert_events",
 		"alert_comments",
 		"alert_claims",
+		// global_settings: Phase 0 of the RBAC label-scoped-access plan
+		// (per-section admin settings, key = section name).
+		"global_settings",
 	}
 	for _, table := range tables {
 		var count int
@@ -249,7 +252,7 @@ func TestMigrate_Postgres_IndexesExist(t *testing.T) {
 // TestMigrate_Postgres_PollSnapshotsTableExists is env-gated (JARVIS_TEST_POSTGRES_DSN):
 // poll_snapshots is PostgreSQL-only (docs/postgres-ha.md D3) — never
 // created on SQLite.
-func TestMigrate_Postgres_PollSnapshotsTableExists(t *testing.T) {
+func TestMigrate_Postgres_PollSnapshotsTableExists(t *testing.T) { //nolint:dupl // same shape as TestMigrate_Postgres_GlobalSettingsTableExists on purpose; one table check per test reads clearer than parameterizing two
 	dsn := os.Getenv("JARVIS_TEST_POSTGRES_DSN")
 	if dsn == "" {
 		t.Skip("JARVIS_TEST_POSTGRES_DSN not set — skipping PostgreSQL-backed test")
@@ -277,6 +280,37 @@ func TestMigrate_Postgres_PollSnapshotsTableExists(t *testing.T) {
 	}
 	if count != 1 {
 		t.Error("poll_snapshots table not found after Migrate() on PostgreSQL")
+	}
+}
+
+// TestMigrate_Postgres_GlobalSettingsTableExists is env-gated
+// (JARVIS_TEST_POSTGRES_DSN): global_settings (Phase 0 of the RBAC
+// label-scoped-access plan) must exist on PostgreSQL too, not just SQLite —
+// TestMigrate_TablesExist only exercises the SQLite migration path.
+func TestMigrate_Postgres_GlobalSettingsTableExists(t *testing.T) { //nolint:dupl // same shape as TestMigrate_Postgres_PollSnapshotsTableExists on purpose; one table check per test reads clearer than parameterizing two
+	dsn := os.Getenv("JARVIS_TEST_POSTGRES_DSN")
+	if dsn == "" {
+		t.Skip("JARVIS_TEST_POSTGRES_DSN not set — skipping PostgreSQL-backed test")
+	}
+	database, dialect, err := openPostgres(dsn, defaultPoolConfig())
+	if err != nil {
+		t.Fatalf("openPostgres() error: %v", err)
+	}
+	defer func() { _ = database.Close() }()
+
+	if err := Migrate(database, dialect); err != nil {
+		t.Fatalf("Migrate() error: %v", err)
+	}
+
+	var count int
+	err = database.QueryRowContext(context.Background(),
+		`SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'global_settings'`,
+	).Scan(&count)
+	if err != nil {
+		t.Fatalf("check global_settings table: %v", err)
+	}
+	if count != 1 {
+		t.Error("global_settings table not found after Migrate() on PostgreSQL")
 	}
 }
 

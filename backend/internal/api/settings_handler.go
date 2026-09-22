@@ -24,7 +24,7 @@ type settingsResponse struct {
 // without login, or auth mode "none") gets user: null and resolves settings
 // from localStorage instead (Invariant #13 unaffected — DB-only, no AM call).
 func (s *Server) getSettings(c echo.Context) error {
-	global := s.globalSettings()
+	global := s.envDefaultSettings()
 
 	u := auth.UserFromContext(c)
 	if u == nil {
@@ -85,11 +85,14 @@ func (s *Server) deleteSettings(c echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
-// globalSettings builds the instance-wide defaults from the environment
+// envDefaultSettings builds the instance-wide defaults from the environment
 // (JARVIS_SILENCE_DURATIONS). Only configured keys are present, so an
 // unconfigured instance answers {} and the frontend keeps its built-in
-// defaults. A user's own setting overrides these.
-func (s *Server) globalSettings() map[string]interface{} {
+// defaults. A user's own setting overrides these. Distinct from
+// globalSettingsStore (Server field): that is the admin-managed DB layer for
+// the "Global Settings" admin tab, this is the env-only source for the
+// "global" key in GET /api/v1/settings — not (yet) connected to each other.
+func (s *Server) envDefaultSettings() map[string]interface{} {
 	global := map[string]interface{}{}
 	if len(s.cfg.SilenceDurations) > 0 {
 		global["silenceDurations"] = s.cfg.SilenceDurations

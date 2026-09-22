@@ -17,6 +17,7 @@ import (
 	"github.com/kj187/jarvis/backend/internal/config"
 	idb "github.com/kj187/jarvis/backend/internal/db"
 	"github.com/kj187/jarvis/backend/internal/fanout"
+	"github.com/kj187/jarvis/backend/internal/globalsettings"
 	"github.com/kj187/jarvis/backend/internal/history"
 	"github.com/kj187/jarvis/backend/internal/metrics"
 	"github.com/kj187/jarvis/backend/internal/models"
@@ -40,10 +41,11 @@ func newTestServerWithRegistry(t *testing.T, registry *cluster.Registry) *Server
 	store := history.NewStore(database, dialect)
 	userStore := users.NewStore(database, dialect)
 	settingsStore := settings.NewStore(database, dialect)
+	globalSettingsStore := globalsettings.NewStore(database, dialect)
 	hub := ws.NewHub(nil, nil, metrics.New("test"))
 	go hub.Run()
 
-	return NewServer(alertStore, history.NewSilenceStore(), store, hub, registry, &config.Config{}, nil, auth.NoneProvider{}, userStore, settingsStore, fanout.NoopFanout{})
+	return NewServer(alertStore, history.NewSilenceStore(), store, hub, registry, &config.Config{}, nil, auth.NoneProvider{}, userStore, settingsStore, globalSettingsStore, fanout.NoopFanout{})
 }
 
 // healthMockAM serves an empty alert list (so FetchAlerts marks the member up)
@@ -210,6 +212,7 @@ func TestGetStatus_IncludesPollIntervalSeconds(t *testing.T) {
 		auth.NoneProvider{},
 		users.NewStore(database, dialect),
 		settings.NewStore(database, dialect),
+		globalsettings.NewStore(database, dialect),
 		fanout.NoopFanout{},
 	)
 

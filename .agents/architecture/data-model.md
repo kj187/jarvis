@@ -160,6 +160,21 @@ CREATE TABLE IF NOT EXISTS user_settings (
     settings   TEXT NOT NULL,
     updated_at DATETIME NOT NULL DEFAULT (datetime('now'))  -- TIMESTAMPTZ NOT NULL DEFAULT NOW() on PostgreSQL
 );
+
+-- One row per admin-settings "section" (`internal/globalsettings`,
+-- `internal/api/admin_settings_handler.go`). `value` is opaque JSON like
+-- `user_settings.settings` above — this package never inspects a section's
+-- shape, only whoever registers the section (via `Store.Register`) does.
+-- Phase 0 of the RBAC label-scoped-access plan registers no section at all;
+-- a later phase (e.g. an "access" rule list) is the first real consumer.
+-- `updated_by` is the acting admin's username, empty for an anonymous caller
+-- (cannot happen in practice — the API is behind RequireAdmin).
+CREATE TABLE IF NOT EXISTS global_settings (
+    key        TEXT PRIMARY KEY,
+    value      TEXT NOT NULL,
+    updated_at DATETIME NOT NULL DEFAULT (datetime('now')),  -- TIMESTAMPTZ NOT NULL DEFAULT NOW() on PostgreSQL
+    updated_by TEXT NOT NULL DEFAULT ''
+);
 ```
 
 The four `*_created_at`/`*_released_at`/`*_recorded_at`/`*_last_seen_at` indices

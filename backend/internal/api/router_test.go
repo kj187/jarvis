@@ -16,6 +16,7 @@ import (
 	"github.com/kj187/jarvis/backend/internal/config"
 	idb "github.com/kj187/jarvis/backend/internal/db"
 	"github.com/kj187/jarvis/backend/internal/fanout"
+	"github.com/kj187/jarvis/backend/internal/globalsettings"
 	"github.com/kj187/jarvis/backend/internal/history"
 	"github.com/kj187/jarvis/backend/internal/metrics"
 	"github.com/kj187/jarvis/backend/internal/settings"
@@ -57,7 +58,7 @@ func newTestEchoWithDB(t *testing.T, origins []string) (*echo.Echo, *sql.DB) {
 	registry := cluster.NewRegistry(nil)
 	cfg := &config.Config{AllowedOrigins: origins}
 
-	e := NewRouter(alertStore, history.NewSilenceStore(), store, hub, registry, cfg, embed.FS{}, &fakeTriggerer{}, auth.NoneProvider{}, userStore, settings.NewStore(database, dialect), metrics.New("test"), fanout.NoopFanout{})
+	e := NewRouter(alertStore, history.NewSilenceStore(), store, hub, registry, cfg, embed.FS{}, &fakeTriggerer{}, auth.NoneProvider{}, userStore, settings.NewStore(database, dialect), globalsettings.NewStore(database, dialect), metrics.New("test"), fanout.NoopFanout{})
 	return e, database
 }
 
@@ -222,7 +223,7 @@ func newTestEchoInternal(t *testing.T, authMode string) *echo.Echo {
 		SecretKey:    []byte("aaaabbbbccccddddeeeeffffgggghhhh"),
 	}
 
-	return NewRouter(alertStore, history.NewSilenceStore(), store, hub, registry, cfg, embed.FS{}, &fakeTriggerer{}, provider, userStore, settings.NewStore(database, dialect), metrics.New("test"), fanout.NoopFanout{})
+	return NewRouter(alertStore, history.NewSilenceStore(), store, hub, registry, cfg, embed.FS{}, &fakeTriggerer{}, provider, userStore, settings.NewStore(database, dialect), globalsettings.NewStore(database, dialect), metrics.New("test"), fanout.NoopFanout{})
 }
 
 func TestMetricsRoute_ExposesBuildInfo(t *testing.T) {

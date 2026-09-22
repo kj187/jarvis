@@ -8,6 +8,7 @@ import { SilenceForm } from '@/components/silences/SilenceForm'
 import { SilenceTemplateTab } from '@/components/silences/SilenceTemplateTab'
 import { SettingsSheet } from '@/components/settings/SettingsSheet'
 import { UserManagement } from '@/components/admin/UserManagement'
+import { GlobalSettings } from '@/components/admin/GlobalSettings'
 import { AccountSheet } from '@/components/account/AccountSheet'
 import { useUIStore } from '@/store/uiStore'
 import { useAuthStore } from '@/store/authStore'
@@ -136,6 +137,7 @@ export function Header() {
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const [infoOpen, setInfoOpen] = useState(false)
   const [adminOpen, setAdminOpen] = useState(false)
+  const [adminActiveTab, setAdminActiveTab] = useState<'users' | 'global-settings'>('users')
   const [accountOpen, setAccountOpen] = useState(false)
   const { user, isAuthenticated, logout, providerInfo, requestLogin } = useAuthStore()
   // A session that ends while the sheet is open must not reopen it after the next login.
@@ -591,11 +593,42 @@ export function Header() {
       <AccountSheet open={accountOpen} onClose={() => setAccountOpen(false)} user={user} />
     )}
 
-    <Sheet open={adminOpen} onClose={() => setAdminOpen(false)} ariaLabel="User Management">
-      <div className="p-5 pt-10">
-        <h2 className="mb-4 text-base font-semibold">User Management</h2>
-        <UserManagement />
+    <Sheet open={adminOpen} onClose={() => setAdminOpen(false)} ariaLabel="Administration">
+      <div className="border-b border-border px-5 pt-10 pb-0">
+        <div className="flex gap-1 -mb-px">
+          <button
+            onClick={() => setAdminActiveTab('users')}
+            className={`px-3 py-2 text-sm font-medium transition-colors cursor-pointer ${
+              adminActiveTab === 'users'
+                ? 'border-b-2 border-primary text-foreground'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            Users
+          </button>
+          <button
+            onClick={() => setAdminActiveTab('global-settings')}
+            className={`px-3 py-2 text-sm font-medium transition-colors cursor-pointer ${
+              adminActiveTab === 'global-settings'
+                ? 'border-b-2 border-primary text-foreground'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            Global Settings
+          </button>
+        </div>
       </div>
+      {adminActiveTab === 'users' && (
+        <div className="p-5">
+          <h2 className="mb-4 text-base font-semibold">User Management</h2>
+          <UserManagement />
+        </div>
+      )}
+      {adminActiveTab === 'global-settings' && (
+        <div className="p-5">
+          <GlobalSettings />
+        </div>
+      )}
     </Sheet>
     </>
   )
