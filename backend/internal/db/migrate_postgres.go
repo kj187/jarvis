@@ -130,6 +130,16 @@ func migratePostgres(database *sql.DB) error {
 			settings   TEXT NOT NULL,
 			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		)`,
+		// global_settings: generic admin-settings foundation (RBAC
+		// label-scoped-access plan, Phase 0). One row per section; a section's
+		// meaning and validation are owned by whichever package registers it
+		// (e.g. the later "access" section) — this table itself is opaque JSON.
+		`CREATE TABLE IF NOT EXISTS global_settings (
+			key        TEXT PRIMARY KEY,
+			value      TEXT NOT NULL,
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			updated_by TEXT NOT NULL DEFAULT ''
+		)`,
 	}
 
 	// Session-level locks require a single dedicated connection: they are

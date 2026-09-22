@@ -231,6 +231,26 @@ export interface AdminUser {
   lastLoginAt: string | null
 }
 
+// ── Global settings (admin-settings foundation, RBAC label-scoped-access
+// plan Phase 0) ─────────────────────────────────────────────────────────────
+
+/** GET /api/v1/admin/settings — the currently registered sections. Phase 0
+    registers none, so this is empty until a later phase (e.g. "access")
+    registers a section. */
+export interface GlobalSettingSections {
+  sections: string[]
+}
+
+/** GET/PUT /api/v1/admin/settings/:section. `value` is opaque JSON whose
+    shape is owned by whichever section registered it — this backend package
+    never interprets it. */
+export interface GlobalSetting {
+  section: string
+  value: unknown
+  updatedAt?: string
+  updatedBy?: string
+}
+
 // ── Settings ─────────────────────────────────────────────────────────────────
 
 /** Server response of GET /api/v1/settings. Both maps are sparse — only keys

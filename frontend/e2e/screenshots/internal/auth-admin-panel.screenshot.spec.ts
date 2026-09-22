@@ -23,7 +23,7 @@ test('auth-admin-panel', async ({ page, am, jarvis }) => {
   await expect(page.getByText('Logout')).toBeVisible()
   await page.getByRole('button', { name: 'Administration' }).click()
 
-  const panel = page.getByRole('dialog', { name: 'User Management' })
+  const panel = page.getByRole('dialog', { name: 'Administration' })
   await expect(panel.getByRole('heading', { name: 'User Management' })).toBeVisible()
   await page.waitForTimeout(300)
 

@@ -4,8 +4,11 @@ import { ensureInternalAdmin, loginInternal, INTERNAL_ADMIN } from '../../suppor
 async function openAdminPanel(page: import('@playwright/test').Page) {
   await page.getByTestId('user-menu').click()
   await page.getByRole('button', { name: 'Administration' }).click()
-  const dialog = page.getByRole('dialog', { name: 'User Management' })
+  const dialog = page.getByRole('dialog', { name: 'Administration' })
   await expect(dialog).toBeVisible({ timeout: 8_000 })
+  // Users is the default tab — every existing test below expects the user
+  // table to be visible immediately after opening the panel.
+  await expect(dialog.getByRole('button', { name: 'Users' })).toBeVisible()
   return dialog
 }
 
@@ -96,6 +99,20 @@ test('I13 delete user shows confirm state then removes user', async ({ page }) =
 
   // User row should disappear
   await expect(dialog.locator('tr').filter({ hasText: 'i13-deleteuser' })).toHaveCount(0, { timeout: 8_000 })
+})
+
+test('I15 global settings tab shows empty state when no section is registered', async ({ page }) => {
+  await ensureInternalAdmin(page)
+  await loginInternal(page)
+
+  await page.goto('/?state=active')
+  const dialog = await openAdminPanel(page)
+
+  await dialog.getByRole('button', { name: 'Global Settings' }).click()
+
+  // Phase 0 of the admin-settings foundation: no section is registered yet,
+  // so the tab must render an empty state, not an error or a blank panel.
+  await expect(dialog.getByText('No global settings sections are available yet.')).toBeVisible({ timeout: 8_000 })
 })
 
 test('I14 self-row has no delete button and non-editable role', async ({ page }) => {

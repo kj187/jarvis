@@ -109,6 +109,16 @@ user_id    TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
 settings   TEXT NOT NULL,
 updated_at DATETIME NOT NULL DEFAULT (datetime('now'))
 )`,
+		// global_settings: generic admin-settings foundation (RBAC
+		// label-scoped-access plan, Phase 0). One row per section; a section's
+		// meaning and validation are owned by whichever package registers it
+		// (e.g. the later "access" section) — this table itself is opaque JSON.
+		`CREATE TABLE IF NOT EXISTS global_settings (
+key        TEXT PRIMARY KEY,
+value      TEXT NOT NULL,
+updated_at DATETIME NOT NULL DEFAULT (datetime('now')),
+updated_by TEXT NOT NULL DEFAULT ''
+)`,
 	}
 
 	for _, stmt := range stmts {

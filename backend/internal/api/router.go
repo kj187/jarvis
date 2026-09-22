@@ -15,6 +15,7 @@ import (
 	"github.com/kj187/jarvis/backend/internal/cluster"
 	"github.com/kj187/jarvis/backend/internal/config"
 	"github.com/kj187/jarvis/backend/internal/fanout"
+	"github.com/kj187/jarvis/backend/internal/globalsettings"
 	"github.com/kj187/jarvis/backend/internal/history"
 	"github.com/kj187/jarvis/backend/internal/metrics"
 	"github.com/kj187/jarvis/backend/internal/settings"
@@ -67,6 +68,7 @@ func NewRouter(
 	authProvider auth.Provider,
 	userStore *users.Store,
 	settingsStore *settings.Store,
+	globalSettingsStore *globalsettings.Store,
 	m *metrics.Metrics,
 	f fanout.Fanout,
 ) *echo.Echo {
@@ -132,7 +134,7 @@ func NewRouter(
 		}))
 	}
 
-	srv := NewServer(alertStore, silenceStore, store, hub, registry, cfg, recorder, authProvider, userStore, settingsStore, f)
+	srv := NewServer(alertStore, silenceStore, store, hub, registry, cfg, recorder, authProvider, userStore, settingsStore, globalSettingsStore, f)
 
 	// Wire JWT secret key into auth middleware.
 	if len(cfg.SecretKey) > 0 {
@@ -233,6 +235,13 @@ func NewRouter(
 	admin.POST("/users", srv.createUser)
 	admin.PATCH("/users/:id", srv.updateUser)
 	admin.DELETE("/users/:id", srv.deleteUser)
+
+	// Generic admin-settings foundation (RBAC label-scoped-access plan,
+	// Phase 0). "/settings" (no section) lists currently registered
+	// sections; Phase 0 registers none, so the admin UI sees an empty list.
+	admin.GET("/settings", srv.listGlobalSettingsSections)
+	admin.GET("/settings/:section", srv.getGlobalSetting)
+	admin.PUT("/settings/:section", srv.putGlobalSetting)
 
 	// ── Static files (prod only) ──────────────────────────────────────────────
 	// Sub the FS to "dist/" so paths resolve without the "dist/" prefix.

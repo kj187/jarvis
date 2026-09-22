@@ -173,6 +173,16 @@ POST   /api/v1/admin/users                       Admin        Body: { username, 
 PATCH  /api/v1/admin/users/:id                   Admin        Body: { role }  (cannot change own role)
 DELETE /api/v1/admin/users/:id                   Admin        (cannot delete self)
 
+# Generic admin-settings foundation (`internal/globalsettings`, RBAC
+# label-scoped-access plan Phase 0). A "section" is a named row in
+# `global_settings` (data-model.md); Phase 0 registers none, so every
+# section answers 404 until a later phase (e.g. "access") calls
+# `Store.Register`. No section-specific validation or merge with
+# `GET /api/v1/settings` above exists yet — deliberately out of scope here.
+GET    /api/v1/admin/settings                    Admin        → { sections: string[] } (currently registered section names)
+GET    /api/v1/admin/settings/:section           Admin        404 if unregistered; else → { section, value, updatedAt?, updatedBy? } (value: null if never written)
+PUT    /api/v1/admin/settings/:section           Admin        404 if unregistered; 400 on invalid JSON or a failing section validator; else replaces the section's value (last write wins)
+
 # ── E2E test routes (only with -tags e2e; no-op in production builds) ────────
 POST   /api/v1/test/reset                        (e2e only)  truncate history tables + clear in-memory stores (alerts + silences)
 POST   /api/v1/test/seed                         (e2e only)  insert resolved-alert lifecycles
