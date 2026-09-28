@@ -14,7 +14,7 @@ version numbers, so use the release notes to select both deliberately.
 ### Podman or Docker Compose
 
 Change the image tag in your Compose file (the current release is
-`ghcr.io/kj187/jarvis:1.12.0`), then pull and recreate the service:
+`ghcr.io/kj187/jarvis:2.0.0`), then pull and recreate the service:
 
 ```bash
 podman compose pull && podman compose up -d
@@ -28,7 +28,7 @@ Docker users can replace `podman` with `docker`. See
 Upgrade the chart separately, using the chart version from the release notes:
 
 ```bash
-helm upgrade jarvis oci://ghcr.io/kj187/charts/jarvis --version 2.0.0 --reuse-values
+helm upgrade jarvis oci://ghcr.io/kj187/charts/jarvis --version 2.1.0 --reuse-values
 ```
 
 Review [Install on Kubernetes](deploy-kubernetes.md) and the

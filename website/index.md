@@ -64,6 +64,6 @@ vulnerability scans in CI, a strict Content Security Policy and a hardened, read
 container.
 [How Jarvis is secured](/concepts/security)
 
-Current release image: `ghcr.io/kj187/jarvis:1.12.0`.
+Current release image: `ghcr.io/kj187/jarvis:2.0.0`.
 
 </div>

@@ -13,7 +13,7 @@ Save this as `compose.yml` and replace the Alertmanager URL with your own:
 ```yaml
 services:
   jarvis:
-    image: ghcr.io/kj187/jarvis:1.12.0
+    image: ghcr.io/kj187/jarvis:2.0.0
     ports:
       - "8080:8080"
     volumes:

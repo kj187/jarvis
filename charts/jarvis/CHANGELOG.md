@@ -8,6 +8,8 @@ Entries up to and including 1.7.6 were reconstructed from the git history when t
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-09-28
+
 ### Breaking Changes
 
 - No breaking changes.
@@ -21,6 +23,7 @@ Entries up to and including 1.7.6 were reconstructed from the git history when t
 
 ### Changed
 
+- `appVersion` bumped to `2.0.0`.
 - The chart README now keeps only chart values and chart-specific examples;
   release verification, upgrade/rollback, and authentication procedures link
   to their canonical guides instead of duplicating them. Documentation only,
@@ -237,7 +240,8 @@ No breaking changes (first published chart version).
 
 Chart versions 1.0.3–1.0.5 only bumped `appVersion` to the matching app release.
 
-[Unreleased]: https://github.com/kj187/jarvis/compare/v1.12.0...HEAD
+[Unreleased]: https://github.com/kj187/jarvis/compare/v2.0.0...HEAD
+[2.1.0]: https://github.com/kj187/jarvis/compare/v1.12.0...v2.0.0
 [2.0.0]: https://github.com/kj187/jarvis/compare/v1.11.0...v1.12.0
 [1.7.6]: https://github.com/kj187/jarvis/compare/v1.10.1...v1.11.0
 [1.7.5]: https://github.com/kj187/jarvis/compare/v1.10.0...v1.10.1
