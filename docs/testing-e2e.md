@@ -117,13 +117,15 @@ frontend/
       none/             # feature-*, auth-noauth-notice, screenshot, social-templates (Open Graph 1200×630, square 1080×1080, slide 1920×1080 → docs/assets/social-*.png, from the design tokens + logo)
       internal/         # auth-setup, auth-login-internal, auth-user-menu, auth-admin-panel, auth-login-page
       oidc/             # oidc-authenticated, auth-login-oidc, screenshot (README hero)
-    video/              # demo videos: recorder.ts, build-video.mjs, fonts.conf, release + intro storyboard templates
+    video/              # demo videos: recorder.ts, charts.ts (before/after and line-chart slides), build-video.mjs, fonts.conf, release + intro storyboard templates
     _video/             # gitignored: <project>.video.ts, <project>.narration.json, <project>/ (frames, audio)
   playwright.video.config.ts            # release-video config; viewport per $VIDEO_FORMAT
 ```
 
 The release demo video reuses this stack: `scripts/e2e-run.sh video none` runs
-the storyboard once per format. It is produced only on request — workflow,
+the storyboard once per format (`VIDEO_AUTH_MODE=oidc` runs it against the
+OIDC stack instead, for a storyboard that shows the login prompt). It is
+produced only on request — workflow,
 storyboard rules and hand-over in `.agents/skills/release-video/SKILL.md`
 (`make release-video VERSION=X.Y.Z [PROJECT=release|intro]`). The committed
 release storyboard template also defines the standard cover subtitle; the

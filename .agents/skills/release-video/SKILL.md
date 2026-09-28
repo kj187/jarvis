@@ -30,6 +30,7 @@ post anything yourself.
 | `frontend/e2e/video/recorder.ts` | `VideoRecorder`: device-pixel screencast, cursor, `clickOn`/`moveTo`, `focus`/`focusOn` (zoom keyframes), `highlight` (hand-drawn marker), `scene` (caption + narration sync), `card` (intro/outro title card = cover design), `finish` (timeline, caption and card PNGs) |
 | `frontend/e2e/video/backdrops.js` | animated card backdrops, rendered frame by frame (time-deterministic): **Owl mesh** (neural mesh assembling into the Jarvis owl) on the first and last card, **Neural mesh** on every card in between — the standard look of every video; the cover (both formats) reuses the Owl mesh too, frozen at its assembled end state (`__draw(2.6)`) behind the app screenshot — never the plain gradient alone |
 | `frontend/e2e/video/theme.ts` + `generated-theme.ts` (rules: `.agents/skills/design-system/SKILL.md` § Media) | card colours: `generated-theme.ts` is generated from `design/tokens.json` (never edit); `theme.ts` adds the stage colour and the brand accents — product blue with coral as counterweight (the logo's eyes). **No violet** any more: videos recorded before the design guide keep their old look; every newly recorded video and cover uses this palette. `recorder.ts` injects the palette into `backdrops.js` as `window.__JARVIS_PALETTE` |
+| `frontend/e2e/video/charts.ts` | chart slides: `rec.card({ eyebrow, title, chart: { bars \| lines, … } })` — before/after bars (to scale from zero, "before" coral, "after" blue) or line charts on one shared y-axis, drawn as HTML/SVG and animated by time (`window.__chart(t)`, called by `recorder.ts` next to the backdrop's `__draw`). Data that only exists as a picture (a Grafana export) is digitized into `[x, value]` points and redrawn — never invented; keep the numbers in the gitignored `e2e/_video/` folder |
 | `frontend/e2e/video/fonts.conf` | maps `system-ui`/`sans-serif` to Inter for the recording (the Playwright image falls back to a CJK font) |
 | `frontend/e2e/video/build-video.mjs` | timeline → two ffmpeg passes (sub-pixel eased zoom via `perspective`, then caption/card overlays + narration mix). Cards less than 0.3 s apart (back-to-back chapter/showcase slides with no demo between them) hard-cut into each other — no fade on that shared edge, overlay window closed exactly at the boundary — instead of each dipping toward the base screencast independently, which flashed whatever the app happened to show for a beat |
 | `frontend/e2e/video/example.storyboard.ts` | complete storyboard of v1.12.0 — the release template |
@@ -55,6 +56,10 @@ Infrastructure Operations”** as its headline.
 | `scripts/release-video/tts/` | voice container: Kokoro-82M (Apache-2.0) via kokoro-onnx, int8 model, checksum-pinned — local, free, no account |
 
 Entry point: `make release-video VERSION=X.Y.Z [STEP=all|tts|record|render] [PROJECT=release]`.
+`VIDEO_AUTH_MODE=none|internal|oidc` (default `none`) picks the e2e auth mode the storyboard runs against — use
+`oidc` when a chapter shows the login prompt (SSO popup): the storyboard fills a form logged out, Create raises
+the login modal, the popup signs in and everything after that is signed in. The popup is a separate page and
+is not part of the screencast.
 Each video is a *project*: storyboard `frontend/e2e/_video/<project>.video.ts`,
 narration `frontend/e2e/_video/<project>.narration.json`, work files in
 `frontend/e2e/_video/<project>/`, output in `~/Downloads/jarvis-<project>-video/`.
@@ -107,6 +112,15 @@ Copy `frontend/e2e/video/example.storyboard.ts` and adapt the scenes. Rules:
   showcase → showcase → outro): a gap above 0.3 s makes the renderer fade the
   first slide out and the next one in, and the app flashes through in
   between. Let the next card replace the open one at the same instant instead.
+- **Chart slides** for numbers that carry a story (benchmarks, memory graphs):
+  `rec.card({ eyebrow, title, chart: { bars: [...] } })` or `chart: { lines: [...], yMax, yTicks }` — see
+  `frontend/e2e/video/charts.ts` for the fields. The animation plays from the moment the card opens, so open
+  the card directly after the chapter slide; if the narration of the chapter scene is longer than the slide,
+  pass `chapterMs` (≈ narration length in ms) to `rec.scene` so the slide holds instead of the app flashing
+  in between. A chapter that shows another page (the docs site) loads it in `underSlide` — the slide then
+  stays up until the page is ready, so the previous screen never flashes in between. The recording has no
+  browser chrome: to show a URL, inject a small fixed pill in an `addInitScript` (see the docs chapter of
+  the v2.0.0 storyboard idea: wrap `history.pushState` to keep it current).
 - **Showcase slides** for facts the UI can't show (auth modes, deployment,
   supply chain): `rec.card({ eyebrow, title, tiles: [{ title, text, code? }] })`
   — 2–3 tiles, one narrated scene each, neural-mesh backdrop.

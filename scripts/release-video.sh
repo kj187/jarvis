@@ -16,6 +16,8 @@
 # Env: VIDEO_PROJECT video project folder (default: release; e.g. intro for the product video)
 #      VIDEO_OUT     output directory (default: ~/Downloads/jarvis-<project>-video) — never inside the repo
 #      VIDEO_FORMATS formats to record/render (default: "landscape square")
+#      VIDEO_AUTH_MODE e2e auth mode the storyboard runs against: none (default) | internal | oidc — for a
+#                    storyboard that shows the login prompt (SSO popup: oidc)
 
 set -euo pipefail
 
@@ -35,6 +37,8 @@ NARRATION="$VIDEO_DIR/$VIDEO_PROJECT.narration.json"
 WORK="$VIDEO_DIR/$VIDEO_PROJECT"
 VIDEO_OUT="${VIDEO_OUT:-$HOME/Downloads/jarvis-$VIDEO_PROJECT-video}"
 VIDEO_FORMATS="${VIDEO_FORMATS:-landscape square}"
+VIDEO_AUTH_MODE="${VIDEO_AUTH_MODE:-none}"
+case "$VIDEO_AUTH_MODE" in none|internal|oidc) ;; *) echo "ERROR: VIDEO_AUTH_MODE must be none|internal|oidc" >&2; exit 1 ;; esac
 TTS_IMAGE="localhost/jarvis-release-video-tts:latest"
 FFMPEG_IMAGE="docker.io/mwader/static-ffmpeg:7.1@sha256:84e4edba9212b950f26fb591365ea4f89baf3d8202310b43bcf0128db9fb0992"
 NODE_IMAGE="mcr.microsoft.com/playwright:v1.63.0-noble"
@@ -63,7 +67,7 @@ step_tts() {
 step_record() {
   [ -f "$STORYBOARD" ] || { echo "ERROR: $STORYBOARD missing (templates: frontend/e2e/video/*.storyboard.ts)" >&2; exit 1; }
   [ -f "$WORK/narration/durations.json" ] || echo "    note: no narration — recording a silent video (run the tts step first for a voice-over)"
-  VIDEO_VERSION="$VERSION" VIDEO_FORMATS="$VIDEO_FORMATS" bash scripts/e2e-run.sh video none
+  VIDEO_VERSION="$VERSION" VIDEO_FORMATS="$VIDEO_FORMATS" bash scripts/e2e-run.sh video "$VIDEO_AUTH_MODE"
 }
 
 step_render() {
