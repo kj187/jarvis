@@ -84,7 +84,7 @@ Tests cover four suites (`deployment`, `configmap`, `secret`, `ingress`) and run
 | `serviceAccount.annotations` | object | `{}` | ServiceAccount annotations |
 | `serviceAccount.name` | string | `""` | ServiceAccount name (auto-generated when empty) |
 | `leaderElection.podLabel.enabled` | bool | `true` | Label the current leader pod `jarvis.kj187.de/role=leader` (informational only — every pod serves all traffic). Renders a `Role`+`RoleBinding` (`pods`: `get`, `patch`) and sets `automountServiceAccountToken: true` on the pod; meaningful only with PostgreSQL and `replicaCount`/HPA `> 1`, harmless to leave on otherwise |
-| `podAnnotations` | object | `{}` | Pod annotations |
+| `podAnnotations` | object | `{}` | Pod annotations. `checksum/config` and `checksum/secret` are set by the chart (they roll the pods when the configuration changes) and cannot be overridden here |
 | `podLabels` | object | `{}` | Extra pod labels, merged into the pod template's labels |
 | `podSecurityContext` | object | `{runAsNonRoot: true, runAsUser: 65532, ...}` | Pod-level security context |
 | `securityContext` | object | `{allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, ...}` | Container-level security context |

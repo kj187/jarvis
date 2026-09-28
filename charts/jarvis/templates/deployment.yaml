@@ -26,9 +26,18 @@ spec:
       {{- include "jarvis.selectorLabels" . | nindent 6 }}
   template:
     metadata:
-      {{- if or .Values.podAnnotations .Values.metrics.podAnnotations }}
       annotations:
-        {{- with .Values.podAnnotations }}
+        {{- /* The pod reads the ConfigMap (envFrom) and the chart-managed Secret only at startup, so a
+               change to either must change the pod template — otherwise Kubernetes never rolls the
+               Deployment. A Secret named by existingSecret is not rendered here and cannot be hashed. */}}
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- $secret := include (print $.Template.BasePath "/secret.yaml") . | trim }}
+        {{- if $secret }}
+        checksum/secret: {{ $secret | sha256sum }}
+        {{- end }}
+        {{- /* The two checksum keys are owned by the chart: a same-named podAnnotations entry would
+               render a duplicate key, so it is dropped. */}}
+        {{- with omit .Values.podAnnotations "checksum/config" "checksum/secret" }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
         {{- if .Values.metrics.podAnnotations }}
@@ -36,7 +45,6 @@ spec:
         prometheus.io/port: "8080"
         prometheus.io/path: /metrics
         {{- end }}
-      {{- end }}
       labels:
         {{- include "jarvis.labels" . | nindent 8 }}
         {{- with .Values.podLabels }}

@@ -1,9 +1,14 @@
 suite: deployment
+# configmap.yaml and secret.yaml are only rendered so the Deployment can hash them (checksum annotations);
+# every assertion below is about the Deployment.
 templates:
   - templates/deployment.yaml
+  - templates/configmap.yaml
+  - templates/secret.yaml
 
 tests:
   - it: renders one Deployment by default
+    template: templates/deployment.yaml
     asserts:
       - hasDocuments:
           count: 1
@@ -11,6 +16,7 @@ tests:
           of: Deployment
 
   - it: uses chart appVersion as image tag by default
+    template: templates/deployment.yaml
     chart:
       appVersion: 9.9.9-test
     asserts:
@@ -19,6 +25,7 @@ tests:
           value: ghcr.io/kj187/jarvis:9.9.9-test
 
   - it: uses custom image tag when set
+    template: templates/deployment.yaml
     set:
       image.tag: v1.2.3
     asserts:
@@ -27,12 +34,14 @@ tests:
           value: ghcr.io/kj187/jarvis:v1.2.3
 
   - it: exposes container port 8080
+    template: templates/deployment.yaml
     asserts:
       - equal:
           path: spec.template.spec.containers[0].ports[0].containerPort
           value: 8080
 
   - it: reads JARVIS_DB_DSN from chart-created secret by default
+    template: templates/deployment.yaml
     asserts:
       - equal:
           path: spec.template.spec.containers[0].env[0].name
@@ -42,6 +51,7 @@ tests:
           value: dsn
 
   - it: reads JARVIS_DB_DSN from existing secret when configured
+    template: templates/deployment.yaml
     set:
       database.existingSecret: my-secret
       database.existingSecretKey: database-url
@@ -54,6 +64,7 @@ tests:
           value: database-url
 
   - it: sets automountServiceAccountToken true and injects POD_NAME/POD_NAMESPACE by default (leaderElection.podLabel.enabled defaults true)
+    template: templates/deployment.yaml
     asserts:
       - equal:
           path: spec.template.spec.automountServiceAccountToken
@@ -72,6 +83,7 @@ tests:
           value: metadata.namespace
 
   - it: sets automountServiceAccountToken false when leaderElection.podLabel.enabled is false
+    template: templates/deployment.yaml
     set:
       leaderElection.podLabel.enabled: false
     asserts:
@@ -80,6 +92,7 @@ tests:
           value: false
 
   - it: mounts emptyDir at /data when persistence disabled
+    template: templates/deployment.yaml
     asserts:
       - equal:
           path: spec.template.spec.volumes[0].emptyDir
@@ -89,6 +102,7 @@ tests:
           value: /data
 
   - it: mounts PVC at /data when persistence enabled
+    template: templates/deployment.yaml
     set:
       persistence.enabled: true
     asserts:
@@ -96,6 +110,7 @@ tests:
           path: spec.template.spec.volumes[0].persistentVolumeClaim.claimName
 
   - it: fails when persistence enabled with SQLite and replicaCount > 1
+    template: templates/deployment.yaml
     set:
       persistence.enabled: true
       replicaCount: 2
@@ -104,6 +119,7 @@ tests:
           errorMessage: "Invalid configuration: SQLite (database.dsn is a file path) requires replicaCount=1. Every pod would poll Alertmanager independently and keep its own divergent history. Use PostgreSQL (database.dsn=postgres://...) for multi-replica deployments."
 
   - it: fails when persistence enabled with SQLite and autoscaling enabled
+    template: templates/deployment.yaml
     set:
       persistence.enabled: true
       autoscaling.enabled: true
@@ -112,6 +128,7 @@ tests:
           errorMessage: "Invalid configuration: SQLite (database.dsn is a file path) is incompatible with autoscaling. HPA may schedule multiple pods, and every pod would poll Alertmanager independently and keep its own divergent history. Use PostgreSQL (database.dsn=postgres://...) for scalable deployments."
 
   - it: fails when persistence disabled (default emptyDir) with SQLite and replicaCount > 1
+    template: templates/deployment.yaml
     set:
       replicaCount: 2
     asserts:
@@ -119,6 +136,7 @@ tests:
           errorMessage: "Invalid configuration: SQLite (database.dsn is a file path) requires replicaCount=1. Every pod would poll Alertmanager independently and keep its own divergent history. Use PostgreSQL (database.dsn=postgres://...) for multi-replica deployments."
 
   - it: fails when persistence disabled (default emptyDir) with SQLite and autoscaling enabled
+    template: templates/deployment.yaml
     set:
       autoscaling.enabled: true
     asserts:
@@ -126,6 +144,7 @@ tests:
           errorMessage: "Invalid configuration: SQLite (database.dsn is a file path) is incompatible with autoscaling. HPA may schedule multiple pods, and every pod would poll Alertmanager independently and keep its own divergent history. Use PostgreSQL (database.dsn=postgres://...) for scalable deployments."
 
   - it: fails when auth.provider is internal without secretKey or existingSecret
+    template: templates/deployment.yaml
     set:
       auth.provider: internal
     asserts:
@@ -133,6 +152,7 @@ tests:
           errorMessage: "Invalid configuration: auth.provider is not 'none' — set auth.secretKey (openssl rand -hex 32) or auth.existingSecret."
 
   - it: fails when auth.provider is oidc without secretKey or existingSecret
+    template: templates/deployment.yaml
     set:
       auth.provider: oidc
       auth.oidc.issuer: https://idp.example.com/realms/jarvis
@@ -143,6 +163,7 @@ tests:
           errorMessage: "Invalid configuration: auth.provider is not 'none' — set auth.secretKey (openssl rand -hex 32) or auth.existingSecret."
 
   - it: fails when auth.provider is oidc without issuer, clientId or redirectUrl
+    template: templates/deployment.yaml
     set:
       auth.provider: oidc
       auth.secretKey: "deadbeefdeadbeefdeadbeefdeadbeef"
@@ -151,6 +172,7 @@ tests:
           errorMessage: "Invalid configuration: auth.provider=oidc requires auth.oidc.issuer, auth.oidc.clientId and auth.oidc.redirectUrl."
 
   - it: allows auth.provider internal with secretKey set
+    template: templates/deployment.yaml
     set:
       auth.provider: internal
       auth.secretKey: "deadbeefdeadbeefdeadbeefdeadbeef"
@@ -159,6 +181,7 @@ tests:
           of: Deployment
 
   - it: allows auth.provider internal with existingSecret set
+    template: templates/deployment.yaml
     set:
       auth.provider: internal
       auth.existingSecret: jarvis-auth
@@ -167,6 +190,7 @@ tests:
           of: Deployment
 
   - it: allows auth.provider oidc with existingSecret and full oidc config
+    template: templates/deployment.yaml
     set:
       auth.provider: oidc
       auth.existingSecret: jarvis-auth
@@ -178,11 +202,13 @@ tests:
           of: Deployment
 
   - it: allows auth.provider none without any secret configured
+    template: templates/deployment.yaml
     asserts:
       - isKind:
           of: Deployment
 
   - it: reads per-cluster auth secrets from the chart secret by default
+    template: templates/deployment.yaml
     values:
       - ./values/cluster-auth.yaml
     asserts:
@@ -215,6 +241,7 @@ tests:
                 optional: false
 
   - it: reads per-cluster auth secrets from an existing secret when configured
+    template: templates/deployment.yaml
     values:
       - ./values/cluster-auth-existing-secret.yaml
     asserts:
@@ -229,6 +256,7 @@ tests:
                 optional: true
 
   - it: uses custom existing-secret key names for per-cluster auth
+    template: templates/deployment.yaml
     values:
       - ./values/cluster-auth-existing-secret-custom-keys.yaml
     asserts:
@@ -243,6 +271,7 @@ tests:
                 optional: true
 
   - it: omits per-cluster auth env vars when no cluster sets auth
+    template: templates/deployment.yaml
     asserts:
       - notContains:
           path: spec.template.spec.containers[0].env
@@ -250,6 +279,7 @@ tests:
             name: JARVIS_CLUSTER_1_BEARER_TOKEN
 
   - it: fails when a cluster sets oauth2.clientId without oauth2.tokenUrl
+    template: templates/deployment.yaml
     values:
       - ./values/cluster-oauth2-missing-token-url.yaml
     asserts:
@@ -257,6 +287,7 @@ tests:
           errorMessage: 'Invalid configuration: clusters[0].auth.oauth2.clientId is set without clusters[0].auth.oauth2.tokenUrl (cluster 1, "production").'
 
   - it: allows a cluster with oauth2.clientId and oauth2.tokenUrl both set
+    template: templates/deployment.yaml
     values:
       - ./values/cluster-auth.yaml
     asserts:
@@ -264,6 +295,7 @@ tests:
           of: Deployment
 
   - it: allows replicaCount > 1 with PostgreSQL even when persistence enabled
+    template: templates/deployment.yaml
     set:
       persistence.enabled: true
       replicaCount: 3
@@ -274,6 +306,7 @@ tests:
           value: 3
 
   - it: renders topologySpreadConstraints when set
+    template: templates/deployment.yaml
     set:
       topologySpreadConstraints:
         - maxSkew: 1
@@ -285,17 +318,20 @@ tests:
           value: kubernetes.io/hostname
 
   - it: omits topologySpreadConstraints by default
+    template: templates/deployment.yaml
     asserts:
       - isNull:
           path: spec.template.spec.topologySpreadConstraints
 
   - it: defaults to RollingUpdate strategy when persistence disabled
+    template: templates/deployment.yaml
     asserts:
       - equal:
           path: spec.strategy.type
           value: RollingUpdate
 
   - it: defaults to Recreate strategy when persistence enabled
+    template: templates/deployment.yaml
     set:
       persistence.enabled: true
     asserts:
@@ -304,6 +340,7 @@ tests:
           value: Recreate
 
   - it: respects explicit updateStrategy override
+    template: templates/deployment.yaml
     set:
       persistence.enabled: true
       updateStrategy.type: RollingUpdate
@@ -313,6 +350,7 @@ tests:
           value: RollingUpdate
 
   - it: does not manage replica count when autoscaling enabled
+    template: templates/deployment.yaml
     set:
       autoscaling.enabled: true
       database.dsn: postgres://user:pass@host:5432/db
@@ -321,6 +359,7 @@ tests:
           path: spec.replicas
 
   - it: sets replica count when autoscaling disabled
+    template: templates/deployment.yaml
     set:
       replicaCount: 3
       database.dsn: postgres://user:pass@host:5432/db
@@ -330,18 +369,21 @@ tests:
           value: 3
 
   - it: applies readOnlyRootFilesystem security context
+    template: templates/deployment.yaml
     asserts:
       - equal:
           path: spec.template.spec.containers[0].securityContext.readOnlyRootFilesystem
           value: true
 
   - it: runs as non-root
+    template: templates/deployment.yaml
     asserts:
       - equal:
           path: spec.template.spec.securityContext.runAsNonRoot
           value: true
 
   - it: does not add JARVIS_SECRET_KEY env when auth.provider is none
+    template: templates/deployment.yaml
     asserts:
       - notContains:
           path: spec.template.spec.containers[0].env
@@ -349,6 +391,7 @@ tests:
             name: JARVIS_SECRET_KEY
 
   - it: adds JARVIS_SECRET_KEY from chart secret when auth.provider is internal
+    template: templates/deployment.yaml
     set:
       auth.provider: internal
       auth.secretKey: "deadbeef"
@@ -363,6 +406,7 @@ tests:
                 key: secret-key
 
   - it: adds JARVIS_SECRET_KEY from existingSecret when auth.existingSecret is set
+    template: templates/deployment.yaml
     set:
       auth.provider: internal
       auth.existingSecret: jarvis-auth
@@ -377,6 +421,7 @@ tests:
                 key: secret-key
 
   - it: adds JARVIS_AUTH_OIDC_CLIENT_SECRET when auth.provider is oidc
+    template: templates/deployment.yaml
     set:
       auth.provider: oidc
       auth.existingSecret: jarvis-auth
@@ -394,6 +439,7 @@ tests:
                 key: oidc-client-secret
 
   - it: does not add JARVIS_AUTH_OIDC_CLIENT_SECRET when auth.provider is internal
+    template: templates/deployment.yaml
     set:
       auth.provider: internal
       auth.existingSecret: jarvis-auth
@@ -404,6 +450,7 @@ tests:
             name: JARVIS_AUTH_OIDC_CLIENT_SECRET
 
   - it: appends extraEnv entries to container env
+    template: templates/deployment.yaml
     set:
       extraEnv:
         - name: VAULT_TOKEN_FILE
@@ -416,6 +463,7 @@ tests:
             value: /var/run/secrets/workload/token
 
   - it: does not add extra env vars when extraEnv is empty
+    template: templates/deployment.yaml
     asserts:
       - notContains:
           path: spec.template.spec.containers[0].env
@@ -423,6 +471,7 @@ tests:
             name: VAULT_TOKEN_FILE
 
   - it: appends extraVolumeMounts to container
+    template: templates/deployment.yaml
     set:
       extraVolumeMounts:
         - name: my-secret
@@ -437,6 +486,7 @@ tests:
             readOnly: true
 
   - it: does not add extra volume mounts when extraVolumeMounts is empty
+    template: templates/deployment.yaml
     asserts:
       - equal:
           path: spec.template.spec.containers[0].volumeMounts
@@ -445,6 +495,7 @@ tests:
               mountPath: /data
 
   - it: appends extraVolumes to pod spec
+    template: templates/deployment.yaml
     set:
       extraVolumes:
         - name: my-secret
@@ -459,6 +510,7 @@ tests:
               secretName: my-secret
 
   - it: does not add projected token volume when serviceAccountTokenProjection is disabled
+    template: templates/deployment.yaml
     asserts:
       - notContains:
           path: spec.template.spec.volumes
@@ -471,6 +523,7 @@ tests:
               mountPath: /data
 
   - it: adds projected token volume and mount when serviceAccountTokenProjection is enabled
+    template: templates/deployment.yaml
     set:
       serviceAccountTokenProjection.enabled: true
     asserts:
@@ -491,6 +544,7 @@ tests:
             readOnly: true
 
   - it: sets audience on projected token when configured
+    template: templates/deployment.yaml
     set:
       serviceAccountTokenProjection.enabled: true
       serviceAccountTokenProjection.audience: vault
@@ -506,12 +560,144 @@ tests:
                     expirationSeconds: 3600
                     audience: vault
 
-  - it: renders no pod annotations by default
+  - it: renders only the checksum annotations by default
+    template: templates/deployment.yaml
     asserts:
+      - matchRegex:
+          path: spec.template.metadata.annotations["checksum/config"]
+          pattern: ^[a-f0-9]{64}$
+      - matchRegex:
+          path: spec.template.metadata.annotations["checksum/secret"]
+          pattern: ^[a-f0-9]{64}$
       - notExists:
-          path: spec.template.metadata.annotations
+          path: spec.template.metadata.annotations["prometheus.io/scrape"]
+
+  # A change to anything the pod only reads at startup (envFrom ConfigMap, chart-managed Secret) must change the pod
+  # template, or Kubernetes never rolls the Deployment (issue #264).
+  - it: omits checksum/secret when the chart renders no Secret
+    template: templates/deployment.yaml
+    set:
+      database.existingSecret: my-secret
+    asserts:
+      - matchRegex:
+          path: spec.template.metadata.annotations["checksum/config"]
+          pattern: ^[a-f0-9]{64}$
+      - notExists:
+          path: spec.template.metadata.annotations["checksum/secret"]
+
+  - it: adds checksum/secret when only the auth secret is chart-managed
+    template: templates/deployment.yaml
+    set:
+      database.existingSecret: my-secret
+      auth.provider: internal
+      auth.secretKey: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+    asserts:
+      - matchRegex:
+          path: spec.template.metadata.annotations["checksum/secret"]
+          pattern: ^[a-f0-9]{64}$
+
+  # The checksums must follow the rendered values, not merely exist. Chart and release metadata are pinned because they are part
+  # of the ConfigMap and Secret labels and names. When configmap.yaml or secret.yaml changes, `helm unittest` prints the new hash — update it here.
+  - it: checksum/config follows the rendered ConfigMap
+    template: templates/deployment.yaml
+    chart:
+      version: 0.0.0-test
+      appVersion: 0.0.0-test
+    release:
+      name: pinned
+      namespace: pinned
+    asserts:
+      - equal:
+          path: spec.template.metadata.annotations["checksum/config"]
+          value: 6f7ebc6a8f36435df7984692db7f9109bfeeab095cb10c731aa5beb0913cb45d
+
+  - it: checksum/config changes when a ConfigMap value changes
+    template: templates/deployment.yaml
+    chart:
+      version: 0.0.0-test
+      appVersion: 0.0.0-test
+    release:
+      name: pinned
+      namespace: pinned
+    set:
+      config.pollInterval: 45s
+    asserts:
+      - equal:
+          path: spec.template.metadata.annotations["checksum/config"]
+          value: 973dd00e9417cf4c675ab55bc67912ea337775fd91648d6d63bbd70ff2ca156f
+
+  - it: checksum/secret follows the rendered Secret
+    template: templates/deployment.yaml
+    chart:
+      version: 0.0.0-test
+      appVersion: 0.0.0-test
+    release:
+      name: pinned
+      namespace: pinned
+    asserts:
+      - equal:
+          path: spec.template.metadata.annotations["checksum/secret"]
+          value: 27382640f177d98dbb64c3365c8d28391a51e23f3bf6799b387b308bf09dc9d9
+
+  - it: checksum/secret changes when a Secret value changes
+    template: templates/deployment.yaml
+    chart:
+      version: 0.0.0-test
+      appVersion: 0.0.0-test
+    release:
+      name: pinned
+      namespace: pinned
+    set:
+      database.dsn: /data/other.db
+    asserts:
+      - equal:
+          path: spec.template.metadata.annotations["checksum/secret"]
+          value: 2bdf9ee04f067d908e6d7b27cd7da4bcdfb5ad42383bfeda9833919409fee909
+
+  - it: adds checksum/secret when only a cluster credential is chart-managed
+    template: templates/deployment.yaml
+    values:
+      - values/cluster-auth.yaml
+    set:
+      database.existingSecret: my-secret
+    asserts:
+      - matchRegex:
+          path: spec.template.metadata.annotations["checksum/secret"]
+          pattern: ^[a-f0-9]{64}$
+
+  - it: ignores podAnnotations that reuse a checksum key
+    template: templates/deployment.yaml
+    set:
+      podAnnotations:
+        checksum/config: mine
+        checksum/secret: mine
+        team: sre
+    asserts:
+      - matchRegex:
+          path: spec.template.metadata.annotations["checksum/config"]
+          pattern: ^[a-f0-9]{64}$
+      - matchRegex:
+          path: spec.template.metadata.annotations["checksum/secret"]
+          pattern: ^[a-f0-9]{64}$
+      - equal:
+          path: spec.template.metadata.annotations["team"]
+          value: sre
+
+  - it: keeps the checksum annotations next to user podAnnotations
+    template: templates/deployment.yaml
+    set:
+      podAnnotations:
+        team: sre
+    asserts:
+      - equal:
+          path: spec.template.metadata.annotations["team"]
+          value: sre
+      - matchRegex:
+          path: spec.template.metadata.annotations["checksum/config"]
+          pattern: ^[a-f0-9]{64}$
 
   - it: renders prometheus.io annotations when metrics.podAnnotations is enabled
+    template: templates/deployment.yaml
     set:
       metrics.podAnnotations: true
     asserts:
@@ -526,6 +712,7 @@ tests:
           value: /metrics
 
   - it: merges user podAnnotations with prometheus.io annotations
+    template: templates/deployment.yaml
     set:
       metrics.podAnnotations: true
       podAnnotations:
@@ -539,6 +726,7 @@ tests:
           value: "true"
 
   - it: respects custom volumeName and mountPath for projected token
+    template: templates/deployment.yaml
     set:
       serviceAccountTokenProjection.enabled: true
       serviceAccountTokenProjection.volumeName: vault-token

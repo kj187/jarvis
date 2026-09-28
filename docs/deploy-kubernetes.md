@@ -117,6 +117,29 @@ For HA debugging beyond "is the process up" — which pod currently holds
 leadership — see `GET /api/v1/status` in
 [PostgreSQL & HA](postgres-ha.md#observability).
 
+## Configuration changes roll the pods
+
+Jarvis reads its environment once, at startup. The chart therefore puts a
+checksum of the rendered ConfigMap (`checksum/config`) and of the Secret it
+creates (`checksum/secret`) into the pod template: a `helm upgrade` that changes
+a value such as `auth.mode`, `config.pollInterval` or a chart-managed secret
+rolls the Deployment by itself, and re-running the same chart version with the
+same values leaves the pods alone. The two keys belong to the chart; a
+`podAnnotations` entry with the same name is ignored.
+
+Two cases are outside what Helm can see. A Secret you supply through
+`database.existingSecret`, `auth.existingSecret` or
+`clusters[].auth.existingSecret` is not rendered by the chart, and an edit made
+directly on the cluster (`kubectl edit`) does not go through Helm at all. After
+either, restart the Deployment yourself (`kubectl rollout restart
+deployment/<name>`, the name `kubectl get deployments` shows) or let a controller
+such as [Stakater Reloader](https://github.com/stakater/Reloader) do it.
+
+The checksum of the chart-created Secret is visible to anyone who may read the
+Deployment, and it is a plain SHA-256 of the rendered manifest. Use strong,
+random values for the database password and any client secret you give the chart,
+or keep them in an `existingSecret`.
+
 ## Where to go next
 
 - [PostgreSQL & HA](postgres-ha.md) — leader election, snapshot distribution, failover
