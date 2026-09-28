@@ -3,6 +3,7 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { palette } from './generated-theme'
 import { backdropPalette, rgba } from './theme'
+import { chartHtml, type ChartSpec } from './charts'
 
 /**
  * Release-video recorder (.agents/skills/release-video/SKILL.md).
@@ -53,6 +54,11 @@ export interface CardContent {
    * with one supporting line and an optional command (e.g. `helm install …`).
    */
   tiles?: Array<{ title: string; text: string; code?: string }>
+  /**
+   * Chart slide (before/after bars or line charts, see charts.ts) instead of the cover layout; `title`
+   * and `eyebrow` head the slide. Animated by time like the backdrop, so it needs no extra wait.
+   */
+  chart?: Omit<ChartSpec, 'title' | 'eyebrow'>
 }
 
 interface Zoom { ts: number; z: number; cx: number; cy: number }
@@ -246,13 +252,15 @@ export class VideoRecorder {
    * each feature): the voice already starts on the slide, the picture resets
    * to the overview behind it, and the demo continues when it fades out — so
    * viewers always see where one feature ends and the next begins. Chapter
-   * slides also become the YouTube chapter timestamps (chapters.txt).
+   * slides also become the YouTube chapter timestamps (chapters.txt). `opts.underSlide` runs while the
+   * slide is up — use it to load a page the chapter shows, so the previous screen never flashes in
+   * between.
    */
   async scene(
     id: string,
     caption: { title: string; sub?: string } | null,
     run: () => Promise<void>,
-    opts: { chapter?: Chapter; chapterMs?: number } = {},
+    opts: { chapter?: Chapter; chapterMs?: number; underSlide?: () => Promise<void> } = {},
   ): Promise<void> {
     const start = now()
     this.closeCaption(start)
@@ -263,7 +271,9 @@ export class VideoRecorder {
       // Reset the zoom once the slide covers the picture; the scene zooms in visibly afterwards.
       await this.page.waitForTimeout(400)
       this.focus(null)
-      await this.page.waitForTimeout(Math.max(0, (opts.chapterMs ?? 3400) - 400))
+      // `underSlide` prepares what the slide reveals (e.g. navigates to another site) while it covers the
+      // picture; the slide stays up until both the hold time and the preparation are over.
+      await Promise.all([this.page.waitForTimeout(Math.max(0, (opts.chapterMs ?? 3400) - 400)), opts.underSlide?.()])
       this.card(null)
     }
     if (caption) this.captions.push({ title: caption.title, sub: caption.sub ?? '', start: now(), end: 0 })
@@ -332,7 +342,7 @@ export class VideoRecorder {
     const cardFrames: number[] = []
     if (this.cards.length > 0) {
       // renderCover leaves the app's origin (CSP) and sizes the viewport to the output; the cards reuse both.
-      const { outWidth, width } = this.dims
+      const { outWidth, width, height } = this.dims
       await this.renderCover(this.cards[0].content, logoB64)
 
       // In the video every card is an animated frame sequence at output size:
@@ -342,6 +352,14 @@ export class VideoRecorder {
         const edge = i === 0 || i === this.cards.length - 1
         const html = c.chapter !== undefined
           ? chapterHtml(c.content, c.chapter, chapterTitles, this.format, logoB64)
+          : c.content.chart
+            ? chartHtml(
+              { ...c.content.chart, title: c.content.title, eyebrow: c.content.eyebrow },
+              { width, height, square: this.format === 'square' },
+              { ...CARD_LOOK, blue: CARD_LOOK.accent },
+              logoB64,
+              backdropHtml('mesh', this.format, logoB64),
+            )
           : c.content.tiles?.length
             ? showcaseHtml(c.content, this.format, logoB64)
             : cardHtml(c.content, this.format, logoB64, this.appShot, edge ? 'owl' : 'mesh')
@@ -353,7 +371,11 @@ export class VideoRecorder {
         fs.mkdirSync(dir, { recursive: true })
         const frames = Math.max(1, Math.round((c.end - c.start) * CARD_FPS)) + 1
         for (let f = 0; f < frames; f++) {
-          await this.page.evaluate((t) => (window as unknown as { __draw: (t: number) => void }).__draw(t), f / CARD_FPS)
+          await this.page.evaluate((t) => {
+            const w = window as unknown as { __draw: (t: number) => void; __chart?: (t: number) => void }
+            w.__draw(t)
+            w.__chart?.(t)
+          }, f / CARD_FPS)
           await this.page.screenshot({ path: path.join(dir, `${String(f).padStart(5, '0')}.jpg`), type: 'jpeg', quality: 92, scale: 'css' })
         }
         cardFrames.push(frames)
