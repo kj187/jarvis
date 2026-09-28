@@ -1,3 +1,74 @@
+<a name="v2.0.0"></a>
+## [v2.0.0](https://github.com/kj187/jarvis/compare/v1.12.0...v2.0.0) (2026-09-28)
+
+### Breaking Changes
+
+* JARVIS_OIDC_ADMIN_CLAIM was renamed to
+JARVIS_OIDC_GROUPS_CLAIM, without an alias. The old variable is ignored, so
+an SSO admin loses the admin role at the next login until the variable is
+renamed. Rename it before upgrading.
+* Resolved-view regex filters now use RE2; search matches individual
+label names and values instead of serialized JSON. Equal resolve timestamps are
+ordered by event ID, and Alerts Overview summarizes the current page. Review saved
+resolved filters for JS-only regex or JSON-fragment searches. Live filters and the
+legacy resolved API response shape are unchanged.
+
+### Bug Fixes
+
+* **alerts:** reduce memory usage across history, WS and API ([#232](https://github.com/kj187/jarvis/issues/232))
+* **config:** roll the Deployment when chart-rendered configuration changes ([#267](https://github.com/kj187/jarvis/issues/267))
+* **db:** log the connection pool size SQLite actually uses ([#246](https://github.com/kj187/jarvis/issues/246))
+* **db:** index retention-sweep columns missing coverage ([#223](https://github.com/kj187/jarvis/issues/223))
+* **frontend:** make the Fast-Silence popover and list rows operable from the keyboard ([#245](https://github.com/kj187/jarvis/issues/245))
+* **frontend:** open alert details from the keyboard and correct popover semantics ([#242](https://github.com/kj187/jarvis/issues/242))
+* **frontend:** explain server-side regex only when a regex filter is set ([#236](https://github.com/kj187/jarvis/issues/236))
+* **silences:** add Values/Regex toggle to silence matcher value field ([#265](https://github.com/kj187/jarvis/issues/265))
+* **ws:** keep browsers connected when several alert events arrive at once ([#244](https://github.com/kj187/jarvis/issues/244))
+
+### Chores
+
+* run backend and E2E CI jobs in parallel ([#249](https://github.com/kj187/jarvis/issues/249))
+* **deps:** bump the minor-patch group across 1 directory with 8 updates ([#234](https://github.com/kj187/jarvis/issues/234))
+* **deps:** bump docker/build-push-action from 7.3.0 to 7.4.0 ([#231](https://github.com/kj187/jarvis/issues/231))
+* **deps:** bump docker/setup-qemu-action from 4.3.0 to 4.4.0 ([#230](https://github.com/kj187/jarvis/issues/230))
+* **deps:** bump docker/setup-buildx-action from 4.3.0 to 4.4.1 ([#229](https://github.com/kj187/jarvis/issues/229))
+* **deps:** bump codecov/codecov-action from 7.0.0 to 7.1.1 ([#225](https://github.com/kj187/jarvis/issues/225))
+* **deps:** bump modernc.org/sqlite from 1.58.0 to 1.59.0 in /backend ([#227](https://github.com/kj187/jarvis/issues/227))
+* **docker:** use curated release notes in release candidates ([#252](https://github.com/kj187/jarvis/issues/252))
+* **video:** add chart slides, an OIDC mode and an under-slide hook to the video tooling ([#268](https://github.com/kj187/jarvis/issues/268))
+* **video:** restyle video cards and covers with the design guide ([#238](https://github.com/kj187/jarvis/issues/238))
+* **video:** record narrated demo videos from the e2e stack ([#216](https://github.com/kj187/jarvis/issues/216))
+
+### Documentation
+
+* add pod memory before/after graphs to v2.0.0 release notes ([#257](https://github.com/kj187/jarvis/issues/257))
+* update v2.0.0 release notes with SSO groups changes ([#256](https://github.com/kj187/jarvis/issues/256))
+* slim the AI agent context and simplify its checks ([#248](https://github.com/kj187/jarvis/issues/248))
+* define ownership and lifecycle of critical invariants ([#247](https://github.com/kj187/jarvis/issues/247))
+* regenerate all screenshots ([#241](https://github.com/kj187/jarvis/issues/241))
+* point README at the docs site and fix the home hero screenshot alignment ([#222](https://github.com/kj187/jarvis/issues/222))
+* publish the documentation as a website on GitHub Pages ([#215](https://github.com/kj187/jarvis/issues/215))
+* **silences:** add regex matcher screenshot and sync e2e doc row ([#266](https://github.com/kj187/jarvis/issues/266))
+
+### Features
+
+* **config:** add admin-managed global settings foundation ([#259](https://github.com/kj187/jarvis/issues/259))
+* **config:** expose OIDC groups/admin claim and retention sweep as chart values ([#258](https://github.com/kj187/jarvis/issues/258))
+* **config:** read OIDC groups claim and show it in an account panel ([#255](https://github.com/kj187/jarvis/issues/255))
+* **config:** configurable silence durations per instance and per user ([#239](https://github.com/kj187/jarvis/issues/239))
+* **config:** add native Helm chart upstream auth and restructure the documentation site ([#220](https://github.com/kj187/jarvis/issues/220))
+* **frontend:** copy a link to an alert from the detail panel ([#237](https://github.com/kj187/jarvis/issues/237))
+* **frontend:** resume the interrupted action after login instead of losing it ([#235](https://github.com/kj187/jarvis/issues/235))
+* **frontend:** design system, accessibility fixes and a refreshed documentation site ([#233](https://github.com/kj187/jarvis/issues/233))
+* **frontend:** improve documentation media ([#226](https://github.com/kj187/jarvis/issues/226))
+* **frontend:** animated owl-mesh backdrop for empty alert and silence views ([#213](https://github.com/kj187/jarvis/issues/213))
+* **silences:** extend a running silence with one click ([#240](https://github.com/kj187/jarvis/issues/240))
+
+### Security
+
+* **api:** drop per-IP rate limits, keep one global login limit ([#251](https://github.com/kj187/jarvis/issues/251))
+* **frontend:** update website build dependencies ([#221](https://github.com/kj187/jarvis/issues/221))
+
 <a name="v1.12.0"></a>
 ## [v1.12.0](https://github.com/kj187/jarvis/compare/v1.11.0...v1.12.0) (2026-09-15)
 

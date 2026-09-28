@@ -68,7 +68,7 @@ Just looking around? [the demo guide](https://kj187.github.io/jarvis/demo) bring
 ```yaml
 services:
   jarvis:
-    image: ghcr.io/kj187/jarvis:1.12.0
+    image: ghcr.io/kj187/jarvis:2.0.0
     ports:
       - "8080:8080"
     volumes:

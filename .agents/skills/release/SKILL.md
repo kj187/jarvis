@@ -50,7 +50,7 @@ Record the decision; it drives two later steps (step 10a and step 13).
 1. `git status --porcelain` — working tree must be clean.
 2. `git branch --show-current` — must be `main`.
 3. Version sanity: valid semver, strictly greater than
-   `git describe --tags --abbrev=0`, tag `vX.Y.Z` does not exist yet
+   `git describe --tags --abbrev=0 --exclude '*-rc.*'`, tag `vX.Y.Z` does not exist yet
    (`git tag -l vX.Y.Z` and `git ls-remote --tags origin vX.Y.Z`).
 4. HEAD is pushed and CI is green:
    ```bash
@@ -61,7 +61,7 @@ Record the decision; it drives two later steps (step 10a and step 13).
    running, wait (`gh run watch`). If red, abort.
 5. Local backend tests: `cd backend && go test ./...` — must be green.
 6. **Classify breaking changes** (decides the version numbers below):
-   - **App**: `git log $(git describe --tags --abbrev=0)..HEAD --grep='BREAKING CHANGE'`
+   - **App**: `git log $(git describe --tags --abbrev=0 --exclude '*-rc.*')..HEAD --grep='BREAKING CHANGE'`
      plus a read of the commits since the last tag (removed/renamed env vars
      or config, changed API/WS contract, required manual migration). A
      breaking app change requires a major `X.0.0` — if the requested version
@@ -143,17 +143,17 @@ Record the decision; it drives two later steps (step 10a and step 13).
 11. **Bump versions in README, the deploy/upgrade guides, the demo stack and the homepage** —
    the image tag is the **app** version, the `helm install --version` is the **chart**
    version (decoupled — never the app version, that chart doesn't exist). README,
-   `docs/deploy-compose.md` and `docs/deploy-kubernetes.md` carry the app and chart
-   examples respectively, `docs/upgrade.md` also names both in its cosign examples,
+   `docs/getting-started.md`, `docs/deploy-compose.md` and `docs/deploy-kubernetes.md`
+   carry the app and chart examples respectively, `docs/upgrade.md` also names both in its cosign examples,
    `compose.demo.yml` pins the app image, and `website/index.md` pins the app image in
    its "Getting started" snippet.
    Run before step 12 bumps `Chart.yaml`:
    ```bash
-   PREV=$(git describe --tags --abbrev=0)
+   PREV=$(git describe --tags --abbrev=0 --exclude '*-rc.*')
    PREV_CLEAN="${PREV#v}"
    PREV_CHART=$(awk '/^version:/{print $2}' charts/jarvis/Chart.yaml)
    # perl -pi instead of sed -i: identical on macOS (BSD sed) and Linux (GNU sed)
-   for f in README.md docs/deploy-compose.md docs/deploy-kubernetes.md docs/upgrade.md compose.demo.yml website/index.md; do
+   for f in README.md docs/getting-started.md docs/deploy-compose.md docs/deploy-kubernetes.md docs/upgrade.md compose.demo.yml website/index.md; do
      perl -pi -e "s|ghcr.io/kj187/jarvis:\Q${PREV_CLEAN}\E|ghcr.io/kj187/jarvis:X.Y.Z|g" "$f"
      perl -pi -e "s|--version \Q${PREV_CHART}\E |--version <chart version> |g" "$f"
      perl -pi -e "s|charts/jarvis:\Q${PREV_CHART}\E|charts/jarvis:<chart version>|g" "$f"
@@ -161,7 +161,7 @@ Record the decision; it drives two later steps (step 10a and step 13).
    ```
    Verify every occurrence changed:
    ```bash
-   grep -rn "ghcr.io/kj187/jarvis:\|--version \|charts/jarvis:" README.md docs/deploy-compose.md docs/deploy-kubernetes.md docs/upgrade.md compose.demo.yml website/index.md
+   grep -rn "ghcr.io/kj187/jarvis:\|--version \|charts/jarvis:" README.md docs/getting-started.md docs/deploy-compose.md docs/deploy-kubernetes.md docs/upgrade.md compose.demo.yml website/index.md
    ```
 12. **Bump chart versions** in `charts/jarvis/Chart.yaml` — chart version is
     **decoupled** from the app version, but an app release must ship a chart
@@ -194,7 +194,7 @@ Record the decision; it drives two later steps (step 10a and step 13).
     ```bash
     printf '%s\n' CHANGELOG.md charts/jarvis/CHANGELOG.md .github/release-notes/vX.Y.Z.md \
       | scripts/check-changelogs.sh
-    git add CHANGELOG.md README.md docs/deploy-compose.md docs/deploy-kubernetes.md docs/upgrade.md docs/videos.md compose.demo.yml charts/jarvis/Chart.yaml charts/jarvis/CHANGELOG.md .github/release-notes/vX.Y.Z.md
+    git add CHANGELOG.md README.md docs/getting-started.md docs/deploy-compose.md docs/deploy-kubernetes.md docs/upgrade.md docs/videos.md compose.demo.yml charts/jarvis/Chart.yaml charts/jarvis/CHANGELOG.md .github/release-notes/vX.Y.Z.md
     git commit -s -m "chore(release): prepare vX.Y.Z"
     ```
 

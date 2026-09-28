@@ -12,6 +12,15 @@ watch them either here or alongside the full technical changelog.
 
 ## Release videos
 
+### v2.0.0
+
+Paged Resolved history, far less memory, the silence regex switch and one-click
+Extend, a login that keeps your place, alert links and the documentation website.
+
+<a class="video-cover" href="https://www.youtube.com/watch?v=OC_-txt7irc" target="_blank" rel="noreferrer"><img class="no-lightbox" src="https://img.youtube.com/vi/OC_-txt7irc/maxresdefault.jpg" alt="Play Jarvis v2.0.0 release highlights on YouTube"></a>
+
+[Watch the v2.0.0 release video on YouTube](https://www.youtube.com/watch?v=OC_-txt7irc) · [Read the v2.0.0 release notes](https://github.com/kj187/jarvis/releases/tag/v2.0.0)
+
 ### v1.12.0
 
 Saved filters, Pin & Hide labels, toolbar grouping, the multi-column card grid

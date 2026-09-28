@@ -10,7 +10,7 @@ alone.
 
 ```bash
 helm install jarvis oci://ghcr.io/kj187/charts/jarvis \
-  --version 2.0.0 \
+  --version 2.1.0 \
   --set clusters[0].name=production \
   --set clusters[0].alertmanagerUrl=http://alertmanager:9093
 ```
@@ -23,7 +23,7 @@ history. The chart fails the render rather than deploying that — see
 
 ```bash
 helm install jarvis oci://ghcr.io/kj187/charts/jarvis \
-  --version 2.0.0 \
+  --version 2.1.0 \
   --set replicaCount=3 \
   --set database.dsn='postgres://jarvis:secret@postgres:5432/jarvis?sslmode=require' \
   --set clusters[0].name=production \
