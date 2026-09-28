@@ -703,6 +703,17 @@ export function escapeRegexValue(s: string): string {
 }
 
 /**
+ * True if a value typed into `SilenceForm`'s literal tag list for a `=~`/`!~`
+ * matcher was evidently meant as a regex (e.g. `renovate-.*`) — the form then
+ * switches that row to raw regex mode instead of escaping it into a literal
+ * that matches nothing. A bare `.` doesn't count: it is common in real label
+ * values (hostnames, IPs) and those must stay literal.
+ */
+export function looksLikeRegexPattern(s: string): boolean {
+  return /[*+?^${}()[\]\\]/.test(s)
+}
+
+/**
  * Inverse of `escapeRegexValue` for a single already-unescaped-boundary
  * segment: a backslash always means "literal next character" in the
  * pipe-separated-literal-tags model `SilenceForm` edits regex matchers with,

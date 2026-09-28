@@ -4,6 +4,7 @@ import { DEFAULT_SETTINGS } from './settingsUtils'
 import { parseSilenceDuration } from './silenceDurations'
 import {
   escapeRegexValue,
+  looksLikeRegexPattern,
   formatAckDuration,
   formatSilenceDuration,
   formatTime,
@@ -131,6 +132,20 @@ describe('escapeRegexValue', () => {
         expect(() => new RegExp(escapeRegexValue(s))).not.toThrow()
       }),
     )
+  })
+})
+
+describe('looksLikeRegexPattern', () => {
+  it('flags values typed with regex intent', () => {
+    for (const s of ['renovate-.*', 'web-.+', 'web-[0-9]', 'web(1|2)', '^web', 'web$', 'a{2}', 'web-\\d', 'colou?r']) {
+      expect(looksLikeRegexPattern(s)).toBe(true)
+    }
+  })
+
+  it('does not flag plain label values, including dotted hostnames and IPs', () => {
+    for (const s of ['renovate-foo', '10.0.0.1', 'web1.example.com', 'team-snowball', 'a:b/c_d', '']) {
+      expect(looksLikeRegexPattern(s)).toBe(false)
+    }
   })
 })
 

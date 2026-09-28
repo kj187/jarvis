@@ -3,17 +3,18 @@ import { useQueryClient } from '@tanstack/react-query'
 import { format, addSeconds, parse, isValid } from 'date-fns'
 import { enUS } from 'date-fns/locale'
 import { DayPicker } from 'react-day-picker'
-import { Plus, X, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, ArrowLeft, Check, Loader2, CircleAlert, RotateCcw, Code } from 'lucide-react'
+import { Plus, X, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, ArrowLeft, Check, Loader2, CircleAlert, RotateCcw } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Select } from '@/components/ui/select'
+import { InfoHint } from '@/components/ui/info-hint'
 import { DateTimePicker } from '@/components/ui/date-time-picker'
 import { useAlerts } from '@/hooks/useAlerts'
 import { useSilences } from '@/hooks/useSilences'
 import { useSilenceTemplates } from '@/hooks/useSilenceTemplates'
-import { silenceWouldMatchAlert, hasUnevaluableRegexMatcher, pickIdentifierLabel, tzAbbr, computeGroupLabelValues, escapeRegexValue, unescapeRegex, isRoundTrippableTagList } from '@/lib/alertUtils'
+import { silenceWouldMatchAlert, hasUnevaluableRegexMatcher, pickIdentifierLabel, tzAbbr, computeGroupLabelValues, escapeRegexValue, unescapeRegex, looksLikeRegexPattern, isRoundTrippableTagList } from '@/lib/alertUtils'
 import { upsertSilence, triggerPoll } from '@/api/client'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { useAuthStore } from '@/store/authStore'
@@ -80,9 +81,15 @@ interface TagValueInputProps {
   placeholder?: string
   className?: string
   maxTags?: number
+  /**
+   * Set for `=~`/`!~` rows: a typed (not picked) value with regex syntax is
+   * handed here instead of becoming a literal chip, so the row can switch to
+   * raw regex mode (`looksLikeRegexPattern`).
+   */
+  onRegexTyped?: (typed: string) => void
 }
 
-function TagValueInput({ value, onChange, suggestions = [], placeholder, className, maxTags }: TagValueInputProps) {
+function TagValueInput({ value, onChange, suggestions = [], placeholder, className, maxTags, onRegexTyped }: TagValueInputProps) {
   const tags = value ? value.split('|').filter(Boolean) : []
   const [inputVal, setInputVal] = useState('')
   const [open, setOpen] = useState(false)
@@ -102,6 +109,15 @@ function TagValueInput({ value, onChange, suggestions = [], placeholder, classNa
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === 'Enter' || e.key === ',') {
+      const typed = inputVal.trim()
+      if (onRegexTyped && looksLikeRegexPattern(typed)) {
+        // A comma inside a pattern (`a{1,3}`) is part of the regex, not a separator.
+        if (e.key === ',') return
+        e.preventDefault()
+        onRegexTyped(typed)
+        setInputVal('')
+        return
+      }
       e.preventDefault()
       addTag(inputVal)
     }
@@ -589,6 +605,8 @@ export function SilenceForm({
 
   const [results, setResults] = useState<Map<string, ClusterResult>>(new Map())
   const [affectedOpen, setAffectedOpen] = useState(false)
+  // Row whose raw regex field should take focus when it mounts after an automatic switch.
+  const [rawFocusId, setRawFocusId] = useState<number | null>(null)
 
   const silenceGroups = useMemo(() => {
     if (isEdit || !prefillAlerts?.length) return []
@@ -636,9 +654,24 @@ export function SilenceForm({
     )
   }
 
-  /** Toggles a regex matcher between the tag-list editor and a raw pattern text field. */
-  function toggleMatcherRaw(id: number) {
-    setMatchers((m) => m.map((x) => (x.id === id ? { ...x, raw: !x.raw } : x)))
+  /** Switches a regex matcher between the tag-list editor and a raw pattern text field. */
+  function setMatcherRaw(id: number, raw: boolean) {
+    setMatchers((m) => m.map((x) => (x.id === id ? { ...x, raw } : x)))
+  }
+
+  /**
+   * A value typed with regex syntax into a row's tag list: switch the row to raw regex mode
+   * and append the pattern. Existing chips are escaped so they keep matching as literals.
+   */
+  function switchToRawWithPattern(id: number, pattern: string) {
+    setMatchers((m) =>
+      m.map((x) => {
+        if (x.id !== id) return x
+        const literals = x.value.split('|').filter(Boolean).map(escapeRegexValue)
+        return { ...x, raw: true, value: [...literals, pattern].join('|') }
+      }),
+    )
+    setRawFocusId(id)
   }
 
   // ── Clusters ────────────────────────────────────────────────────────────────
@@ -1043,35 +1076,60 @@ export function SilenceForm({
                   <option value="=~">=~</option>
                   <option value="!~">!~</option>
                 </Select>
-                <div className="flex min-w-0 items-center gap-1">
+                <div className="flex min-w-0 items-start gap-1.5">
+                  {(m.operator === '=~' || m.operator === '!~') && (
+                    <div className="flex h-8 shrink-0 items-center gap-1 pr-0.5">
+                      <div
+                        role="group"
+                        aria-label="Value mode"
+                        className="flex h-7 items-center rounded-control bg-muted p-0.5"
+                      >
+                        {([
+                          [false, 'Values'],
+                          [true, 'Regex'],
+                        ] as const).map(([raw, label]) => (
+                          <button
+                            key={label}
+                            type="button"
+                            aria-pressed={Boolean(m.raw) === raw}
+                            onClick={() => setMatcherRaw(m.id, raw)}
+                            className={cn(
+                              'h-full rounded-compact px-2 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                              Boolean(m.raw) === raw
+                                ? 'bg-background font-medium text-foreground shadow-sm'
+                                : 'text-muted-foreground hover:text-foreground',
+                            )}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                      <InfoHint size="sm" label="How regex matcher values are read">
+                        <p><strong>Values</strong> — each entry matches exactly one label value, literally. <code>10.0.0.1</code> matches only that value.</p>
+                        <p className="mt-1.5"><strong>Regex</strong> — a pattern such as <code>renovate-.*</code>, anchored like Alertmanager: it must match the whole value.</p>
+                        <p className="mt-1.5">Typing regex syntax (<code>*</code>, <code>+</code>, <code>?</code>, brackets, <code>^</code>, <code>$</code>, <code>\</code>) into Values switches to Regex automatically.</p>
+                      </InfoHint>
+                    </div>
+                  )}
                   {m.raw ? (
                     <Input
                       value={m.value}
                       onChange={(e) => updateMatcher(m.id, 'value', e.target.value)}
-                      placeholder="raw regex pattern"
-                      className="min-w-0 font-mono text-xs"
+                      placeholder="regex, e.g. renovate-.*"
+                      aria-label="Regex pattern"
+                      autoFocus={rawFocusId === m.id}
+                      className="min-w-0 flex-1 font-mono text-xs"
                     />
                   ) : (
                     <TagValueInput
                       value={m.value}
                       onChange={(v) => updateMatcher(m.id, 'value', v)}
                       suggestions={labelSuggestions.get(m.name) ?? []}
-                      placeholder="value"
-                      className="min-w-0"
+                      placeholder={m.operator === '=~' || m.operator === '!~' ? 'exact values' : 'value'}
+                      className="min-w-0 flex-1"
                       maxTags={m.operator === '=' || m.operator === '!=' ? 1 : undefined}
+                      onRegexTyped={m.operator === '=~' || m.operator === '!~' ? (p) => switchToRawWithPattern(m.id, p) : undefined}
                     />
-                  )}
-                  {(m.operator === '=~' || m.operator === '!~') && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className={cn('h-8 w-8 shrink-0', m.raw && 'text-primary')}
-                      onClick={() => toggleMatcherRaw(m.id)}
-                      title={m.raw ? 'Switch to tag list (comma/pipe-separated literal values)' : 'Switch to raw regex pattern'}
-                    >
-                      <Code className="h-3.5 w-3.5" />
-                    </Button>
                   )}
                 </div>
                 <Button

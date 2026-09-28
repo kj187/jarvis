@@ -211,7 +211,9 @@ supposed to cover are still firing.
    shows cluster and receiver as chips, but they are not real alert labels
    upstream. A silence must match on the alert's own labels.
 2. **Regex matchers are anchored in Alertmanager.** `instance=~"web"` does not
-   match `web-01`; Alertmanager evaluates `^(?:web)$`. Use `web.*`.
+   match `web-01`; Alertmanager evaluates `^(?:web)$`. Use `web.*`, entered
+   with the value field in *Regex* mode — in *Values* mode each entry is an
+   exact value (typing regex syntax there switches the row to *Regex*).
 3. **The silence was created against one Alertmanager of an HA pair.** Members
    gossip silences between themselves; if they are not actually clustered, the
    silence exists on one member only.
