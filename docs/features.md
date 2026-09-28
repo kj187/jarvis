@@ -338,6 +338,8 @@ The silence creation form is designed to make it fast and safe to create silence
 - For `=~` / `!~`, a **Values | Regex** switch next to the value field sets how the value is read: *Values* takes one or more exact values (each matches literally, so `10.0.0.1` never matches `10a0b0c1`), *Regex* takes a pattern such as `renovate-.*`. Typing a value with regex syntax (`*`, `+`, `?`, brackets, `^`, `$`, `\`) into *Values* switches the row to *Regex* automatically; values you already entered stay literal
 - Add as many matchers as needed; all are ANDed
 
+![Regex matcher in the silence form](assets/feature-silence-create-regex.png)
+
 **Duration:**
 - A days / hours / minutes spinner — set any duration you need
 - Or switch to calendar mode to pick an exact end date and time
