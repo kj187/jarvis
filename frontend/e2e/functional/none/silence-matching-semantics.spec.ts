@@ -172,4 +172,40 @@ test.describe('Silence matching semantics (Alertmanager parity — S-01)', () =>
     await expect.poll(() => alertState('10.0.0.2'), { timeout: 10_000 }).toBe('suppressed')
     await expect.poll(() => alertState('10a0b0c1'), { timeout: 10_000 }).toBe('active')
   })
+  test('a value typed with regex syntax under =~ switches the row to Regex mode and matches as a pattern', async ({ page, am, jarvis }) => {
+    await dismissNoAuthNotice(page)
+    await am.fire([
+      { labels: { alertname: 'RegexIntentTest', instance: 'renovate-alpha' } },
+      { labels: { alertname: 'RegexIntentTest', instance: 'renovate-beta' } },
+      { labels: { alertname: 'RegexIntentTest', instance: 'other-gamma' } },
+    ])
+    await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, 3)
+
+    await page.goto('/')
+    const dialog = await openSilenceForm(page)
+
+    await fillSilenceLabel(dialog, 'instance')
+    await selectOperator(dialog, '=~')
+    const mode = dialog.getByRole('group', { name: 'Value mode' })
+    await expect(mode.getByRole('button', { name: 'Values' })).toHaveAttribute('aria-pressed', 'true')
+
+    const valueInput = getValueInput(dialog)
+    await valueInput.fill('renovate-.*')
+    await valueInput.press('Enter')
+
+    // Before the fix the chip was escaped into the literal `renovate-\.\*` — 0 affected
+    // alerts, and a silence that suppressed nothing. Now the row flips to Regex mode.
+    await expect(mode.getByRole('button', { name: 'Regex' })).toHaveAttribute('aria-pressed', 'true')
+    await expect(dialog.getByPlaceholder(/^regex, e\.g\./)).toHaveValue('renovate-.*')
+
+    await expect(matchBadge(dialog)).toBeVisible({ timeout: 8_000 })
+    await expect.poll(() => matchCount(dialog)).toBe(2)
+
+    await fillAuthorReasonAndSubmit(dialog, 'regex-intent auto-switch test')
+    await jarvis.poll()
+
+    await expect.poll(() => alertState('renovate-alpha'), { timeout: 10_000 }).toBe('suppressed')
+    await expect.poll(() => alertState('renovate-beta'), { timeout: 10_000 }).toBe('suppressed')
+    await expect.poll(() => alertState('other-gamma'), { timeout: 10_000 }).toBe('active')
+  })
 })

@@ -327,7 +327,7 @@ test('F17 silence from alert detail panel is pre-filled with alert labels', asyn
   await page.getByRole('button', { name: 'Cancel' }).first().click()
 })
 
-test('F4 regex operator allows entering regex-special characters as tag values', async ({ page }) => {
+test('F4 regex operator keeps dotted values literal and switches to Regex mode for a pattern', async ({ page }) => {
   await dismissNoAuthNotice(page)
   await page.goto('/')
   const dialog = await openSilenceForm(page)
@@ -345,10 +345,14 @@ test('F4 regex operator allows entering regex-special characters as tag values',
   // Tag chip shows the raw value
   await expect(dialog.locator('.flex.min-h-8').getByText('web.server').first()).toBeVisible()
 
-  // Enter another regex value with wildcard chars
+  // A value with regex syntax is a pattern, not a literal: the row switches to Regex mode,
+  // the existing chip stays literal (escaped) and the pattern is appended verbatim.
   await valueInput.fill('api.*')
   await valueInput.press('Enter')
-  await expect(dialog.locator('.flex.min-h-8').getByText('api.*').first()).toBeVisible()
+  await expect(
+    dialog.getByRole('group', { name: 'Value mode' }).getByRole('button', { name: 'Regex' }),
+  ).toHaveAttribute('aria-pressed', 'true')
+  await expect(dialog.getByLabel('Regex pattern')).toHaveValue('web\\.server|api.*')
 })
 
 test('F6 overlap warning shows when an existing silence already covers the same alerts', async ({ page, am, jarvis }) => {
