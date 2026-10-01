@@ -264,6 +264,7 @@ The detail panel is the central hub for working with a single alert. It slides i
 ![Detail Panel — Details tab](assets/feature-detail-tab-details.png)
 
 - Complete label set, rendered as key-value pairs
+- **Metadata** section above the labels, in two columns: the alert's **fingerprint** (the identifier that uniquely identifies it — a hash of its labels, the same value Alertmanager uses — with a copy button for finding it in Alertmanager, the API, or logs), its **cluster**, when it **started** and was **first seen**, the Alertmanager **receivers** it is routed to, and a link to its **source** (the rule's `generatorURL`, shown only when it is an `http(s)` URL)
 - All annotations, including `description` and `summary`
 - **Dynamic link buttons**: any label or annotation whose value is an absolute URL (`http://` or `https://`) automatically renders as a clickable button using the key name as the label — no configuration needed. Examples: `dashboard=https://grafana.example.com/d/abc`, `ticket=https://jira.example.com/ISSUE-1`
 - **Runbook**: the `runbook` key (label or annotation) is handled specially:
