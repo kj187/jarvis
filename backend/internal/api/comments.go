@@ -6,6 +6,7 @@ import (
 
 	"github.com/kj187/jarvis/backend/internal/auth"
 	"github.com/kj187/jarvis/backend/internal/fanout"
+	"github.com/kj187/jarvis/backend/internal/history"
 	"github.com/kj187/jarvis/backend/internal/models"
 	"github.com/labstack/echo/v4"
 )
@@ -36,6 +37,23 @@ func (s *Server) getComments(c echo.Context) error {
 		"comments": comments,
 		"total":    total,
 	})
+}
+
+// GET /api/v1/alerts/comment-counts
+// Comment count per alert currently in the live snapshot, keyed
+// "<cluster>::<fingerprint>"; alerts without comments are omitted.
+func (s *Server) getCommentCounts(c echo.Context) error {
+	counts, err := s.store.CountCommentsByAlert()
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to count comments")
+	}
+	out := make(map[string]int)
+	for _, a := range s.alertStore.Get() {
+		if n := counts[history.ClaimKey{Fingerprint: a.Fingerprint, ClusterName: a.ClusterName}]; n > 0 {
+			out[a.ClusterName+"::"+a.Fingerprint] = n
+		}
+	}
+	return c.JSON(http.StatusOK, map[string]interface{}{"counts": out})
 }
 
 // POST /api/v1/alerts/:fingerprint/comments
