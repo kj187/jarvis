@@ -106,8 +106,9 @@ or reuse one; retire in place (`docs/ai-agents.md`).
 21. **Globally mounted browser hooks never load unbounded DB history to compute
     a count** — SQL aggregates; history lists paginated or streamed;
     cancellation reaches the database.
-22. **Every live resolved-buffer entry expires with its own episode after 20
-    minutes** on leaders and followers; re-ingest never extends it; the sweep
+22. **Every live resolved-buffer entry expires with its own episode after the
+    configured buffer TTL** (`JARVIS_RESOLVED_BUFFER_TTL`, default 20 minutes)
+    on leaders and followers; re-ingest never extends it; the sweep
     never touches active last-good alerts or persistent history.
 
 ## Workflow Rules — always follow

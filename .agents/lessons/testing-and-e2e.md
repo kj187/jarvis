@@ -189,3 +189,7 @@ both the active list and the resolved buffer; `testReset` uses it instead of
 `Set(nil)`. `Set(nil)` keeps its production semantics for the real poll loop.
 Any store with a deliberately-persisted buffer/cache needs an explicit
 test-only full-wipe method — `Set(nil)`-shaped "clear" calls are not it.
+Specs that need a buffer entry on purpose (`recently-resolved.spec.ts`) rely
+on exactly this reset for isolation and create the entry with `am.resolve()`
+plus `waitForResolvedBuffer()` (the buffer window is the instance's
+`JARVIS_RESOLVED_BUFFER_TTL`, 20 minutes in the e2e stack).

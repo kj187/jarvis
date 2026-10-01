@@ -76,7 +76,7 @@ test('resolved view shows loading and retry states and only fetches on demand', 
   })
 
   await page.goto('/?state=active')
-  await page.getByTitle('Resolved').click()
+  await page.getByRole('button', { name: 'Resolved', exact: true }).click()
   await expect(page.getByTestId('resolved-loading')).toBeVisible()
   releaseFirst?.()
   await expect(page.getByText('Failed to load resolved alerts.')).toBeVisible({ timeout: 10_000 })
@@ -97,7 +97,7 @@ test('leaving resolved mode aborts its in-flight request', async ({ page }) => {
   })
 
   await page.goto('/?state=active')
-  await page.getByTitle('Resolved').click()
+  await page.getByRole('button', { name: 'Resolved', exact: true }).click()
   await expect(page.getByTestId('resolved-loading')).toBeVisible()
   await page.getByTitle('Active').click()
   await expect.poll(() => requestFailed).toBe(true)

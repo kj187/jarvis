@@ -4,7 +4,7 @@ import { useAlerts } from '@/hooks/useAlerts'
 import { useSilences } from '@/hooks/useSilences'
 import { useUIStore } from '@/store/uiStore'
 import { useSettingsStore } from '@/store/useSettingsStore'
-import { computeLabelBreakdown, getEffectiveAlertState, labelColorStyle } from '@/lib/alertUtils'
+import { computeLabelBreakdown, matchesStateFilter, labelColorStyle } from '@/lib/alertUtils'
 import { cn } from '@/lib/utils'
 
 interface AlertsOverviewModalProps {
@@ -34,7 +34,8 @@ export function AlertsOverviewModal({ open, onClose, resolvedAlerts = [], resolv
 
   const basisAlerts = useMemo(() => {
     if (isResolvedMode || !filters.state) return alerts
-    return alerts.filter((a) => getEffectiveAlertState(a, silences) === filters.state)
+    // Never the recently-resolved buffer entries: the overview summarizes the current state tab only.
+    return alerts.filter((a) => matchesStateFilter(a, filters.state, silences, false))
   }, [alerts, filters.state, isResolvedMode, silences])
 
   const breakdown = useMemo(() => computeLabelBreakdown(basisAlerts), [basisAlerts])

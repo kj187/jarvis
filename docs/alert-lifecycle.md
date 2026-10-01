@@ -124,14 +124,15 @@ When an alert disappears from a poll snapshot, three things happen:
 
 1. **A `resolved` event is recorded** immediately (inheriting the episode's
    `starts_at`, so the history stays internally consistent).
-2. **The alert stays visible in the UI for 20 minutes**, greyed out in a
-   "resolved buffer", so operators see recent resolutions without digging
-   into the history view. After 20 minutes it moves to the resolved/history
-   view only. If it re-fires within those 20 minutes it simply returns to
-   the active list. One central once-per-second sweep expires entries by the
+2. **The alert stays available for 20 minutes** (by default, see
+   `JARVIS_RESOLVED_BUFFER_TTL`) in a "resolved buffer", so operators can
+   show recent resolutions with the **Recently resolved** toggle without
+   digging into the history view. After that window it moves to the
+   resolved/history view only. If it re-fires within the window it simply
+   returns to the active list. One central once-per-second sweep expires entries by the
    timestamp of their own resolved episode; there is no timer or goroutine
-   per alert. On startup, only still-live resolutions from the preceding 20
-   minutes are streamed from the database into this buffer. This affects the
+   per alert. On startup, only still-live resolutions from the preceding buffer
+   window are streamed from the database into this buffer. This affects the
    live display only — the complete lifecycle remains in history.
 3. **Active claims are auto-released — but only after a delay** of
    `max(20min, 2 × grace period)`, and only if the alert is *still* resolved
@@ -201,7 +202,7 @@ grace-period involvement — nothing resolved.
 | Occurrence counts | ✓ | ✓ | ✓ |
 | Comments & claim history | ✓ | ✓ | ✓ |
 | Active claims | ✓ | ✓ (no phantom auto-release) | ✓ |
-| Resolved-buffer visibility (20 min, greyed out) | ✓ (re-seeded from the DB's recent resolves) | ✓ | ✓ |
+| Resolved-buffer visibility (default 20 min, "Recently resolved" toggle) | ✓ (re-seeded from the DB's recent resolves) | ✓ | ✓ |
 | In-memory poll snapshot | rebuilt on first poll | frozen per failed cluster | rebuilt |
 
 ## Related configuration

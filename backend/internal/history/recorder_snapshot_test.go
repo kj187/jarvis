@@ -79,7 +79,7 @@ func TestFollower_ExpiredResolvedRemovedFromStoreAndCache(t *testing.T) {
 		"a": {
 			alerts: []models.EnrichedAlert{
 				makeEnrichedAlert("active", "active", "a"),
-				resolvedAlertAt("resolved", "a", now.Add(-ResolvedBufferTTL+time.Nanosecond)),
+				resolvedAlertAt("resolved", "a", now.Add(-DefaultResolvedBufferTTL+time.Nanosecond)),
 			},
 			takenAt: now,
 		},
@@ -108,7 +108,7 @@ func TestFollower_OldSnapshotCannotResurrect(t *testing.T) {
 	rec.now = func() time.Time { return now }
 	rec.alertStore.now = rec.now
 	payload, err := encodeSnapshot(pollSnapshot{Alerts: []models.EnrichedAlert{
-		resolvedAlertAt("old", "a", now.Add(-ResolvedBufferTTL)),
+		resolvedAlertAt("old", "a", now.Add(-DefaultResolvedBufferTTL)),
 	}})
 	if err != nil {
 		t.Fatalf("encodeSnapshot: %v", err)
@@ -133,10 +133,37 @@ func TestFollower_PromotionPreservesDeadline(t *testing.T) {
 	rec.rebuildFollowerAlertStore()
 	rec.rebuildFollowerAlertStore()
 
-	if rec.alertStore.ExpireResolved(base.Add(ResolvedBufferTTL - time.Nanosecond)) {
+	if rec.alertStore.ExpireResolved(base.Add(DefaultResolvedBufferTTL - time.Nanosecond)) {
 		t.Fatal("entry expired before original deadline")
 	}
-	if !rec.alertStore.ExpireResolved(base.Add(ResolvedBufferTTL)) {
+	if !rec.alertStore.ExpireResolved(base.Add(DefaultResolvedBufferTTL)) {
 		t.Fatal("rebuild/promotion extended the original deadline")
+	}
+}
+
+func TestRebuildFollowerAlertStore_DoesNotRehydrateClaimOnResolved(t *testing.T) {
+	rec, _ := newTestRecorder(t)
+	now := time.Date(2026, 9, 17, 10, 0, 0, 0, time.UTC)
+	rec.now = func() time.Time { return now }
+	rec.alertStore.now = rec.now
+	// A claim row still exists (release runs delayed after a resolve); the leader already
+	// dropped it from the resolved entry, so the follower must not put it back.
+	if err := rec.store.UpsertFingerprint("fp1", "TestAlert", "a", map[string]string{"alertname": "TestAlert"}); err != nil {
+		t.Fatalf("UpsertFingerprint: %v", err)
+	}
+	if _, err := rec.store.SetClaim("fp1", "a", nil, "alice", "on it"); err != nil {
+		t.Fatalf("SetClaim: %v", err)
+	}
+	rec.followerSnapshots = map[string]followerSnapshotEntry{
+		"a": {alerts: []models.EnrichedAlert{resolvedAlertAt("fp1", "a", now.Add(-time.Minute))}, takenAt: now},
+	}
+	rec.rebuildFollowerAlertStore()
+
+	got := rec.alertStore.Get()
+	if len(got) != 1 {
+		t.Fatalf("alerts = %d, want 1", len(got))
+	}
+	if got[0].ActiveClaim != nil {
+		t.Fatalf("resolved entry carries ActiveClaim %+v, want nil (same as on the leader)", got[0].ActiveClaim)
 	}
 }

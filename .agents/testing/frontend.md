@@ -200,7 +200,7 @@ Specs live under `frontend/e2e/`:
   only overwrites after "Click again to overwrite" (K13).
 - `e2e/screenshots/<mode>/*.screenshot.spec.ts` — screenshot generation for docs (`docs/assets/`)
 - `e2e/video/` — demo-video recorder, renderer, release and intro storyboard templates (`playwright.video.config.ts`; per-project storyboards in gitignored `e2e/_video/`; `.agents/skills/release-video/SKILL.md`). Not a test and not run in CI.
-- `e2e/fixtures/`, `e2e/support/` — shared fixtures and helpers
+- `e2e/fixtures/`, `e2e/support/` — shared fixtures and helpers (a spec that needs a resolved-buffer entry fires alerts, calls `am.resolve()` and waits with `waitForResolvedBuffer()`; `functional/none/recently-resolved.spec.ts`)
 
 The complete spec inventory (which spec file covers which scenario), the
 container stack architecture, fixture setup, auth-mode details, and

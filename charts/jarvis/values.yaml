@@ -129,6 +129,13 @@ config:
   # each between 1m and 365d. Empty keeps the built-in defaults. Users can still
   # override them for themselves in Settings. Example: "15m,1h,4h,1d,1w,30d"
   silenceDurations: ""
+  # How long a resolved alert stays in the live snapshot ("Recently resolved"
+  # toggle, WebSocket pushes, poll snapshots). Go duration, 1m to 24h; empty
+  # keeps the app default (20m). Longer windows keep more resolved alerts in
+  # memory and in every push, so size it deliberately (see
+  # docs/configuration.md). Must be identical on every replica, which the
+  # shared ConfigMap guarantees. Example: "1h"
+  resolvedBufferTTL: ""
   # Data-retention sweep. Fully opt-in — everything here is unset by default,
   # which disables the sweep entirely and keeps history forever, matching the
   # backend's own default. See docs/configuration.md for the full semantics

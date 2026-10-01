@@ -42,7 +42,7 @@ WS     /ws                                       full_protect?  (origin checked 
 #        session cookie via RequireAuth — /ws streams the full alert snapshot)
 
 # ── Status / Version ─────────────────────────────────────────────────────────
-GET    /api/v1/status                            full_protect?  → { status, clusters, alerts, ws_clients, leader, poll_interval_seconds }
+GET    /api/v1/status                            full_protect?  → { status, clusters, alerts, ws_clients, leader, poll_interval_seconds, resolved_buffer_ttl_seconds }
 #        leader: this pod's current leader-election state (internal/leader) — always true on SQLite
 GET    /api/v1/info                              full_protect?  → { version }
 
@@ -55,7 +55,7 @@ GET    /api/v1/alerts                            full_protect?  → []EnrichedAl
 #        not stable); prevents frontend alert-group flicker. Groups inherit it, then
 #        re-sort the group list itself by severity, then alertname.
 #        resolvedBuffer is map[fingerprint+cluster]resolvedEntry. Each entry expires
-#        exactly 20 minutes after its episode's EndsAt. Recorder owns one 1s sweeper;
+#        exactly the configured TTL (JARVIS_RESOLVED_BUFFER_TTL, default 20 minutes; AlertStore.ResolvedTTL(), zero value = default) after its episode's EndsAt. Recorder owns one 1s sweeper;
 #        active alerts win duplicate keys and repeated snapshot rebuilds do not extend TTL.
 #        AlertStore also holds a version counter (bumped by every mutation that changes
 #        what Get() would return — a no-op mutation, e.g. SetActiveClaim on a missing

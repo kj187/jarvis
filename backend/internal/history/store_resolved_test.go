@@ -28,7 +28,7 @@ func visitRecentFingerprints(t *testing.T, store *Store, now time.Time, cluster 
 	got := make([]string, 0)
 	err := store.VisitResolved(context.Background(), ResolvedReadQuery{
 		Cluster: cluster,
-		After:   now.Add(-ResolvedBufferTTL),
+		After:   now.Add(-DefaultResolvedBufferTTL),
 		Through: now,
 	}, func(alert models.EnrichedAlert) error {
 		got = append(got, alert.Fingerprint+"/"+alert.ClusterName)
@@ -66,9 +66,9 @@ func TestRecentResolved_ClusterIsolation(t *testing.T) {
 func TestRecentResolved_BoundaryAtTTL(t *testing.T) {
 	rec, _ := newTestRecorder(t)
 	now := time.Date(2026, 9, 17, 10, 0, 0, 0, time.UTC)
-	insertResolvedTestEvent(t, rec.store, "before", "a", models.EventStatusResolved, now.Add(-ResolvedBufferTTL-time.Nanosecond))
-	insertResolvedTestEvent(t, rec.store, "at", "a", models.EventStatusResolved, now.Add(-ResolvedBufferTTL))
-	insertResolvedTestEvent(t, rec.store, "inside", "a", models.EventStatusResolved, now.Add(-ResolvedBufferTTL+time.Nanosecond))
+	insertResolvedTestEvent(t, rec.store, "before", "a", models.EventStatusResolved, now.Add(-DefaultResolvedBufferTTL-time.Nanosecond))
+	insertResolvedTestEvent(t, rec.store, "at", "a", models.EventStatusResolved, now.Add(-DefaultResolvedBufferTTL))
+	insertResolvedTestEvent(t, rec.store, "inside", "a", models.EventStatusResolved, now.Add(-DefaultResolvedBufferTTL+time.Nanosecond))
 	insertResolvedTestEvent(t, rec.store, "through", "a", models.EventStatusResolved, now)
 	insertResolvedTestEvent(t, rec.store, "future", "a", models.EventStatusResolved, now.Add(time.Nanosecond))
 

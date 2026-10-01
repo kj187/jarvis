@@ -110,7 +110,8 @@ func main() {
 	}
 
 	// ── Stores ────────────────────────────────────────────────────────────────
-	alertStore := &history.AlertStore{}
+	alertStore := history.NewAlertStoreFromConfig(cfg)
+	logger.Info("resolved buffer configured", "ttl", alertStore.ResolvedTTL())
 	silenceStore := history.NewSilenceStore()
 	store := history.NewStore(database, dialect)
 	userStore := users.NewStore(database, dialect)

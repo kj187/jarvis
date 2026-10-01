@@ -9,12 +9,12 @@ test('regex hint on the Resolved view appears only when a regex filter is set', 
 
   // Resolved, no filter → nothing to explain, nothing shown.
   await page.goto('/?state=resolved')
-  await expect(page.getByTitle('Resolved')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Resolved', exact: true })).toBeVisible()
   await expect(hint(page)).toHaveCount(0)
 
   // An equality filter is not a regex either.
   await page.goto('/?state=resolved&filter=' + encodeURIComponent('{alertname="Kube"}'))
-  await expect(page.getByTitle('Resolved')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Resolved', exact: true })).toBeVisible()
   await expect(hint(page)).toHaveCount(0)
 
   // A regex filter → an (i) that explains the server-side syntax.

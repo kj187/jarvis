@@ -164,6 +164,14 @@ Labels are ordered by usefulness: `alertname` and `severity` are always pinned t
 
 ---
 
+### Recently resolved
+
+The **Recently resolved** toggle (the clock icon left of the Active / Suppressed / Resolved switch, shown on the Active tab only) also lists alerts that resolved a moment ago, right in the normal list. It is off by default, so nothing changes until you switch it on, and the choice is remembered in your settings (and follows your account when you are signed in).
+
+Resolved entries are sorted exactly like active alerts, so one sits between the active ones by its start time, and they are marked with a **Resolved** badge and a muted background. They come from the live snapshot, not from the history, so switching the toggle costs no extra request. A single resolved alert, or a group made only of resolved alerts, is dimmed as a whole; in a mixed group only the resolved alerts are. A mixed group's badge reads e.g. `2 + 1 resolved` (active + resolved); position and section counts include the resolved entries. Counters (the number on the **Alerts** tab, the Active count, the overview) never include them, and a resolved entry takes no part in silencing: there is no Fast-Silence bell, and a group's silence actions only cover its active alerts (a group made only of resolved entries has none). Claiming stays closed for them; comments still work.
+
+How long an alert counts as recently resolved is an instance setting, [`JARVIS_RESOLVED_BUFFER_TTL`](configuration.md#jarvis_resolved_buffer_ttl) (20 minutes by default). Older resolutions live in the [Resolved View](#resolved-view).
+
 ### Resolved View
 
 Full alert history persisted in the database (SQLite or PostgreSQL — see [docs/postgres-ha.md](postgres-ha.md)) — survives container restarts and Alertmanager reconnects.

@@ -69,6 +69,10 @@ export interface UserSettings {
   // Resolved view
   resolvedPageSize: ResolvedPageSizeOption
 
+  // Active tab: also list alerts that resolved within the instance's
+  // resolved-buffer TTL (live snapshot, no history request). Off by default.
+  showRecentlyResolved: boolean
+
   // Silences
   defaultSilenceDurationMinutes: number
   // The durations (minutes, ascending) offered by the one-click Fast-Silence
@@ -96,6 +100,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   cardColumns: 'auto',
   savedFilters: [],
   resolvedPageSize: 25,
+  showRecentlyResolved: false,
   defaultSilenceDurationMinutes: 60,
   silenceDurations: [5, 10, 15, 30, 60, 240, 1440, 10080],
   defaultCreatorName: '',
@@ -249,6 +254,9 @@ export function normalizeSettings(raw: unknown): Partial<UserSettings> {
   }
   if (typeof obj.defaultCreatorName === 'string') {
     out.defaultCreatorName = obj.defaultCreatorName
+  }
+  if (typeof obj.showRecentlyResolved === 'boolean') {
+    out.showRecentlyResolved = obj.showRecentlyResolved
   }
   if (typeof obj.claimAnimationEnabled === 'boolean') {
     out.claimAnimationEnabled = obj.claimAnimationEnabled

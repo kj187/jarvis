@@ -121,8 +121,12 @@ and WebSocket pushes to its own connected browsers, from a snapshot that is
 at most one poll interval old, regardless of which pod happens to be
 leader right now.
 
-Resolved alerts in those snapshots keep the same 20-minute live-display
-deadline as on the leader. Followers normalize the resolution timestamp,
+Resolved alerts in those snapshots keep the same live-display deadline
+(`JARVIS_RESOLVED_BUFFER_TTL`, 20 minutes by default) as on the leader. Every
+replica must run with the same value: a follower applies its own window to the
+snapshots it receives, so a shorter value on a follower hides entries the
+leader still carries, and a longer one cannot bring back entries the leader
+already dropped. Followers normalize the resolution timestamp,
 discard already-expired rows while decoding/rebuilding, and physically remove
 expired entries from both their `AlertStore` and per-cluster snapshot cache.
 Promotion never restarts that deadline. Active last-good alerts are not subject

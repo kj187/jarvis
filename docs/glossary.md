@@ -95,7 +95,8 @@ and [PostgreSQL & HA](postgres-ha.md).
 ## Resolved buffer
 
 The short-lived in-memory copy of recently resolved alerts that keeps them in
-live snapshots and WebSocket updates for 20 minutes after their episode ends.
+live snapshots and WebSocket updates after their episode ends, for 20 minutes
+by default (`JARVIS_RESOLVED_BUFFER_TTL`).
 It is separate from persistent resolved history, which remains in the
 database. See
 [What happens on resolution](alert-lifecycle.md#what-happens-on-resolution).

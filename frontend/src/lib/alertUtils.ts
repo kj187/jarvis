@@ -485,6 +485,43 @@ export function getEffectiveAlertState(
   return 'suppressed'
 }
 
+/**
+ * Whether an alert passes the state tab filter. Resolved buffer entries
+ * (state `resolved`, kept in the live snapshot for the resolved-buffer TTL)
+ * only ever show in the Active view, and only when `includeResolved` (the
+ * "Recently resolved" toggle) is on. With no state selected nothing is
+ * filtered, as before.
+ */
+export function matchesStateFilter(
+  alert: EnrichedAlert,
+  state: string,
+  silences: Silence[],
+  includeResolved: boolean,
+): boolean {
+  if (!state) return true
+  if (alert.status.state === 'resolved') return includeResolved && state === 'active'
+  return getEffectiveAlertState(alert, silences) === state
+}
+
+/** A resolved alert cannot be silenced — group/card silence actions ignore it. */
+export function isSilenceable(alert: EnrichedAlert): boolean {
+  return alert.status.state !== 'resolved'
+}
+
+export function silenceableAlerts(alerts: EnrichedAlert[]): EnrichedAlert[] {
+  return alerts.filter(isSilenceable)
+}
+
+/**
+ * Most recent `startsAt` of a group, for ordering groups by freshness. A
+ * resolved buffer member never moves its group: it only counts when every
+ * member is resolved.
+ */
+export function freshestStartsAt(alerts: EnrichedAlert[]): number {
+  const live = silenceableAlerts(alerts)
+  return Math.max(...(live.length > 0 ? live : alerts).map((a) => new Date(a.startsAt).getTime()))
+}
+
 // ── Silence state ─────────────────────────────────────────────────────────
 
 export interface SilenceStateResult {

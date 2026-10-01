@@ -101,10 +101,10 @@ frontend/
   playwright.screenshots.e2e.config.ts  # screenshot config; testDir = $E2E_SCREENSHOT_DIR
   e2e/
     support/
-      alertmanager.ts   # AM API v2 client: fire() / clearAll()
+      alertmanager.ts   # AM API v2 client: fire() / resolve() / clearAll()
       jarvis.ts         # Jarvis client: poll() / reset() / seedResolved() / seedHeatmapHistory()
       auth.ts           # dismissNoAuthNotice, ensureInternalAdmin, loginInternal, loginOIDC
-      fixtures.ts       # test.extend (auto reset+clear per test), freezeClock, waitForActiveAlerts
+      fixtures.ts       # test.extend (auto reset+clear per test), freezeClock, waitForActiveAlerts, waitForResolvedBuffer
       heatmapHistory.ts # fireWithHeatmapHistory() — screenshot-only, see below
       screenshotData.ts # polished alert fixture + label hiding shared by card-view / home-tour shots
     fixtures/
@@ -224,7 +224,7 @@ cover.
 1. Pick the auth mode → the matching `functional/<mode>/` or
    `screenshots/<mode>/` folder.
 2. Import from `../../support/fixtures` (gives you `test`, `expect`, `am`,
-   `jarvis`, `freezeClock`, `waitForActiveAlerts`) and `../../support/auth` for
+   `jarvis`, `freezeClock`, `waitForActiveAlerts`, `waitForResolvedBuffer`) and `../../support/auth` for
    login helpers.
 3. Fire fixtures → drive the UI → assert via `data-testid`. For screenshots,
    `freezeClock`, wait for the expected state, then `page.screenshot(...)`.

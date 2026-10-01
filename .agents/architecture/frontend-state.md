@@ -61,6 +61,7 @@ interface UserSettings {
   savedFilters: SavedFilter[]                   // toolbar quick-select/manage menu
                                                  // { name, matchers: SavedFilterMatcher[], isDefault }
                                                  // — see `frontend-tree.md` lib/savedFilters.ts
+  showRecentlyResolved: boolean                  // Active tab: also list resolved-buffer entries (default false)
   resolvedPageSize: 10 | 25 | 50 | 100          
   defaultSilenceDurationMinutes: number         // any integer 1…525600 (isValidSilenceDurationMinutes) — the Settings picker
                                                  // offers silenceDurations + the current value

@@ -39,6 +39,28 @@ export class AlertmanagerClient {
     }
   }
 
+  /**
+   * Resolves the given alerts in Alertmanager (re-posts them with endsAt=now).
+   * Pass the same labels and the same explicit past `startsAt` as when fired.
+   */
+  async resolve(alerts: AlertInput[]): Promise<void> {
+    const now = new Date().toISOString()
+    const payload = alerts.map((a) => ({
+      labels: { test_suite: 'jarvis', ...a.labels },
+      annotations: a.annotations ?? {},
+      startsAt: a.startsAt ?? now,
+      endsAt: now,
+    }))
+    const res = await fetch(`${this.baseURL}/api/v2/alerts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+    if (!res.ok) {
+      throw new Error(`AM resolve failed: ${res.status} ${await res.text()}`)
+    }
+  }
+
   /** Expires all currently active alerts by re-posting them with endsAt=now. */
   async clearAll(): Promise<void> {
     await Promise.all([this.clearAlerts(), this.clearSilences()])

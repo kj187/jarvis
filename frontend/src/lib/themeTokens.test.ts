@@ -109,6 +109,22 @@ describe.each([
   })
 })
 
+// ── recently resolved entries ────────────────────────────────────────────────
+// Their text sits on bg-success-soft/50 (half-strength fill) over the card (cards) or the page (list rows).
+describe.each([
+  ['dark', () => darkBlock],
+  ['light', () => lightBlock],
+] as const)('muted-foreground on the recently-resolved fill, %s theme', (_theme, blockOf) => {
+  it.each(['card', 'background'])('over %s', (surface) => {
+    const block = blockOf()
+    const surf = token(block, surface)
+    const soft = tokenA(block, 'success-soft')
+    const fill = over([soft[0], soft[1], soft[2], soft[3] * 0.5], surf)
+    const fg = luminance(token(block, 'muted-foreground'))
+    expect((Math.max(fg, fill) + 0.05) / (Math.min(fg, fill) + 0.05)).toBeGreaterThanOrEqual(4.5)
+  })
+})
+
 // ── secondary text on every surface ──────────────────────────────────────────
 // muted-foreground is meaningful text (labels, meta lines); it sits on cards, inputs, chips and hover
 // fills, so it must reach 4.5:1 on all of them, not only on the page background.
