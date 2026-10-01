@@ -614,3 +614,62 @@ func TestWarnings_AdminGroupWithoutClaim(t *testing.T) {
 		})
 	}
 }
+
+func TestLoad_ResolvedBufferTTL(t *testing.T) {
+	cases := []struct {
+		name    string
+		env     string
+		want    time.Duration
+		wantErr bool
+	}{
+		{"unset defaults to 20m", "", 20 * time.Minute, false},
+		{"custom value", "45m", 45 * time.Minute, false},
+		{"minimum 1m", "1m", time.Minute, false},
+		{"maximum 24h", "24h", 24 * time.Hour, false},
+		{"below minimum", "59s", 0, true},
+		{"zero", "0", 0, true},
+		{"negative", "-5m", 0, true},
+		{"above maximum", "25h", 0, true},
+		{"not a duration", "soon", 0, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("JARVIS_CLUSTER_1_NAME", "")
+			t.Setenv("JARVIS_RESOLVED_BUFFER_TTL", tc.env)
+			cfg, err := Load()
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("Load() = nil error, want an error for %q", tc.env)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("Load() error: %v", err)
+			}
+			if cfg.ResolvedBufferTTL != tc.want {
+				t.Fatalf("ResolvedBufferTTL = %v, want %v", cfg.ResolvedBufferTTL, tc.want)
+			}
+		})
+	}
+}
+
+func TestWarnings_ResolvedBufferTTL(t *testing.T) {
+	cases := []struct {
+		name string
+		ttl  time.Duration
+		want int
+	}{
+		{"default", 20 * time.Minute, 0},
+		{"exactly 1h", time.Hour, 0},
+		{"above 1h", time.Hour + time.Minute, 1},
+		{"24h", 24 * time.Hour, 1},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := Config{ResolvedBufferTTL: tc.ttl}
+			if got := cfg.Warnings(); len(got) != tc.want {
+				t.Fatalf("Warnings() = %v, want %d entries", got, tc.want)
+			}
+		})
+	}
+}

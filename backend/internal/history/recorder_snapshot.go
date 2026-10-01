@@ -252,7 +252,7 @@ func (r *Recorder) applySnapshotRow(clusterName string, row snapshotRow) {
 	if r.silenceStore != nil {
 		r.silenceStore.Set(clusterName, snap.Silences)
 	}
-	snap.Alerts, _ = filterFollowerAlerts(snap.Alerts, row.TakenAt, r.currentTime())
+	snap.Alerts, _ = filterFollowerAlerts(snap.Alerts, row.TakenAt, r.currentTime(), r.alertStore.ResolvedTTL())
 	r.followerMu.Lock()
 	if r.followerSnapshots == nil {
 		r.followerSnapshots = make(map[string]followerSnapshotEntry)
@@ -265,7 +265,7 @@ func (r *Recorder) applySnapshotRow(clusterName string, row snapshotRow) {
 	r.followerMu.Unlock()
 }
 
-func filterFollowerAlerts(alerts []models.EnrichedAlert, takenAt, now time.Time) ([]models.EnrichedAlert, bool) {
+func filterFollowerAlerts(alerts []models.EnrichedAlert, takenAt, now time.Time, ttl time.Duration) ([]models.EnrichedAlert, bool) {
 	kept := alerts[:0]
 	removed := false
 	for _, alert := range alerts {
@@ -281,7 +281,7 @@ func filterFollowerAlerts(alerts []models.EnrichedAlert, takenAt, now time.Time)
 		if !takenAt.IsZero() && takenAt.UTC().Before(resolvedAt) {
 			resolvedAt = takenAt.UTC()
 		}
-		if !resolvedAt.Add(ResolvedBufferTTL).After(now) {
+		if !resolvedAt.Add(ttl).After(now) {
 			removed = true
 			continue
 		}
@@ -305,7 +305,7 @@ func (r *Recorder) rebuildFollowerAlertStore() {
 	now := r.currentTime()
 	for clusterName, entry := range r.followerSnapshots {
 		var removed bool
-		entry.alerts, removed = filterFollowerAlerts(entry.alerts, entry.takenAt, now)
+		entry.alerts, removed = filterFollowerAlerts(entry.alerts, entry.takenAt, now, r.alertStore.ResolvedTTL())
 		if removed {
 			r.followerSnapshots[clusterName] = entry
 		}
@@ -328,6 +328,12 @@ func (r *Recorder) rebuildFollowerAlertStore() {
 		r.logger.Error("follower: get active claims", "err", err)
 	} else {
 		for i := range merged {
+			// A resolved buffer entry has no claim: the leader drops it at resolve time
+			// (AlertStore.MarkResolved*), the claim row is only released later.
+			if merged[i].Status.State == "resolved" {
+				merged[i].ActiveClaim = nil
+				continue
+			}
 			key := ClaimKey{Fingerprint: merged[i].Fingerprint, ClusterName: merged[i].ClusterName}
 			merged[i].ActiveClaim = claims[key] // nil when the map has no entry
 		}

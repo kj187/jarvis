@@ -8,7 +8,7 @@ import { TruncatableChip } from '@/components/ui/truncatable-chip'
 import { cn } from '@/lib/utils'
 import { Sheet } from '@/components/ui/sheet'
 import { AlertBadge, StatusBadge } from './AlertBadge'
-import { labelColorStyle, findRelatedAlerts } from '@/lib/alertUtils'
+import { labelColorStyle, findRelatedAlerts, formatTime, formatSilenceDuration } from '@/lib/alertUtils'
 import { CommentsPanel } from '@/components/comments/CommentsPanel'
 import { useAlertComments } from '@/hooks/useAlertComments'
 import { AlertDetailHistorySection } from './AlertDetailHistorySection'
@@ -255,6 +255,11 @@ export function AlertDetailPanel({
   const setActiveTab = useUIStore((s) => s.setDetailTab)
   const selectedGroupKeys = useUIStore((s) => s.selectedGroupKeys)
   const fmtTime = useFormatTime()
+  const isResolved = alert?.status.state === 'resolved'
+  // Duration the alert fired for; skipped when either timestamp is missing or inconsistent.
+  const startMs = alert ? new Date(alert.startsAt).getTime() : NaN
+  const endMs = alert ? new Date(alert.endsAt).getTime() : NaN
+  const firedForMs = endMs > startMs && startMs > 0 ? endMs - startMs : null
 
   // Up/down arrow navigation between sibling alerts of the group (list/card
   // grouped view) the current selection came from. `selectedGroupKeys` is
@@ -565,6 +570,20 @@ export function AlertDetailPanel({
               <span>Stats unavailable</span>
             )}
           </div>
+
+          {isResolved && (
+            <Tooltip content={new Date(alert.endsAt).toLocaleString('en-US')} side="bottom" wrapperClassName="mt-2 flex">
+              <div
+                data-testid="detail-resolved-banner"
+                tabIndex={0}
+                className="flex w-full items-center gap-1.5 rounded-compact border-r-4 border-r-success-edge bg-success-soft px-2 py-1.5 text-xs text-success-fg"
+              >
+                <Check className="h-3 w-3 shrink-0" />
+                <span className="font-medium">Resolved {formatTime(alert.endsAt, 'relative')}</span>
+                {firedForMs !== null && <span>· fired for {formatSilenceDuration(firedForMs)}</span>}
+              </div>
+            </Tooltip>
+          )}
 
           <div className="mt-2.5" data-testid="detail-heatmap-section">
             <AlertHeatmap fingerprint={alert.fingerprint} cluster={alert.clusterName} enabled={Boolean(alert.fingerprint)} />

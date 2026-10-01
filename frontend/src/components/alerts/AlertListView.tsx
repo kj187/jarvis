@@ -11,7 +11,7 @@ import { SilenceForm } from '@/components/silences/SilenceForm'
 import { SilenceExpireModal } from '@/components/silences/SilenceExpireModal'
 import { ExtendSilenceMenu } from '@/components/silences/ExtendSilenceMenu'
 import { fetchClusters, deleteSilence } from '@/api/client'
-import { formatSilenceDuration, getFilterableLabels, partitionLabelsForDisplay } from '@/lib/alertUtils'
+import { formatSilenceDuration, getFilterableLabels, partitionLabelsForDisplay, silenceableAlerts } from '@/lib/alertUtils'
 import { renderTextWithLinks } from '@/lib/linkUtils'
 import { useSettingsStore, RESOLVED_PAGE_SIZE_OPTIONS } from '@/store/useSettingsStore'
 import type { LabelDisplayConfig } from '@/lib/settingsUtils'
@@ -741,7 +741,12 @@ export function AlertListView({
                   const groupKey = `${groupValue}:${group.alertname}`
                   const expanded = expandedGroups.has(groupKey)
                   const stateLabel = group.states.length === 1 ? group.states[0] : 'mixed'
-                  const { active: activeSilences, expiring: expiringSilences, expired: expiredSilences } = getGroupSilenceInfo(group.alerts, group.alertname, silences)
+                  // Resolved members (recently-resolved buffer) take no part in any group silence action or state.
+                  const silenceable = silenceableAlerts(group.alerts)
+                  const canSilence = silenceable.length > 0
+                  const resolvedCount = group.alerts.length - silenceable.length
+                  const allResolved = !canSilence
+                  const { active: activeSilences, expiring: expiringSilences, expired: expiredSilences } = getGroupSilenceInfo(silenceable, group.alertname, silences)
                   const hasSilence = activeSilences.length > 0 || expiringSilences.length > 0
                   return (
                     <Fragment key={groupKey}>
@@ -749,6 +754,7 @@ export function AlertListView({
                         role="row"
                         tabIndex={0}
                         data-testid="alert-group-row"
+                        data-resolved={allResolved ? 'true' : 'false'}
                         onClick={() => toggleGroup(groupKey)}
                         // Only when the row itself has focus: Enter on a button inside it ("Silence group")
                         // bubbles up to here and must not also toggle the group behind that button's action.
@@ -758,6 +764,8 @@ export function AlertListView({
                           theme === 'light'
                             ? 'bg-card hover:bg-accent'
                             : cn('hover:bg-accent/70', expanded ? 'bg-muted/40' : 'bg-muted/30'),
+                          // A group made only of recently resolved alerts is dimmed as a whole.
+                          allResolved && 'bg-success-soft/50 text-muted-foreground',
                         )}
                       >
                         <td className={cn('px-4 py-2.5 border-l-4', cfg.borderClass)}>
@@ -770,7 +778,10 @@ export function AlertListView({
                               )}
                               {group.alertname}
                               <span className="rounded-pill bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                                {group.alerts.length}
+                                {/* Mixed group: "active + resolved" (section and position counts stay inclusive). */}
+                                {resolvedCount > 0 && canSilence
+                                  ? `${silenceable.length} + ${resolvedCount} resolved`
+                                  : group.alerts.length}
                               </span>
                               {activeSilences.length > 0 && (
                                 <span className="inline-flex items-center gap-1 text-xs font-normal text-muted-foreground" title={`Group silenced, ends in ${formatSilenceDuration(activeSilences[0].remaining)}`}>
@@ -836,7 +847,7 @@ export function AlertListView({
                             {!hasSilence && expiredSilences.length > 0 && (
                               <button
                                 type="button"
-                                onClick={() => openSilenceForm(group.alerts, expiredSilences[0], true)}
+                                onClick={() => openSilenceForm(silenceable, expiredSilences[0], true)}
                                 title="Recreate the expired group silence"
                                 className="cursor-pointer flex w-fit items-center gap-1.5 rounded-compact border border-border/50 px-2 py-1 text-xs text-muted-foreground transition-colors hover:border-border hover:text-foreground"
                               >
@@ -844,10 +855,10 @@ export function AlertListView({
                                 <span>Recreate group silence</span>
                               </button>
                             )}
-                            {!hasSilence && expiredSilences.length === 0 && (
+                            {canSilence && !hasSilence && expiredSilences.length === 0 && (
                               <button
                                 type="button"
-                                onClick={() => openSilenceForm(group.alerts)}
+                                onClick={() => openSilenceForm(silenceable)}
                                 title="Open a silence form pre-filled for every alert in this group"
                                 className="cursor-pointer flex w-fit items-center gap-1.5 rounded-compact border border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:border-border/80 hover:text-foreground"
                               >

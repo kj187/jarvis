@@ -51,6 +51,11 @@ type Config struct {
 
 	Retention RetentionConfig
 
+	// ResolvedBufferTTL is how long a resolved alert stays in the live snapshot
+	// (and therefore in every WebSocket push and, on PostgreSQL, every poll
+	// snapshot row). Instance-wide; must be identical on all replicas.
+	ResolvedBufferTTL time.Duration
+
 	// SilenceDurations is the instance-wide default list of silence durations
 	// (minutes, ascending) behind the Fast-Silence and Extend-silence menus,
 	// served as `global` in GET /api/v1/settings. nil = not configured: the
@@ -66,7 +71,30 @@ func (c *Config) Warnings() []string {
 	if c.AuthProvider == "oidc" && c.OIDCAdminValue != "" && c.OIDCGroupsClaim == "" {
 		w = append(w, "JARVIS_OIDC_ADMIN_VALUE is set but JARVIS_OIDC_GROUPS_CLAIM is not: no group is read from the token, so nobody becomes admin")
 	}
+	if c.ResolvedBufferTTL > ResolvedBufferTTLWarnAbove {
+		w = append(w, fmt.Sprintf("JARVIS_RESOLVED_BUFFER_TTL is %s: every resolved alert stays in memory, in each WebSocket push and (PostgreSQL) in each poll snapshot for that long; memory and payload size grow with the resolves inside the window", c.ResolvedBufferTTL))
+	}
 	return w
+}
+
+const (
+	// Same value as history.DefaultResolvedBufferTTL (config cannot import history);
+	// history pins the two together in a test.
+	DefaultResolvedBufferTTL   = 20 * time.Minute
+	MinResolvedBufferTTL       = time.Minute
+	MaxResolvedBufferTTL       = 24 * time.Hour
+	ResolvedBufferTTLWarnAbove = time.Hour
+)
+
+func parseResolvedBufferTTL() (time.Duration, error) {
+	ttl, err := time.ParseDuration(getEnv("JARVIS_RESOLVED_BUFFER_TTL", DefaultResolvedBufferTTL.String()))
+	if err != nil {
+		return 0, fmt.Errorf("invalid JARVIS_RESOLVED_BUFFER_TTL: %w", err)
+	}
+	if ttl < MinResolvedBufferTTL || ttl > MaxResolvedBufferTTL {
+		return 0, fmt.Errorf("invalid JARVIS_RESOLVED_BUFFER_TTL: %s is outside %s..%s", ttl, MinResolvedBufferTTL, MaxResolvedBufferTTL)
+	}
+	return ttl, nil
 }
 
 // RetentionConfig holds the data-retention sweep settings. All Days fields
@@ -190,6 +218,11 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("invalid JARVIS_POLL_INTERVAL: %w", err)
 	}
 
+	resolvedBufferTTL, err := parseResolvedBufferTTL()
+	if err != nil {
+		return nil, err
+	}
+
 	allowedOriginsRaw := getEnv("JARVIS_ALLOWED_ORIGINS", "")
 	var allowedOrigins []string
 	if allowedOriginsRaw != "" {
@@ -253,27 +286,28 @@ func Load() (*Config, error) {
 	}
 
 	return &Config{
-		Port:             getEnv("JARVIS_PORT", "8080"),
-		LogLevel:         getEnv("JARVIS_LOG_LEVEL", "info"),
-		LogRequests:      getEnvBool("JARVIS_LOG_REQUESTS", false),
-		PollInterval:     pollInterval,
-		DBDSN:            getEnv("JARVIS_DB_DSN", "/data/jarvis.db"),
-		DBMaxOpenConns:   dbMaxOpenConns,
-		RunbookBaseURL:   getEnv("JARVIS_RUNBOOK_BASE_URL", ""),
-		AllowedOrigins:   allowedOrigins,
-		Clusters:         clusters,
-		PprofAddr:        getEnv("JARVIS_PPROF_ADDR", ""),
-		AuthProvider:     authProvider,
-		AuthMode:         authMode,
-		SecretKey:        secretKey,
-		OIDCIssuer:       getEnv("JARVIS_AUTH_OIDC_ISSUER", ""),
-		OIDCClientID:     getEnv("JARVIS_AUTH_OIDC_CLIENT_ID", ""),
-		OIDCClientSecret: getEnv("JARVIS_AUTH_OIDC_CLIENT_SECRET", ""),
-		OIDCRedirectURL:  getEnv("JARVIS_AUTH_OIDC_REDIRECT_URL", ""),
-		OIDCScopes:       oidcScopes,
-		OIDCGroupsClaim:  getEnv("JARVIS_OIDC_GROUPS_CLAIM", ""),
-		OIDCAdminValue:   getEnv("JARVIS_OIDC_ADMIN_VALUE", ""),
-		Retention:        retention,
+		Port:              getEnv("JARVIS_PORT", "8080"),
+		LogLevel:          getEnv("JARVIS_LOG_LEVEL", "info"),
+		LogRequests:       getEnvBool("JARVIS_LOG_REQUESTS", false),
+		PollInterval:      pollInterval,
+		ResolvedBufferTTL: resolvedBufferTTL,
+		DBDSN:             getEnv("JARVIS_DB_DSN", "/data/jarvis.db"),
+		DBMaxOpenConns:    dbMaxOpenConns,
+		RunbookBaseURL:    getEnv("JARVIS_RUNBOOK_BASE_URL", ""),
+		AllowedOrigins:    allowedOrigins,
+		Clusters:          clusters,
+		PprofAddr:         getEnv("JARVIS_PPROF_ADDR", ""),
+		AuthProvider:      authProvider,
+		AuthMode:          authMode,
+		SecretKey:         secretKey,
+		OIDCIssuer:        getEnv("JARVIS_AUTH_OIDC_ISSUER", ""),
+		OIDCClientID:      getEnv("JARVIS_AUTH_OIDC_CLIENT_ID", ""),
+		OIDCClientSecret:  getEnv("JARVIS_AUTH_OIDC_CLIENT_SECRET", ""),
+		OIDCRedirectURL:   getEnv("JARVIS_AUTH_OIDC_REDIRECT_URL", ""),
+		OIDCScopes:        oidcScopes,
+		OIDCGroupsClaim:   getEnv("JARVIS_OIDC_GROUPS_CLAIM", ""),
+		OIDCAdminValue:    getEnv("JARVIS_OIDC_ADMIN_VALUE", ""),
+		Retention:         retention,
 
 		SilenceDurations: silenceDurations,
 	}, nil

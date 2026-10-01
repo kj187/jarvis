@@ -213,8 +213,11 @@ that stays a review duty.
 
 ### 22.
 
-**Every live resolved-buffer entry expires with its own episode after 20
-minutes on leaders and followers.** Re-ingesting the same episode never
+**Every live resolved-buffer entry expires with its own episode after the
+configured buffer TTL on leaders and followers.** The TTL is
+`JARVIS_RESOLVED_BUFFER_TTL` (default 20 minutes, 1m to 24h), read through
+`AlertStore.ResolvedTTL()` and set once before the recorder starts; the seed,
+the sweeper and every follower path use that one value. Re-ingesting the same episode never
 extends its deadline; a genuine re-fire/new resolve gets a new deadline.
 The central sweep removes follower-cache references too, but never active
 last-good alerts or persistent database history.

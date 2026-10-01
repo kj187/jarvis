@@ -235,6 +235,50 @@ func TestGetStatus_IncludesPollIntervalSeconds(t *testing.T) {
 	if got["poll_interval_seconds"] != float64(45) {
 		t.Errorf("poll_interval_seconds = %v, want 45", got["poll_interval_seconds"])
 	}
+	// A zero-value AlertStore reports the default resolved-buffer window (20m).
+	if got["resolved_buffer_ttl_seconds"] != float64(1200) {
+		t.Errorf("resolved_buffer_ttl_seconds = %v, want 1200", got["resolved_buffer_ttl_seconds"])
+	}
+}
+
+func TestGetStatus_ReportsConfiguredResolvedBufferTTL(t *testing.T) {
+	database, dialect, err := idb.Open(":memory:")
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	if err := idb.Migrate(database, dialect); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	t.Cleanup(func() { _ = database.Close() })
+	hub := ws.NewHub(nil, nil, metrics.New("test"))
+	go hub.Run()
+	srv := NewServer(
+		history.NewAlertStore(90*time.Minute),
+		history.NewSilenceStore(),
+		history.NewStore(database, dialect),
+		hub,
+		cluster.NewRegistry(nil),
+		&config.Config{},
+		&fakeTriggerer{},
+		auth.NoneProvider{},
+		users.NewStore(database, dialect),
+		settings.NewStore(database, dialect),
+		globalsettings.NewStore(database, dialect),
+		fanout.NoopFanout{},
+	)
+	e := echo.New()
+	rec := httptest.NewRecorder()
+	c := e.NewContext(httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/status", nil), rec)
+	if err := srv.getStatus(c); err != nil {
+		t.Fatalf("getStatus: %v", err)
+	}
+	var got map[string]interface{}
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if got["resolved_buffer_ttl_seconds"] != float64(5400) {
+		t.Errorf("resolved_buffer_ttl_seconds = %v, want 5400", got["resolved_buffer_ttl_seconds"])
+	}
 }
 
 func TestGetClusters_NoPollYet_OptimisticallyHealthy(t *testing.T) {

@@ -107,7 +107,7 @@ func TestResolvedBuffer_SweepWithoutPoll(t *testing.T) {
 	rec.alertStore.Set([]models.EnrichedAlert{makeEnrichedAlert("fp1", "active", "a")})
 	rec.alertStore.MarkResolvedForClusterAt("fp1", "a", base)
 
-	if !rec.sweepResolved(base.Add(ResolvedBufferTTL)) {
+	if !rec.sweepResolved(base.Add(DefaultResolvedBufferTTL)) {
 		t.Fatal("sweep did not expire resolved alert without a poll")
 	}
 	if got := rec.alertStore.Get(); len(got) != 0 {
@@ -145,7 +145,7 @@ func TestResolvedBuffer_RecorderUsesSameRuntimeTimestamp(t *testing.T) {
 func TestResolvedBuffer_CancelStopsSweeper(t *testing.T) {
 	rec, _ := newTestRecorder(t)
 	base := time.Date(2026, 9, 17, 10, 0, 0, 0, time.UTC)
-	rec.now = func() time.Time { return base.Add(ResolvedBufferTTL) }
+	rec.now = func() time.Time { return base.Add(DefaultResolvedBufferTTL) }
 	rec.alertStore.Set([]models.EnrichedAlert{makeEnrichedAlert("fp1", "active", "a")})
 	rec.alertStore.MarkResolvedForClusterAt("fp1", "a", base)
 	ctx, cancel := context.WithCancel(context.Background())

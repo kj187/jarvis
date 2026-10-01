@@ -148,7 +148,7 @@ func (s *Server) getAlerts(c echo.Context) error {
 	stateFilter := c.QueryParam("state")
 
 	// Resolved alerts are served from the persistent DB so they survive beyond
-	// the in-memory resolved buffer's 20-minute window.
+	// the in-memory resolved buffer's TTL window.
 	if stateFilter == "resolved" {
 		return s.streamResolvedAlerts(c, clusterFilter, severityFilter)
 	}

@@ -93,6 +93,7 @@ export function LabelChip({
       {open && dropdownPos && (
         <div
           ref={popoverRef}
+          data-label-popover
           className="fixed z-50 w-max max-w-[420px] rounded-surface border border-border bg-popover p-2 shadow-md"
           style={{ top: dropdownPos.top, left: dropdownPos.left }}
           onMouseEnter={show}
@@ -217,5 +218,18 @@ export function HiddenLabelsToggle({
         document.body,
       )}
     </>
+  )
+}
+
+/**
+ * "Resolved" marker for a recently resolved entry, drawn like a label chip but not a label: it is a
+ * UI addition only, so it never reads labelDisplay/labelColors, never filters and never takes part
+ * in silence matching (Critical Invariants #12, #19). Always the first chip of the label row.
+ */
+export function ResolvedChip() {
+  return (
+    <span data-testid="resolved-chip" className="max-w-[200px] truncate rounded-compact border border-success-edge bg-success-soft px-1.5 py-0.5 text-[10px] font-medium text-success-fg">
+      Resolved
+    </span>
   )
 }

@@ -185,3 +185,16 @@ body {
 .hljs-emphasis { font-style: italic; }
 .hljs-strong { font-weight: 600; }
 
+/* Recently resolved (data-resolved="true" on rows, cards and card entries): the entry reads as
+ * inactive by losing its colour, not by opacity on text. Every text level that would be full
+ * foreground drops to muted-foreground at full strength (>= 4.5:1 on the entry's bg-success-soft/50
+ * fill over card and background in both themes, see themeTokens.test.ts); only decoration (the
+ * firing sparkline) is faded. The chip's operator popover is excluded (it is a menu, not content). The Resolved label and the green
+ * resolve time keep their own role colours. */
+[data-resolved="true"] :is(.text-foreground, .text-card-foreground):not([data-label-popover] *) {
+  color: var(--color-muted-foreground);
+}
+[data-resolved="true"] [data-decoration] {
+  opacity: 0.45;
+  filter: grayscale(1);
+}

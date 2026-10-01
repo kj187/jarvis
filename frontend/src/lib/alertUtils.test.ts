@@ -38,6 +38,10 @@ import {
   findRelatedAlerts,
   partitionLabelsForDisplay,
   matchesAlertSearch,
+  matchesStateFilter,
+  isSilenceable,
+  silenceableAlerts,
+  freshestStartsAt,
 } from './alertUtils'
 import resolvedFilterConformance from './testdata/resolved-filter-conformance.json'
 import type { EnrichedAlert, LabelMatcher, Silence } from '@/types'
@@ -1643,4 +1647,58 @@ describe('buildExtendSilenceBody', () => {
     expect(silence).toEqual(copy)
   })
 
+})
+
+describe('recently-resolved helpers', () => {
+  const active = makeAlert({ fingerprint: 'a', startsAt: '2026-01-01T10:00:00Z', status: { inhibitedBy: [], silencedBy: [], state: 'active' } })
+  const resolved = makeAlert({ fingerprint: 'r', startsAt: '2026-01-01T11:00:00Z', status: { inhibitedBy: [], silencedBy: [], state: 'resolved' } })
+  const suppressed = makeAlert({ fingerprint: 's', status: { inhibitedBy: [], silencedBy: ['s1'], state: 'suppressed' } })
+  const longSilence = makeSilence({ id: 's1', endsAt: new Date(Date.now() + 3 * 86_400_000).toISOString() })
+
+  describe('matchesStateFilter', () => {
+    it('keeps the effective-state comparison for non-resolved alerts', () => {
+      expect(matchesStateFilter(active, 'active', [], false)).toBe(true)
+      expect(matchesStateFilter(active, 'suppressed', [], false)).toBe(false)
+      expect(matchesStateFilter(suppressed, 'suppressed', [longSilence], false)).toBe(true)
+      expect(matchesStateFilter(suppressed, 'active', [longSilence], true)).toBe(false)
+    })
+
+    it('hides resolved buffer entries from the Active view unless included', () => {
+      expect(matchesStateFilter(resolved, 'active', [], false)).toBe(false)
+      expect(matchesStateFilter(resolved, 'active', [], true)).toBe(true)
+    })
+
+    it('never shows resolved buffer entries in the Suppressed view, even when included', () => {
+      expect(matchesStateFilter(resolved, 'suppressed', [], true)).toBe(false)
+    })
+
+    it('does not filter by state when no state is selected', () => {
+      expect(matchesStateFilter(active, '', [], false)).toBe(true)
+      expect(matchesStateFilter(resolved, '', [], false)).toBe(true)
+    })
+  })
+
+  describe('isSilenceable / silenceableAlerts', () => {
+    it('treats resolved alerts as not silenceable', () => {
+      expect(isSilenceable(active)).toBe(true)
+      expect(isSilenceable(suppressed)).toBe(true)
+      expect(isSilenceable(resolved)).toBe(false)
+    })
+
+    it('drops resolved members and keeps order', () => {
+      expect(silenceableAlerts([resolved, active, suppressed]).map((a) => a.fingerprint)).toEqual(['a', 's'])
+      expect(silenceableAlerts([resolved])).toEqual([])
+    })
+  })
+
+  describe('freshestStartsAt', () => {
+    it('ignores resolved members when the group has non-resolved ones', () => {
+      expect(freshestStartsAt([active, resolved])).toBe(new Date('2026-01-01T10:00:00Z').getTime())
+    })
+
+    it('falls back to all members when every member is resolved', () => {
+      const older = makeAlert({ startsAt: '2026-01-01T09:00:00Z', status: { inhibitedBy: [], silencedBy: [], state: 'resolved' } })
+      expect(freshestStartsAt([older, resolved])).toBe(new Date('2026-01-01T11:00:00Z').getTime())
+    })
+  })
 })

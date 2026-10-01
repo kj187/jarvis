@@ -361,6 +361,7 @@ export function fetchStatus(): Promise<{
   alerts: number
   ws_clients: number
   poll_interval_seconds: number
+  resolved_buffer_ttl_seconds: number
 }> {
   return request('/status')
 }

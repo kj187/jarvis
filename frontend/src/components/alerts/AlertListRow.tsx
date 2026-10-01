@@ -2,7 +2,7 @@ import { BellMinus, BellOff, User } from 'lucide-react'
 import { AlertBadge, StatusBadge } from './AlertBadge'
 import { AckButton } from './AckButton'
 import { ExtendSilenceMenu } from '@/components/silences/ExtendSilenceMenu'
-import { LabelChip, HiddenLabelsToggle } from './LabelChip'
+import { LabelChip, HiddenLabelsToggle, ResolvedChip } from './LabelChip'
 import { useAlertStats } from '@/hooks/useAlerts'
 import { getFilterableLabels, getSilenceState, formatSilenceDuration, shortClaimant, partitionLabelsForDisplay } from '@/lib/alertUtils'
 import { renderTextWithLinks } from '@/lib/linkUtils'
@@ -53,7 +53,9 @@ export function AlertListRow({
   const { data: stats } = useAlertStats(alert.fingerprint, alert.clusterName)
   const formatTime = useFormatTime()
 
-  const { type: silenceType, silence, remaining } = silences
+  // A resolved alert (recently-resolved buffer entry) is out of every silence
+  // flow: no silence state, no bell, no extend/expire actions.
+  const { type: silenceType, silence, remaining } = silences && !isResolved
     ? getSilenceState(alert, silences)
     : { type: null as null, silence: null, remaining: undefined }
 
@@ -144,6 +146,7 @@ export function AlertListRow({
   // own distinguishing labels instead (first one emphasized).
   const chipRow = (
     <div className="flex flex-wrap items-center gap-1 pt-0.5">
+      {isResolved && !noOpacity && <ResolvedChip />}
       {uniqueLabels.map(([key, value], i) => (
         <LabelChip key={key} labelKey={key} value={value} emphasized={indented && i === 0} />
       ))}
@@ -156,6 +159,7 @@ export function AlertListRow({
       role="row"
       tabIndex={0}
       data-testid="alert-list-row"
+      data-resolved={isResolved && !noOpacity ? 'true' : 'false'}
       onClick={() => onClick(makeAlertSelectionKeyForAlert(alert))}
       // Only when the row itself has focus: Enter on a button inside it (Fast-Silence, a label chip)
       // bubbles up to here and must not also open the detail panel behind that button's own action.
@@ -165,11 +169,12 @@ export function AlertListRow({
         indented && !selected && !claim && (theme === 'light' ? 'bg-background' : 'bg-background/60'),
         claim && !selected && 'bg-claim-soft hover:bg-selected',
         isLastInGroup && 'border-b border-border/60',
-        isResolved && !noOpacity && 'opacity-50',
+        // Recently resolved: dimmed through tokens (no opacity, so text keeps its contrast).
+        isResolved && !noOpacity && !selected && 'bg-success-soft/50 text-muted-foreground',
         selected && 'bg-accent',
       )}
     >
-      <td className={cn('px-4 py-2 border-l-2', indented && 'pl-10', claim ? 'border-claim-edge' : 'border-transparent')}>
+      <td className={cn('px-4 py-2 border-l-2', indented && 'pl-10', claim ? 'border-claim-edge' : isResolved && !noOpacity ? 'border-success-edge' : 'border-transparent')}>
         <div className="flex flex-col gap-0.5">
           {indented ? (
             <>{claimLine}{chipRow}{metaLine}{descLine}</>
@@ -190,7 +195,7 @@ export function AlertListRow({
       )}
       {showActionsColumn && <td className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center gap-1">
-          {silences && (
+          {silences && !isResolved && (
             <AckButton
               alerts={[alert]}
               silences={silences}
