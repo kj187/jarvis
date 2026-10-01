@@ -2,6 +2,7 @@ import { Fragment, useState, useEffect, useRef, type MouseEvent as ReactMouseEve
 import { ArrowUpDown, Bell, BellMinus, BellOff, ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Grip, RefreshCw } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { AlertListRow } from './AlertListRow'
+import { GroupCommentCountBadge } from '@/components/comments/CommentCountBadge'
 import { EmptyState } from '@/components/common/EmptyState'
 import { StatusBadge } from './AlertBadge'
 import { LabelChip, HiddenLabelsToggle } from './LabelChip'
@@ -783,6 +784,7 @@ export function AlertListView({
                                   ? `${silenceable.length} + ${resolvedCount} resolved`
                                   : group.alerts.length}
                               </span>
+                              <GroupCommentCountBadge alerts={group.alerts} />
                               {activeSilences.length > 0 && (
                                 <span className="inline-flex items-center gap-1 text-xs font-normal text-muted-foreground" title={`Group silenced, ends in ${formatSilenceDuration(activeSilences[0].remaining)}`}>
                                   <BellOff className="h-3 w-3 shrink-0" />

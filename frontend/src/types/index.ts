@@ -283,6 +283,10 @@ export interface ClaimReleasedPayload {
   releasedBy: string
 }
 
+export interface CommentCounts {
+  counts: Record<string, number> // key "<cluster>::<fingerprint>"; alerts without comments are absent
+}
+
 export interface CommentAddedPayload {
   fingerprint: string
   comment: Comment
