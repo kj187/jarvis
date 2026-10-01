@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/kj187/jarvis/backend/internal/auth"
+	"github.com/kj187/jarvis/backend/internal/models"
 	"github.com/labstack/echo/v4"
 )
 
@@ -386,5 +387,55 @@ func TestDeleteComment_AuthMode_OnlyOwnerCanDelete(t *testing.T) {
 	he, ok := err.(*echo.HTTPError)
 	if !ok || he.Code != http.StatusForbidden {
 		t.Fatalf("expected 403, got %v", err)
+	}
+}
+
+func TestGetCommentCounts_OnlyAlertsInSnapshot(t *testing.T) {
+	srv, alertStore, store := newTestServerFull(t)
+	seedFP(t, store, "1234567890abcdef")
+	seedFP(t, store, "fedcba0987654321")
+	for _, in := range []struct{ fp, cluster string }{
+		{"1234567890abcdef", "c1"}, {"1234567890abcdef", "c1"},
+		{"fedcba0987654321", "c1"}, // alert no longer in the snapshot
+	} {
+		if _, err := store.AddComment(in.fp, in.cluster, nil, nil, "alice", "x"); err != nil {
+			t.Fatalf("AddComment: %v", err)
+		}
+	}
+	alertStore.Set([]models.EnrichedAlert{
+		{Fingerprint: "1234567890abcdef", ClusterName: "c1", Status: models.AlertStatus{State: "active"}},
+		{Fingerprint: "aaaaaaaaaaaaaaaa", ClusterName: "c1", Status: models.AlertStatus{State: "active"}},
+	})
+
+	e := echo.New()
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	if err := srv.getCommentCounts(e.NewContext(req, rec)); err != nil {
+		t.Fatalf("getCommentCounts: %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	var resp struct {
+		Counts map[string]int `json:"counts"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(resp.Counts) != 1 || resp.Counts["c1::1234567890abcdef"] != 2 {
+		t.Errorf("counts = %v, want only c1::1234567890abcdef = 2", resp.Counts)
+	}
+}
+
+func TestGetCommentCounts_EmptyIsObject(t *testing.T) {
+	srv, _, _ := newTestServerFull(t)
+	e := echo.New()
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	if err := srv.getCommentCounts(e.NewContext(req, rec)); err != nil {
+		t.Fatalf("getCommentCounts: %v", err)
+	}
+	if rec.Body.String() != "{\"counts\":{}}\n" {
+		t.Errorf("body = %q, want empty counts object", rec.Body.String())
 	}
 }

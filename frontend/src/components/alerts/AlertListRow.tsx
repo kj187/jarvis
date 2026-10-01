@@ -4,6 +4,8 @@ import { AckButton } from './AckButton'
 import { ExtendSilenceMenu } from '@/components/silences/ExtendSilenceMenu'
 import { LabelChip, HiddenLabelsToggle, ResolvedChip } from './LabelChip'
 import { useAlertStats } from '@/hooks/useAlerts'
+import { useCommentCount } from '@/hooks/useAlertComments'
+import { CommentCountBadge } from '@/components/comments/CommentCountBadge'
 import { getFilterableLabels, getSilenceState, formatSilenceDuration, shortClaimant, partitionLabelsForDisplay } from '@/lib/alertUtils'
 import { renderTextWithLinks } from '@/lib/linkUtils'
 import { useFormatTime } from '@/hooks/useFormatTime'
@@ -51,6 +53,7 @@ export function AlertListRow({
   const labelDisplay = useSettingsStore((s) => s.labelDisplay)
 
   const { data: stats } = useAlertStats(alert.fingerprint, alert.clusterName)
+  const commentCount = useCommentCount(alert.fingerprint, alert.clusterName)
   const formatTime = useFormatTime()
 
   // A resolved alert (recently-resolved buffer entry) is out of every silence
@@ -108,6 +111,12 @@ export function AlertListRow({
           <span className="text-xs font-normal text-muted-foreground" title={`${stats.occurrenceCount}× occurred`}>
             ↻{stats.occurrenceCount}×
           </span>
+        </>
+      )}
+      {commentCount > 0 && (
+        <>
+          <span className="font-normal text-muted-foreground">, </span>
+          <CommentCountBadge count={commentCount} />
         </>
       )}
       {silenceType === 'active' && silence && remaining !== undefined && (

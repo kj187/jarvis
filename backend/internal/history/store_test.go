@@ -563,6 +563,47 @@ func TestComments(t *testing.T) {
 	}
 }
 
+func TestCountCommentsByAlert(t *testing.T) {
+	s := newTestStore(t)
+
+	counts, err := s.CountCommentsByAlert()
+	if err != nil {
+		t.Fatalf("CountCommentsByAlert (empty): %v", err)
+	}
+	if len(counts) != 0 {
+		t.Fatalf("expected no counts on an empty table, got %v", counts)
+	}
+
+	s.UpsertFingerprint("fp1", "A", "c1", nil) //nolint:errcheck
+	s.UpsertFingerprint("fp1", "A", "c2", nil) //nolint:errcheck
+	s.UpsertFingerprint("fp2", "B", "c1", nil) //nolint:errcheck
+	for _, in := range []struct{ fp, cluster string }{
+		{"fp1", "c1"}, {"fp1", "c1"}, {"fp1", "c2"}, {"fp2", "c1"},
+	} {
+		if _, err := s.AddComment(in.fp, in.cluster, nil, nil, "alice", "x"); err != nil {
+			t.Fatalf("AddComment: %v", err)
+		}
+	}
+
+	counts, err = s.CountCommentsByAlert()
+	if err != nil {
+		t.Fatalf("CountCommentsByAlert: %v", err)
+	}
+	want := map[ClaimKey]int{
+		{Fingerprint: "fp1", ClusterName: "c1"}: 2,
+		{Fingerprint: "fp1", ClusterName: "c2"}: 1,
+		{Fingerprint: "fp2", ClusterName: "c1"}: 1,
+	}
+	if len(counts) != len(want) {
+		t.Fatalf("counts = %v, want %v", counts, want)
+	}
+	for k, n := range want {
+		if counts[k] != n {
+			t.Errorf("counts[%+v] = %d, want %d", k, counts[k], n)
+		}
+	}
+}
+
 func TestGetComments_PaginatedAndOrdered(t *testing.T) {
 	s := newTestStore(t)
 	s.UpsertFingerprint("fp1", "A", "c", nil) //nolint:errcheck
