@@ -8,6 +8,7 @@ import type {
   HeatmapRange,
   Comment,
   CommentsPage,
+  CommentCounts,
   Claim,
   Silence,
   SilenceTemplate,
@@ -161,6 +162,10 @@ export function fetchComments(
   if (params?.offset) q.set('offset', String(params.offset))
   const qs = q.toString()
   return request<CommentsPage>(`/alerts/${fingerprint}/comments${qs ? `?${qs}` : ''}`)
+}
+
+export function fetchCommentCounts(): Promise<CommentCounts> {
+  return request<CommentCounts>('/alerts/comment-counts')
 }
 
 export function addComment(

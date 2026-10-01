@@ -6,6 +6,8 @@ import { renderTextWithLinks } from '@/lib/linkUtils'
 import { bucketFiringStarts } from '@/lib/heatmapUtils'
 import { AlertBadge } from './AlertBadge'
 import { LabelChip, HiddenLabelsToggle, ResolvedChip } from './LabelChip'
+import { useCommentCount } from '@/hooks/useAlertComments'
+import { CommentCountBadge } from '@/components/comments/CommentCountBadge'
 import { AckButton } from './AckButton'
 import { HeatmapCellsRow } from './HeatmapCells'
 import { HIDDEN_LABEL_KEYS } from '@/lib/alertUtils'
@@ -93,6 +95,7 @@ function AlertEntry({
     : getSilenceState(alert, silences)
   const expiredSilence = silenceType === null && !isResolved ? getExpiredSilence(alert, silences) : null
   const { data: stats } = useAlertStats(alert.fingerprint, alert.clusterName)
+  const commentCount = useCommentCount(alert.fingerprint, alert.clusterName)
   const claim = alert.activeClaim ?? null
   const labelDisplay = useSettingsStore((s) => s.labelDisplay)
   const maintainer = claim ? null : (alert.labels['maintainer'] ?? null)
@@ -196,6 +199,7 @@ function AlertEntry({
             {stats && stats.occurrenceCount > 1 && (
               <span title={`${stats.occurrenceCount}× occurred`}>↻{stats.occurrenceCount}×</span>
             )}
+            {commentCount > 0 && <CommentCountBadge count={commentCount} />}
             {maintainer && <span>{maintainer}</span>}
           </div>
           {isResolved && (

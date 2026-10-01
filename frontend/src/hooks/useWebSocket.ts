@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useUIStore } from '@/store/uiStore'
+import { COMMENT_COUNTS_KEY } from '@/hooks/useAlertComments'
+import { alertKeySetChanged } from '@/lib/commentCounts'
 import type {
   WSEvent,
   AlertsUpdatePayload,
@@ -85,6 +87,9 @@ export function useWebSocket() {
       switch (event.type) {
         case 'alerts_update': {
           const payload = event.payload as AlertsUpdatePayload
+          if (alertKeySetChanged(qc.getQueryData(['alerts', {}]), payload.alerts)) {
+            qc.invalidateQueries({ queryKey: COMMENT_COUNTS_KEY })
+          }
           qc.setQueryData(['alerts', undefined], payload.alerts)
           qc.setQueryData(['alerts', {}], payload.alerts)
           break
@@ -131,6 +136,7 @@ export function useWebSocket() {
         case 'comment_added': {
           const payload = event.payload as CommentAddedPayload
           const clusterName = payload.comment?.clusterName
+          qc.invalidateQueries({ queryKey: COMMENT_COUNTS_KEY })
           if (clusterName) {
             qc.invalidateQueries({ queryKey: ['comments', payload.fingerprint, clusterName] })
           } else {

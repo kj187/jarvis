@@ -856,6 +856,35 @@ func (s *Store) GetComments(fingerprint, clusterName string, limit, offset int) 
 	return comments, total, nil
 }
 
+// CountCommentsByAlert returns the number of comments per (fingerprint,
+// cluster) pair as one SQL aggregate — never by loading comment rows.
+// Pairs without comments are absent.
+func (s *Store) CountCommentsByAlert() (map[ClaimKey]int, error) {
+	rows, err := s.query(context.Background(), `
+		SELECT fingerprint, cluster_name, COUNT(*)
+		FROM alert_comments
+		GROUP BY fingerprint, cluster_name
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("count comments by alert: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	counts := make(map[ClaimKey]int)
+	for rows.Next() {
+		var k ClaimKey
+		var n int
+		if err := rows.Scan(&k.Fingerprint, &k.ClusterName, &n); err != nil {
+			return nil, fmt.Errorf("scan comment count: %w", err)
+		}
+		counts[k] = n
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return counts, nil
+}
+
 // GetComment returns a comment by ID scoped to (fingerprint, cluster).
 func (s *Store) GetComment(fingerprint, clusterName string, id int64) (*models.Comment, error) {
 	var c models.Comment

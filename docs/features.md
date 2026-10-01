@@ -17,6 +17,7 @@ The card view is the default landing page and the primary interface for active a
 - How long the alert has been firing (e.g. "firing for 2h 14m")
 - A 14-day firing sparkline under the timestamp — see [Firing Heatmap](#firing-heatmap)
 - Claim line — "Claimed by: \<name\> · \<time\>" above the entry, with a blue right accent, if anyone has claimed it
+- Comment count — a speech-bubble icon with the number of comments next to the start time, shown only when the alert has comments (see [Comments](#alert-detail-panel))
 
 **Actions available directly on the card:**
 - **Silence / Fast-Silence** — a persistent bell icon in a narrow column on the right of each alert entry (and one for the whole group, in the card header) opens a menu with the full silence form and one-click Fast-Silence durations — see [Fast-Silence](#fast-silence)
@@ -63,6 +64,8 @@ Within each section, groups are collapsed by alert name. Expand a group to see i
 - **State** — firing / suppressed / resolved (hidden when a single state tab is active)
 - **Time** — sortable; earliest start time within the group
 - **Actions** — one silence icon (menu: full form + Fast-Silence durations) plus, when the alert is already suppressed, an [Extend](#extend-silence) icon (menu of durations) and an expire icon
+
+A collapsed group header shows a speech-bubble icon with the total number of comments across its alerts, and an expanded alert row shows its own count in its time line, the same as on the card. Alerts and groups without comments show nothing. The count updates live when someone comments, without a page reload.
 
 There is no separate Claim column — a claimed alert shows a read-only "Claimed by: \<name\> · \<time\>" line above its labels instead; claiming and releasing happen in the detail panel.
 
@@ -264,6 +267,7 @@ The detail panel is the central hub for working with a single alert. It slides i
 ![Detail Panel — Details tab](assets/feature-detail-tab-details.png)
 
 - Complete label set, rendered as key-value pairs
+- **Metadata** section above the labels, in two columns: the alert's **fingerprint** (the identifier that uniquely identifies it — a hash of its labels, the same value Alertmanager uses — with a copy button for finding it in Alertmanager, the API, or logs), its **cluster**, when it **started** and was **first seen**, the Alertmanager **receivers** it is routed to, and a link to its **source** (the rule's `generatorURL`, shown only when it is an `http(s)` URL)
 - All annotations, including `description` and `summary`
 - **Dynamic link buttons**: any label or annotation whose value is an absolute URL (`http://` or `https://`) automatically renders as a clickable button using the key name as the label — no configuration needed. Examples: `dashboard=https://grafana.example.com/d/abc`, `ticket=https://jira.example.com/ISSUE-1`
 - **Runbook**: the `runbook` key (label or annotation) is handled specially:

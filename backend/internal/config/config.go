@@ -46,8 +46,8 @@ type Config struct {
 	OIDCClientSecret string
 	OIDCRedirectURL  string
 	OIDCScopes       []string
-	OIDCGroupsClaim  string // ID-token claim that carries the user's groups (e.g. "groups", "cognito:groups"); empty = groups are not read
-	OIDCAdminValue   string // group inside that claim that grants the admin role (e.g. "Administrator")
+	OIDCGroupsClaim  string   // ID-token claim that carries the user's groups (e.g. "groups", "cognito:groups"); empty = groups are not read
+	OIDCAdminGroups  []string // groups inside that claim that grant the admin role (JARVIS_OIDC_ADMIN_VALUE, comma-separated); membership in any one suffices
 
 	Retention RetentionConfig
 
@@ -68,7 +68,7 @@ type Config struct {
 // operator meant; main logs each one at startup.
 func (c *Config) Warnings() []string {
 	var w []string
-	if c.AuthProvider == "oidc" && c.OIDCAdminValue != "" && c.OIDCGroupsClaim == "" {
+	if c.AuthProvider == "oidc" && len(c.OIDCAdminGroups) > 0 && c.OIDCGroupsClaim == "" {
 		w = append(w, "JARVIS_OIDC_ADMIN_VALUE is set but JARVIS_OIDC_GROUPS_CLAIM is not: no group is read from the token, so nobody becomes admin")
 	}
 	if c.ResolvedBufferTTL > ResolvedBufferTTLWarnAbove {
@@ -306,7 +306,7 @@ func Load() (*Config, error) {
 		OIDCRedirectURL:   getEnv("JARVIS_AUTH_OIDC_REDIRECT_URL", ""),
 		OIDCScopes:        oidcScopes,
 		OIDCGroupsClaim:   getEnv("JARVIS_OIDC_GROUPS_CLAIM", ""),
-		OIDCAdminValue:    getEnv("JARVIS_OIDC_ADMIN_VALUE", ""),
+		OIDCAdminGroups:   splitCSV(getEnv("JARVIS_OIDC_ADMIN_VALUE", "")),
 		Retention:         retention,
 
 		SilenceDurations: silenceDurations,
@@ -551,6 +551,18 @@ func resolveAlertmanagerLinkURL(alertmanagerURL, hostAlias string) string {
 	base.Scheme = alias.Scheme
 	base.Host = alias.Host
 	return base.String()
+}
+
+// splitCSV splits a comma-separated value, trimming whitespace and dropping
+// empty entries; nil when nothing is left.
+func splitCSV(raw string) []string {
+	var out []string
+	for _, part := range strings.Split(raw, ",") {
+		if part = strings.TrimSpace(part); part != "" {
+			out = append(out, part)
+		}
+	}
+	return out
 }
 
 func getEnv(key, fallback string) string {

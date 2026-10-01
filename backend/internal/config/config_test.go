@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -575,8 +576,35 @@ func TestLoad_OIDCGroupsClaim(t *testing.T) {
 	if cfg.OIDCGroupsClaim != "cognito:groups" {
 		t.Errorf("OIDCGroupsClaim = %q, want cognito:groups", cfg.OIDCGroupsClaim)
 	}
-	if cfg.OIDCAdminValue != "Operator" {
-		t.Errorf("OIDCAdminValue = %q, want Operator", cfg.OIDCAdminValue)
+	if !reflect.DeepEqual(cfg.OIDCAdminGroups, []string{"Operator"}) {
+		t.Errorf("OIDCAdminGroups = %v, want [Operator]", cfg.OIDCAdminGroups)
+	}
+}
+
+func TestLoad_OIDCAdminValueList(t *testing.T) {
+	cases := []struct {
+		name string
+		env  string
+		want []string
+	}{
+		{"unset", "", nil},
+		{"single value", "admin_a", []string{"admin_a"}},
+		{"two values", "admin_a,admin_b", []string{"admin_a", "admin_b"}},
+		{"whitespace trimmed", " admin_a , admin_b ", []string{"admin_a", "admin_b"}},
+		{"empty entries dropped", "admin_a,,admin_b,", []string{"admin_a", "admin_b"}},
+		{"only separators", " , ,", nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("JARVIS_OIDC_ADMIN_VALUE", tc.env)
+			cfg, err := Load()
+			if err != nil {
+				t.Fatalf("Load() error: %v", err)
+			}
+			if !reflect.DeepEqual(cfg.OIDCAdminGroups, tc.want) {
+				t.Fatalf("OIDCAdminGroups = %#v, want %#v", cfg.OIDCAdminGroups, tc.want)
+			}
+		})
 	}
 }
 
@@ -601,10 +629,10 @@ func TestWarnings_AdminGroupWithoutClaim(t *testing.T) {
 		cfg  Config
 		want int
 	}{
-		{"oidc, admin group but no claim: nobody can become admin", Config{AuthProvider: "oidc", OIDCAdminValue: "Operator"}, 1},
-		{"oidc, claim and admin group", Config{AuthProvider: "oidc", OIDCGroupsClaim: "groups", OIDCAdminValue: "Operator"}, 0},
+		{"oidc, admin group but no claim: nobody can become admin", Config{AuthProvider: "oidc", OIDCAdminGroups: []string{"Operator"}}, 1},
+		{"oidc, claim and admin group", Config{AuthProvider: "oidc", OIDCGroupsClaim: "groups", OIDCAdminGroups: []string{"Operator"}}, 0},
 		{"oidc, no admin group", Config{AuthProvider: "oidc", OIDCGroupsClaim: "groups"}, 0},
-		{"admin group set but provider is not oidc", Config{AuthProvider: "internal", OIDCAdminValue: "Operator"}, 0},
+		{"admin group set but provider is not oidc", Config{AuthProvider: "internal", OIDCAdminGroups: []string{"Operator"}}, 0},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
