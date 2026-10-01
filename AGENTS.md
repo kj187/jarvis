@@ -2,8 +2,8 @@
 
 You are a developer working on Jarvis, a web frontend for Prometheus
 Alertmanager. This file is the **single entry point for every AI coding
-agent**: the minimum context for any task. Deep references live in `.agents/`,
-workflows as skills in `.agents/skills/` — load them via the
+agent**: the minimum context for any task. Deep references and skills live in
+`.agents/` — load them via the
 [Task Router](#task-router--load-on-demand); never duplicate them here.
 
 ## What Jarvis Is
@@ -13,17 +13,15 @@ lifecycle in SQLite or PostgreSQL, keeps the current poll snapshot in an
 in-memory store, and pushes updates via WebSocket to the frontend. Users can
 view, filter, silence, claim, and comment on alerts.
 
-Stack: Go 1.26+ (Echo v4); React 19,
-TypeScript `strict`, Vite 8, Zustand v5, TanStack Query v5, Tailwind v4; SQLite
-(`modernc.org/sqlite`) or PostgreSQL (`pgx/v5`) by `JARVIS_DB_DSN` prefix, both
-pure Go; one distroless image, frontend embedded (`//go:build prod`).
+Stack: Go 1.26+ (Echo); React 19, TypeScript `strict`, Vite, Zustand v5,
+TanStack Query v5, Tailwind v4; SQLite or PostgreSQL by `JARVIS_DB_DSN` prefix,
+both pure Go; one distroless image, frontend embedded (`//go:build prod`).
 
 Layout: `backend/` (Go, `internal/*`) · `frontend/` (`src/components|hooks|lib|store`,
-`e2e/`) · `charts/jarvis/` (Helm, own `CHANGELOG.md`) · `docs/` (user docs; also AI
-context: `testing-e2e.md`, `scope.md`, `design-system.md`, `ai-agents.md`) ·
-`website/` (VitePress, renders `docs/`) · `design/` · `scripts/` · `Makefile` ·
-`.agents/` (indexes `architecture.md`, `testing.md`, `lessons.md`; `invariants.md`,
-`doc-sync.md`; [Agent Skills](https://agentskills.io) in `skills/<name>/SKILL.md`).
+`e2e/`) · `charts/jarvis/` (Helm, own `CHANGELOG.md`) · `docs/` (user docs, also AI
+context) · `website/` (VitePress, renders `docs/`) · `design/` · `scripts/` ·
+`Makefile` · `.agents/` (references; [Agent Skills](https://agentskills.io) in
+`skills/<name>/SKILL.md`).
 
 ## Task Router — load on demand
 
@@ -35,9 +33,7 @@ may be read directly; an index names the topic file(s) to open. Adapters:
 |---|---|
 | Data model, DB schema, API, WS events, auth, state machine, component tree, stores | `.agents/architecture.md` (index → topic file) |
 | Changing code an invariant governs, reviewing a diff, proposing an invariant | `.agents/invariants.md` |
-| Finishing a change: which docs and context files to update (Rule 6) | `.agents/doc-sync.md` |
 | Workflows: feature TDD checklist · branch/commit/PR/CI/changelog · UI changes · feature-request issues · docs site, new doc page · security audit | `.agents/skills/<name>/SKILL.md`: `add-feature` · `pr-workflow` · `design-system` (rules: `docs/design-system.md`) · `scope-triage` · `website` · `security-check` |
-| Scope gate for a feature idea | `docs/scope.md` |
 | Tests, test matrix, CI pipeline · E2E / screenshot stack | `.agents/testing.md` (index → `.agents/testing/`) · `docs/testing-e2e.md` |
 | Env vars, metrics, PostgreSQL / multi-replica HA, Kubernetes, migration | `docs/configuration.md`, `docs/metrics.md`, `docs/postgres-ha.md`, `docs/deploy-kubernetes.md`, `docs/migrate-postgres.md`, `docs/sqlite-limits.md` |
 | Release — **only when the user explicitly asks** | `.agents/skills/release/SKILL.md` |
@@ -67,9 +63,9 @@ or reuse one; retire in place (`docs/ai-agents.md`).
 5. **Echo route order**: static segments before wildcard params
    (`/api/v1/alerts/groups` before `/api/v1/alerts/:fingerprint/*`).
    `internal/api/router.go`.
-6. *Retired* — `console.log` is rejected by ESLint `no-console`.
-7. *Retired* — `cursor: pointer` is the global CSS rule in
-   `frontend/src/index.css`; never override it per component.
+6. *Retired* — ESLint `no-console`.
+7. *Retired* — global `cursor: pointer` rule in `frontend/src/index.css`;
+   never override it per component.
 8. **DB pools**: SQLite `SetMaxOpenConns(1)` + WAL. PostgreSQL a capped pool
    (`JARVIS_DB_MAX_OPEN_CONNS`, default 10, MaxIdle = MaxOpen) — never
    unbounded, never 1.
@@ -131,9 +127,8 @@ or reuse one; retire in place (`docs/ai-agents.md`).
    when a change touches: Go models / DB schema, API routes, WS events, env
    vars, state machines, invariants, test or CI commands, workflow or release
    contracts, security behavior, or user-visible behavior (`docs/features.md`).
-   No duty to describe every component or hook; update the component tree only
-   for a structural change (new page, store, hook family). Before finishing,
-   walk the table in `.agents/doc-sync.md`.
+   Before finishing, walk the table in `.agents/doc-sync.md` (it also says what
+   *not* to document).
 7. **Done-gate — never report work as complete untested.** Before presenting
    non-documentation work as finished, run the targeted tests for what you
    changed (`go test ./internal/<pkg>/...`; frontend additionally
@@ -147,12 +142,11 @@ or reuse one; retire in place (`docs/ai-agents.md`).
 9. **Dependabot** runs daily; its PRs run through CI — green CI →
    merge, no manual intervention needed.
 10. **`main` is PR-only — always work on a feature branch, with user gates.**
-    Direct pushes to `main` are rejected. Every
-    change goes branch → commit (`-s`, tests in the same commit) → PR → watch
-    CI → squash merge → cleanup, and you **ask the user** at three gates:
-    before creating the branch (propose `<type>/<slug>`), before
-    pushing/opening the PR, and before merging. Never commit on local `main`.
-    Steps → `.agents/skills/pr-workflow/SKILL.md`.
+    Every change goes branch → commit → PR → watch CI → squash merge →
+    cleanup, and you **ask the user** at three gates: before creating the
+    branch (propose `<type>/<slug>`), before pushing/opening the PR, and before
+    merging. Never commit on local `main`. Steps →
+    `.agents/skills/pr-workflow/SKILL.md`.
 11. **Scope gate — check every new feature (requested or self-proposed)
     against `docs/scope.md` before building it.** Out of scope or borderline →
     say so and why **before writing any code**; the user decides. Never
@@ -173,7 +167,7 @@ or reuse one; retire in place (`docs/ai-agents.md`).
 ```
 feat(<scope>): ... → MINOR  |  fix / security(<scope>): ... → PATCH
 BREAKING CHANGE: ... → MAJOR (footer, Workflow Rule 13)
-test / refactor / docs / chore → no bump (tests always in the implementation's commit)
+test / refactor / docs / chore → no bump
 ```
 
 Scopes: `alerts` `silences` `claims` `comments` `ws` `api` `db` `config`
@@ -187,7 +181,5 @@ Scopes: `alerts` `silences` `claims` `comments` `ws` `api` `db` `config`
 cp .env.example .env    # configure at least one cluster
 make setup              # enable pre-commit hooks (once)
 make up                 # dev stack: frontend :5173, backend :8080
-cd backend && go test ./...
-make test-all
-make verify             # every CI gate + PostgreSQL tests + image smoke test
+make test-all           # tests only; `make verify` = every CI gate (Rule 7)
 ```
