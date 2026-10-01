@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import { ArrowUpRight, BellOff, User } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { getFilterableLabels, getSilenceState, getExpiredSilence, formatSilenceDuration, tzAbbr, shortClaimant, partitionLabelsForDisplay } from '@/lib/alertUtils'
+import { getFilterableLabels, getSilenceState, getExpiredSilence, formatSilenceDuration, tzAbbr, shortClaimant, partitionLabelsForDisplay, silenceableAlerts } from '@/lib/alertUtils'
 import { renderTextWithLinks } from '@/lib/linkUtils'
 import { bucketFiringStarts } from '@/lib/heatmapUtils'
 import { AlertBadge } from './AlertBadge'
-import { LabelChip, HiddenLabelsToggle } from './LabelChip'
+import { LabelChip, HiddenLabelsToggle, ResolvedChip } from './LabelChip'
 import { AckButton } from './AckButton'
 import { HeatmapCellsRow } from './HeatmapCells'
 import { HIDDEN_LABEL_KEYS } from '@/lib/alertUtils'
@@ -46,7 +46,7 @@ function FiringSparkline({
   if (!data) return null
   const cells = bucketFiringStarts(data.firingStarts, '30d').slice(-14)
   return (
-    <div className="mb-1">
+    <div className="mb-1" data-decoration="sparkline">
       <HeatmapCellsRow cells={cells} range="30d" cellClassName="h-2 w-full rounded-compact" gapClassName="gap-0.5" />
     </div>
   )
@@ -86,9 +86,12 @@ function AlertEntry({
   index: number
   total: number
 }) {
-  const { type: silenceType, silence, remaining } = getSilenceState(alert, silences)
-  const expiredSilence = silenceType === null ? getExpiredSilence(alert, silences) : null
+  // A resolved alert (recently-resolved buffer entry) is out of every silence flow.
   const isResolved = alert.status.state === 'resolved'
+  const { type: silenceType, silence, remaining } = isResolved
+    ? { type: null as null, silence: null, remaining: undefined }
+    : getSilenceState(alert, silences)
+  const expiredSilence = silenceType === null && !isResolved ? getExpiredSilence(alert, silences) : null
   const { data: stats } = useAlertStats(alert.fingerprint, alert.clusterName)
   const claim = alert.activeClaim ?? null
   const labelDisplay = useSettingsStore((s) => s.labelDisplay)
@@ -114,15 +117,19 @@ function AlertEntry({
     // screen-reader path is the named "Open details" button in the action rail.
     <div
       data-testid="alert-card"
+      data-resolved={isResolved ? 'true' : 'false'}
       data-fingerprint={alert.fingerprint}
       onClick={() => onClick(makeAlertSelectionKeyForAlert(alert), groupKeys)}
       className={cn(
         'group relative flex cursor-pointer items-start gap-1 px-3 py-3.5 transition-colors',
         // Claimed entries carry a blue right accent — "someone's on it", scannable
         // in a large group — not the old grey tint that read as "deprioritised".
-        claim ? 'border-r-4 border-claim-edge bg-claim-soft hover:bg-selected' : 'hover:bg-accent/20',
+        claim ? 'border-r-4 border-r-claim-edge bg-claim-soft hover:bg-selected' : 'hover:bg-accent/20',
         isSelected && !claim && 'bg-selected hover:bg-info-soft',
         isSelected && claim && 'bg-info-soft',
+        // Recently resolved: dimmed through tokens (no opacity, so text keeps its contrast).
+        // Like a claimed entry (right edge + soft fill), in green.
+        isResolved && !isSelected && 'border-r-4 border-r-success-edge bg-success-soft/50 text-muted-foreground',
       )}
     >
       <div className="min-w-0 flex-1">
@@ -169,6 +176,7 @@ function AlertEntry({
               {index + 1}/{total}
             </span>
             <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
+              {isResolved && <ResolvedChip />}
               {labels.map(([key, value], i) => (
                 <LabelChip key={key} labelKey={key} value={value} emphasized={i === 0} />
               ))}
@@ -178,9 +186,9 @@ function AlertEntry({
         )}
 
         {/* Timestamp + maintainer */}
-        <div className="mb-0.5 flex flex-col gap-0.5 text-xs text-muted-foreground">
+        <div className="mb-0.5 flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
           <div className="flex items-center gap-2">
-            <span title={new Date(alert.startsAt).toLocaleString('en-US')}>
+            <span data-testid="alert-start-time" title={new Date(alert.startsAt).toLocaleString('en-US')}>
               {new Date(alert.startsAt) > new Date()
                 ? `Expires ${formatTime(alert.endsAt)}`
                 : formatTime(alert.startsAt)}
@@ -190,9 +198,9 @@ function AlertEntry({
             )}
             {maintainer && <span>{maintainer}</span>}
           </div>
-          {isResolved && stats?.lastResolvedAt && (
-            <span className="text-success-fg" title={new Date(stats.lastResolvedAt).toLocaleString('en-US')}>
-              ✓ {formatTime(stats.lastResolvedAt)}
+          {isResolved && (
+            <span data-testid="alert-resolved-at" className="ml-auto text-success-fg" title={new Date(alert.endsAt).toLocaleString('en-US')}>
+              ✓ {formatTime(alert.endsAt)}
             </span>
           )}
         </div>
@@ -307,6 +315,13 @@ export function AlertCard({
   }
 
   const visible = alerts.slice(0, visibleCount)
+  // Resolved members (recently-resolved buffer) take no part in group silence actions; the
+  // group badge counts the others, unless the whole card is resolved.
+  const silenceable = silenceableAlerts(alerts)
+  const resolvedCount = count - silenceable.length
+  const allResolved = silenceable.length === 0
+  // A card with one (resolved) entry has no per-entry label row: the marker leads the card's label strip.
+  const singleResolved = count === 1 && allResolved
   const claimedCount = alerts.filter((a) => a.activeClaim != null).length
   const groupKeys = alerts.length > 1 ? alerts.map(makeAlertSelectionKeyForAlert) : null
 
@@ -324,10 +339,14 @@ export function AlertCard({
 
   return (
     <div
+      data-testid="alert-group-card"
+      data-resolved={allResolved ? 'true' : 'false'}
       className={cn(
         'overflow-hidden rounded-surface border border-border bg-card shadow-sm',
         'border-l-4',
         severityBorderColor[severity] ?? 'border-l-slate-500',
+        // A card made only of recently resolved alerts is dimmed as a whole.
+        allResolved && 'text-muted-foreground',
       )}
     >
       {/* Card header */}
@@ -336,12 +355,13 @@ export function AlertCard({
         onDoubleClick={toggleCollapsed}
         title="Double-click to collapse"
       >
-        <span className="break-all font-semibold leading-tight text-foreground">{alertname}</span>
+        <span className={cn('break-all font-semibold leading-tight', allResolved ? 'text-muted-foreground' : 'text-foreground')}>{alertname}</span>
         <div className="flex shrink-0 items-center gap-2" title="">
           {showSeverityBadge && severityRaw && <AlertBadge severity={severity} />}
           {count > 1 && (
             <span className="flex h-5 min-w-[20px] items-center justify-center rounded-pill bg-accent px-1.5 text-xs font-bold">
-              ×{count}
+              {/* Mixed card: "active + resolved" (position and claimed counts stay inclusive). */}
+              {resolvedCount > 0 && !allResolved ? `×${silenceable.length} + ${resolvedCount} resolved` : `×${count}`}
             </span>
           )}
           {claimedCount > 0 && (
@@ -353,14 +373,16 @@ export function AlertCard({
               {count === 1 ? 'Claimed' : `Claimed ${claimedCount}/${count}`}
             </span>
           )}
-          <AckButton
-            alerts={alerts}
-            silences={silences}
-            variant="icon"
-            subtle={false}
-            requireActive={false}
-            onCreateSilence={onCreateSilence}
-          />
+          {silenceable.length > 0 && (
+            <AckButton
+              alerts={silenceable}
+              silences={silences}
+              variant="icon"
+              subtle={false}
+              requireActive={false}
+              onCreateSilence={onCreateSilence}
+            />
+          )}
         </div>
       </div>
 
@@ -369,8 +391,9 @@ export function AlertCard({
           Labels have no automatic color (see LabelChip), so this is neutral
           by default anyway; only an explicit custom color from Settings →
           Labels shows here. */}
-      {!collapsed && (sortedCommonLabels.length > 0 || hiddenCommonLabels.length > 0) && (
+      {!collapsed && (sortedCommonLabels.length > 0 || hiddenCommonLabels.length > 0 || singleResolved) && (
         <div data-testid="alert-card-common-labels" className="flex flex-wrap gap-1 border-b border-border/60 px-3 py-2">
+          {singleResolved && <ResolvedChip />}
           {sortedCommonLabels.map(([key, value]) => (
             <LabelChip key={key} labelKey={key} value={value} />
           ))}

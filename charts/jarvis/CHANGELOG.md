@@ -8,6 +8,15 @@ Entries up to and including 1.7.6 were reconstructed from the git history when t
 
 ## [Unreleased]
 
+### Breaking Changes
+
+- No breaking changes.
+
+### Added
+
+- `config.resolvedBufferTTL` value, rendered as `JARVIS_RESOLVED_BUFFER_TTL` in the ConfigMap only when set. It sets how long a resolved alert stays in the live snapshot (Go duration, 1m–24h; an invalid value makes the app refuse to start, so it surfaces on rollout). Empty by default, so an existing release renders unchanged and keeps the 20-minute default — not breaking.
+- `auth.oidc.adminValue` now accepts several comma-separated groups (e.g. `admin_a,admin_b`); membership in any one grants the admin role. A single group behaves exactly as before and the value is passed through unchanged, so an existing release renders unchanged — not breaking.
+
 ## [2.1.0] - 2026-09-28
 
 ### Breaking Changes

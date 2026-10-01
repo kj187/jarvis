@@ -164,6 +164,14 @@ Labels are ordered by usefulness: `alertname` and `severity` are always pinned t
 
 ---
 
+### Recently resolved
+
+The **Recently resolved** toggle (the clock icon left of the Active / Suppressed / Resolved switch, shown on the Active tab only) also lists alerts that resolved a moment ago, right in the normal list. It is off by default, so nothing changes until you switch it on, and the choice is remembered in your settings (and follows your account when you are signed in).
+
+Resolved entries are sorted exactly like active alerts, so one sits between the active ones by its start time, and they are marked with a **Resolved** badge and a muted background. They come from the live snapshot, not from the history, so switching the toggle costs no extra request. A single resolved alert, or a group made only of resolved alerts, is dimmed as a whole; in a mixed group only the resolved alerts are. A mixed group's badge reads e.g. `2 + 1 resolved` (active + resolved); position and section counts include the resolved entries. Counters (the number on the **Alerts** tab, the Active count, the overview) never include them, and a resolved entry takes no part in silencing: there is no Fast-Silence bell, and a group's silence actions only cover its active alerts (a group made only of resolved entries has none). Claiming stays closed for them; comments still work.
+
+How long an alert counts as recently resolved is an instance setting, [`JARVIS_RESOLVED_BUFFER_TTL`](configuration.md#jarvis_resolved_buffer_ttl) (20 minutes by default). Older resolutions live in the [Resolved View](#resolved-view).
+
 ### Resolved View
 
 Full alert history persisted in the database (SQLite or PostgreSQL — see [docs/postgres-ha.md](postgres-ha.md)) — survives container restarts and Alertmanager reconnects.
@@ -256,6 +264,7 @@ The detail panel is the central hub for working with a single alert. It slides i
 ![Detail Panel — Details tab](assets/feature-detail-tab-details.png)
 
 - Complete label set, rendered as key-value pairs
+- **Metadata** section above the labels, in two columns: the alert's **fingerprint** (the identifier that uniquely identifies it — a hash of its labels, the same value Alertmanager uses — with a copy button for finding it in Alertmanager, the API, or logs), its **cluster**, when it **started** and was **first seen**, the Alertmanager **receivers** it is routed to, and a link to its **source** (the rule's `generatorURL`, shown only when it is an `http(s)` URL)
 - All annotations, including `description` and `summary`
 - **Dynamic link buttons**: any label or annotation whose value is an absolute URL (`http://` or `https://`) automatically renders as a clickable button using the key name as the label — no configuration needed. Examples: `dashboard=https://grafana.example.com/d/abc`, `ticket=https://jira.example.com/ISSUE-1`
 - **Runbook**: the `runbook` key (label or annotation) is handled specially:

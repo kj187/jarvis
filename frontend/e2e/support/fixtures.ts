@@ -64,6 +64,30 @@ export async function waitForActiveAlerts(
   throw new Error(`timed out waiting for >=${expectedMin} active alerts`)
 }
 
+/**
+ * Triggers polls until Jarvis' live snapshot holds at least `expectedMin`
+ * alerts in the resolved buffer (state `resolved`, kept for the resolved-buffer
+ * TTL). Call after `am.resolve(...)`.
+ */
+export async function waitForResolvedBuffer(
+  jarvis: JarvisClient,
+  baseURL: string,
+  expectedMin: number,
+  timeoutMs = 15_000,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    await jarvis.poll()
+    const res = await fetch(`${baseURL}/api/v1/alerts`)
+    if (res.ok) {
+      const alerts = (await res.json()) as Array<{ status: { state: string } }>
+      if (alerts.filter((a) => a.status.state === 'resolved').length >= expectedMin) return
+    }
+    await new Promise((r) => setTimeout(r, 500))
+  }
+  throw new Error(`timed out waiting for >=${expectedMin} resolved buffer entries`)
+}
+
 export const JARVIS_BASE_URL = JARVIS_URL
 
 /**

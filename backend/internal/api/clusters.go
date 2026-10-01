@@ -75,5 +75,8 @@ func (s *Server) getStatus(c echo.Context) error {
 		"ws_clients":            s.hub.ClientCount(),
 		"leader":                s.pollTrigger.IsLeader(),
 		"poll_interval_seconds": s.cfg.PollInterval.Seconds(),
+		// Effective resolved-buffer window (JARVIS_RESOLVED_BUFFER_TTL), so the UI can say how long
+		// a recently resolved alert stays in the live view.
+		"resolved_buffer_ttl_seconds": s.alertStore.ResolvedTTL().Seconds(),
 	})
 }

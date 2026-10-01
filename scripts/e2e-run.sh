@@ -14,6 +14,13 @@
 # parallel jobs; every shard boots its own stack, so run shards on separate hosts
 # (the stack binds fixed host ports 8085/8086).
 #
+# Optional: E2E_FAST=1 (local opt-in, `make e2e-fast`; CI never sets it) skips the
+# image rebuild when nothing the image is built from changed (content hash of
+# backend/, frontend/ without e2e/ specs, Containerfile.e2e, kept in
+# tmp/e2e-image.hash) and mounts a persistent pnpm store + corepack cache
+# (volume jarvis_e2e_pnpm_store) into the Playwright container so `pnpm install`
+# does not re-download. The default path is unchanged.
+#
 # Brings the stack up fresh, waits until it is ready, runs Playwright inside the
 # official playwright container, then always tears the stack down (ephemeral).
 
@@ -90,27 +97,60 @@ if [ "$MODE" = "oidc" ]; then
   wait_for "${OIDC_HOST_URL}/default/.well-known/openid-configuration" "mock-oidc"
 fi
 
-"${COMPOSE[@]}" up -d --build e2e-alertmanager e2e-jarvis
+image_hash() {
+  git ls-files -z -co --exclude-standard -- backend frontend Containerfile.e2e .containerignore \
+    ':!frontend/e2e' ':!frontend/playwright*' \
+    | xargs -0 sh -c 'for f; do [ -f "$f" ] && shasum -a 256 "$f"; done' sh \
+    | shasum -a 256 | cut -d' ' -f1
+}
+
+BUILD_ARGS=(--build)
+HASH_FILE="${ROOT}/tmp/e2e-image.hash"
+if [ "${E2E_FAST:-}" = "1" ]; then
+  CUR_HASH="$(image_hash)"
+  IMAGE_REF="jarvis-e2e:local"  # image of e2e-jarvis in compose.e2e.yml
+  # podman: `image exists`; docker: `image inspect`
+  IMAGE_CMD="${COMPOSE[0]}"
+  if [ "$(cat "$HASH_FILE" 2>/dev/null || true)" = "$CUR_HASH" ] \
+     && "$IMAGE_CMD" image inspect "$IMAGE_REF" >/dev/null 2>&1; then
+    echo "==> [${MODE}] E2E_FAST: image up to date, skipping build"
+    BUILD_ARGS=(--no-build)
+  else
+    echo "==> [${MODE}] E2E_FAST: image missing or sources changed, building"
+  fi
+fi
+
+"${COMPOSE[@]}" up -d "${BUILD_ARGS[@]}" e2e-alertmanager e2e-jarvis
+if [ "${E2E_FAST:-}" = "1" ] && [ "${BUILD_ARGS[0]}" = "--build" ]; then
+  mkdir -p "$(dirname "$HASH_FILE")" && echo "$CUR_HASH" > "$HASH_FILE"
+fi
 wait_for "${JARVIS_HOST_URL}/api/v1/status" "jarvis"
 
 # ── Run Playwright in the official container, on the e2e network ──────────────
 PW_SETUP='corepack enable && pnpm install --frozen-lockfile'
+PW_RUN=("${COMPOSE[@]}" run --rm)
+if [ "${E2E_FAST:-}" = "1" ]; then
+  # The store lives outside the mounted frontend/ dir, so host node_modules and
+  # the store never interact beyond what the install already does.
+  PW_RUN+=(-v jarvis_e2e_pnpm_store:/pnpm-store:z -e npm_config_store_dir=/pnpm-store -e COREPACK_HOME=/pnpm-store/corepack)
+  PW_SETUP='corepack enable && pnpm install --frozen-lockfile --prefer-offline'
+fi
 
 case "$ACTION" in
   test)
     echo "==> [${MODE}] running functional suite (${E2E_TEST_DIR})${E2E_SHARD:+, shard ${E2E_SHARD}}"
-    "${COMPOSE[@]}" run --rm e2e-playwright \
+    "${PW_RUN[@]}" e2e-playwright \
       sh -c "${PW_SETUP} && pnpm exec playwright test --config playwright.e2e.config.ts${SHARD_ARG}"
     ;;
   screenshots)
     echo "==> [${MODE}] generating screenshots (${E2E_SCREENSHOT_DIR})"
-    "${COMPOSE[@]}" run --rm e2e-playwright \
+    "${PW_RUN[@]}" e2e-playwright \
       sh -c "${PW_SETUP} && pnpm exec playwright test --config playwright.screenshots.e2e.config.ts"
     ;;
   screenshot)
     [ -n "$NAME" ] || { echo "ERROR: screenshot action needs a NAME" >&2; exit 1; }
     echo "==> [${MODE}] generating single screenshot '${NAME}'"
-    "${COMPOSE[@]}" run --rm e2e-playwright \
+    "${PW_RUN[@]}" e2e-playwright \
       sh -c "${PW_SETUP} && pnpm exec playwright test --config playwright.screenshots.e2e.config.ts -g '${NAME}'"
     ;;
   video)
@@ -120,7 +160,7 @@ case "$ACTION" in
     VIDEO_FONTS="apt-get update -qq && apt-get install -y -qq --no-install-recommends fonts-inter fonts-jetbrains-mono >/dev/null && cp e2e/video/fonts.conf /etc/fonts/local.conf && fc-cache -f >/dev/null"
     for format in ${VIDEO_FORMATS:-landscape square}; do
       echo "==> [${MODE}] recording release video (${format})"
-      "${COMPOSE[@]}" run --rm -e VIDEO_FORMAT="${format}" -e VIDEO_VERSION="${VIDEO_VERSION:-}" -e VIDEO_PROJECT="${VIDEO_PROJECT:-release}" e2e-playwright \
+      "${PW_RUN[@]}" -e VIDEO_FORMAT="${format}" -e VIDEO_VERSION="${VIDEO_VERSION:-}" -e VIDEO_PROJECT="${VIDEO_PROJECT:-release}" e2e-playwright \
         sh -c "${VIDEO_FONTS} && ${PW_SETUP} && pnpm exec playwright test --config playwright.video.config.ts"
     done
     ;;

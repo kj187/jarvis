@@ -109,6 +109,7 @@ Tests cover four suites (`deployment`, `configmap`, `secret`, `ingress`) and run
 | `config.runbookBaseURL` | string | `""` | Base URL prepended to runbook label values |
 | `config.allowedOrigins` | string | `""` | Comma-separated allowed CORS/WebSocket origins |
 | `config.silenceDurations` | string | `""` | Instance default durations of the Fast-Silence and Extend-silence menus, e.g. `15m,1h,4h,1d,1w,30d` (`m`/`h`/`d`/`w`/`y`, max 12, 1m–365d). Empty = built-in defaults; users can override it in Settings |
+| `config.resolvedBufferTTL` | string | `""` | How long a resolved alert stays in the live snapshot (Go duration, 1m–24h). Empty = app default `20m`. A longer window costs memory and payload size per resolved alert in the window; see the configuration docs |
 | `config.retention.days` | string | `""` | Fallback retention age (days) for every history type. Empty disables the sweep entirely |
 | `config.retention.eventsDays` | string | `""` | Retention override (days) for alert lifecycle events; inherits `days` when unset |
 | `config.retention.claimsDays` | string | `""` | Retention override (days) for released claims; inherits `days` when unset |
@@ -146,7 +147,7 @@ Tests cover four suites (`deployment`, `configmap`, `secret`, `ingress`) and run
 | `auth.oidc.redirectUrl` | string | `""` | OIDC redirect URL (must match provider config) |
 | `auth.oidc.scopes` | string | `openid,profile,email` | Comma-separated OIDC scopes |
 | `auth.oidc.groupsClaim` | string | `""` | ID-token claim carrying the user's groups, e.g. `cognito:groups` |
-| `auth.oidc.adminValue` | string | `""` | Group in `groupsClaim` that grants the admin role; needs `groupsClaim` |
+| `auth.oidc.adminValue` | string | `""` | Group in `groupsClaim` that grants the admin role; several groups comma-separated (`admin_a,admin_b`), any one suffices; needs `groupsClaim` |
 | `persistence.enabled` | bool | `false` | Enable PVC for SQLite storage (single-replica recommended) |
 | `persistence.storageClass` | string | `""` | StorageClass name |
 | `persistence.accessMode` | string | `ReadWriteOnce` | PVC access mode |

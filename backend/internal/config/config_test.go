@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -575,8 +576,35 @@ func TestLoad_OIDCGroupsClaim(t *testing.T) {
 	if cfg.OIDCGroupsClaim != "cognito:groups" {
 		t.Errorf("OIDCGroupsClaim = %q, want cognito:groups", cfg.OIDCGroupsClaim)
 	}
-	if cfg.OIDCAdminValue != "Operator" {
-		t.Errorf("OIDCAdminValue = %q, want Operator", cfg.OIDCAdminValue)
+	if !reflect.DeepEqual(cfg.OIDCAdminGroups, []string{"Operator"}) {
+		t.Errorf("OIDCAdminGroups = %v, want [Operator]", cfg.OIDCAdminGroups)
+	}
+}
+
+func TestLoad_OIDCAdminValueList(t *testing.T) {
+	cases := []struct {
+		name string
+		env  string
+		want []string
+	}{
+		{"unset", "", nil},
+		{"single value", "admin_a", []string{"admin_a"}},
+		{"two values", "admin_a,admin_b", []string{"admin_a", "admin_b"}},
+		{"whitespace trimmed", " admin_a , admin_b ", []string{"admin_a", "admin_b"}},
+		{"empty entries dropped", "admin_a,,admin_b,", []string{"admin_a", "admin_b"}},
+		{"only separators", " , ,", nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("JARVIS_OIDC_ADMIN_VALUE", tc.env)
+			cfg, err := Load()
+			if err != nil {
+				t.Fatalf("Load() error: %v", err)
+			}
+			if !reflect.DeepEqual(cfg.OIDCAdminGroups, tc.want) {
+				t.Fatalf("OIDCAdminGroups = %#v, want %#v", cfg.OIDCAdminGroups, tc.want)
+			}
+		})
 	}
 }
 
@@ -601,14 +629,73 @@ func TestWarnings_AdminGroupWithoutClaim(t *testing.T) {
 		cfg  Config
 		want int
 	}{
-		{"oidc, admin group but no claim: nobody can become admin", Config{AuthProvider: "oidc", OIDCAdminValue: "Operator"}, 1},
-		{"oidc, claim and admin group", Config{AuthProvider: "oidc", OIDCGroupsClaim: "groups", OIDCAdminValue: "Operator"}, 0},
+		{"oidc, admin group but no claim: nobody can become admin", Config{AuthProvider: "oidc", OIDCAdminGroups: []string{"Operator"}}, 1},
+		{"oidc, claim and admin group", Config{AuthProvider: "oidc", OIDCGroupsClaim: "groups", OIDCAdminGroups: []string{"Operator"}}, 0},
 		{"oidc, no admin group", Config{AuthProvider: "oidc", OIDCGroupsClaim: "groups"}, 0},
-		{"admin group set but provider is not oidc", Config{AuthProvider: "internal", OIDCAdminValue: "Operator"}, 0},
+		{"admin group set but provider is not oidc", Config{AuthProvider: "internal", OIDCAdminGroups: []string{"Operator"}}, 0},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := tc.cfg.Warnings(); len(got) != tc.want {
+				t.Fatalf("Warnings() = %v, want %d entries", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestLoad_ResolvedBufferTTL(t *testing.T) {
+	cases := []struct {
+		name    string
+		env     string
+		want    time.Duration
+		wantErr bool
+	}{
+		{"unset defaults to 20m", "", 20 * time.Minute, false},
+		{"custom value", "45m", 45 * time.Minute, false},
+		{"minimum 1m", "1m", time.Minute, false},
+		{"maximum 24h", "24h", 24 * time.Hour, false},
+		{"below minimum", "59s", 0, true},
+		{"zero", "0", 0, true},
+		{"negative", "-5m", 0, true},
+		{"above maximum", "25h", 0, true},
+		{"not a duration", "soon", 0, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("JARVIS_CLUSTER_1_NAME", "")
+			t.Setenv("JARVIS_RESOLVED_BUFFER_TTL", tc.env)
+			cfg, err := Load()
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("Load() = nil error, want an error for %q", tc.env)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("Load() error: %v", err)
+			}
+			if cfg.ResolvedBufferTTL != tc.want {
+				t.Fatalf("ResolvedBufferTTL = %v, want %v", cfg.ResolvedBufferTTL, tc.want)
+			}
+		})
+	}
+}
+
+func TestWarnings_ResolvedBufferTTL(t *testing.T) {
+	cases := []struct {
+		name string
+		ttl  time.Duration
+		want int
+	}{
+		{"default", 20 * time.Minute, 0},
+		{"exactly 1h", time.Hour, 0},
+		{"above 1h", time.Hour + time.Minute, 1},
+		{"24h", 24 * time.Hour, 1},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := Config{ResolvedBufferTTL: tc.ttl}
+			if got := cfg.Warnings(); len(got) != tc.want {
 				t.Fatalf("Warnings() = %v, want %d entries", got, tc.want)
 			}
 		})

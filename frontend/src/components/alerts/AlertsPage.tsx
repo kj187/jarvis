@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { ChartPie, Loader2, Maximize2, Search, X, Siren, BellOff, CheckCircle2 } from 'lucide-react'
+import { ChartPie, Loader2, Maximize2, Search, X, Siren, BellOff, CheckCircle2, History } from 'lucide-react'
 import { Input } from '@/components/ui/input'
+import { Tooltip } from '@/components/ui/tooltip'
+import { useResolvedBufferWindow } from '@/hooks/useResolvedBufferWindow'
 import { ViewToggle } from './ViewToggle'
 import { AlertsOverviewModal } from './AlertsOverviewModal'
 import { MatcherChipsBar } from '@/components/layout/MatcherChipsBar'
@@ -15,7 +17,7 @@ import { AlertCardGrid } from './AlertCardGrid'
 import { GroupingControl } from './GroupingControl'
 import { AlertListView } from './AlertListView'
 import { AlertDetailPanel } from './AlertDetailPanel'
-import { matchesAlertSearch, matchesLabelMatchers, getEffectiveAlertState } from '@/lib/alertUtils'
+import { matchesAlertSearch, matchesLabelMatchers, matchesStateFilter } from '@/lib/alertUtils'
 import { findDefaultSavedFilter, hasAlertViewParams } from '@/lib/savedFilters'
 import { FILTER_PARAM, LEGACY_MATCHERS_PARAM, formatMatchers, readUrlMatchers } from '@/lib/filterUrl'
 import { parseAlertSelectionKey } from '@/lib/alertSelection'
@@ -126,6 +128,10 @@ export function AlertsPage() {
   const { data: liveAlerts = [], isLoading: liveLoading } = useAlerts()
   const resolvedPageSize = useSettingsStore((s) => s.resolvedPageSize)
   const updateSettings = useSettingsStore((s) => s.update)
+  const showRecentlyResolved = useSettingsStore((s) => s.showRecentlyResolved)
+  const bufferWindow = useResolvedBufferWindow()
+  // Buffer entries (state resolved) only ever join the Active tab, and only on request.
+  const includeResolved = showRecentlyResolved && filters.state === 'active'
   const [debouncedSearch, setDebouncedSearch] = useState(filters.search)
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedSearch(filters.search), 300)
@@ -239,10 +245,7 @@ export function AlertsPage() {
   const filtered: EnrichedAlert[] = isResolvedMode ? alerts : alerts.filter((alert) => {
     if (!matchesAlertSearch(alert, filters.search)) return false
 
-    if (filters.state && !isResolvedMode) {
-      const effectiveState = getEffectiveAlertState(alert, silences)
-      if (effectiveState !== filters.state) return false
-    }
+    if (!isResolvedMode && !matchesStateFilter(alert, filters.state, silences, includeResolved)) return false
 
     if (!matchesLabelMatchers(alert, filters.labelMatchers)) return false
 
@@ -301,6 +304,23 @@ export function AlertsPage() {
                   onToggleEnabled={toggleCardGrouping}
                 />
               )}
+              {filters.state === 'active' && (
+                <Tooltip content={`${showRecentlyResolved ? 'Hide' : 'Show'} recently resolved alerts${bufferWindow ? ` (kept for ${bufferWindow})` : ''}`} side="bottom">
+                  <button
+                    type="button"
+                    aria-pressed={showRecentlyResolved}
+                    aria-label="Show recently resolved alerts"
+                    onClick={() => updateSettings({ showRecentlyResolved: !showRecentlyResolved })}
+                    className={`cursor-pointer flex h-7 w-7 items-center justify-center rounded-control border border-border transition-colors ${
+                      showRecentlyResolved
+                        ? 'bg-accent text-foreground'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-accent/40'
+                    }`}
+                  >
+                    <History className="h-3.5 w-3.5" />
+                  </button>
+                </Tooltip>
+              )}
               <div className="flex items-center rounded-control border border-border overflow-hidden">
                 <button
                   onClick={() => { setFilter('state', 'active'); setViewMode(activeViewMode) }}
@@ -322,16 +342,18 @@ export function AlertsPage() {
                   <BellOff className="h-3 w-3 shrink-0" />
                   {isSuppressedMode && 'Suppressed'}
                 </button>
-                <button
-                  onClick={() => { if (!isResolvedMode) setActiveViewMode(viewMode); setFilter('state', 'resolved'); setViewMode('list') }}
-                  className={`cursor-pointer flex items-center gap-1.5 h-7 text-xs font-medium transition-colors ${
-                    isResolvedMode ? 'px-2.5 bg-accent text-foreground' : 'px-2 text-muted-foreground hover:text-foreground'
-                  }`}
-                  title="Resolved"
-                >
-                  <CheckCircle2 className="h-3 w-3 shrink-0" />
-                  {isResolvedMode && 'Resolved'}
-                </button>
+                <Tooltip content={`Resolved alerts (history).${bufferWindow ? ` Alerts that resolved recently also stay in the Active view for ${bufferWindow} when 'Recently resolved' is on.` : ''}`} side="bottom" wrapperClassName="flex">
+                  <button
+                    aria-label="Resolved"
+                    onClick={() => { if (!isResolvedMode) setActiveViewMode(viewMode); setFilter('state', 'resolved'); setViewMode('list') }}
+                    className={`cursor-pointer flex items-center gap-1.5 h-7 text-xs font-medium transition-colors ${
+                      isResolvedMode ? 'px-2.5 bg-accent text-foreground' : 'px-2 text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    <CheckCircle2 className="h-3 w-3 shrink-0" />
+                    {isResolvedMode && 'Resolved'}
+                  </button>
+                </Tooltip>
               </div>
               {searchOpen ? (
                 <div className="flex items-center rounded-control border border-control overflow-hidden bg-input h-7">

@@ -3,12 +3,12 @@ import { useState, useEffect, useMemo } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import { enUS } from 'date-fns/locale'
-import { ExternalLink, BookOpen, ChevronDown, ChevronUp, BellOff, Pencil, Trash2, User, Server, X, Link2, Check } from 'lucide-react'
+import { ExternalLink, BookOpen, ChevronDown, ChevronUp, BellOff, Pencil, Trash2, User, Server, X, Link2, Check, Copy } from 'lucide-react'
 import { TruncatableChip } from '@/components/ui/truncatable-chip'
 import { cn } from '@/lib/utils'
 import { Sheet } from '@/components/ui/sheet'
 import { AlertBadge, StatusBadge } from './AlertBadge'
-import { labelColorStyle, findRelatedAlerts } from '@/lib/alertUtils'
+import { labelColorStyle, findRelatedAlerts, formatTime, formatSilenceDuration } from '@/lib/alertUtils'
 import { CommentsPanel } from '@/components/comments/CommentsPanel'
 import { useAlertComments } from '@/hooks/useAlertComments'
 import { AlertDetailHistorySection } from './AlertDetailHistorySection'
@@ -241,11 +241,17 @@ export function AlertDetailPanel({
   const claimName = user?.username ?? manualClaimName
   const [promptCopied, setPromptCopied] = useState(false)
   const [linkCopy, setLinkCopy] = useState<'idle' | 'copied' | 'failed'>('idle')
+  const [fingerprintCopy, setFingerprintCopy] = useState<'idle' | 'copied' | 'failed'>('idle')
   useEffect(() => {
     if (linkCopy === 'idle') return
     const t = setTimeout(() => setLinkCopy('idle'), 2000)
     return () => clearTimeout(t)
   }, [linkCopy])
+  useEffect(() => {
+    if (fingerprintCopy === 'idle') return
+    const t = setTimeout(() => setFingerprintCopy('idle'), 2000)
+    return () => clearTimeout(t)
+  }, [fingerprintCopy])
   const [expiredSilenceCollapsed, setExpiredSilenceCollapsed] = useState(true)
   const [expandedSilenceIds, setExpandedSilenceIds] = useState<Set<string>>(new Set())
   // Tab state lives in uiStore (synced to the `tab` URL param) so a shared
@@ -255,6 +261,11 @@ export function AlertDetailPanel({
   const setActiveTab = useUIStore((s) => s.setDetailTab)
   const selectedGroupKeys = useUIStore((s) => s.selectedGroupKeys)
   const fmtTime = useFormatTime()
+  const isResolved = alert?.status.state === 'resolved'
+  // Duration the alert fired for; skipped when either timestamp is missing or inconsistent.
+  const startMs = alert ? new Date(alert.startsAt).getTime() : NaN
+  const endMs = alert ? new Date(alert.endsAt).getTime() : NaN
+  const firedForMs = endMs > startMs && startMs > 0 ? endMs - startMs : null
 
   // Up/down arrow navigation between sibling alerts of the group (list/card
   // grouped view) the current selection came from. `selectedGroupKeys` is
@@ -364,6 +375,14 @@ export function AlertDetailPanel({
         isRunbook: false,
       }
     : null
+  const sourceUrl = (() => {
+    try {
+      const u = new URL(alert.generatorURL)
+      return u.protocol === 'http:' || u.protocol === 'https:' ? u : null
+    } catch {
+      return null
+    }
+  })()
   const linkButtons = [
     ...extractLinkButtons(alert.labels, alert.annotations, runbookBaseUrl),
     ...(alertmanagerLinkButton ? [alertmanagerLinkButton] : []),
@@ -419,7 +438,8 @@ export function AlertDetailPanel({
     })
   }
 
-  const labelEntries = Object.entries(alert.labels)
+  // '@'-prefixed keys are synthetic (e.g. the backend-injected '@receiver'); real label names can't start with '@'.
+  const labelEntries = Object.entries(alert.labels).filter(([k]) => !k.startsWith('@'))
   const half = Math.ceil(labelEntries.length / 2)
   const leftLabels = labelEntries.slice(0, half)
   const rightLabels = labelEntries.slice(half)
@@ -565,6 +585,20 @@ export function AlertDetailPanel({
               <span>Stats unavailable</span>
             )}
           </div>
+
+          {isResolved && (
+            <Tooltip content={new Date(alert.endsAt).toLocaleString('en-US')} side="bottom" wrapperClassName="mt-2 flex">
+              <div
+                data-testid="detail-resolved-banner"
+                tabIndex={0}
+                className="flex w-full items-center gap-1.5 rounded-compact border-r-4 border-r-success-edge bg-success-soft px-2 py-1.5 text-xs text-success-fg"
+              >
+                <Check className="h-3 w-3 shrink-0" />
+                <span className="font-medium">Resolved {formatTime(alert.endsAt, 'relative')}</span>
+                {firedForMs !== null && <span>· fired for {formatSilenceDuration(firedForMs)}</span>}
+              </div>
+            </Tooltip>
+          )}
 
           <div className="mt-2.5" data-testid="detail-heatmap-section">
             <AlertHeatmap fingerprint={alert.fingerprint} cluster={alert.clusterName} enabled={Boolean(alert.fingerprint)} />
@@ -1019,6 +1053,122 @@ export function AlertDetailPanel({
             </div>
           </AlertDetailSection>
         )}
+
+        {/* Metadata */}
+        <AlertDetailSection
+          title={
+            <>
+              Metadata
+              <span onClick={(e) => e.stopPropagation()} className="inline-flex">
+                <InfoHint label="About the metadata">
+                  Technical details of this alert: where it comes from, when it started, and where it is routed.
+                </InfoHint>
+              </span>
+            </>
+          }
+          testId="detail-metadata-section"
+          persistKey="metadata"
+        >
+          <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
+            {alert.fingerprint && (
+              <div className="flex min-w-0 flex-col gap-0.5">
+                <dt className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                  Fingerprint
+                  <InfoHint label="About the fingerprint" size="sm">
+                    Alertmanager&apos;s own fingerprint, shown unchanged — Jarvis does not compute or alter it. It is a hash of the alert&apos;s complete label set, so the same labels always give the same value. Annotations and timestamps are not part of it. Use it to find the alert in Alertmanager, its API, or logs.
+                    <br /><br />
+                    Jarvis tracks an alert by cluster + fingerprint: identical labels on two clusters share a fingerprint but stay separate alerts.
+                  </InfoHint>
+                </dt>
+                <dd className="flex min-w-0 items-center gap-2">
+                  <code data-testid="detail-fingerprint" className="min-w-0 break-all rounded-compact border border-border bg-muted px-1.5 py-0.5 font-mono">{alert.fingerprint}</code>
+                  <button
+                    data-testid="detail-fingerprint-copy"
+                    onClick={() => {
+                      void copyText(alert.fingerprint).then((ok) => setFingerprintCopy(ok ? 'copied' : 'failed'))
+                    }}
+                    aria-label="Copy fingerprint"
+                    title="Copy fingerprint"
+                    className="inline-flex shrink-0 items-center gap-1 rounded-compact border border-border px-2 py-1 text-muted-foreground hover:bg-accent hover:text-foreground cursor-pointer"
+                  >
+                    {fingerprintCopy === 'copied' ? <Check className="h-3 w-3 text-success-fg" /> : <Copy className="h-3 w-3" />}
+                    {fingerprintCopy === 'copied' ? 'Copied' : fingerprintCopy === 'failed' ? 'Copy failed' : 'Copy'}
+                  </button>
+                </dd>
+              </div>
+            )}
+            <div className="flex min-w-0 flex-col gap-0.5">
+              <dt className="text-[10px] text-muted-foreground">Cluster</dt>
+              <dd>
+                <span
+                  data-testid="detail-meta-cluster"
+                  title="Add as filter"
+                  onClick={() => onAddLabelMatcher({ name: '@cluster', operator: '=', value: alert.clusterName })}
+                  className="cursor-pointer rounded-compact border border-border bg-muted px-1.5 py-0.5 font-mono text-[11px] hover:bg-accent"
+                >
+                  {alert.clusterName}
+                </span>
+              </dd>
+            </div>
+            {startMs > 0 && (
+              <div className="flex min-w-0 flex-col gap-0.5">
+                <dt className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                  Started
+                  <InfoHint label="About Started" size="sm">
+                    When the <em>current</em> firing began, as reported by the alert source via Alertmanager. If the alert resolves and fires again later, this moves to the new start.
+                  </InfoHint>
+                </dt>
+                <dd data-testid="detail-meta-started">{fmtTime(alert.startsAt)}</dd>
+              </div>
+            )}
+            {stats?.firstSeenAt && (
+              <div className="flex min-w-0 flex-col gap-0.5">
+                <dt className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                  First seen
+                  <InfoHint label="About First seen" size="sm">
+                    When Jarvis first recorded this alert on this cluster, across all its occurrences. It never moves on a re-fire, and it cannot be earlier than Jarvis&apos;s own history.
+                  </InfoHint>
+                </dt>
+                <dd data-testid="detail-meta-first-seen">{fmtTime(stats.firstSeenAt)}</dd>
+              </div>
+            )}
+            {alert.receivers && alert.receivers.length > 0 && (
+              <div className="flex min-w-0 flex-col gap-0.5">
+                <dt className="text-[10px] text-muted-foreground">Receivers</dt>
+                <dd data-testid="detail-meta-receivers" className="flex flex-wrap gap-1.5">
+                  {alert.receivers.map((r) => (
+                    <span
+                      key={r.name}
+                      title="Add as filter"
+                      onClick={() => onAddLabelMatcher({ name: '@receiver', operator: '=', value: r.name })}
+                      className="cursor-pointer rounded-compact border border-border bg-muted px-1.5 py-0.5 font-mono text-[11px] hover:bg-accent"
+                    >
+                      {r.name}
+                    </span>
+                  ))}
+                </dd>
+              </div>
+            )}
+            {sourceUrl && (
+              <div className="flex min-w-0 flex-col gap-0.5">
+                <dt className="text-[10px] text-muted-foreground">Source</dt>
+                <dd className="min-w-0">
+                  <a
+                    data-testid="detail-meta-source"
+                    href={sourceUrl.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={sourceUrl.href}
+                    className="inline-flex max-w-full items-center gap-1 text-link hover:underline cursor-pointer"
+                  >
+                    <span className="truncate">{sourceUrl.host}</span>
+                    <ExternalLink className="h-3 w-3 shrink-0" />
+                  </a>
+                </dd>
+              </div>
+            )}
+          </dl>
+        </AlertDetailSection>
 
         {/* Labels */}
         <AlertDetailSection title="Labels" testId="detail-labels-section" bordered={false}>

@@ -101,10 +101,10 @@ frontend/
   playwright.screenshots.e2e.config.ts  # screenshot config; testDir = $E2E_SCREENSHOT_DIR
   e2e/
     support/
-      alertmanager.ts   # AM API v2 client: fire() / clearAll()
+      alertmanager.ts   # AM API v2 client: fire() / resolve() / clearAll()
       jarvis.ts         # Jarvis client: poll() / reset() / seedResolved() / seedHeatmapHistory()
       auth.ts           # dismissNoAuthNotice, ensureInternalAdmin, loginInternal, loginOIDC
-      fixtures.ts       # test.extend (auto reset+clear per test), freezeClock, waitForActiveAlerts
+      fixtures.ts       # test.extend (auto reset+clear per test), freezeClock, waitForActiveAlerts, waitForResolvedBuffer
       heatmapHistory.ts # fireWithHeatmapHistory() — screenshot-only, see below
       screenshotData.ts # polished alert fixture + label hiding shared by card-view / home-tour shots
     fixtures/
@@ -196,6 +196,8 @@ cover.
 |---|---|---|
 | Before pushing a UI/API change | `make e2e` | All 3 modes, in sequence. Same tests as CI (which runs them as parallel jobs). ~few min. |
 | Iterating on one mode | `make e2e-mode MODE=internal` | Fast feedback. |
+| Fast local run of one mode | `make e2e-fast [MODE=none]` | Local opt-in (`E2E_FAST=1`, CI never sets it). Skips the image build when `backend/`, `frontend/` (without `e2e/` specs) and `Containerfile.e2e` are unchanged (hash in `tmp/e2e-image.hash`), and mounts a persistent pnpm store plus corepack cache (podman volume `jarvis_e2e_pnpm_store`) into the Playwright container. Measured on the `none` suite (223 tests): 5:31 min with `make e2e-mode MODE=none` vs. 2:26 min on a warm second run. Reset the caches with `rm tmp/e2e-image.hash` and `podman volume rm jarvis_e2e_pnpm_store`. |
+| Whole `none` suite locally | `make e2e-mode MODE=none` or `make e2e-fast` | Do **not** loop over `E2E_SHARD=1/4 ... 4/4` locally: every shard boots its own stack, so that is four boots. Shards exist to spread the suite across CI hosts; one unsharded run is a single boot. |
 | Reproducing one CI shard | `E2E_SHARD=2/4 make e2e-mode MODE=none` | Runs only that Playwright shard (`--shard=2/4`) of the mode's suite. Never run two shards at the same time in the same checkout (fixed container and network names and ports, `down -v` at start). |
 | You changed a screen and a doc image is stale | `make e2e-screenshot NAME=<id> [MODE=<m>]` | Regenerate just that PNG, commit it. |
 | Refreshing all docs images | `make e2e-screenshots` | Cycles all modes. |
@@ -224,7 +226,7 @@ cover.
 1. Pick the auth mode → the matching `functional/<mode>/` or
    `screenshots/<mode>/` folder.
 2. Import from `../../support/fixtures` (gives you `test`, `expect`, `am`,
-   `jarvis`, `freezeClock`, `waitForActiveAlerts`) and `../../support/auth` for
+   `jarvis`, `freezeClock`, `waitForActiveAlerts`, `waitForResolvedBuffer`) and `../../support/auth` for
    login helpers.
 3. Fire fixtures → drive the UI → assert via `data-testid`. For screenshots,
    `freezeClock`, wait for the expected state, then `page.screenshot(...)`.
@@ -236,6 +238,8 @@ cover.
 
 | Var | Set by | Meaning |
 |---|---|---|
+| `E2E_FAST` | you (`make e2e-fast`) | `1` = skip the image build if unchanged and cache the pnpm store; default unset (CI behaviour). |
+| `E2E_SHARD` | you / CI | `i/n`: run only that Playwright shard. |
 | `COMPOSE_CMD` | you / CI | `podman compose` (default) or `docker compose`. |
 | `E2E_BASE_URL` | compose | Jarvis URL inside the network (`http://e2e-jarvis:8080`). |
 | `E2E_ALERTMANAGER_URL` | compose | Alertmanager URL (`http://e2e-alertmanager:9093`). |

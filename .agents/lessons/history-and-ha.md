@@ -142,8 +142,8 @@ formed a second owner outside `AlertStore.resolvedBuffer`.
 **Rule**: Store the absolute deadline with the resolved episode. One
 process-context sweeper expires deadlines from both `AlertStore` and follower
 caches; repeated ingestion preserves the original deadline, while a genuine
-refire/new resolve creates a new one. Seed only the still-live 20-minute
-window, and select the latest event before filtering for `resolved`, otherwise
+refire/new resolve creates a new one. Seed only the still-live TTL
+window (`AlertStore.ResolvedTTL()`), and select the latest event before filtering for `resolved`, otherwise
 an older resolve can survive a later firing. TTL cleanup never touches active
 last-good alerts or persistent history.
 

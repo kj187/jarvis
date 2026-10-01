@@ -7,10 +7,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kj187/jarvis/backend/internal/config"
 	"github.com/kj187/jarvis/backend/internal/models"
 )
 
-const ResolvedBufferTTL = 20 * time.Minute
+// DefaultResolvedBufferTTL is how long a resolved alert stays in the live
+// snapshot when JARVIS_RESOLVED_BUFFER_TTL is not set. An AlertStore built
+// without NewAlertStore (zero value) uses it too.
+const DefaultResolvedBufferTTL = 20 * time.Minute
 
 type resolvedEntry struct {
 	alert     models.EnrichedAlert
@@ -26,7 +30,10 @@ type AlertStore struct {
 	mu             sync.RWMutex
 	alerts         []models.EnrichedAlert
 	resolvedBuffer map[string]resolvedEntry
-	now            func() time.Time
+	// resolvedTTL is set once before the recorder starts (SetResolvedTTL) and
+	// never changed at runtime: every entry's deadline is fixed on insertion.
+	resolvedTTL time.Duration
+	now         func() time.Time
 
 	// version increments exactly once per mutation that changes what Get()
 	// would return (see bumpVersionLocked). cachedVersion/cachedJSON/cacheValid
@@ -35,6 +42,35 @@ type AlertStore struct {
 	cachedVersion uint64
 	cachedJSON    []byte
 	cacheValid    bool
+}
+
+// NewAlertStore returns a store whose resolved buffer keeps entries for ttl.
+// A ttl <= 0 means DefaultResolvedBufferTTL.
+func NewAlertStore(ttl time.Duration) *AlertStore {
+	s := &AlertStore{}
+	s.SetResolvedTTL(ttl)
+	return s
+}
+
+// NewAlertStoreFromConfig builds the process's AlertStore from the loaded
+// configuration (the one place JARVIS_RESOLVED_BUFFER_TTL reaches the store).
+func NewAlertStoreFromConfig(cfg *config.Config) *AlertStore {
+	return NewAlertStore(cfg.ResolvedBufferTTL)
+}
+
+// SetResolvedTTL sets the resolved-buffer TTL. Call it once before the store
+// is used; a later change would not move deadlines of entries already stored.
+func (s *AlertStore) SetResolvedTTL(ttl time.Duration) {
+	s.resolvedTTL = ttl
+}
+
+// ResolvedTTL is the effective resolved-buffer TTL: the configured value, or
+// DefaultResolvedBufferTTL when none was set (zero-value store).
+func (s *AlertStore) ResolvedTTL() time.Duration {
+	if s.resolvedTTL <= 0 {
+		return DefaultResolvedBufferTTL
+	}
+	return s.resolvedTTL
 }
 
 func (s *AlertStore) currentTime() time.Time {
@@ -49,7 +85,7 @@ func alertSnapshotKey(fingerprint, clusterName string) string {
 }
 
 // Set replaces the active alert snapshot. Alerts that reappear as active are
-// removed from the resolved buffer (they came back before the 20-min window).
+// removed from the resolved buffer (they came back before the resolved-buffer TTL).
 // Incoming alerts are cloned before storage (cloneEnrichedAlert) so mutating
 // the caller's slice/maps afterward never affects the store. Always bumps
 // the cache version, even for a content-identical snapshot — the caller
@@ -89,10 +125,10 @@ func (s *AlertStore) Set(alerts []models.EnrichedAlert) {
 }
 
 // Reset clears both the active list and the resolved buffer. Unlike Set(nil),
-// which intentionally preserves the resolved buffer for its 20-minute
+// which intentionally preserves the resolved buffer for its TTL
 // visibility window, Reset wipes the store entirely — used only by the e2e
 // test-reset route so a resolved alert from one test can't leak into the
-// next test's alert list for up to 20 minutes.
+// next test's alert list for up to the TTL.
 func (s *AlertStore) Reset() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -206,7 +242,7 @@ func (s *AlertStore) ClearActiveClaim(fingerprint, clusterName string) {
 }
 
 // MarkResolved moves the alert to the resolved buffer so it stays visible for
-// 20 minutes after disappearing from Alertmanager. Clears its active claim.
+// the resolved-buffer TTL after disappearing from Alertmanager. Clears its active claim.
 // The resolved buffer is NOT overwritten by Set, so the entry survives the next poll.
 func (s *AlertStore) MarkResolvedForCluster(fingerprint, clusterName string) {
 	s.MarkResolvedForClusterAt(fingerprint, clusterName, s.currentTime())
@@ -227,7 +263,7 @@ func (s *AlertStore) MarkResolvedForClusterAt(fingerprint, clusterName string, r
 				s.resolvedBuffer = make(map[string]resolvedEntry)
 			}
 			s.resolvedBuffer[alertSnapshotKey(fingerprint, clusterName)] = resolvedEntry{
-				alert: resolved, expiresAt: resolvedAt.Add(ResolvedBufferTTL),
+				alert: resolved, expiresAt: resolvedAt.Add(s.ResolvedTTL()),
 			}
 			s.alerts = append(s.alerts[:i], s.alerts[i+1:]...)
 			s.bumpVersionLocked()
@@ -256,7 +292,7 @@ func (s *AlertStore) markResolvedAt(fingerprint string, resolvedAt time.Time) {
 				s.resolvedBuffer = make(map[string]resolvedEntry)
 			}
 			s.resolvedBuffer[alertSnapshotKey(a.Fingerprint, a.ClusterName)] = resolvedEntry{
-				alert: resolved, expiresAt: resolvedAt.Add(ResolvedBufferTTL),
+				alert: resolved, expiresAt: resolvedAt.Add(s.ResolvedTTL()),
 			}
 			s.alerts = append(s.alerts[:i], s.alerts[i+1:]...)
 			s.bumpVersionLocked()
@@ -289,7 +325,7 @@ func (s *AlertStore) seedResolvedLocked(a models.EnrichedAlert, now time.Time) {
 			return
 		}
 	}
-	expiresAt := a.EndsAt.UTC().Add(ResolvedBufferTTL)
+	expiresAt := a.EndsAt.UTC().Add(s.ResolvedTTL())
 	if !expiresAt.After(now) {
 		return
 	}
@@ -322,11 +358,11 @@ func (s *AlertStore) ExpireResolved(now time.Time) bool {
 }
 
 // RemoveResolvedForCluster removes only the resolved-buffer entry for an
-// alert, leaving the active list untouched. Used by the recorder's 20-minute
+// alert, leaving the active list untouched. Used by the recorder's TTL
 // removal timer: if the alert re-fired in the meantime, Set() already moved
 // it back into the active list (and cleared its buffer entry), so by the
 // time this timer fires there is normally nothing left to do here — but if
-// it re-fired *after* the timer's 20-minute wait already started, deleting
+// it re-fired *after* the timer's TTL wait already started, deleting
 // it by fingerprint+cluster from both places (as an earlier version of this
 // method did) would wrongly remove it from the active list too.
 func (s *AlertStore) RemoveResolvedForCluster(fingerprint, clusterName string) {

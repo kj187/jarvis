@@ -7,7 +7,7 @@ import { SilenceForm } from '@/components/silences/SilenceForm'
 import { useQuery } from '@tanstack/react-query'
 import { fetchClusters } from '@/api/client'
 import type { EnrichedAlert, Silence } from '@/types'
-import { getFilterableLabels, severityOrder } from '@/lib/alertUtils'
+import { getFilterableLabels, severityOrder, freshestStartsAt } from '@/lib/alertUtils'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { useUIStore } from '@/store/uiStore'
 
@@ -62,12 +62,6 @@ function useColumns(): number {
     return () => window.removeEventListener('resize', update)
   }, [])
   return cardColumns === 'auto' ? autoCols : cardColumns
-}
-
-// Most recent `startsAt` across a group's alerts — used to sort groups within
-// a section by freshness instead of alphabetically (see the group sort below).
-function latestStartsAt(group: CardGroup): number {
-  return Math.max(...group.alerts.map((a) => new Date(a.startsAt).getTime()))
 }
 
 function loadStoredArray(key: string): string[] {
@@ -246,7 +240,7 @@ export function AlertCardGrid({
       const labelDiff = a.groupValue.localeCompare(b.groupValue)
       if (labelDiff !== 0) return labelDiff
     }
-    const recencyDiff = latestStartsAt(b) - latestStartsAt(a)
+    const recencyDiff = freshestStartsAt(b.alerts) - freshestStartsAt(a.alerts)
     if (recencyDiff !== 0) return recencyDiff
     return a.alertname.localeCompare(b.alertname)
   })

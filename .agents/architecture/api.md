@@ -42,7 +42,7 @@ WS     /ws                                       full_protect?  (origin checked 
 #        session cookie via RequireAuth — /ws streams the full alert snapshot)
 
 # ── Status / Version ─────────────────────────────────────────────────────────
-GET    /api/v1/status                            full_protect?  → { status, clusters, alerts, ws_clients, leader, poll_interval_seconds }
+GET    /api/v1/status                            full_protect?  → { status, clusters, alerts, ws_clients, leader, poll_interval_seconds, resolved_buffer_ttl_seconds }
 #        leader: this pod's current leader-election state (internal/leader) — always true on SQLite
 GET    /api/v1/info                              full_protect?  → { version }
 
@@ -55,7 +55,7 @@ GET    /api/v1/alerts                            full_protect?  → []EnrichedAl
 #        not stable); prevents frontend alert-group flicker. Groups inherit it, then
 #        re-sort the group list itself by severity, then alertname.
 #        resolvedBuffer is map[fingerprint+cluster]resolvedEntry. Each entry expires
-#        exactly 20 minutes after its episode's EndsAt. Recorder owns one 1s sweeper;
+#        exactly the configured TTL (JARVIS_RESOLVED_BUFFER_TTL, default 20 minutes; AlertStore.ResolvedTTL(), zero value = default) after its episode's EndsAt. Recorder owns one 1s sweeper;
 #        active alerts win duplicate keys and repeated snapshot rebuilds do not extend TTL.
 #        AlertStore also holds a version counter (bumped by every mutation that changes
 #        what Get() would return — a no-op mutation, e.g. SetActiveClaim on a missing
@@ -226,7 +226,7 @@ consumed snapshot.
 - **Middleware**: `RequireAuth` (valid JWT cookie/header) on write routes + `/auth/me`; `RequireAdmin` on `/api/v1/admin/*`; `firstRunRedirect` → `/setup` when internal mode has no users.
 - **`OptionalAuth`**: like `RequireAuth` (resolves the cookie and sets `auth.ContextKey`) but never rejects the request — for routes that must answer both anonymous and authenticated callers differently without requiring login (`GET /api/v1/settings` is the only user so far). A route with neither `RequireAuth` nor `OptionalAuth` never gets `auth.ContextKey` set, so `auth.UserFromContext(c)` is always nil there even with a valid cookie present — this bit a first draft of the settings endpoint (PUT wrote correctly, but the unauthenticated-by-design GET always read back `user: null`, silently "losing" every write) before `OptionalAuth` was added; `internal/api/settings_handler_test.go`'s `TestGetSettings_RealHTTPRoundTrip` guards against a regression by driving a real cookie through a real `httptest.Server` + router instead of `c.Set(auth.ContextKey, ...)`, which would mask this class of bug.
 - **JWT**: HMAC-SHA256 signed with `JARVIS_SECRET_KEY`; claims `sub, name (username), role, provider, exp, iat, jti` (no e-mail, no groups); delivered as secure HttpOnly cookie.
-- **OIDC**: `/auth/oidc/start` (PKCE + state cookie) → issuer → `/auth/oidc/callback` (state CSRF check, ID-token verify, `UpsertOIDCUser` by `sub`). The ID-token claim named by `JARVIS_OIDC_GROUPS_CLAIM` supplies the user's groups (stored in `users.oidc_groups` at every login); the admin role is granted when it contains `JARVIS_OIDC_ADMIN_VALUE`. The frontend runs it in a popup (`lib/ssoLogin.ts` `startSsoLogin`, `?popup=1`) so page state survives; popup-blocked and the full-page `LoginPage` use `?return_to=`.
+- **OIDC**: `/auth/oidc/start` (PKCE + state cookie) → issuer → `/auth/oidc/callback` (state CSRF check, ID-token verify, `UpsertOIDCUser` by `sub`). The ID-token claim named by `JARVIS_OIDC_GROUPS_CLAIM` supplies the user's groups (stored in `users.oidc_groups` at every login); the admin role is granted when it contains any group of the comma-separated `JARVIS_OIDC_ADMIN_VALUE`. The frontend runs it in a popup (`lib/ssoLogin.ts` `startSsoLogin`, `?popup=1`) so page state survives; popup-blocked and the full-page `LoginPage` use `?return_to=`.
 - **Login never navigates (frontend)**: anything needing a session calls `authStore.requestLogin()` → the single `LoginPrompt`. `api/client.ts` `request()` also replays a write once after a 401 → login (session expired mid-task); a 401 on a GET only calls `expireSession()` (no dialog from background polls). The backend forces the actor (createdBy/claimedBy/authorName/by) to the session user in every auth mode ≠ none, so an action queued before login and run after it is safe with a stale client-side user.
 - **Rate limit**: one global bucket for `POST /auth/login` (0.5 req/s = 30/min, burst 10, per-process).
 - **Admin guards**: cannot change own role; cannot delete self.

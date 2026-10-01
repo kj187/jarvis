@@ -10,14 +10,17 @@
 set -euo pipefail
 
 usage() {
-  echo "usage: $0 [--profile demo|full]"
+  echo "usage: $0 [--profile demo|full] [--no-pause]"
 }
 
 PROFILE="${FIXTURE_PROFILE:-full}"
+# Random pauses between alerts let a demo list fill up live; --no-pause fires everything at once.
+PAUSE=1
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --profile) PROFILE="${2:-}"; shift 2 ;;
     --profile=*) PROFILE="${1#*=}"; shift ;;
+    --no-pause) PAUSE=0; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "ERROR: unknown argument: $1" >&2; usage >&2; exit 2 ;;
   esac
@@ -56,12 +59,13 @@ post() {
 }
 
 pause() {
+  [[ "$PAUSE" == 1 ]] || return 0
   local s=$(( RANDOM % 8 + 1 ))
   printf "      sleeping ${s}s...\n"
   sleep "$s"
 }
 
-echo "==> Firing ${TOTAL} Kubernetes test alerts (profile: ${PROFILE}) to ${AM} (randomized, ~2 min)"
+echo "==> Firing ${TOTAL} Kubernetes test alerts (profile: ${PROFILE}) to ${AM} $([[ "$PAUSE" == 1 ]] && echo "(randomized, ~2 min)" || echo "(no pauses)")"
 
 step "KubePodCrashLooping (critical, payment-api, prod)"
 post '[{

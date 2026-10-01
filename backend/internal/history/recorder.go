@@ -290,17 +290,12 @@ func (r *Recorder) triggerLocal() {
 	}
 }
 
-// Start seeds resolved alerts from the DB, then runs the poll loop — for
-// SQLite (or a Recorder built without an elector, e.g. most tests), that is
-// the only mode there ever is. On PostgreSQL, a mode supervisor instead
-// switches this pod between polling (leader) and consuming snapshots
-// (follower) on every leadership transition, restarting the active loop each
-// time (D3). The loop(s) stop when ctx is cancelled.
-func (r *Recorder) Start(ctx context.Context) {
-	go r.runResolvedSweeper(ctx)
+// seedResolved loads the still-live resolved episodes (the store's TTL window)
+// from the database into the in-memory buffer and returns how many it seeded.
+func (r *Recorder) seedResolved(ctx context.Context) int {
 	seeded := 0
 	now := r.currentTime()
-	if err := r.store.VisitRecentResolved(ctx, now, ResolvedBufferTTL, func(alert models.EnrichedAlert) error {
+	if err := r.store.VisitRecentResolved(ctx, now, r.alertStore.ResolvedTTL(), func(alert models.EnrichedAlert) error {
 		r.alertStore.SeedResolved([]models.EnrichedAlert{alert})
 		seeded++
 		return nil
@@ -309,6 +304,18 @@ func (r *Recorder) Start(ctx context.Context) {
 	} else {
 		r.logger.Warn("seed resolved alerts from db failed", "err", err)
 	}
+	return seeded
+}
+
+// Start seeds resolved alerts from the DB, then runs the poll loop — for
+// SQLite (or a Recorder built without an elector, e.g. most tests), that is
+// the only mode there ever is. On PostgreSQL, a mode supervisor instead
+// switches this pod between polling (leader) and consuming snapshots
+// (follower) on every leadership transition, restarting the active loop each
+// time (D3). The loop(s) stop when ctx is cancelled.
+func (r *Recorder) Start(ctx context.Context) {
+	go r.runResolvedSweeper(ctx)
+	r.seedResolved(ctx)
 
 	if r.elector == nil || r.dsn == "" {
 		r.runPollLoop(ctx)
@@ -416,7 +423,7 @@ func (r *Recorder) sweepResolved(now time.Time) bool {
 	changed := r.alertStore.ExpireResolved(now)
 	r.followerMu.Lock()
 	for clusterName, entry := range r.followerSnapshots {
-		filtered, removed := filterFollowerAlerts(entry.alerts, entry.takenAt, now)
+		filtered, removed := filterFollowerAlerts(entry.alerts, entry.takenAt, now, r.alertStore.ResolvedTTL())
 		if removed {
 			entry.alerts = filtered
 			r.followerSnapshots[clusterName] = entry

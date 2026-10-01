@@ -93,6 +93,40 @@ test.describe('D2: Labels & annotations rendered', () => {
     expect(labelTexts.join('').toLowerCase()).toContain('alertname')
   })
 
+  test('synthetic @receiver is not a label; receivers show in the Metadata section', async ({ page, am, jarvis }) => {
+    await dismissNoAuthNotice(page)
+    await am.fire(kubernetesAlerts)
+    await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, kubernetesAlerts.length)
+
+    await page.goto('/?state=active')
+    await page.getByTestId('alert-card').first().click()
+    await expect(page.getByTestId('detail-labels-section')).toBeVisible()
+
+    const labelTexts = await page.getByTestId('detail-label-item').allTextContents()
+    expect(labelTexts.join('')).not.toContain('@receiver')
+    await expect(page.getByTestId('detail-meta-receivers')).toBeVisible()
+  })
+
+  test('Metadata section remembers being collapsed across alerts and reopening', async ({ page, am, jarvis }) => {
+    await dismissNoAuthNotice(page)
+    await am.fire(kubernetesAlerts)
+    await waitForActiveAlerts(jarvis, JARVIS_BASE_URL, kubernetesAlerts.length)
+
+    await page.goto('/?state=active')
+    await page.getByTestId('alert-card').first().click()
+    const section = page.getByTestId('detail-metadata-section')
+    await expect(section.getByTestId('detail-fingerprint')).toBeVisible()
+
+    await section.getByRole('button').first().click()
+    await expect(section.getByTestId('detail-fingerprint')).toHaveCount(0)
+
+    await page.getByTestId('detail-panel-close').click()
+    await expect(page.getByTestId('detail-panel')).toBeHidden()
+    await page.getByTestId('alert-card').nth(1).click()
+    await expect(page.getByTestId('detail-metadata-section')).toBeVisible()
+    await expect(page.getByTestId('detail-fingerprint')).toHaveCount(0)
+  })
+
   test('detail panel shows summary and extra annotations', async ({ page, am, jarvis }) => {
     await dismissNoAuthNotice(page)
     // summary/description render in their own "Summary" section; only extra

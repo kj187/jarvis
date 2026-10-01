@@ -46,10 +46,15 @@ type Config struct {
 	OIDCClientSecret string
 	OIDCRedirectURL  string
 	OIDCScopes       []string
-	OIDCGroupsClaim  string // ID-token claim that carries the user's groups (e.g. "groups", "cognito:groups"); empty = groups are not read
-	OIDCAdminValue   string // group inside that claim that grants the admin role (e.g. "Administrator")
+	OIDCGroupsClaim  string   // ID-token claim that carries the user's groups (e.g. "groups", "cognito:groups"); empty = groups are not read
+	OIDCAdminGroups  []string // groups inside that claim that grant the admin role (JARVIS_OIDC_ADMIN_VALUE, comma-separated); membership in any one suffices
 
 	Retention RetentionConfig
+
+	// ResolvedBufferTTL is how long a resolved alert stays in the live snapshot
+	// (and therefore in every WebSocket push and, on PostgreSQL, every poll
+	// snapshot row). Instance-wide; must be identical on all replicas.
+	ResolvedBufferTTL time.Duration
 
 	// SilenceDurations is the instance-wide default list of silence durations
 	// (minutes, ascending) behind the Fast-Silence and Extend-silence menus,
@@ -63,10 +68,33 @@ type Config struct {
 // operator meant; main logs each one at startup.
 func (c *Config) Warnings() []string {
 	var w []string
-	if c.AuthProvider == "oidc" && c.OIDCAdminValue != "" && c.OIDCGroupsClaim == "" {
+	if c.AuthProvider == "oidc" && len(c.OIDCAdminGroups) > 0 && c.OIDCGroupsClaim == "" {
 		w = append(w, "JARVIS_OIDC_ADMIN_VALUE is set but JARVIS_OIDC_GROUPS_CLAIM is not: no group is read from the token, so nobody becomes admin")
 	}
+	if c.ResolvedBufferTTL > ResolvedBufferTTLWarnAbove {
+		w = append(w, fmt.Sprintf("JARVIS_RESOLVED_BUFFER_TTL is %s: every resolved alert stays in memory, in each WebSocket push and (PostgreSQL) in each poll snapshot for that long; memory and payload size grow with the resolves inside the window", c.ResolvedBufferTTL))
+	}
 	return w
+}
+
+const (
+	// Same value as history.DefaultResolvedBufferTTL (config cannot import history);
+	// history pins the two together in a test.
+	DefaultResolvedBufferTTL   = 20 * time.Minute
+	MinResolvedBufferTTL       = time.Minute
+	MaxResolvedBufferTTL       = 24 * time.Hour
+	ResolvedBufferTTLWarnAbove = time.Hour
+)
+
+func parseResolvedBufferTTL() (time.Duration, error) {
+	ttl, err := time.ParseDuration(getEnv("JARVIS_RESOLVED_BUFFER_TTL", DefaultResolvedBufferTTL.String()))
+	if err != nil {
+		return 0, fmt.Errorf("invalid JARVIS_RESOLVED_BUFFER_TTL: %w", err)
+	}
+	if ttl < MinResolvedBufferTTL || ttl > MaxResolvedBufferTTL {
+		return 0, fmt.Errorf("invalid JARVIS_RESOLVED_BUFFER_TTL: %s is outside %s..%s", ttl, MinResolvedBufferTTL, MaxResolvedBufferTTL)
+	}
+	return ttl, nil
 }
 
 // RetentionConfig holds the data-retention sweep settings. All Days fields
@@ -190,6 +218,11 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("invalid JARVIS_POLL_INTERVAL: %w", err)
 	}
 
+	resolvedBufferTTL, err := parseResolvedBufferTTL()
+	if err != nil {
+		return nil, err
+	}
+
 	allowedOriginsRaw := getEnv("JARVIS_ALLOWED_ORIGINS", "")
 	var allowedOrigins []string
 	if allowedOriginsRaw != "" {
@@ -253,27 +286,28 @@ func Load() (*Config, error) {
 	}
 
 	return &Config{
-		Port:             getEnv("JARVIS_PORT", "8080"),
-		LogLevel:         getEnv("JARVIS_LOG_LEVEL", "info"),
-		LogRequests:      getEnvBool("JARVIS_LOG_REQUESTS", false),
-		PollInterval:     pollInterval,
-		DBDSN:            getEnv("JARVIS_DB_DSN", "/data/jarvis.db"),
-		DBMaxOpenConns:   dbMaxOpenConns,
-		RunbookBaseURL:   getEnv("JARVIS_RUNBOOK_BASE_URL", ""),
-		AllowedOrigins:   allowedOrigins,
-		Clusters:         clusters,
-		PprofAddr:        getEnv("JARVIS_PPROF_ADDR", ""),
-		AuthProvider:     authProvider,
-		AuthMode:         authMode,
-		SecretKey:        secretKey,
-		OIDCIssuer:       getEnv("JARVIS_AUTH_OIDC_ISSUER", ""),
-		OIDCClientID:     getEnv("JARVIS_AUTH_OIDC_CLIENT_ID", ""),
-		OIDCClientSecret: getEnv("JARVIS_AUTH_OIDC_CLIENT_SECRET", ""),
-		OIDCRedirectURL:  getEnv("JARVIS_AUTH_OIDC_REDIRECT_URL", ""),
-		OIDCScopes:       oidcScopes,
-		OIDCGroupsClaim:  getEnv("JARVIS_OIDC_GROUPS_CLAIM", ""),
-		OIDCAdminValue:   getEnv("JARVIS_OIDC_ADMIN_VALUE", ""),
-		Retention:        retention,
+		Port:              getEnv("JARVIS_PORT", "8080"),
+		LogLevel:          getEnv("JARVIS_LOG_LEVEL", "info"),
+		LogRequests:       getEnvBool("JARVIS_LOG_REQUESTS", false),
+		PollInterval:      pollInterval,
+		ResolvedBufferTTL: resolvedBufferTTL,
+		DBDSN:             getEnv("JARVIS_DB_DSN", "/data/jarvis.db"),
+		DBMaxOpenConns:    dbMaxOpenConns,
+		RunbookBaseURL:    getEnv("JARVIS_RUNBOOK_BASE_URL", ""),
+		AllowedOrigins:    allowedOrigins,
+		Clusters:          clusters,
+		PprofAddr:         getEnv("JARVIS_PPROF_ADDR", ""),
+		AuthProvider:      authProvider,
+		AuthMode:          authMode,
+		SecretKey:         secretKey,
+		OIDCIssuer:        getEnv("JARVIS_AUTH_OIDC_ISSUER", ""),
+		OIDCClientID:      getEnv("JARVIS_AUTH_OIDC_CLIENT_ID", ""),
+		OIDCClientSecret:  getEnv("JARVIS_AUTH_OIDC_CLIENT_SECRET", ""),
+		OIDCRedirectURL:   getEnv("JARVIS_AUTH_OIDC_REDIRECT_URL", ""),
+		OIDCScopes:        oidcScopes,
+		OIDCGroupsClaim:   getEnv("JARVIS_OIDC_GROUPS_CLAIM", ""),
+		OIDCAdminGroups:   splitCSV(getEnv("JARVIS_OIDC_ADMIN_VALUE", "")),
+		Retention:         retention,
 
 		SilenceDurations: silenceDurations,
 	}, nil
@@ -517,6 +551,18 @@ func resolveAlertmanagerLinkURL(alertmanagerURL, hostAlias string) string {
 	base.Scheme = alias.Scheme
 	base.Host = alias.Host
 	return base.String()
+}
+
+// splitCSV splits a comma-separated value, trimming whitespace and dropping
+// empty entries; nil when nothing is left.
+func splitCSV(raw string) []string {
+	var out []string
+	for _, part := range strings.Split(raw, ",") {
+		if part = strings.TrimSpace(part); part != "" {
+			out = append(out, part)
+		}
+	}
+	return out
 }
 
 func getEnv(key, fallback string) string {

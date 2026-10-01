@@ -18,8 +18,8 @@ DEMO_AM_URL        = http://localhost:$(DEMO_AM_PORT)
         lint gosec govulncheck audit security-all check-agent-context test-scripts \
         scan scan-history scan-staged scan-all \
         build \
-        e2e-build e2e-down e2e e2e-mode e2e-screenshots e2e-screenshot release-video \
-        fixtures-create fixtures-remove fixtures-refire fixtures-silence fixtures-unsilence \
+        e2e-build e2e-down e2e e2e-mode e2e-fast e2e-screenshots e2e-screenshot release-video \
+        fixtures-create fixtures-remove fixtures-partial-resolve fixtures-refire fixtures-silence fixtures-unsilence \
         diagrams \
         website website-dev
 
@@ -223,6 +223,9 @@ e2e: ## Run the functional suite across ALL auth modes (none + internal + oidc)
 e2e-mode: ## Run the functional suite for ONE mode: make e2e-mode MODE=oidc [E2E_SHARD=1/3]
 	$(E2E_RUN) test $(MODE)
 
+e2e-fast: ## Local-only faster run of ONE mode (image build skipped if unchanged, pnpm store cached): make e2e-fast [MODE=none]
+	E2E_FAST=1 $(E2E_RUN) test $(MODE)
+
 e2e-screenshots: ## Regenerate ALL screenshots across all modes into docs/assets/
 	$(E2E_RUN) screenshots none
 	$(E2E_RUN) screenshots internal
@@ -240,11 +243,14 @@ release-video: ## Record + render a demo video: make release-video VERSION=1.13.
 
 # ── Fixtures ───────────────────────────────────────────────────────────────────
 
-fixtures-create: ## Fire 27 Kubernetes-themed test alerts (test_suite=jarvis) to Alertmanager
-	@bash scripts/fire-test-alerts.sh
+fixtures-create: ## Fire 27 Kubernetes-themed test alerts (test_suite=jarvis) to Alertmanager, all at once
+	@bash scripts/fire-test-alerts.sh --no-pause
 
 fixtures-remove: ## Resolve all test alerts fired by fixtures-create
 	@bash scripts/resolve-test-alerts.sh
+
+fixtures-partial-resolve: ## Resolve only three test cases: one single alert, one alert in a group, one whole group (CASES="single member group")
+	@bash scripts/resolve-test-alerts-partial.sh $(CASES)
 
 fixtures-refire: ## Resolve, wait out the 60s grace period, re-fire — guarantees a new occurrence (~3-4 min)
 	@bash scripts/refire-test-alerts.sh

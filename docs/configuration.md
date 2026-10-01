@@ -24,9 +24,20 @@ Values are read once at startup — a change means a restart.
 | <a id="jarvis_log_level"></a>`JARVIS_LOG_LEVEL` | `info` | Log verbosity: `info` or `debug` |
 | <a id="jarvis_log_requests"></a>`JARVIS_LOG_REQUESTS` | `false` | Log every HTTP request. Noisy — for debugging a proxy or auth problem, not for normal operation |
 | <a id="jarvis_poll_interval"></a>`JARVIS_POLL_INTERVAL` | `15s` | How often Alertmanager is polled (Go duration, e.g. `30s`). Also scales the grace period to `max(60s, 2 × interval)` — see [Alert lifecycle](alert-lifecycle.md) |
+| <a id="jarvis_resolved_buffer_ttl"></a>`JARVIS_RESOLVED_BUFFER_TTL` | `20m` | How long a resolved alert stays in the live snapshot, which feeds the **Recently resolved** toggle on the Active tab (Go duration, `1m` to `24h`; anything else stops the start). Instance-wide — set the same value on every replica. **Memory and performance:** every resolved alert inside the window stays in memory and is part of each WebSocket push, each `GET /api/v1/alerts` response and, on PostgreSQL, each poll snapshot row, so the cost grows with the number of distinct alerts that resolve within the window (a flapping alert occupies one slot). The UI shows the active value in the tooltips of the **Recently resolved** toggle and the Resolved label (`GET /api/v1/status` → `resolved_buffer_ttl_seconds`). Values above `1h` log a warning at startup. The value may be shorter than the grace period; that is harmless. See [Resolved-buffer window](#resolved-buffer-window) |
 | <a id="jarvis_allowed_origins"></a>`JARVIS_ALLOWED_ORIGINS` | *(same origin)* | Comma-separated origins allowed for CORS and the WebSocket upgrade, e.g. `https://jarvis.example.com`. Required whenever the browser reaches Jarvis under a different host than the backend itself — see [Running behind a proxy](reverse-proxy.md). No wildcard is accepted |
 | <a id="jarvis_runbook_base_url"></a>`JARVIS_RUNBOOK_BASE_URL` | — | Prefix for runbook links. Prepended to the `runbook` label or annotation when its value is not already an absolute URL, e.g. `https://wiki.example.com/runbooks/` |
 | <a id="jarvis_pprof_addr"></a>`JARVIS_PPROF_ADDR` | — | Opt-in loopback-only pprof debug server (`heap`/`allocs`/`goroutine` profiles only), e.g. `127.0.0.1:6060`. Empty (default) opens no port at all. Must be a literal loopback IP + port — see [Troubleshooting](troubleshooting.md#memory-profiling-jarvis_pprof_addr) |
+
+### Resolved-buffer window
+
+`JARVIS_RESOLVED_BUFFER_TTL` decides how long an alert that disappeared from Alertmanager still travels with the live snapshot. It does not change what is recorded: the full history stays in the database and in the **Resolved** view. The live snapshot is what every client receives on connect and on every change, so a longer window is a real cost:
+
+- **Memory:** one entry per distinct alert (fingerprint and cluster) that resolved inside the window. Repeated flapping of the same alert overwrites its entry instead of adding one.
+- **Payload:** each entry adds to every WebSocket push and every unfiltered `GET /api/v1/alerts`. On PostgreSQL it is also written to `poll_snapshots` on each poll and decoded by every follower.
+- **Start:** the buffer is re-seeded from the database with the same window, so a restart shows the same recently resolved alerts.
+
+Start with the default and raise it only when the resolved-alert volume is small compared with the number of active alerts. Watch `jarvis_alerts{state="resolved"}` and the process memory after changing it.
 
 ---
 
@@ -106,7 +117,7 @@ Kubernetes deployment including a CloudNativePG example are covered in
 | <a id="jarvis_auth_oidc_redirect_url"></a>`JARVIS_AUTH_OIDC_REDIRECT_URL` | — | Callback URL, must match the provider's configuration (required for `oidc`) |
 | <a id="jarvis_auth_oidc_scopes"></a>`JARVIS_AUTH_OIDC_SCOPES` | `openid,profile,email` | Comma-separated scopes |
 | <a id="jarvis_oidc_groups_claim"></a>`JARVIS_OIDC_GROUPS_CLAIM` | — | ID-token claim that carries the user's groups, e.g. `groups` or `cognito:groups`. Jarvis stores them at each login and shows them in the *Account* panel of the user menu. Without it groups are not read |
-| <a id="jarvis_oidc_admin_value"></a>`JARVIS_OIDC_ADMIN_VALUE` | — | The group in that claim that makes a user an admin, e.g. `jarvis-admins`. Needs `JARVIS_OIDC_GROUPS_CLAIM`; without both every OIDC user gets the `user` role |
+| <a id="jarvis_oidc_admin_value"></a>`JARVIS_OIDC_ADMIN_VALUE` | — | The group in that claim that makes a user an admin, e.g. `jarvis-admins`. Several groups: comma-separated (`admin_a,admin_b`), membership in any one is enough; whitespace around entries is ignored. Group names that themselves contain a comma (e.g. full LDAP DNs) cannot be listed this way. Needs `JARVIS_OIDC_GROUPS_CLAIM`; without both every OIDC user gets the `user` role |
 
 ```env
 JARVIS_AUTH_PROVIDER=internal

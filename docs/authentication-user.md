@@ -180,7 +180,19 @@ JARVIS_OIDC_ADMIN_VALUE=jarvis-admins
 
 The claim may be a single string or a list — Keycloak's `groups` and
 Cognito's `cognito:groups` both work. A user whose claim contains the
-configured group becomes `admin`, everyone else stays `user`. Because this is
+configured group becomes `admin`, everyone else stays `user`.
+
+If several groups should grant admin, for example because two directories are
+federated through one identity provider, list them comma-separated; membership
+in any one is enough:
+
+```env
+JARVIS_OIDC_ADMIN_VALUE=admin_a,admin_b
+```
+
+Whitespace around entries is ignored. A group name that itself contains a
+comma, such as a full LDAP DN, cannot be listed this way.
+ Because this is
 evaluated at each login, revoking the group in the identity provider takes
 effect the next time the user signs in.
 

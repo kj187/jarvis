@@ -467,3 +467,18 @@ describe('migratePersistedSettings', () => {
     expect(result.labelDisplay).toEqual(DEFAULT_SETTINGS.labelDisplay)
   })
 })
+
+describe('showRecentlyResolved setting', () => {
+  it('is a boolean default that a user override or the instance layer can replace', () => {
+    expect(typeof DEFAULT_SETTINGS.showRecentlyResolved).toBe('boolean')
+    expect(resolveSettings({}, { showRecentlyResolved: true }).showRecentlyResolved).toBe(true)
+    expect(resolveSettings({}, { showRecentlyResolved: false }).showRecentlyResolved).toBe(false)
+  })
+
+  it('normalizeSettings keeps a boolean and drops any other type', () => {
+    expect(normalizeSettings({ showRecentlyResolved: true })).toEqual({ showRecentlyResolved: true })
+    expect(normalizeSettings({ showRecentlyResolved: false })).toEqual({ showRecentlyResolved: false })
+    expect(normalizeSettings({ showRecentlyResolved: 'true' })).toEqual({})
+    expect(normalizeSettings({ showRecentlyResolved: 1 })).toEqual({})
+  })
+})

@@ -45,6 +45,19 @@ tests:
           path: data.JARVIS_SILENCE_DURATIONS
           value: "15m,1h,30d"
 
+  - it: omits JARVIS_RESOLVED_BUFFER_TTL by default so the app keeps its 20m default
+    asserts:
+      - notExists:
+          path: data.JARVIS_RESOLVED_BUFFER_TTL
+
+  - it: renders JARVIS_RESOLVED_BUFFER_TTL when config.resolvedBufferTTL is set
+    set:
+      config.resolvedBufferTTL: 1h
+    asserts:
+      - equal:
+          path: data.JARVIS_RESOLVED_BUFFER_TTL
+          value: "1h"
+
   - it: omits all JARVIS_RETENTION_* by default
     asserts:
       - notExists:
@@ -170,6 +183,17 @@ tests:
       - equal:
           path: data.JARVIS_OIDC_ADMIN_VALUE
           value: Operator
+
+  - it: passes several comma-separated admin groups through unchanged
+    set:
+      auth.provider: oidc
+      auth.oidc.issuer: https://keycloak.example.com/realms/myrealm
+      auth.oidc.groupsClaim: groups
+      auth.oidc.adminValue: admin_a,admin_b
+    asserts:
+      - equal:
+          path: data.JARVIS_OIDC_ADMIN_VALUE
+          value: admin_a,admin_b
 
   - it: omits OIDC config when auth.oidc.issuer is empty
     asserts:

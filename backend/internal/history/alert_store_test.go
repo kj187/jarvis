@@ -34,10 +34,10 @@ func TestResolvedBuffer_RuntimeTimestamp(t *testing.T) {
 	if len(got) != 1 || !got[0].EndsAt.Equal(resolvedAt) || !got[0].UpdatedAt.Equal(resolvedAt) {
 		t.Fatalf("resolved timestamps = %+v, want EndsAt/UpdatedAt %s", got, resolvedAt)
 	}
-	if s.ExpireResolved(resolvedAt.Add(ResolvedBufferTTL - time.Nanosecond)) {
+	if s.ExpireResolved(resolvedAt.Add(DefaultResolvedBufferTTL - time.Nanosecond)) {
 		t.Fatal("entry expired before deadline")
 	}
-	if !s.ExpireResolved(resolvedAt.Add(ResolvedBufferTTL)) || len(s.Get()) != 0 {
+	if !s.ExpireResolved(resolvedAt.Add(DefaultResolvedBufferTTL)) || len(s.Get()) != 0 {
 		t.Fatal("entry did not expire exactly at deadline")
 	}
 }
@@ -46,9 +46,9 @@ func TestResolvedBuffer_SeedUsesRemainingTTL(t *testing.T) {
 	now := time.Date(2026, 9, 17, 10, 0, 0, 0, time.UTC)
 	s := &AlertStore{now: func() time.Time { return now }}
 	s.SeedResolved([]models.EnrichedAlert{
-		resolvedAlertAt("alive", "a", now.Add(-ResolvedBufferTTL+time.Nanosecond)),
-		resolvedAlertAt("at-deadline", "a", now.Add(-ResolvedBufferTTL)),
-		resolvedAlertAt("old", "a", now.Add(-ResolvedBufferTTL-time.Nanosecond)),
+		resolvedAlertAt("alive", "a", now.Add(-DefaultResolvedBufferTTL+time.Nanosecond)),
+		resolvedAlertAt("at-deadline", "a", now.Add(-DefaultResolvedBufferTTL)),
+		resolvedAlertAt("old", "a", now.Add(-DefaultResolvedBufferTTL-time.Nanosecond)),
 	})
 	got := s.Get()
 	if len(got) != 1 || got[0].Fingerprint != "alive" {
@@ -67,7 +67,7 @@ func TestResolvedBuffer_RefireResolveDoesNotUseOldDeadline(t *testing.T) {
 	s.Set([]models.EnrichedAlert{{Fingerprint: "fp1", ClusterName: "a", Status: models.AlertStatus{State: "active"}}})
 	s.MarkResolvedForClusterAt("fp1", "a", base.Add(10*time.Minute))
 
-	if s.ExpireResolved(base.Add(ResolvedBufferTTL)) || len(s.Get()) != 1 {
+	if s.ExpireResolved(base.Add(DefaultResolvedBufferTTL)) || len(s.Get()) != 1 {
 		t.Fatal("old episode deadline removed the newer resolved episode")
 	}
 	if !s.ExpireResolved(base.Add(30*time.Minute)) || len(s.Get()) != 0 {
@@ -88,7 +88,7 @@ func TestResolvedBuffer_ActiveWinsAndDuplicateDoesNotExtendTTL(t *testing.T) {
 	s.Set([]models.EnrichedAlert{resolved})
 	now = now.Add(5 * time.Minute)
 	s.Set([]models.EnrichedAlert{resolved})
-	if !s.ExpireResolved(resolved.EndsAt.Add(ResolvedBufferTTL)) {
+	if !s.ExpireResolved(resolved.EndsAt.Add(DefaultResolvedBufferTTL)) {
 		t.Fatal("repeated Set extended the resolved episode deadline")
 	}
 }
@@ -110,7 +110,7 @@ func TestResolvedBuffer_ResetClearsExpiry(t *testing.T) {
 	s := &AlertStore{now: func() time.Time { return now }}
 	s.SeedResolved([]models.EnrichedAlert{resolvedAlertAt("fp1", "a", now)})
 	s.Reset()
-	if s.ExpireResolved(now.Add(ResolvedBufferTTL)) {
+	if s.ExpireResolved(now.Add(DefaultResolvedBufferTTL)) {
 		t.Fatal("Reset left expiry metadata behind")
 	}
 }
