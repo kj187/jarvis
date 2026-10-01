@@ -139,8 +139,10 @@ or reuse one; retire in place (`docs/ai-agents.md`).
 8. **Releases**: Never trigger a release without an explicit user request;
    then load `.agents/skills/release/SKILL.md` and follow its flow (one
    upfront question, one review-gate stop; chart-only releases: same file).
-9. **Dependabot** runs daily; its PRs run through CI — green CI →
-   merge, no manual intervention needed.
+9. **Dependabot** runs daily; its PRs run through CI. Merge one without asking
+   (exception to Rule 10's merge gate) **only** if CI is green, it is **no major
+   update** and has **no breaking changes** (check its release notes); otherwise
+   ask the user first.
 10. **`main` is PR-only — always work on a feature branch, with user gates.**
     Every change goes branch → commit → PR → watch CI → squash merge →
     cleanup, and you **ask the user** at three gates: before creating the
