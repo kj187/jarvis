@@ -154,7 +154,7 @@ func main() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		oidcProvider, err := auth.NewOIDCProvider(ctx, cfg.OIDCIssuer, cfg.OIDCClientID,
 			cfg.OIDCClientSecret, cfg.OIDCRedirectURL, cfg.OIDCScopes, userStore,
-			cfg.OIDCGroupsClaim, cfg.OIDCAdminValue)
+			cfg.OIDCGroupsClaim, cfg.OIDCAdminGroups)
 		cancel()
 		if err != nil {
 			logger.Error("oidc provider init", "err", err)

@@ -117,7 +117,7 @@ Kubernetes deployment including a CloudNativePG example are covered in
 | <a id="jarvis_auth_oidc_redirect_url"></a>`JARVIS_AUTH_OIDC_REDIRECT_URL` | — | Callback URL, must match the provider's configuration (required for `oidc`) |
 | <a id="jarvis_auth_oidc_scopes"></a>`JARVIS_AUTH_OIDC_SCOPES` | `openid,profile,email` | Comma-separated scopes |
 | <a id="jarvis_oidc_groups_claim"></a>`JARVIS_OIDC_GROUPS_CLAIM` | — | ID-token claim that carries the user's groups, e.g. `groups` or `cognito:groups`. Jarvis stores them at each login and shows them in the *Account* panel of the user menu. Without it groups are not read |
-| <a id="jarvis_oidc_admin_value"></a>`JARVIS_OIDC_ADMIN_VALUE` | — | The group in that claim that makes a user an admin, e.g. `jarvis-admins`. Needs `JARVIS_OIDC_GROUPS_CLAIM`; without both every OIDC user gets the `user` role |
+| <a id="jarvis_oidc_admin_value"></a>`JARVIS_OIDC_ADMIN_VALUE` | — | The group in that claim that makes a user an admin, e.g. `jarvis-admins`. Several groups: comma-separated (`admin_a,admin_b`), membership in any one is enough; whitespace around entries is ignored. Group names that themselves contain a comma (e.g. full LDAP DNs) cannot be listed this way. Needs `JARVIS_OIDC_GROUPS_CLAIM`; without both every OIDC user gets the `user` role |
 
 ```env
 JARVIS_AUTH_PROVIDER=internal

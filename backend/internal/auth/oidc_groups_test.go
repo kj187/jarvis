@@ -37,20 +37,23 @@ func TestClaimStrings(t *testing.T) {
 
 func TestResolveRole(t *testing.T) {
 	cases := []struct {
-		name       string
-		adminValue string
-		groups     []string
-		want       string
+		name        string
+		adminGroups []string
+		groups      []string
+		want        string
 	}{
-		{"member of the admin group", "Operator", []string{"x", "Operator"}, "admin"},
-		{"not a member", "Operator", []string{"x"}, "user"},
-		{"no groups at all", "Operator", nil, "user"},
-		{"no admin value configured", "", []string{"Operator"}, "user"},
-		{"match is exact, not a substring", "Operator", []string{"Operators"}, "user"},
+		{"member of the admin group", []string{"Operator"}, []string{"x", "Operator"}, "admin"},
+		{"not a member", []string{"Operator"}, []string{"x"}, "user"},
+		{"no groups at all", []string{"Operator"}, nil, "user"},
+		{"no admin group configured", nil, []string{"Operator"}, "user"},
+		{"match is exact, not a substring", []string{"Operator"}, []string{"Operators"}, "user"},
+		{"member of the first of several", []string{"admin_a", "admin_b"}, []string{"admin_a"}, "admin"},
+		{"member of the last of several", []string{"admin_a", "admin_b"}, []string{"x", "admin_b"}, "admin"},
+		{"member of none of several", []string{"admin_a", "admin_b"}, []string{"x"}, "user"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			p := &OIDCProvider{adminValue: tc.adminValue}
+			p := &OIDCProvider{adminGroups: tc.adminGroups}
 			if got := p.resolveRole(tc.groups); got != tc.want {
 				t.Fatalf("resolveRole(%v) = %q, want %q", tc.groups, got, tc.want)
 			}

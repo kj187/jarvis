@@ -234,7 +234,8 @@ auth:
     # the Account panel of the user menu. Without it groups are not read.
     groupsClaim: ""
     # The group in groupsClaim that makes a user an admin, e.g. "jarvis-admins".
-    # Needs groupsClaim; without both, every OIDC user gets the "user" role.
+    # Several groups: comma-separated, e.g. "admin_a,admin_b"; membership in
+    # any one is enough. Needs groupsClaim; without both, every OIDC user gets the "user" role.
     adminValue: ""
 
 # Database configuration.

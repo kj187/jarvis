@@ -147,7 +147,7 @@ Tests cover four suites (`deployment`, `configmap`, `secret`, `ingress`) and run
 | `auth.oidc.redirectUrl` | string | `""` | OIDC redirect URL (must match provider config) |
 | `auth.oidc.scopes` | string | `openid,profile,email` | Comma-separated OIDC scopes |
 | `auth.oidc.groupsClaim` | string | `""` | ID-token claim carrying the user's groups, e.g. `cognito:groups` |
-| `auth.oidc.adminValue` | string | `""` | Group in `groupsClaim` that grants the admin role; needs `groupsClaim` |
+| `auth.oidc.adminValue` | string | `""` | Group in `groupsClaim` that grants the admin role; several groups comma-separated (`admin_a,admin_b`), any one suffices; needs `groupsClaim` |
 | `persistence.enabled` | bool | `false` | Enable PVC for SQLite storage (single-replica recommended) |
 | `persistence.storageClass` | string | `""` | StorageClass name |
 | `persistence.accessMode` | string | `ReadWriteOnce` | PVC access mode |
