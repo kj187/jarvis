@@ -124,7 +124,7 @@ function AlertEntry({
         'group relative flex cursor-pointer items-start gap-1 px-3 py-3.5 transition-colors',
         // Claimed entries carry a blue right accent — "someone's on it", scannable
         // in a large group — not the old grey tint that read as "deprioritised".
-        claim ? 'border-r-4 border-claim-edge bg-claim-soft hover:bg-selected' : 'hover:bg-accent/20',
+        claim ? 'border-r-4 border-r-claim-edge bg-claim-soft hover:bg-selected' : 'hover:bg-accent/20',
         isSelected && !claim && 'bg-selected hover:bg-info-soft',
         isSelected && claim && 'bg-info-soft',
         // Recently resolved: dimmed through tokens (no opacity, so text keeps its contrast).
