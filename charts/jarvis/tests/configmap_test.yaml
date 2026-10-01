@@ -184,6 +184,17 @@ tests:
           path: data.JARVIS_OIDC_ADMIN_VALUE
           value: Operator
 
+  - it: passes several comma-separated admin groups through unchanged
+    set:
+      auth.provider: oidc
+      auth.oidc.issuer: https://keycloak.example.com/realms/myrealm
+      auth.oidc.groupsClaim: groups
+      auth.oidc.adminValue: admin_a,admin_b
+    asserts:
+      - equal:
+          path: data.JARVIS_OIDC_ADMIN_VALUE
+          value: admin_a,admin_b
+
   - it: omits OIDC config when auth.oidc.issuer is empty
     asserts:
       - notExists:

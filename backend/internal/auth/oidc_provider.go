@@ -18,12 +18,12 @@ type OIDCProvider struct {
 	verifier    *gooidc.IDTokenVerifier
 	oauth2Cfg   oauth2.Config
 	users       *users.Store
-	groupsClaim string // ID-token claim carrying the user's groups (e.g. "groups", "cognito:groups"); "" = not read
-	adminValue  string // group inside groupsClaim that grants the admin role (e.g. "Administrator")
+	groupsClaim string   // ID-token claim carrying the user's groups (e.g. "groups", "cognito:groups"); "" = not read
+	adminGroups []string // groups inside groupsClaim that grant the admin role (e.g. "Administrator"); any one suffices
 }
 
 // NewOIDCProvider creates an OIDCProvider by discovering the OIDC issuer metadata.
-func NewOIDCProvider(ctx context.Context, issuer, clientID, clientSecret, redirectURL string, scopes []string, store *users.Store, groupsClaim, adminValue string) (*OIDCProvider, error) {
+func NewOIDCProvider(ctx context.Context, issuer, clientID, clientSecret, redirectURL string, scopes []string, store *users.Store, groupsClaim string, adminGroups []string) (*OIDCProvider, error) {
 	provider, err := gooidc.NewProvider(ctx, issuer)
 	if err != nil {
 		return nil, fmt.Errorf("oidc discovery: %w", err)
@@ -51,7 +51,7 @@ func NewOIDCProvider(ctx context.Context, issuer, clientID, clientSecret, redire
 		oauth2Cfg:   cfg,
 		users:       store,
 		groupsClaim: groupsClaim,
-		adminValue:  adminValue,
+		adminGroups: adminGroups,
 	}, nil
 }
 
@@ -134,14 +134,13 @@ func (p *OIDCProvider) Info() ProviderInfo {
 	return ProviderInfo{Mode: "oidc", LoginURL: "/auth/oidc/start"}
 }
 
-// resolveRole returns "admin" when adminValue is configured and the user is in
-// that group, otherwise "user".
+// resolveRole returns "admin" when the user is in at least one of the
+// configured admin groups, otherwise "user".
 func (p *OIDCProvider) resolveRole(groups []string) string {
-	if p.adminValue == "" {
-		return "user"
-	}
-	if slices.Contains(groups, p.adminValue) {
-		return "admin"
+	for _, g := range p.adminGroups {
+		if slices.Contains(groups, g) {
+			return "admin"
+		}
 	}
 	return "user"
 }
