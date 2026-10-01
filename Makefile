@@ -19,7 +19,7 @@ DEMO_AM_URL        = http://localhost:$(DEMO_AM_PORT)
         scan scan-history scan-staged scan-all \
         build \
         e2e-build e2e-down e2e e2e-mode e2e-screenshots e2e-screenshot release-video \
-        fixtures-create fixtures-remove fixtures-refire fixtures-silence fixtures-unsilence \
+        fixtures-create fixtures-remove fixtures-partial-resolve fixtures-refire fixtures-silence fixtures-unsilence \
         diagrams \
         website website-dev
 
@@ -240,11 +240,14 @@ release-video: ## Record + render a demo video: make release-video VERSION=1.13.
 
 # ── Fixtures ───────────────────────────────────────────────────────────────────
 
-fixtures-create: ## Fire 27 Kubernetes-themed test alerts (test_suite=jarvis) to Alertmanager
-	@bash scripts/fire-test-alerts.sh
+fixtures-create: ## Fire 27 Kubernetes-themed test alerts (test_suite=jarvis) to Alertmanager, all at once
+	@bash scripts/fire-test-alerts.sh --no-pause
 
 fixtures-remove: ## Resolve all test alerts fired by fixtures-create
 	@bash scripts/resolve-test-alerts.sh
+
+fixtures-partial-resolve: ## Resolve only three test cases: one single alert, one alert in a group, one whole group (CASES="single member group")
+	@bash scripts/resolve-test-alerts-partial.sh $(CASES)
 
 fixtures-refire: ## Resolve, wait out the 60s grace period, re-fire — guarantees a new occurrence (~3-4 min)
 	@bash scripts/refire-test-alerts.sh

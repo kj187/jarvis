@@ -163,6 +163,7 @@ rig rather than as incidents, so the demo leaves them out:
 ```bash
 make fixtures-create      # all 27 alerts, against the dev stack's Alertmanager
 make fixtures-remove      # resolve them
+make fixtures-partial-resolve  # resolve only three cases: one single alert, one alert in a group, one whole group
 make fixtures-refire      # resolve, wait out the grace period, re-fire (~3-4 min)
 make fixtures-silence     # create a silence with an escaped-regex matcher
 make fixtures-unsilence   # expire it

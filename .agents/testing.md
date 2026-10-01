@@ -95,6 +95,7 @@ JARVIS_TEST_POSTGRES_DSN='postgres://jarvis:jarvis@localhost:5432/jarvis?sslmode
 # ── Manual test fixtures against the dev stack ───────────────
 make fixtures-create               # fire all 27 Kubernetes-themed test alerts (label test_suite=jarvis)
 make fixtures-remove               # resolve those alerts
+make fixtures-partial-resolve      # resolve a single alert, one group member and one whole group (CASES="single member group")
 make fixtures-refire               # resolve + wait 70s (must clear the 60s grace period,
                                     # Critical Invariant #1) + re-fire — guarantees a new
                                     # occurrence. Takes ~3-4 minutes. See .agents/lessons.md
