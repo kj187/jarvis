@@ -108,6 +108,10 @@ GET    /api/v1/alerts/:fingerprint/silence-events full_protect? → []SilenceEve
 GET    /api/v1/alerts/:fingerprint/comments      full_protect?  → { comments: Comment[], total }  ?limit= ?offset= ?cluster= (required)
 #        mirrors the history/timeline pagination pattern: default limit 20, max 100, offset >= 0
 #        (parseFingerprintClusterPagination); ORDER BY created_at DESC, id DESC (newest first)
+GET    /api/v1/alerts/comment-counts             full_protect?  → { counts: { "<cluster>::<fingerprint>": n } }  one SQL aggregate (`Store.CountCommentsByAlert`)
+#        restricted to alerts in the live AlertStore snapshot, alerts without comments omitted; registered before
+#        `/alerts/:fingerprint/*` (invariant 5). Feeds the list/card comment badge (`useCommentCount`); the
+#        frontend invalidates it on `comment_added`, on add/delete, and when `alerts_update` changes the alert key set
 POST   /api/v1/alerts/:fingerprint/comments      Auth  (write)  Body: { authorName, body, eventId? }  (body capped at 10000 chars → 400)
 DELETE /api/v1/alerts/:fingerprint/comments/:id  Auth  (write)  (author-gated: user_id, else author_name)
 
@@ -205,7 +209,7 @@ GET    /*                                         None        → embed.FS (Vite
 | `alerts_update` | `{ alerts: EnrichedAlert[] }` | `queryClient.setQueryData(['alerts'], alerts)` |
 | `claim_set` | `{ fingerprint, clusterName, claim }` | patch alerts cache + invalidate claim queries (cluster-scoped keys) |
 | `claim_released` | `{ fingerprint, clusterName, releasedBy }` | set `activeClaim` to `undefined` + invalidate claim queries |
-| `comment_added` | `{ fingerprint, comment }` | invalidate comments query by prefix key `['comments', fingerprint, clusterName]` — matches every paged query key (`..., page]`) for that alert, so whichever page is mounted refetches; local `page` state is untouched (see `CommentsPanel.tsx` above for the page>1 "jump to latest" affordance) |
+| `comment_added` | `{ fingerprint, comment }` | also invalidates `['comment-counts']` (list/card badge); invalidate comments query by prefix key `['comments', fingerprint, clusterName]` — matches every paged query key (`..., page]`) for that alert, so whichever page is mounted refetches; local `page` state is untouched (see `CommentsPanel.tsx` above for the page>1 "jump to latest" affordance) |
 | `silences_update` | `{}` (pure invalidation signal) | `invalidateQueries(['silences'])` → refetch from the in-memory snapshot. Broadcast by the recorder when the silence snapshot diff changed vs. the previous poll, and by every silence mutation write-through (`applySilenceWriteThrough`) |
 
 `claim_set`/`claim_released`/`comment_added`/the write-through `silences_update`
