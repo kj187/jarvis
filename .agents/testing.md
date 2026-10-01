@@ -49,6 +49,8 @@ pnpm build                         # tsc -b && vite build (type-check + build)
 # ── Functional E2E via Makefile (isolated container stack) ───
 make e2e                           # functional suite across all auth modes (none + internal + oidc)
 make e2e-mode MODE=oidc            # functional suite for ONE mode; E2E_SHARD=2/4 limits it to one Playwright shard (as CI does)
+make e2e-fast MODE=none            # local only: one mode, image build skipped if sources unchanged, pnpm store cached (E2E_FAST=1; CI never sets it);
+                                   # the whole none suite locally = one unsharded run, never four E2E_SHARD runs (four boots)
 make e2e-screenshots               # regenerate all docs screenshots
 make e2e-screenshot NAME=card-view # regenerate ONE screenshot
 make release-video VERSION=1.13.0  # release demo video (TTS → record → render), only on request; PROJECT=intro for the product video —
