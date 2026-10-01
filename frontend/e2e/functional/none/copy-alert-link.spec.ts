@@ -71,3 +71,21 @@ test('C2 Copy link also works where the Clipboard API is unavailable (plain http
   await expect(page.getByTestId('detail-copy-link')).toContainText('Link copied')
   expect(await readCopied(page)).toContain('alert=')
 })
+
+test('C3 The fingerprint is shown in the detail panel and copies on click', async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText: async (t: string) => { (window as CopyProbe).__copied = t } },
+      configurable: true,
+    })
+  })
+  await openFirstAlert(page, '/?state=active')
+
+  const fingerprint = page.getByTestId('detail-fingerprint')
+  await expect(fingerprint).toBeVisible()
+  const shown = (await fingerprint.textContent())?.trim() ?? ''
+  expect(shown).toMatch(/^[0-9a-f]{16}$/)
+
+  await page.getByTestId('detail-fingerprint-copy').click()
+  expect(await readCopied(page)).toBe(shown)
+})

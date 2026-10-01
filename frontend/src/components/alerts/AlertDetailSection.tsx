@@ -11,6 +11,8 @@ interface AlertDetailSectionProps {
   /** Divider below the section. Default true; set false for sections that
    * flow into the next one without a visual break. */
   bordered?: boolean
+  /** When set, the open/closed state is remembered in localStorage under this key (shared across alerts). */
+  persistKey?: string
 }
 
 export function AlertDetailSection({
@@ -20,14 +22,31 @@ export function AlertDetailSection({
   headerRight,
   testId,
   bordered = true,
+  persistKey,
 }: AlertDetailSectionProps) {
-  const [open, setOpen] = useState(defaultOpen)
+  const storageKey = persistKey ? `jarvis:detail-section:${persistKey}` : null
+  const [open, setOpen] = useState(() => {
+    if (!storageKey) return defaultOpen
+    try {
+      const stored = localStorage.getItem(storageKey)
+      return stored === null ? defaultOpen : stored === 'open'
+    } catch {
+      return defaultOpen
+    }
+  })
+
+  const toggle = () => {
+    const next = !open
+    setOpen(next)
+    if (!storageKey) return
+    try { localStorage.setItem(storageKey, next ? 'open' : 'closed') } catch {}
+  }
 
   return (
     <div data-testid={testId} className={cn('py-4 px-5', bordered && 'border-b border-border')}>
       <button
         className="flex w-full items-center justify-between text-sm font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground cursor-pointer"
-        onClick={() => setOpen((v) => !v)}
+        onClick={toggle}
       >
         <span className="flex items-center gap-1.5">{title}</span>
         <div className="flex items-center gap-2">
