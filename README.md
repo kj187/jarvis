@@ -52,7 +52,7 @@ Worried about feature creep? Jarvis has a deliberately focused scope — what it
 
 ### Built with AI
 
-AI writes the code; 20 years of software engineering experience — 9 of them in DevOps/platform engineering — directs it, so this isn't vibe-coded. Every commit and CI run enforces the same bar as hand-written code: gosec, govulncheck, golangci-lint, pnpm audit, plus defense-in-depth hardening (strict CSP, read-only container filesystem, no-new-privileges). See [Security Policy](https://kj187.github.io/jarvis/project/security-policy) for details.
+AI writes the code; 20 years of software engineering experience — 9 of them in DevOps/platform engineering — directs it, so this isn't vibe-coded. Every commit and CI run enforces the same bar as hand-written code: gosec, govulncheck, golangci-lint, pnpm audit, plus defense-in-depth hardening (strict CSP, read-only container filesystem, no-new-privileges). See [AI and engineering](https://kj187.github.io/jarvis/project/ai-development) for how it works and what it does not guarantee, and the [Security Policy](https://kj187.github.io/jarvis/project/security-policy) for details.
 
 ## Getting Started
 

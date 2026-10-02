@@ -3,6 +3,8 @@
 Jarvis is developed with AI coding agents. All project knowledge follows open,
 tool-neutral conventions, so any agent (Claude Code, Codex, GitHub Copilot) gets
 the same content. Commit and PR rules in `AGENTS.md` apply to every tool alike.
+For the non-technical picture — what AI does here, what stays with the maintainer,
+and which gates apply — see [AI and engineering](ai-development.md).
 
 ## Layout
 

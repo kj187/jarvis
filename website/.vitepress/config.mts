@@ -190,6 +190,7 @@ export default defineConfig({
           { text: 'Contributing', link: '/project/contributing' },
           { text: 'E2E & screenshot testing', link: '/project/testing-e2e' },
           { text: 'Design system', link: '/project/design-system' },
+          { text: 'AI and engineering', link: '/project/ai-development' },
           { text: 'Working with AI agents', link: '/project/ai-agents' },
           { text: 'Security policy', link: '/project/security-policy' },
           { text: 'Maintainers', link: '/project/maintainers' },
