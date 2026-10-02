@@ -3,6 +3,7 @@ package metrics
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus/testutil"
 
@@ -31,7 +32,7 @@ func TestStoreCollector_Collect(t *testing.T) {
 		}
 	}
 
-	c := NewCollector(alerts, clients, clusterUp, 2)
+	c := NewCollector(alerts, clients, clusterUp, nil, 2)
 
 	want := `
 		# HELP jarvis_alerts Number of alerts, by cluster and state.
@@ -61,13 +62,32 @@ func TestStoreCollector_Collect(t *testing.T) {
 }
 
 func TestStoreCollector_NilClusterUp(t *testing.T) {
-	c := NewCollector(fakeAlertSource{}, fakeClientCounter{}, nil, 0)
+	c := NewCollector(fakeAlertSource{}, fakeClientCounter{}, nil, nil, 0)
 
 	if err := testutil.CollectAndCompare(c, strings.NewReader(`
 		# HELP jarvis_alertmanager_up Whether the last poll of a cluster member succeeded (1) or failed (0).
 		# TYPE jarvis_alertmanager_up gauge
 	`), "jarvis_alertmanager_up"); err != nil {
 		t.Fatalf("expected no jarvis_alertmanager_up samples when clusterUp is nil: %v", err)
+	}
+}
+
+func TestStoreCollector_ClusterLastSuccess(t *testing.T) {
+	lastSuccess := func() map[string]time.Time {
+		return map[string]time.Time{
+			"prod":    time.Unix(1790000000, 0),
+			"staging": {}, // never succeeded: no sample
+		}
+	}
+	c := NewCollector(fakeAlertSource{}, fakeClientCounter{}, nil, lastSuccess, 2)
+
+	want := `
+		# HELP jarvis_cluster_last_success_timestamp_seconds Unix time of the last successful alert fetch of a cluster (as recorded by the polling leader). Absent while no fetch has succeeded yet.
+		# TYPE jarvis_cluster_last_success_timestamp_seconds gauge
+		jarvis_cluster_last_success_timestamp_seconds{cluster="prod"} 1.79e+09
+	`
+	if err := testutil.CollectAndCompare(c, strings.NewReader(want), "jarvis_cluster_last_success_timestamp_seconds"); err != nil {
+		t.Fatalf("unexpected collector output: %v", err)
 	}
 }
 
@@ -86,7 +106,7 @@ func TestMetrics_New_ExposesBuildInfo(t *testing.T) {
 
 func TestMetrics_MustRegister_PanicsOnDuplicate(t *testing.T) {
 	m := New("dev")
-	c := NewCollector(fakeAlertSource{}, fakeClientCounter{}, nil, 1)
+	c := NewCollector(fakeAlertSource{}, fakeClientCounter{}, nil, nil, 1)
 	m.MustRegister(c)
 
 	defer func() {

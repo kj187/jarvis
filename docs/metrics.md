@@ -58,7 +58,8 @@ sync with reality.
 | `jarvis_ws_clients` | — | Number of currently connected WebSocket clients |
 | `jarvis_clusters_configured` | — | Number of configured Alertmanager clusters |
 | `jarvis_leader` | — | `1` if this pod currently holds Alertmanager-polling/history-write leadership, else `0`. Always `1` on SQLite (single replica by design) |
-| `jarvis_snapshot_stale` | — | `1` if a follower's consumed poll snapshot is older than 3× `JARVIS_POLL_INTERVAL` (a missed/delayed `pg_notify` and periodic resync both not having landed yet), else `0`. Always `0` while leader or on SQLite |
+| `jarvis_snapshot_stale` | — | `1` if any cluster's last successful fetch is older than max(3× `JARVIS_POLL_INTERVAL`, 60 s) — Alertmanager unreachable, or on a follower the leader's snapshots not arriving — else `0` |
+| `jarvis_cluster_last_success_timestamp_seconds` | `cluster` | Unix time of the last successful alert fetch of that cluster (as recorded by the polling leader). Absent until a fetch has succeeded |
 
 ## Event counters
 
@@ -139,7 +140,15 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: Jarvis follower {{ $labels.instance }} has a stale snapshot
+          summary: Jarvis {{ $labels.instance }} shows stale alert data
+
+      - alert: JarvisClusterDataOld
+        expr: time() - jarvis_cluster_last_success_timestamp_seconds{job="jarvis"} > 600
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: Jarvis last fetched Alertmanager cluster {{ $labels.cluster }} more than 10 minutes ago
 
       - alert: JarvisPollErrors
         expr: sum by (cluster) (rate(jarvis_poll_errors_total{job="jarvis"}[5m])) > 0

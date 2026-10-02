@@ -148,6 +148,10 @@ export interface ClusterInfo {
   prometheusUrl: string
   healthy: boolean
   alertCount: number
+  /** Last successful alert fetch for this cluster; absent while none has succeeded yet. */
+  lastSuccessfulPollAt?: string
+  /** True when the data is older than max(3 × poll interval, 60 s): last known state, not live. */
+  stale: boolean
   /** Per-member health for HA clusters. Absent for single-member clusters. */
   members?: MemberInfo[]
 }

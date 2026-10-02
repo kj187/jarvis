@@ -201,6 +201,12 @@ type ClusterInfo struct {
 	PrometheusURL   string `json:"prometheusUrl"`
 	Healthy         bool   `json:"healthy"`
 	AlertCount      int    `json:"alertCount"`
+	// LastSuccessfulPollAt is when this cluster's alerts were last fetched
+	// successfully; omitted while no fetch has succeeded yet.
+	LastSuccessfulPollAt *time.Time `json:"lastSuccessfulPollAt,omitempty"`
+	// Stale is true when that is older than max(3 × poll interval, 60 s): the
+	// alerts shown for the cluster are the last known state, not live.
+	Stale bool `json:"stale"`
 	// Members lists per-member health for HA clusters. Omitted for
 	// single-member clusters so existing payloads stay byte-identical.
 	Members []MemberInfo `json:"members,omitempty"`

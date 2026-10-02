@@ -1,6 +1,8 @@
 package metrics
 
 import (
+	"time"
+
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/kj187/jarvis/backend/internal/models"
@@ -28,6 +30,10 @@ var (
 		[]string{"cluster", "member"}, nil)
 	wsClientsDesc = prometheus.NewDesc(
 		"jarvis_ws_clients", "Number of currently connected WebSocket clients.", nil, nil)
+	clusterLastSuccessDesc = prometheus.NewDesc(
+		"jarvis_cluster_last_success_timestamp_seconds",
+		"Unix time of the last successful alert fetch of a cluster (as recorded by the polling leader). Absent while no fetch has succeeded yet.",
+		[]string{"cluster"}, nil)
 	clustersConfiguredDesc = prometheus.NewDesc(
 		"jarvis_clusters_configured", "Number of configured Alertmanager clusters.", nil, nil)
 )
@@ -41,20 +47,24 @@ type storeCollector struct {
 	alerts      alertSource
 	clients     clientCounter
 	clusterUp   func() map[string]map[string]bool
+	lastSuccess func() map[string]time.Time
 	numClusters int
 }
 
 // NewCollector creates the scrape-time collector. clusterUp may be nil (no
 // jarvis_alertmanager_up samples emitted) until the recorder wires it in.
-// clusterUp maps cluster name -> member name -> up.
-func NewCollector(alerts alertSource, clients clientCounter, clusterUp func() map[string]map[string]bool, numClusters int) prometheus.Collector {
-	return &storeCollector{alerts: alerts, clients: clients, clusterUp: clusterUp, numClusters: numClusters}
+// clusterUp maps cluster name -> member name -> up. lastSuccess maps cluster
+// name -> last successful fetch and may be nil (no
+// jarvis_cluster_last_success_timestamp_seconds samples).
+func NewCollector(alerts alertSource, clients clientCounter, clusterUp func() map[string]map[string]bool, lastSuccess func() map[string]time.Time, numClusters int) prometheus.Collector {
+	return &storeCollector{alerts: alerts, clients: clients, clusterUp: clusterUp, lastSuccess: lastSuccess, numClusters: numClusters}
 }
 
 func (c *storeCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- alertsDesc
 	ch <- alertsBySeverityDesc
 	ch <- alertmanagerUpDesc
+	ch <- clusterLastSuccessDesc
 	ch <- wsClientsDesc
 	ch <- clustersConfiguredDesc
 }
@@ -89,6 +99,15 @@ func (c *storeCollector) Collect(ch chan<- prometheus.Metric) {
 				}
 				ch <- prometheus.MustNewConstMetric(alertmanagerUpDesc, prometheus.GaugeValue, value, cluster, member)
 			}
+		}
+	}
+
+	if c.lastSuccess != nil {
+		for cluster, at := range c.lastSuccess() {
+			if at.IsZero() {
+				continue
+			}
+			ch <- prometheus.MustNewConstMetric(clusterLastSuccessDesc, prometheus.GaugeValue, float64(at.Unix()), cluster)
 		}
 	}
 

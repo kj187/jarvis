@@ -25,6 +25,12 @@ type pollTriggerer interface {
 	IsLeader() bool
 }
 
+// clusterFreshnessSource is implemented by the recorder; the handler asserts
+// for it so a nil or minimal pollTriggerer simply reports no data age.
+type clusterFreshnessSource interface {
+	ClusterFreshness() map[string]history.ClusterFreshness
+}
+
 // Server holds shared dependencies for all API handlers.
 type Server struct {
 	alertStore          *history.AlertStore

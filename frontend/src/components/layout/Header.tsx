@@ -15,6 +15,7 @@ import { useAuthStore } from '@/store/authStore'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { useQuery } from '@tanstack/react-query'
 import { fetchClusters, fetchStatus } from '@/api/client'
+import { formatDataAge } from '@/lib/dataAge'
 import { FALLBACK_REFETCH_INTERVAL_MS } from '@/lib/refetch'
 import { Tooltip } from '@/components/ui/tooltip'
 import { useVersion } from '@/hooks/useVersion'
@@ -153,6 +154,10 @@ export function Header() {
   const [refreshTooltipOpen, setRefreshTooltipOpen] = useState(false)
 
   const healthyCount = clusters.filter((c) => c.healthy).length
+  const staleCount = clusters.filter((c) => c.stale).length
+  const clusterDotClass =
+    healthyCount !== clusters.length ? 'bg-critical-solid' : staleCount > 0 ? 'bg-warning-solid' : 'bg-success-solid'
+  const clusterLabel = `Instances ${healthyCount}/${clusters.length}${staleCount > 0 ? `, ${staleCount} with stale data` : ''}`
 
   function setSettingsVisibility(open: boolean) {
     setSettingsOpen(open)
@@ -253,10 +258,10 @@ export function Header() {
               <button
                 type="button"
                 className="flex items-center gap-1.5 rounded-compact px-2 py-1 text-xs cursor-pointer select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                aria-label={`Instances ${healthyCount}/${clusters.length}`}
+                aria-label={clusterLabel}
                 {...props}
               >
-                <div className={`h-2 w-2 rounded-pill ${healthyCount === clusters.length ? 'bg-success-solid' : 'bg-critical-solid'}`} />
+                <div className={`h-2 w-2 rounded-pill ${clusterDotClass}`} />
                 <span className="text-muted-foreground tabular-nums">{healthyCount}/{clusters.length}</span>
               </button>
             )}
@@ -321,6 +326,11 @@ export function Header() {
                     </div>
                     {!c.healthy && (
                       <span className="rounded-compact bg-critical-soft px-1 py-0.5 text-[10px] font-semibold text-critical-fg uppercase tracking-wide">DOWN</span>
+                    )}
+                    {c.stale && (
+                      <span className="rounded-compact bg-warning-soft px-1 py-0.5 text-[10px] font-semibold text-warning-fg uppercase tracking-wide">
+                        Stale · {formatDataAge(c.lastSuccessfulPollAt)}
+                      </span>
                     )}
                   </div>
                   <span className="text-xs text-muted-foreground whitespace-nowrap">{c.alertCount} Alerts</span>
@@ -461,8 +471,8 @@ export function Header() {
         <div className="md:hidden border-t border-border px-3 py-3 space-y-3">
           <div className="flex items-center gap-1 flex-wrap">
             <div className="flex-1" />
-            <div className="flex items-center gap-1.5 px-2 text-xs cursor-pointer select-none" aria-label={`Instances ${healthyCount}/${clusters.length}`}>
-              <div className={`h-2 w-2 rounded-pill ${healthyCount === clusters.length ? 'bg-success-solid' : 'bg-critical-solid'}`} />
+            <div className="flex items-center gap-1.5 px-2 text-xs cursor-pointer select-none" aria-label={clusterLabel}>
+              <div className={`h-2 w-2 rounded-pill ${clusterDotClass}`} />
               <span className="text-muted-foreground tabular-nums">{healthyCount}/{clusters.length}</span>
             </div>
             <Tooltip content={refreshTooltipText} side="bottom">

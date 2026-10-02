@@ -25,9 +25,11 @@ const (
 	snapshotKeepAliveCount    = 3
 	listenRetryInterval       = 5 * time.Second
 
-	// snapshotStaleFactor: a consumed snapshot older than this many poll
-	// intervals is considered stale (Binding Constant: 3 × JARVIS_POLL_INTERVAL).
+	// snapshotStaleFactor and minStaleThreshold: a cluster whose last successful
+	// fetch is older than max(3 × JARVIS_POLL_INTERVAL, 60 s) is stale
+	// (Binding Constants).
 	snapshotStaleFactor = 3
+	minStaleThreshold   = 60 * time.Second
 
 	// followerBurstWindow (P5, tmp/memory.md §8.3): after a follower's first
 	// jarvis_snapshot notification in an otherwise-idle stretch, wait this long
@@ -97,6 +99,9 @@ func (r *Recorder) persistSnapshots(ctx context.Context, clusters []*cluster.Clu
 			Silences: r.silenceStore.GetCluster(cl.Name),
 			MemberUp: cl.MemberUpStates(),
 		}
+		if at, ok := r.lastSuccessAt(cl.Name); ok {
+			snap.LastSuccessAt = &at
+		}
 		payload, err := encodeSnapshot(snap)
 		if err != nil {
 			r.logger.Error("encode snapshot", "cluster", cl.Name, "err", err)
@@ -145,6 +150,7 @@ func (r *Recorder) seedLastGoodFromSnapshots(ctx context.Context) {
 			}
 		}
 		r.lastGoodAlerts[cl.Name] = alerts
+		r.markPollSuccess(cl.Name, snap.effectiveLastSuccess(row.TakenAt))
 		if r.silenceStore != nil {
 			r.silenceStore.Set(cl.Name, snap.Silences)
 		}
@@ -307,6 +313,8 @@ func (r *Recorder) applySnapshotRow(clusterName string, row snapshotRow) {
 		alerts:   snap.Alerts,
 		memberUp: snap.MemberUp,
 		takenAt:  row.TakenAt,
+		// Legacy rows have no field: the snapshot's own age is the best bound.
+		lastSuccessAt: snap.effectiveLastSuccess(row.TakenAt),
 	}
 	r.followerMu.Unlock()
 }
@@ -346,8 +354,6 @@ func filterFollowerAlerts(alerts []models.EnrichedAlert, takenAt, now time.Time,
 func (r *Recorder) rebuildFollowerAlertStore() {
 	r.followerMu.Lock()
 	merged := make([]models.EnrichedAlert, 0)
-	stale := false
-	threshold := snapshotStaleFactor * r.interval
 	now := r.currentTime()
 	for clusterName, entry := range r.followerSnapshots {
 		var removed bool
@@ -356,9 +362,6 @@ func (r *Recorder) rebuildFollowerAlertStore() {
 			r.followerSnapshots[clusterName] = entry
 		}
 		merged = append(merged, entry.alerts...)
-		if now.Sub(entry.takenAt) > threshold {
-			stale = true
-		}
 	}
 	r.followerMu.Unlock()
 
@@ -385,13 +388,7 @@ func (r *Recorder) rebuildFollowerAlertStore() {
 		}
 	}
 
-	if r.metrics != nil {
-		if stale {
-			r.metrics.SnapshotStale.Set(1)
-		} else {
-			r.metrics.SnapshotStale.Set(0)
-		}
-	}
+	r.updateStaleGauge()
 
 	r.alertStore.Set(merged)
 	r.broadcastAlertsIfChanged()

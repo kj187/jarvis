@@ -107,7 +107,7 @@ func New(version string) *Metrics {
 		}),
 		SnapshotStale: f.NewGauge(prometheus.GaugeOpts{
 			Name: "jarvis_snapshot_stale",
-			Help: "Whether this follower's consumed poll snapshot is older than 3x the poll interval (1) or fresh (0). Always 0 while leader or on SQLite.",
+			Help: "Whether any configured cluster's last successful fetch is older than max(3x the poll interval, 60s) (1) or all are fresh (0). Leaders use their own polls, followers the leader's snapshots.",
 		}),
 	}
 }

@@ -176,7 +176,7 @@ func main() {
 
 	// ── Recorder ──────────────────────────────────────────────────────────────
 	recorder := history.NewRecorder(registry, alertStore, silenceStore, store, hub, cfg.PollInterval, logger, m, claimReleaseDelay, el, recorderDSN)
-	m.MustRegister(metrics.NewCollector(alertStore, hub, recorder.ClusterUpStates, len(registry.All())))
+	m.MustRegister(metrics.NewCollector(alertStore, hub, recorder.ClusterUpStates, recorder.ClusterLastSuccess, len(registry.All())))
 
 	// ── Retention Sweeper ─────────────────────────────────────────────────────
 	// Fully opt-in: with the default config (all JARVIS_RETENTION_* unset)
