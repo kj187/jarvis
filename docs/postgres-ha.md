@@ -121,6 +121,14 @@ and WebSocket pushes to its own connected browsers, from a snapshot that is
 at most one poll interval old, regardless of which pod happens to be
 leader right now.
 
+A newly promoted leader starts from the last snapshot of each cluster. If
+Alertmanager is unreachable at that moment, the cluster keeps showing the
+alerts of that snapshot instead of going empty on every pod; a cluster Jarvis
+has never seen is simply not written, so followers show no member state for
+it. These carried-over alerts are not written to the history; they are
+resolved normally once Alertmanager answers again. How old those alerts are is
+not indicated yet.
+
 Resolved alerts in those snapshots keep the same live-display deadline
 (`JARVIS_RESOLVED_BUFFER_TTL`, 20 minutes by default) as on the leader. Every
 replica must run with the same value: a follower applies its own window to the

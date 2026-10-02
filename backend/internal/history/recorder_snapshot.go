@@ -78,14 +78,20 @@ func (d *followerDirtySet) drain() []string {
 // instead of polling Alertmanager itself. Only ever called while leader (see
 // runPollLoop) against PostgreSQL (r.dsn is empty on SQLite, guarded by the
 // caller) — PersistSnapshot/NotifySnapshotChanged are additionally
-// self-guarded no-ops on SQLite as defense in depth.
-func (r *Recorder) persistSnapshots(ctx context.Context, clusters []*cluster.Cluster) {
+// self-guarded no-ops on SQLite as defense in depth. A cluster in skip (fetch
+// failed, nothing known about its alerts) keeps its existing row: an empty
+// snapshot would blank it for every pod.
+func (r *Recorder) persistSnapshots(ctx context.Context, clusters []*cluster.Cluster, skip map[string]bool) {
 	now := time.Now().UTC()
 	byCluster := make(map[string][]models.EnrichedAlert, len(clusters))
 	for _, a := range r.alertStore.Get() {
 		byCluster[a.ClusterName] = append(byCluster[a.ClusterName], a)
 	}
 	for _, cl := range clusters {
+		if skip[cl.Name] {
+			r.logger.Warn("snapshot not persisted: cluster fetch failed and no earlier alerts are known", "cluster", cl.Name)
+			continue
+		}
 		snap := pollSnapshot{
 			Alerts:   byCluster[cl.Name],
 			Silences: r.silenceStore.GetCluster(cl.Name),
@@ -103,6 +109,46 @@ func (r *Recorder) persistSnapshots(ctx context.Context, clusters []*cluster.Clu
 		if err := r.store.NotifySnapshotChanged(ctx, cl.Name); err != nil {
 			r.logger.Error("notify snapshot changed", "cluster", cl.Name, "err", err)
 		}
+	}
+}
+
+// seedLastGoodFromSnapshots loads lastGoodAlerts (and the silence store) from
+// the previous leader's poll_snapshots rows, once per leader tenure. A freshly
+// elected leader whose first fetch of a cluster fails then keeps that cluster's
+// alerts instead of persisting and broadcasting an empty list. Rows replace
+// whatever an earlier tenure of this pod left in memory. Resolved buffer
+// entries are not seeded (they expire through the resolved-buffer TTL) and
+// claims are dropped: they come from the database, not from the snapshot. A
+// failed read is retried on the next poll.
+func (r *Recorder) seedLastGoodFromSnapshots(ctx context.Context) {
+	rows, err := r.store.GetAllSnapshots(ctx)
+	if err != nil {
+		r.logger.Warn("seed last-good alerts from snapshots failed", "err", err)
+		return
+	}
+	r.lastGoodSeeded = true
+	for _, cl := range r.registry.All() {
+		row, ok := rows[cl.Name]
+		if !ok {
+			continue
+		}
+		snap, err := decodeSnapshot(row.Payload)
+		if err != nil {
+			r.logger.Error("decode snapshot for seeding", "cluster", cl.Name, "err", err)
+			continue
+		}
+		alerts := make([]models.EnrichedAlert, 0, len(snap.Alerts))
+		for _, a := range snap.Alerts {
+			if a.Status.State != "resolved" {
+				a.ActiveClaim = nil
+				alerts = append(alerts, a)
+			}
+		}
+		r.lastGoodAlerts[cl.Name] = alerts
+		if r.silenceStore != nil {
+			r.silenceStore.Set(cl.Name, snap.Silences)
+		}
+		r.logger.Info("seeded last-good state from snapshot", "cluster", cl.Name, "alerts", len(alerts), "taken_at", row.TakenAt)
 	}
 }
 

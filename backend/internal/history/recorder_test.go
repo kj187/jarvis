@@ -279,7 +279,7 @@ func TestRecorder_SilenceTrueExpiry(t *testing.T) {
 // registry. It delegates to the production applyPollResults so tests exercise
 // the real code path (claim batching, broadcast dedup, silence handling).
 func (r *Recorder) processAlerts(ctx context.Context, allAlerts []models.EnrichedAlert) {
-	r.applyPollResults(ctx, allAlerts, nil)
+	r.applyPollResults(ctx, allAlerts, nil, nil)
 }
 
 // TestRecorder_ClaimReleasedAfterGenuineResolution verifies that a claim is
@@ -1068,7 +1068,7 @@ func TestApplyPollResults_SilenceChangeBroadcastsSilencesUpdate(t *testing.T) {
 	// First poll: a silence appears → broadcast.
 	rec.applyPollResults(ctx, nil, map[string]silenceInfoEntry{
 		"homelab\x1fsil-1": {state: "active", clusterName: "homelab"},
-	})
+	}, nil)
 	if got := countEvents(hub, models.WSTypeSilencesUpdate); got != 1 {
 		t.Fatalf("silences_update broadcasts after new silence = %d, want 1", got)
 	}
@@ -1076,7 +1076,7 @@ func TestApplyPollResults_SilenceChangeBroadcastsSilencesUpdate(t *testing.T) {
 	// Unchanged snapshot → no additional broadcast.
 	rec.applyPollResults(ctx, nil, map[string]silenceInfoEntry{
 		"homelab\x1fsil-1": {state: "active", clusterName: "homelab"},
-	})
+	}, nil)
 	if got := countEvents(hub, models.WSTypeSilencesUpdate); got != 1 {
 		t.Fatalf("silences_update broadcasts after unchanged poll = %d, want still 1", got)
 	}
@@ -1084,13 +1084,13 @@ func TestApplyPollResults_SilenceChangeBroadcastsSilencesUpdate(t *testing.T) {
 	// State change (active → expired) → broadcast.
 	rec.applyPollResults(ctx, nil, map[string]silenceInfoEntry{
 		"homelab\x1fsil-1": {state: "expired", clusterName: "homelab"},
-	})
+	}, nil)
 	if got := countEvents(hub, models.WSTypeSilencesUpdate); got != 2 {
 		t.Fatalf("silences_update broadcasts after state change = %d, want 2", got)
 	}
 
 	// Silence disappears → broadcast.
-	rec.applyPollResults(ctx, nil, nil)
+	rec.applyPollResults(ctx, nil, nil, nil)
 	if got := countEvents(hub, models.WSTypeSilencesUpdate); got != 3 {
 		t.Fatalf("silences_update broadcasts after removal = %d, want 3", got)
 	}
@@ -1099,8 +1099,8 @@ func TestApplyPollResults_SilenceChangeBroadcastsSilencesUpdate(t *testing.T) {
 func TestApplyPollResults_NoSilences_NoSilencesUpdateBroadcast(t *testing.T) {
 	rec, hub := newTestRecorder(t)
 
-	rec.applyPollResults(context.Background(), nil, nil)
-	rec.applyPollResults(context.Background(), nil, nil)
+	rec.applyPollResults(context.Background(), nil, nil, nil)
+	rec.applyPollResults(context.Background(), nil, nil, nil)
 
 	if got := countEvents(hub, models.WSTypeSilencesUpdate); got != 0 {
 		t.Errorf("silences_update broadcasts with empty snapshots = %d, want 0", got)
