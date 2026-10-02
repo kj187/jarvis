@@ -113,6 +113,14 @@ spec:
                   name: {{ .Values.auth.existingSecret | default (include "jarvis.fullname" .) }}
                   key: {{ .Values.auth.existingSecretKeys.secretKey }}
             {{- end }}
+            {{- if and (eq .Values.auth.provider "internal") (or .Values.auth.setupToken .Values.auth.existingSecret) }}
+            - name: JARVIS_SETUP_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.auth.existingSecret | default (include "jarvis.fullname" .) }}
+                  key: {{ .Values.auth.existingSecretKeys.setupToken }}
+                  optional: true
+            {{- end }}
             {{- if eq .Values.auth.provider "oidc" }}
             - name: JARVIS_AUTH_OIDC_CLIENT_SECRET
               valueFrom:

@@ -729,3 +729,37 @@ func TestWarnings_ResolvedBufferTTL(t *testing.T) {
 		})
 	}
 }
+
+func TestLoad_SetupToken(t *testing.T) {
+	t.Setenv("JARVIS_CLUSTER_1_NAME", "c1")
+	t.Setenv("JARVIS_CLUSTER_1_ALERTMANAGER_URL", "http://am:9093")
+	t.Setenv("JARVIS_AUTH_PROVIDER", "internal")
+	t.Setenv("JARVIS_SECRET_KEY", "aaaabbbbccccddddeeeeffffgggghhhh")
+	t.Setenv("JARVIS_SETUP_TOKEN", "first-run-token")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	if cfg.SetupToken != "first-run-token" {
+		t.Errorf("SetupToken = %q, want %q", cfg.SetupToken, "first-run-token")
+	}
+}
+
+func TestWarnings_SetupTokenWithoutInternalAuth(t *testing.T) {
+	cases := []struct {
+		name string
+		cfg  Config
+		want int
+	}{
+		{"internal provider uses the token", Config{AuthProvider: "internal", SetupToken: "t"}, 0},
+		{"oidc provider ignores the token", Config{AuthProvider: "oidc", SetupToken: "t"}, 1},
+		{"no token", Config{AuthProvider: "oidc"}, 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.cfg.Warnings(); len(got) != tc.want {
+				t.Fatalf("Warnings() = %v, want %d entries", got, tc.want)
+			}
+		})
+	}
+}

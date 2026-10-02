@@ -306,6 +306,7 @@ Quick reference: which spec file covers what. Use this to find the right place f
 | `login.spec.ts` | I2, I4, I6 | First-run setup + login happy path, write_protect login modal on write attempt, retry flow after modal login |
 | `session-resume.spec.ts` | R1–R2 | Login (up front or after a mid-task session expiry → `401`) opens over the page and the interrupted silence Create completes; Preview stays enabled logged out |
 | `admin.spec.ts` | I10–I15 | Administration panel user list, add-user password validation, role change, delete confirm flow, self-row guards; Global Settings tab empty state (no section registered yet) |
+| `setup-token.spec.ts` | — | The first-run setup page asks for the setup token only when `/auth/info` says it is required and reports a wrong one (`/auth/info` and `POST /setup` stubbed) |
 | `account-menu.spec.ts` | U4 | A local account gets no Account entry in the user menu |
 
 ### Mode: `oidc`

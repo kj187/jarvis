@@ -113,21 +113,77 @@ func encodeGroups(groups []string) (string, error) {
 	return string(b), nil
 }
 
-// Create inserts a new user and returns the created record.
-func (s *Store) Create(ctx context.Context, cu *CreateUser) (*User, error) {
+// ErrAlreadyInitialized is returned by CreateFirstAdmin when the users table is
+// not empty.
+var ErrAlreadyInitialized = errors.New("users: setup already completed")
+
+type execer interface {
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+}
+
+func (s *Store) insert(ctx context.Context, ex execer, cu *CreateUser) (string, error) {
 	id := uuid.New().String()
 	now := time.Now().UTC()
 	groupsJSON, err := encodeGroups(cu.Groups)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	q := s.rebind(`INSERT INTO users (id, username, email, password_hash, role, provider, oidc_sub, oidc_groups, created_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 	email := sql.NullString{String: cu.Email, Valid: cu.Email != ""}
 	ph := sql.NullString{String: cu.PasswordHash, Valid: cu.PasswordHash != ""}
 	oidcSub := sql.NullString{String: cu.OIDCSub, Valid: cu.OIDCSub != ""}
-	if _, err := s.db.ExecContext(ctx, q, id, cu.Username, email, ph, cu.Role, cu.Provider, oidcSub, groupsJSON, now); err != nil {
+	if _, err := ex.ExecContext(ctx, q, id, cu.Username, email, ph, cu.Role, cu.Provider, oidcSub, groupsJSON, now); err != nil {
+		return "", err
+	}
+	return id, nil
+}
+
+// Create inserts a new user and returns the created record.
+func (s *Store) Create(ctx context.Context, cu *CreateUser) (*User, error) {
+	id, err := s.insert(ctx, s.db, cu)
+	if err != nil {
 		return nil, fmt.Errorf("users.Create: %w", err)
+	}
+	return s.GetByID(ctx, id)
+}
+
+// CreateFirstAdmin inserts an internal admin only while the users table is
+// empty, atomically: of any number of concurrent calls exactly one succeeds
+// and the rest get ErrAlreadyInitialized. Role and provider are forced to
+// "admin" and "internal". SQLite serialises through its single pooled
+// connection; PostgreSQL takes a table lock that conflicts with itself, so the
+// emptiness check and the insert cannot interleave (a UNIQUE(username)
+// constraint alone would not stop two different usernames).
+func (s *Store) CreateFirstAdmin(ctx context.Context, cu *CreateUser) (*User, error) {
+	admin := *cu
+	admin.Role = "admin"
+	admin.Provider = "internal"
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("users.CreateFirstAdmin: begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if s.dialect != idb.DialectSQLite {
+		if _, err := tx.ExecContext(ctx, `LOCK TABLE users IN SHARE ROW EXCLUSIVE MODE`); err != nil {
+			return nil, fmt.Errorf("users.CreateFirstAdmin: lock: %w", err)
+		}
+	}
+	var n int
+	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM users`).Scan(&n); err != nil {
+		return nil, fmt.Errorf("users.CreateFirstAdmin: count: %w", err)
+	}
+	if n > 0 {
+		return nil, ErrAlreadyInitialized
+	}
+	id, err := s.insert(ctx, tx, &admin)
+	if err != nil {
+		return nil, fmt.Errorf("users.CreateFirstAdmin: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("users.CreateFirstAdmin: commit: %w", err)
 	}
 	return s.GetByID(ctx, id)
 }

@@ -47,9 +47,11 @@ An attacker with network access to the login endpoint can exhaust this bucket an
 for all users. However, read access remains available in `write_protect` mode. All other endpoints
 (`/poll`, `/setup`, write routes, admin endpoints) have no rate limits.
 
-**`POST /setup`**: This endpoint is open (no authentication, no rate limit) as long as no admin user exists
-in the database. Complete the initial setup immediately after deployment, or restrict network access to this
-endpoint until setup is complete.
+**`POST /setup`**: This endpoint is open (no authentication, no rate limit) as long as no user exists
+in the database. The first admin is created atomically, so concurrent requests cannot create more than one
+account; every later request gets `403`. Until setup is complete, anyone who can reach the URL can claim the
+instance: set [`JARVIS_SETUP_TOKEN`](configuration.md#jarvis_setup_token) to require a token for the first
+admin, complete the setup immediately after deployment, or restrict network access to the endpoint until then.
 
 **`POST /api/v1/poll`**: This endpoint needs no authentication (unless `JARVIS_AUTH_MODE=full_protect`) and has no rate limit. A hostile client
 can hammer it and keep the Alertmanager poll loop running constantly. Read-only access is available in

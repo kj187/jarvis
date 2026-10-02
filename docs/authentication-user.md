@@ -37,7 +37,7 @@ JARVIS_AUTH_PROVIDER=internal
 JARVIS_SECRET_KEY=<min 32 random bytes>
 ```
 
-On first access, Jarvis redirects to `/setup` where you create the initial admin account. Additional users are managed under **Administration** in the user menu.
+On first access, Jarvis redirects to `/setup` where you create the initial admin account. To stop anyone else from claiming a fresh instance first, also set [`JARVIS_SETUP_TOKEN`](configuration.md#jarvis_setup_token) (any secret string); the setup page then asks for it. Additional users are managed under **Administration** in the user menu.
 
 Generate a secret key:
 
@@ -91,10 +91,10 @@ under [Role Mapping](#role-mapping) below.
 When `JARVIS_AUTH_PROVIDER=internal` and no admin account exists in the database, Jarvis redirects every request to `/setup`.
 
 1. Open Jarvis in the browser — you land on the setup page automatically.
-2. Enter a username and password (min 12 characters).
+2. Enter a username and password (min 12 characters). If `JARVIS_SETUP_TOKEN` is set, the page also asks for that token (a wrong one is rejected with `401`).
 3. Submit — the admin account is created and you are redirected to the main view.
 
-The setup endpoint is disabled once at least one user exists in the database.
+The first admin is created atomically: if two requests arrive at once, exactly one wins. The setup endpoint is disabled once at least one user exists in the database.
 
 ![First-run setup page](assets/auth-setup.png)
 
@@ -253,10 +253,12 @@ auth:
   provider: internal    # none | internal | oidc
   mode: ""              # write_protect (default) | full_protect — ignored when provider=none
   secretKey: ""         # use existingSecret in production
-  existingSecret: ""    # K8s Secret containing secret-key (and oidc-client-secret)
+  setupToken: ""        # optional: internal only, required by the first-run /setup page
+  existingSecret: ""    # K8s Secret containing secret-key (and oidc-client-secret, setup-token)
   existingSecretKeys:
     secretKey: secret-key
     oidcClientSecret: oidc-client-secret
+    setupToken: setup-token
   oidc:
     issuer: ""
     clientId: ""

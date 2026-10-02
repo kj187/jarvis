@@ -221,6 +221,8 @@ export interface ProviderInfo {
   mode: 'none' | 'internal' | 'oidc'
   loginUrl: string
   setupRequired?: boolean
+  /** True while setup is open and the server has JARVIS_SETUP_TOKEN set. */
+  setupTokenRequired?: boolean
   authMode?: 'none' | 'write_protect' | 'full_protect'
   runbookBaseUrl?: string
 }

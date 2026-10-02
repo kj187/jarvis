@@ -41,6 +41,7 @@ type Config struct {
 	AuthProvider     string // "none" | "internal" | "oidc"
 	AuthMode         string // "none" | "write_protect" | "full_protect"
 	SecretKey        []byte // HMAC key for JWTs; required when AuthProvider != "none"
+	SetupToken       string // optional; when set, POST /setup must carry it (internal auth only)
 	OIDCIssuer       string
 	OIDCClientID     string
 	OIDCClientSecret string
@@ -73,6 +74,9 @@ func (c *Config) Warnings() []string {
 	}
 	if c.AuthProvider == "oidc" && len(c.OIDCAdminGroups) > 0 && c.OIDCGroupsClaim == "" {
 		w = append(w, "JARVIS_OIDC_ADMIN_VALUE is set but JARVIS_OIDC_GROUPS_CLAIM is not: no group is read from the token, so nobody becomes admin")
+	}
+	if c.SetupToken != "" && c.AuthProvider != "internal" {
+		w = append(w, "JARVIS_SETUP_TOKEN is set but JARVIS_AUTH_PROVIDER is not internal: there is no first-run setup, so the token is ignored")
 	}
 	if c.ResolvedBufferTTL > ResolvedBufferTTLWarnAbove {
 		w = append(w, fmt.Sprintf("JARVIS_RESOLVED_BUFFER_TTL is %s: every resolved alert stays in memory, in each WebSocket push and (PostgreSQL) in each poll snapshot for that long; memory and payload size grow with the resolves inside the window", c.ResolvedBufferTTL))
@@ -303,6 +307,7 @@ func Load() (*Config, error) {
 		AuthProvider:      authProvider,
 		AuthMode:          authMode,
 		SecretKey:         secretKey,
+		SetupToken:        getEnv("JARVIS_SETUP_TOKEN", ""),
 		OIDCIssuer:        getEnv("JARVIS_AUTH_OIDC_ISSUER", ""),
 		OIDCClientID:      getEnv("JARVIS_AUTH_OIDC_CLIENT_ID", ""),
 		OIDCClientSecret:  getEnv("JARVIS_AUTH_OIDC_CLIENT_SECRET", ""),

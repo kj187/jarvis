@@ -111,6 +111,7 @@ Kubernetes deployment including a CloudNativePG example are covered in
 | <a id="jarvis_auth_provider"></a>`JARVIS_AUTH_PROVIDER` | `none` | `none`, `internal` or `oidc`. With `none` nothing requires a login — anyone who can reach Jarvis can read alerts and create claims, comments and silences — and Jarvis logs a warning at startup |
 | <a id="jarvis_auth_mode"></a>`JARVIS_AUTH_MODE` | `write_protect` | Applies when the provider is not `none`. `write_protect` lets anyone read and requires a login to change anything; `full_protect` requires a login for everything |
 | <a id="jarvis_secret_key"></a>`JARVIS_SECRET_KEY` | — | Signing key for session tokens, at least 32 bytes. Required for `internal` and `oidc` |
+| <a id="jarvis_setup_token"></a>`JARVIS_SETUP_TOKEN` | — | Optional. With `internal` auth, creating the first admin through `/setup` then requires this token, so nobody else can claim a fresh instance before you do. The setup page asks for it. Unset keeps the wizard open. Ignored (with a startup warning) for other providers |
 | <a id="jarvis_auth_oidc_issuer"></a>`JARVIS_AUTH_OIDC_ISSUER` | — | Issuer URL (required for `oidc`) |
 | <a id="jarvis_auth_oidc_client_id"></a>`JARVIS_AUTH_OIDC_CLIENT_ID` | — | Client ID (required for `oidc`) |
 | <a id="jarvis_auth_oidc_client_secret"></a>`JARVIS_AUTH_OIDC_CLIENT_SECRET` | — | Client secret (required for `oidc`) |
@@ -125,7 +126,7 @@ JARVIS_SECRET_KEY=<openssl rand -hex 32>
 ```
 
 With `internal`, the first visit redirects to `/setup` to create the admin
-account; further users are managed under **Administration** in the user menu. Provider setup for
+account (set `JARVIS_SETUP_TOKEN` to require a token there); further users are managed under **Administration** in the user menu. Provider setup for
 Keycloak and Authentik, the OIDC flow, role mapping, session details and
 Kubernetes secrets are in [User authentication](authentication-user.md).
 

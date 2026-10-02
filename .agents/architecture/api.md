@@ -25,7 +25,7 @@ CORS from `JARVIS_ALLOWED_ORIGINS` (credentials allowed).
 # ── Health / Metrics / Auth / Setup ──────────────────────────────────────────
 GET    /health                                   None        → { status: "ok" }
 GET    /metrics                                  None        → Prometheus exposition format (see internal/metrics below)
-GET    /auth/info                                None        → { mode, loginUrl, setupRequired, runbookBaseUrl }
+GET    /auth/info                                None        → { mode, loginUrl, setupRequired, setupTokenRequired, runbookBaseUrl }
 POST   /auth/login                               None  (RL)  Body: { username, password } → user + Set-Cookie  (global 30/min rate limit)
 POST   /auth/logout                              None        → clears session cookie
 GET    /auth/me                                  Auth        → User { id, username, role, provider }; SSO adds email? (from the DB), and with JARVIS_OIDC_GROUPS_CLAIM set groupsClaim, groups[] (as of the last login), lastLoginAt
@@ -36,7 +36,7 @@ GET    /auth/oidc/start                          None        → 302 redirect to
 #                                                              Both ride in the state cookie (`state|verifier[|popup|r:<b64url>]`,
 #                                                              oidc_flow.go) — the callback re-validates, a forged cookie falls back to /
 GET    /auth/oidc/callback                       None        → exchanges code, sets cookie, 302 → landing target (/ | popup-done | return_to)
-POST   /setup                                    None        Body: { username, password } (internal mode only; 403 if users exist)
+POST   /setup                                    None        Body: { username, password, setupToken? } (internal mode only; atomic first-admin insert via users.Store.CreateFirstAdmin; 403 if users exist; 401 if JARVIS_SETUP_TOKEN is set and the token is wrong)
 
 # ── WebSocket ────────────────────────────────────────────────────────────────
 WS     /ws                                       full_protect?  (origin checked against JARVIS_ALLOWED_ORIGINS;

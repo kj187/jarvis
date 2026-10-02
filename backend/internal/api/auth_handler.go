@@ -23,6 +23,7 @@ func (s *Server) getAuthInfo(c echo.Context) error {
 		n, err := s.userStore.Count(c.Request().Context())
 		if err == nil && n == 0 {
 			info.SetupRequired = true
+			info.SetupTokenRequired = s.cfg.SetupToken != ""
 		}
 	}
 	return c.JSON(http.StatusOK, info)

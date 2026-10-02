@@ -1,12 +1,15 @@
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { postSetup } from '@/api/client'
+import { postSetup, SetupError } from '@/api/client'
+import { useAuthStore } from '@/store/authStore'
 
 export function SetupPage() {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
+  const [setupToken, setSetupToken] = useState('')
+  const tokenRequired = useAuthStore((s) => s.providerInfo?.setupTokenRequired === true)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -28,10 +31,16 @@ export function SetupPage() {
 
     setLoading(true)
     try {
-      await postSetup(username, password)
+      await postSetup(username, password, tokenRequired ? setupToken : undefined)
       window.location.href = '/'
-    } catch {
-      setError('Setup failed. Please try again.')
+    } catch (err) {
+      if (err instanceof SetupError && err.status === 401) {
+        setError('The setup token is not correct.')
+      } else if (err instanceof SetupError && err.status === 403) {
+        setError('Setup was already completed. Reload the page to sign in.')
+      } else {
+        setError('Setup failed. Please try again.')
+      }
     } finally {
       setLoading(false)
     }
@@ -88,9 +97,24 @@ export function SetupPage() {
             />
           </div>
 
+          {tokenRequired && (
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium" htmlFor="setup-token">Setup token</label>
+              <Input
+                id="setup-token"
+                type="password"
+                value={setupToken}
+                onChange={(e) => setSetupToken(e.target.value)}
+                placeholder="JARVIS_SETUP_TOKEN"
+                required
+                autoComplete="off"
+              />
+            </div>
+          )}
+
           {error && <p className="text-sm text-destructive">{error}</p>}
 
-          <Button type="submit" className="w-full" disabled={loading || !username || !password || !confirm}>
+          <Button type="submit" className="w-full" disabled={loading || !username || !password || !confirm || (tokenRequired && !setupToken)}>
             {loading ? 'Creating account…' : 'Create admin account'}
           </Button>
         </form>
