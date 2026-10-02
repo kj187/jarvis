@@ -115,7 +115,11 @@ successful snapshot stays authoritative — for alerts
 (`Recorder.lastGoodAlerts`) as for silences (`SilenceStore` snapshots
 only on success). Otherwise `applyPollResults` diffs zero alerts as mass
 resolves: phantom `resolved` events, wrong `occurrence_count`, premature
-claim releases (`.agents/lessons/history-and-ha.md`).
+claim releases (`.agents/lessons/history-and-ha.md`). This also holds across
+a leadership change: a new leader seeds `lastGoodAlerts` from the
+`poll_snapshots` rows (`seedLastGoodFromSnapshots`) and never overwrites a
+row with an empty list when it has no known alerts; reused alerts write no
+history.
 
 ### 15.
 

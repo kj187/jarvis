@@ -63,6 +63,11 @@ type Recorder struct {
 	// silence-snapshot "only update on success" pattern above).
 	lastGoodAlerts map[string][]models.EnrichedAlert
 
+	// lastGoodSeeded is true once this leader tenure has loaded lastGoodAlerts
+	// from the poll_snapshots rows. runPollLoop resets it so every tenure starts
+	// from the newest snapshot, not from what an earlier tenure left in memory.
+	lastGoodSeeded bool
+
 	// reconciledClusters tracks which clusters have already run startup
 	// reconciliation (reconcileStartupResolves) since this Recorder was
 	// created — each cluster runs it exactly once, on its first successful
@@ -442,6 +447,7 @@ func (r *Recorder) runPollLoop(ctx context.Context) {
 	if r.dsn != "" {
 		go r.listenLoop(ctx, notifyChannelTrigger, r.interval, func(string) { r.triggerLocal() }, nil)
 	}
+	r.lastGoodSeeded = false
 	r.poll(ctx)
 	ticker := time.NewTicker(r.interval)
 	defer ticker.Stop()
@@ -466,6 +472,10 @@ func (r *Recorder) poll(ctx context.Context) {
 			r.metrics.PollDurationSeconds.Observe(time.Since(start).Seconds())
 		}
 	}()
+
+	if r.dsn != "" && !r.lastGoodSeeded {
+		r.seedLastGoodFromSnapshots(ctx)
+	}
 
 	clusters := r.registry.All()
 
@@ -505,6 +515,12 @@ func (r *Recorder) poll(ctx context.Context) {
 
 	var allAlerts []models.EnrichedAlert
 	currSilenceInfo := make(map[string]silenceInfoEntry)
+	// Clusters whose fetch failed with no known-good alerts at all: their
+	// snapshot row is left untouched rather than overwritten with an empty list.
+	unknownClusters := make(map[string]bool)
+	// Clusters whose alerts are reused from lastGoodAlerts: not fresh data, so
+	// they must not write history.
+	staleClusters := make(map[string]bool)
 	for _, res := range results {
 		if res.err != nil {
 			r.logger.Error("poll cluster failed", "cluster", res.name, "err", res.err)
@@ -516,6 +532,9 @@ func (r *Recorder) poll(ctx context.Context) {
 			// cluster as resolved on a merely transient fetch failure.
 			if stale, ok := r.lastGoodAlerts[res.name]; ok {
 				allAlerts = append(allAlerts, stale...)
+				staleClusters[res.name] = true
+			} else {
+				unknownClusters[res.name] = true
 			}
 			continue
 		}
@@ -547,7 +566,7 @@ func (r *Recorder) poll(ctx context.Context) {
 		}
 	}
 
-	r.applyPollResults(ctx, allAlerts, currSilenceInfo)
+	r.applyPollResults(ctx, allAlerts, currSilenceInfo, staleClusters)
 
 	// Persist + notify per-cluster snapshots for followers (D3). Leader-only
 	// (this method only ever runs while leader — see runPollLoop) and
@@ -555,7 +574,7 @@ func (r *Recorder) poll(ctx context.Context) {
 	// cancelled (mode transition/shutdown) — a stale poll must not persist a
 	// snapshot after this pod may already be a follower consuming its own.
 	if r.dsn != "" && ctx.Err() == nil {
-		r.persistSnapshots(ctx, clusters)
+		r.persistSnapshots(ctx, clusters, unknownClusters)
 	}
 }
 
@@ -606,10 +625,14 @@ func (r *Recorder) reconcileStartupResolves(clusterName string, currentAlerts []
 // the result. It contains the core recorder logic, decoupled from the cluster
 // fetch so it can be driven directly by tests. currSilenceInfo maps
 // cluster+silenceID to current state; pass nil when there are no silences.
+// staleClusters names clusters whose alerts were reused from the last good
+// state (fetch failed): they stay in the diff and the AlertStore but write no
+// history, since they are not an Alertmanager observation.
 func (r *Recorder) applyPollResults(
 	ctx context.Context,
 	allAlerts []models.EnrichedAlert,
 	currSilenceInfo map[string]silenceInfoEntry,
+	staleClusters map[string]bool,
 ) {
 	if currSilenceInfo == nil {
 		currSilenceInfo = map[string]silenceInfoEntry{}
@@ -705,6 +728,9 @@ func (r *Recorder) applyPollResults(
 				return
 			}
 			a := &allAlerts[i]
+			if staleClusters[a.ClusterName] {
+				continue
+			}
 			alertKey := recorderAlertKey(a.Fingerprint, a.ClusterName)
 			if err := r.store.UpsertFingerprint(a.Fingerprint, a.Labels["alertname"], a.ClusterName, a.Labels); err != nil {
 				r.logger.Error("upsert fingerprint", "fp", a.Fingerprint, "err", err)

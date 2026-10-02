@@ -268,7 +268,17 @@ with its own `*alertmanager.Client`); `Cluster.AlertmanagerURL` /
   outage never makes `applyPollResults`'s prev/curr diff read every alert of
   that cluster as resolved (phantom resolves — false `resolved` events,
   wrong `occurrence_count` increments, and premature claim releases on the
-  next re-fire).
+  next re-fire). A freshly elected (or restarted) leader has no in-memory
+  `lastGoodAlerts`: `seedLastGoodFromSnapshots` (first `poll` of every leader
+  tenure, `lastGoodSeeded`; a failed read retries on the next poll) replaces
+  it, and the silence store, with the previous leader's `poll_snapshots` rows
+  (resolved buffer entries excluded, `ActiveClaim` dropped — claims come from
+  the database). Alerts reused from `lastGoodAlerts` (`staleClusters` in
+  `poll`) stay in the diff and `AlertStore` but write no history: they are
+  not an Alertmanager observation. A cluster whose fetch fails with no known
+  alerts at all (`unknownClusters`) is skipped by `persistSnapshots`: no row
+  is written, so followers get no member-up state for a cluster the leader
+  never reached.
 - **Startup reconciliation** (`Recorder.reconcileStartupResolves`,
   `recorder.go`): `prevSnapshot` lives only in memory, so after a Jarvis
   restart it starts empty regardless of what actually happened in the DB
