@@ -53,6 +53,7 @@ these files, and remove such a copied value when you find it.
 | Project description, invariants (short list), workflow rules, commit format, repo layout, Task Router | `AGENTS.md` itself |
 | A critical invariant's full text or rationale | `.agents/invariants.md` (the short entry stays in `AGENTS.md`) |
 | Tool adapter, `scripts/check-agent-context.sh` | `docs/ai-agents.md` |
+| How AI is used in development, its guardrails, CI gates or release verification that the page cites | `docs/ai-development.md` |
 | E2E stack, specs, fixtures, auth modes | `docs/testing-e2e.md` |
 | Database backend behavior, multi-replica HA (leader election, snapshot distribution, WS fanout, failover) | `docs/postgres-ha.md` |
 | Kubernetes HA deployment | `docs/deploy-kubernetes.md` |
