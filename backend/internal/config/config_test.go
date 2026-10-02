@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
@@ -638,6 +639,33 @@ func TestWarnings_AdminGroupWithoutClaim(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := tc.cfg.Warnings(); len(got) != tc.want {
 				t.Fatalf("Warnings() = %v, want %d entries", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestWarnings_AuthProviderNone(t *testing.T) {
+	cases := []struct {
+		name string
+		cfg  Config
+		want int
+	}{
+		{"none: anonymous writes are possible", Config{AuthProvider: "none"}, 1},
+		{"internal", Config{AuthProvider: "internal"}, 0},
+		{"oidc", Config{AuthProvider: "oidc", OIDCGroupsClaim: "groups"}, 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := tc.cfg.Warnings()
+			if len(got) != tc.want {
+				t.Fatalf("Warnings() = %v, want %d entries", got, tc.want)
+			}
+			if tc.want == 1 {
+				for _, token := range []string{"JARVIS_AUTH_PROVIDER", "JARVIS_AUTH_MODE=full_protect"} {
+					if !strings.Contains(got[0], token) {
+						t.Errorf("warning %q does not mention %q", got[0], token)
+					}
+				}
 			}
 		})
 	}

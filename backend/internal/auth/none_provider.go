@@ -6,7 +6,8 @@ import (
 )
 
 // NoneProvider is used when JARVIS_AUTH_PROVIDER=none.
-// All auth operations return errors; write actions are blocked by middleware.
+// All auth operations return errors; the middleware lets every request through
+// (no login, no write protection).
 type NoneProvider struct{}
 
 func (NoneProvider) Mode() string { return "none" }

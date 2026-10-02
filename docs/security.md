@@ -39,6 +39,8 @@ Request bodies are limited to **1 MB**.
 
 Jarvis' internal-tool deployment model has the following security implications:
 
+**No authentication (`JARVIS_AUTH_PROVIDER=none`, the default)**: there is no login and no write protection. Anyone who can reach Jarvis can read all alerts and create claims, comments and silences, and the silences reach Alertmanager. Jarvis logs a warning at startup in this mode. Keep it behind a VPN or an authenticating proxy, or use `internal` / `oidc` (see [authentication-user.md](authentication-user.md)).
+
 **Rate limiting**: The only rate limit is on `POST /auth/login` — a single global bucket
 (30 req/min, burst 10) shared across all clients. On PostgreSQL HA, each pod has its own bucket.
 An attacker with network access to the login endpoint can exhaust this bucket and block logins

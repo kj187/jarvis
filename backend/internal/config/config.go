@@ -68,6 +68,9 @@ type Config struct {
 // operator meant; main logs each one at startup.
 func (c *Config) Warnings() []string {
 	var w []string
+	if c.AuthProvider == "none" {
+		w = append(w, "JARVIS_AUTH_PROVIDER=none: anyone who can reach Jarvis can read alerts and create claims, comments and silences without logging in; set JARVIS_AUTH_PROVIDER=internal or oidc (and JARVIS_AUTH_MODE=full_protect to also protect reads) unless a VPN or an authenticating proxy restricts access")
+	}
 	if c.AuthProvider == "oidc" && len(c.OIDCAdminGroups) > 0 && c.OIDCGroupsClaim == "" {
 		w = append(w, "JARVIS_OIDC_ADMIN_VALUE is set but JARVIS_OIDC_GROUPS_CLAIM is not: no group is read from the token, so nobody becomes admin")
 	}

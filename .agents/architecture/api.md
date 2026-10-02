@@ -10,6 +10,8 @@ Auth column: **None** = public · **Auth** = `RequireAuth` (valid JWT) · **Admi
 When `JARVIS_AUTH_MODE=full_protect`, **all** `/api/v1/*` routes additionally require auth (the `full_protect?`
 marker below). Rate limit: one global bucket for `POST /auth/login` only (0.5 req/s = 30/min, burst 10),
 per-process (each pod's own bucket on PostgreSQL HA).
+With `JARVIS_AUTH_PROVIDER=none` (default) `RequireAuth` and `OptionalAuth` pass every request: the **Auth** marks do not
+apply and writes are anonymous; startup logs a WARN (`config.Warnings()`).
 
 **Cluster scoping**: all `/alerts/:fingerprint/*` routes accept `?cluster=<name>` —
 the same fingerprint can exist in multiple clusters, so history, stats, comments,
