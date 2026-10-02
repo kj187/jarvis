@@ -13,10 +13,15 @@ import (
 	"github.com/kj187/jarvis/backend/internal/models"
 )
 
+var heartbeatMessage = []byte(`{"type":"heartbeat","payload":null}`)
+
+// defaultPingPeriod is how often each client gets a ping frame plus a
+// heartbeat message. The frontend watchdog (lib/wsHeartbeat.ts) mirrors it.
+const defaultPingPeriod = 54 * time.Second
+
 const (
 	writeWait      = 10 * time.Second
 	pongWait       = 60 * time.Second
-	pingPeriod     = 54 * time.Second
 	maxMessageSize = 512 * 1024 // 512 KB
 	// A queued alerts_update keeps its own copy of the whole alert list
 	// reachable, so several of them per client is a real memory hold, not just
@@ -52,6 +57,7 @@ type Hub struct {
 	broadcast  chan outbound
 	unregister chan *Client
 	logger     *slog.Logger
+	pingPeriod time.Duration // a field only so tests can shorten it
 	upgrader   websocket.Upgrader
 	metrics    *metrics.Metrics
 }
@@ -72,6 +78,7 @@ func NewHub(allowedOrigins []string, logger *slog.Logger, m *metrics.Metrics) *H
 		broadcast:  make(chan outbound, globalBroadcastBuffer),
 		unregister: make(chan *Client, 16),
 		logger:     logger,
+		pingPeriod: defaultPingPeriod,
 		metrics:    m,
 	}
 	h.upgrader = websocket.Upgrader{
@@ -360,7 +367,7 @@ func (c *Client) readPump() {
 
 // writePump pumps messages from the send channel to the WebSocket.
 func (c *Client) writePump() {
-	ticker := time.NewTicker(pingPeriod)
+	ticker := time.NewTicker(c.hub.pingPeriod)
 	defer func() {
 		ticker.Stop()
 		_ = c.conn.Close()
@@ -384,6 +391,11 @@ func (c *Client) writePump() {
 		case <-ticker.C:
 			_ = c.conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				return
+			}
+			// Browsers hide ping frames from JavaScript; this message lets the
+			// client tell a quiet connection from a dead one.
+			if err := c.conn.WriteMessage(websocket.TextMessage, heartbeatMessage); err != nil {
 				return
 			}
 		}

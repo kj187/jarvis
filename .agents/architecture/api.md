@@ -215,6 +215,7 @@ GET    /*                                         None        → embed.FS (Vite
 | `claim_released` | `{ fingerprint, clusterName, releasedBy }` | set `activeClaim` to `undefined` + invalidate claim queries |
 | `comment_added` | `{ fingerprint, comment }` | also invalidates `['comment-counts']` (list/card badge); invalidate comments query by prefix key `['comments', fingerprint, clusterName]` — matches every paged query key (`..., page]`) for that alert, so whichever page is mounted refetches; local `page` state is untouched (see `CommentsPanel.tsx` above for the page>1 "jump to latest" affordance) |
 | `silences_update` | `{}` (pure invalidation signal) | `invalidateQueries(['silences'])` → refetch from the in-memory snapshot. Broadcast by the recorder when the silence snapshot diff changed vs. the previous poll, and by every silence mutation write-through (`applySilenceWriteThrough`) |
+| `heartbeat` | `null` | none — resets the client watchdog (`lib/wsHeartbeat.ts`). Sent by `writePump` right after every ping frame (54 s), because browsers hide ping/pong frames from JS; two missed beats (114 s) make `useWebSocket` drop the socket and reconnect |
 
 `claim_set`/`claim_released`/`comment_added`/the write-through `silences_update`
 are mutation-driven and — on PostgreSQL, multi-replica — fanned out to every

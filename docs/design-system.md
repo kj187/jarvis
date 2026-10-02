@@ -229,6 +229,12 @@ Use the primitives in `frontend/src/components/ui/`: `Button`, `Input`,
 writing a new control, and cover every state a control can be in: default,
 hover, focus, active, disabled, loading and error.
 
+Status banners above a list (refresh failed, stale cluster, live connection
+interrupted) use the status roles: `critical` when data is missing or a request
+failed, `warning` when data is old or degraded. They carry text, not only
+colour. An error **MUST NOT** fall through to the empty state — "No alerts"
+claims an all-clear that failed data cannot support.
+
 Every clickable element **MUST** show `cursor: pointer` (set globally in
 `index.css`), and every view **MUST** handle loading and error.
 
