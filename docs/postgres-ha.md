@@ -126,8 +126,9 @@ Alertmanager is unreachable at that moment, the cluster keeps showing the
 alerts of that snapshot instead of going empty on every pod; a cluster Jarvis
 has never seen is simply not written, so followers show no member state for
 it. These carried-over alerts are not written to the history; they are
-resolved normally once Alertmanager answers again. How old those alerts are is
-not indicated yet.
+resolved normally once Alertmanager answers again. Their age is shown: the
+header's instance indicator turns yellow and the cluster list says "Stale ·
+10 min ago" (see [Data age](#data-age) below).
 
 Resolved alerts in those snapshots keep the same live-display deadline
 (`JARVIS_RESOLVED_BUFFER_TTL`, 20 minutes by default) as on the leader. Every
@@ -240,15 +241,30 @@ across a leadership change exactly as it does on a single replica — the
 new leader's poll sees the same Alertmanager state a continuously-running
 single pod would have.
 
+### Data age
+
+Jarvis keeps showing the last known alerts of a cluster while Alertmanager is
+unreachable (and after a leadership change, see above). So that this is never
+mistaken for live data, every cluster carries the time of its last successful
+fetch. The leader records it in each snapshot (`lastSuccessAt`); followers
+and a newly promoted leader take it from there. A cluster whose last success
+is older than max(3× `JARVIS_POLL_INTERVAL`, 60 s) is *stale*; one that has
+never answered since this pod started counts from the pod's start. The data
+is exposed as `lastSuccessfulPollAt` and `stale` in `GET /api/v1/clusters`,
+as the metrics below, and in the header. Snapshots written by an older
+version lack the field; the snapshot's own age is used then.
+
 ### Observability
 
 - `jarvis_leader` (gauge, 0/1) — whether this pod currently holds
   leadership. Always `1` on SQLite.
-- `jarvis_snapshot_stale` (gauge, 0/1) — whether a follower's consumed
-  snapshot is older than 3× `JARVIS_POLL_INTERVAL` (a sign that
-  notifications and the periodic resync have both been missed for a
-  while — check the leader's health). Always `0` while leader or on
-  SQLite.
+- `jarvis_snapshot_stale` (gauge, 0/1) — whether any cluster's last
+  successful Alertmanager fetch is older than max(3× `JARVIS_POLL_INTERVAL`,
+  60 s). A leader judges its own polls, a follower the leader's snapshots (so
+  it also fires when notifications and the periodic resync were missed — check
+  the leader's health).
+- `jarvis_cluster_last_success_timestamp_seconds{cluster}` — Unix time of
+  that cluster's last successful fetch; absent until one succeeded.
 - Leader-transition log lines and the `leader` field in the `GET
   /api/v1/status` response:
   ```json

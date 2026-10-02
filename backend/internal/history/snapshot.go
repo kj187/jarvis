@@ -28,6 +28,19 @@ type pollSnapshot struct {
 	Alerts   []models.EnrichedAlert         `json:"alerts"`
 	Silences []alertmanager.GettableSilence `json:"silences"`
 	MemberUp map[string]bool                `json:"memberUp"`
+	// LastSuccessAt is when the leader last fetched this cluster successfully.
+	// Optional: rows written by an older version lack it, and an older pod
+	// ignores it.
+	LastSuccessAt *time.Time `json:"lastSuccessAt,omitempty"`
+}
+
+// effectiveLastSuccess returns LastSuccessAt, or takenAt for a row written by
+// a version that did not record it.
+func (s pollSnapshot) effectiveLastSuccess(takenAt time.Time) time.Time {
+	if s.LastSuccessAt != nil {
+		return s.LastSuccessAt.UTC()
+	}
+	return takenAt.UTC()
 }
 
 func encodeSnapshot(s pollSnapshot) ([]byte, error) {

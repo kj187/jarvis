@@ -147,9 +147,16 @@ Code: `internal/history/recorder.go`, `recorder_snapshot.go`.
   the row's `takenAt`; the shared sweeper clears them from `AlertStore` and the
   cached follower slice (Invariant #22).
 - Followers report cluster health from `followerSnapshots` in
-  `Recorder.ClusterUpStates()`. `rebuildFollowerAlertStore` sets
-  `jarvis_snapshot_stale` (snapshot older than 3× `JARVIS_POLL_INTERVAL`); a
-  promotion resets it.
+  `Recorder.ClusterUpStates()`.
+- Data age (`cluster_freshness.go`): `poll()` stamps `lastSuccess[cluster]` on
+  every successful fetch; `persistSnapshots` writes it as
+  `pollSnapshot.LastSuccessAt` (legacy rows fall back to `takenAt`), a fresh
+  leader seeds it from the row, a follower reads it from `followerSnapshots`.
+  `Recorder.ClusterFreshness()` marks a cluster stale beyond
+  `max(3 × interval, 60 s)` (never-succeeded: counted from `startedAt`); it
+  feeds `GET /api/v1/clusters`, `jarvis_snapshot_stale` (any cluster stale,
+  updated at the end of `poll` and in `rebuildFollowerAlertStore`) and
+  `jarvis_cluster_last_success_timestamp_seconds`.
 - `Recorder.Trigger()`: leader → `triggerLocal`; follower → `Store.NotifyTrigger`
   (`pg_notify`, `jarvis_trigger`), which the leader's `runPollLoop` listener
   turns into a local trigger.

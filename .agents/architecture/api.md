@@ -155,7 +155,9 @@ DELETE /api/v1/silence-templates/:id             Auth  (write)
 POST   /api/v1/poll                              None        → triggers an immediate Alertmanager poll
 GET    /api/v1/clusters                          full_protect?  → []ClusterInfo
 #        health from the cached per-member up-state of the last poll (Cluster.MemberUpStates) —
-#        never live-pings AM; members without poll state yet count as healthy (writeOrder optimism)
+#        never live-pings AM; members without poll state yet count as healthy (writeOrder optimism).
+#        lastSuccessfulPollAt / stale come from Recorder.ClusterFreshness() (cached, optional
+#        interface on the poll trigger); stale = older than max(3×interval, 60s)
 
 # ── Settings (opaque JSON blob, internal/settings) ───────────────────────────
 GET    /api/v1/settings                          full_protect?  → { user: {...}|null, global: {} }

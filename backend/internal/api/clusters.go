@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 
+	"github.com/kj187/jarvis/backend/internal/history"
 	"github.com/kj187/jarvis/backend/internal/models"
 	"github.com/kj187/jarvis/backend/internal/version"
 	"github.com/labstack/echo/v4"
@@ -30,6 +31,11 @@ func (s *Server) getClusters(c echo.Context) error {
 		clusterAlertCount[a.ClusterName]++
 	}
 
+	var freshness map[string]history.ClusterFreshness
+	if src, ok := s.pollTrigger.(clusterFreshnessSource); ok {
+		freshness = src.ClusterFreshness()
+	}
+
 	clusters := s.registry.All()
 	result := make([]models.ClusterInfo, 0, len(clusters))
 	for _, cl := range clusters {
@@ -54,6 +60,13 @@ func (s *Server) getClusters(c echo.Context) error {
 			PrometheusURL:   cl.PrometheusURL,
 			Healthy:         healthy,
 			AlertCount:      clusterAlertCount[cl.Name],
+		}
+		if f, ok := freshness[cl.Name]; ok {
+			info.Stale = f.Stale
+			if !f.LastSuccessAt.IsZero() {
+				at := f.LastSuccessAt.UTC()
+				info.LastSuccessfulPollAt = &at
+			}
 		}
 		// Members is only populated for HA clusters — single-member clusters
 		// keep the payload byte-identical to before.

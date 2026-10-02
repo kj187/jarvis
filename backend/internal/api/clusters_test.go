@@ -294,3 +294,52 @@ func TestGetClusters_NoPollYet_OptimisticallyHealthy(t *testing.T) {
 		t.Errorf("fresh cluster should be optimistically healthy, got %+v", got)
 	}
 }
+
+type freshnessTriggerer struct {
+	fakeTriggerer
+	fresh map[string]history.ClusterFreshness
+}
+
+func (f *freshnessTriggerer) ClusterFreshness() map[string]history.ClusterFreshness {
+	return f.fresh
+}
+
+func TestGetClusters_ReportsDataAge(t *testing.T) {
+	registry := cluster.NewRegistry([]config.ClusterConfig{
+		{Name: "old", AlertmanagerURL: "http://127.0.0.1:0", AlertmanagerLinkURL: "http://127.0.0.1:0"},
+		{Name: "live", AlertmanagerURL: "http://127.0.0.1:0", AlertmanagerLinkURL: "http://127.0.0.1:0"},
+		{Name: "unknown", AlertmanagerURL: "http://127.0.0.1:0", AlertmanagerLinkURL: "http://127.0.0.1:0"},
+	})
+	srv := newTestServerWithRegistry(t, registry)
+	oldAt := time.Date(2026, 10, 2, 8, 0, 0, 0, time.UTC)
+	liveAt := oldAt.Add(time.Hour)
+	srv.pollTrigger = &freshnessTriggerer{fresh: map[string]history.ClusterFreshness{
+		"old":  {LastSuccessAt: oldAt, Stale: true},
+		"live": {LastSuccessAt: liveAt},
+	}}
+
+	got := map[string]models.ClusterInfo{}
+	for _, c := range getClustersResponse(t, srv) {
+		got[c.Name] = c
+	}
+	if c := got["old"]; !c.Stale || c.LastSuccessfulPollAt == nil || !c.LastSuccessfulPollAt.Equal(oldAt) {
+		t.Errorf("old = %+v, want stale with lastSuccessfulPollAt=%v", c, oldAt)
+	}
+	if c := got["live"]; c.Stale || c.LastSuccessfulPollAt == nil || !c.LastSuccessfulPollAt.Equal(liveAt) {
+		t.Errorf("live = %+v, want fresh with lastSuccessfulPollAt=%v", c, liveAt)
+	}
+	if c := got["unknown"]; c.Stale || c.LastSuccessfulPollAt != nil {
+		t.Errorf("unknown = %+v, want fresh and no timestamp (no freshness data)", c)
+	}
+}
+
+func TestGetClusters_NoFreshnessSource_FieldsOmitted(t *testing.T) {
+	registry := cluster.NewRegistry([]config.ClusterConfig{
+		{Name: "a", AlertmanagerURL: "http://127.0.0.1:0", AlertmanagerLinkURL: "http://127.0.0.1:0"},
+	})
+	srv := newTestServerWithRegistry(t, registry) // pollTrigger is nil
+	got := getClustersResponse(t, srv)
+	if len(got) != 1 || got[0].Stale || got[0].LastSuccessfulPollAt != nil {
+		t.Errorf("got %+v, want fresh cluster without timestamp", got)
+	}
+}

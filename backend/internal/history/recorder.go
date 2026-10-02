@@ -68,6 +68,15 @@ type Recorder struct {
 	// from the newest snapshot, not from what an earlier tenure left in memory.
 	lastGoodSeeded bool
 
+	// freshMu guards lastSuccess, which the API and metrics read concurrently
+	// with the poll loop. lastSuccess is each cluster's last successful
+	// Alertmanager fetch as observed by this leader tenure (or inherited from
+	// the previous leader's snapshot); startedAt is the age baseline for a
+	// cluster that has never answered.
+	freshMu     sync.Mutex
+	lastSuccess map[string]time.Time
+	startedAt   time.Time
+
 	// reconciledClusters tracks which clusters have already run startup
 	// reconciliation (reconcileStartupResolves) since this Recorder was
 	// created — each cluster runs it exactly once, on its first successful
@@ -115,6 +124,9 @@ type followerSnapshotEntry struct {
 	alerts   []models.EnrichedAlert
 	memberUp map[string]bool
 	takenAt  time.Time
+	// lastSuccessAt is when the leader last fetched this cluster successfully;
+	// zero for a snapshot written by a version that does not carry it.
+	lastSuccessAt time.Time
 }
 
 type silenceInfoEntry struct {
@@ -194,6 +206,7 @@ func NewRecorder(
 		dsn:                dsn,
 		followerSnapshots:  make(map[string]followerSnapshotEntry),
 		now:                time.Now,
+		startedAt:          time.Now().UTC(),
 	}
 	if el != nil {
 		el.Subscribe(r.onLeadershipChange)
@@ -547,6 +560,7 @@ func (r *Recorder) poll(ctx context.Context) {
 			r.silenceStore.Set(res.name, res.silences)
 		}
 		r.lastGoodAlerts[res.name] = res.alerts
+		r.markPollSuccess(res.name, r.currentTime())
 		// Only the leader may run startup reconciliation (D3 step 4): a
 		// follower leaves reconciledClusters[res.name] false, so the moment
 		// this pod is promoted, its next poll (triggered immediately by
@@ -576,6 +590,7 @@ func (r *Recorder) poll(ctx context.Context) {
 	if r.dsn != "" && ctx.Err() == nil {
 		r.persistSnapshots(ctx, clusters, unknownClusters)
 	}
+	r.updateStaleGauge()
 }
 
 // reconcileStartupResolves resolves alerts that actually went away while

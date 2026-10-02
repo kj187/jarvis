@@ -25,7 +25,7 @@ Workflow Rules #2).
 | `Claim` (+ `ReleaseReason*`) | Release reasons: `manual` \| `resolved` \| `reclaimed` \| `note_updated` |
 | `SilenceEvent` | Silence action per alert. Actions actually written: `created`, `updated`, `deleted` (`internal/api/silences.go`) and `created`, `expired` (`internal/history/recorder.go`) — the type's own comment lists only the first three. |
 | `SilenceTemplate` | Reusable matcher blueprint, shared across users |
-| `ClusterInfo`, `MemberInfo` | Cluster health/count; `Members` only for HA clusters (2+ members); `AlertmanagerURL` is the first member's browser-visible URL |
+| `ClusterInfo`, `MemberInfo` | Cluster health/count, `LastSuccessfulPollAt`/`Stale` (data age); `Members` only for HA clusters (2+ members); `AlertmanagerURL` is the first member's browser-visible URL |
 | `AlertGroup` | `alertname` + `severity` group with its alerts and count |
 | `AlertHeatmapResponse` | Raw `firingStarts` timestamps for a lookback `range`; bucketing happens in the frontend (`lib/heatmapUtils.ts`) |
 | `WSEvent` + `WSType*` | Envelope `{type, payload}`; the event catalogue with payloads is under "WebSocket Events" in `api.md` |
