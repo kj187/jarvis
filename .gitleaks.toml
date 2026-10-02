@@ -1,27 +1,42 @@
+# Without [extend] gitleaks loads no rules and reports "no leaks found" for
+# everything — scripts/check-gitleaks-canary.sh guards that.
+[extend]
+useDefault = true
+
 [allowlist]
-description = "Exclude paths matching .gitignore"
+description = "Generated, vendored and ignored paths; paths are anchored so testdata/ is never skipped"
 regexes = [
   # Go module checksums (go.sum h1: hashes) are false positives
   '''h1:[A-Za-z0-9+/=]{44}''',
 ]
 paths = [
-  '''tmp/''',
-  '''backend/tmp/''',
-  '''backend/bin/''',
-  '''backend/\.config/''',
-  '''frontend/node_modules/''',
-  '''frontend/dist/''',
-  '''frontend/\.vite/''',
-  '''frontend/\.npm/''',
-  '''frontend/coverage/''',
-  '''frontend/test-results/''',
-  '''\.pnpm-store/''',
-  '''node_modules/''',
-  '''dist/''',
-  '''\.cache/''',
-  '''data/''',
-  '''coverage/''',
-  '''\.env\.example''',
-  '''pnpm-lock\.yaml''',
-  '''go\.sum''',
+  '''^tmp/''',
+  '''^backend/tmp/''',
+  '''^backend/bin/''',
+  '''^backend/\.config/''',
+  '''^frontend/dist/''',
+  '''^frontend/\.vite/''',
+  '''^frontend/\.npm/''',
+  '''^frontend/coverage/''',
+  '''^frontend/test-results/''',
+  '''(^|/)\.pnpm-store/''',
+  '''(^|/)node_modules/''',
+  '''(^|/)dist/''',
+  '''(^|/)\.cache/''',
+  '''^data/''',
+  '''(^|/)coverage/''',
+  '''(^|/)\.env\.example$''',
+  '''(^|/)pnpm-lock\.yaml$''',
+  '''(^|/)go\.sum$''',
+]
+
+# Known placeholders in docs and chart tests, scoped to the one rule that
+# flags them so every other rule still sees these values.
+[[rules]]
+id = "generic-api-key"
+[rules.allowlist]
+description = "Documented placeholder values"
+regexes = [
+  '''^0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef$''',
+  '''^eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9(\.\.\.)?$''',
 ]

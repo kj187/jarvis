@@ -65,6 +65,11 @@ node scripts/check-design-drift.mjs
 echo "  [Security] Running gitleaks (secret scan)..."
 git diff --cached | podman run --rm -i \
   -v "$PWD/.gitleaks.toml:/repo/.gitleaks.toml:ro,z" \
-  zricethezav/gitleaks:latest detect --pipe --redact -c /repo/.gitleaks.toml
+  "$(cat scripts/gitleaks-image)" detect --pipe --redact -c /repo/.gitleaks.toml
+
+if git diff --cached --name-only | grep -qE '^(\.gitleaks\.toml|scripts/gitleaks-image|scripts/check-gitleaks-canary\.sh)$'; then
+  echo "  [Security] Running gitleaks canary (scan config changed)..."
+  scripts/check-gitleaks-canary.sh
+fi
 
 echo "✅ All pre-commit checks passed."

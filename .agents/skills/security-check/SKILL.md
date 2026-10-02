@@ -23,7 +23,7 @@ make fuzz-backend       # native fuzzing, FUZZTIME=30s per target; crash inputs 
                         # internal/<pkg>/testdata/fuzz/ and run as seeds in every `go test`
 cd ../frontend && pnpm audit
 
-make scan | scan-history | scan-staged | scan-all   # gitleaks (.gitleaks.toml, via podman)
+make scan | scan-history | scan-staged | scan-canary | scan-all   # gitleaks (.gitleaks.toml, via podman)
 make security-all       # gosec + govulncheck + pnpm audit
 ```
 
