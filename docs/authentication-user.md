@@ -24,7 +24,7 @@ Jarvis supports three authentication modes, controlled by the `JARVIS_AUTH_PROVI
 JARVIS_AUTH_PROVIDER=none
 ```
 
-Anyone who can reach Jarvis can read alerts and perform write actions (claims, comments, silences). Suitable for private networks with no external access.
+Anyone who can reach Jarvis can read alerts and perform write actions (claims, comments, silences). Suitable for private networks with no external access. Jarvis logs a warning at startup in this mode; switch to `internal` or `oidc` (with `JARVIS_AUTH_MODE=full_protect` to also protect reads) as soon as access is not restricted otherwise.
 
 On first load, Jarvis shows a one-time notice explaining that authentication is not configured:
 

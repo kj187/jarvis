@@ -164,7 +164,7 @@ func main() {
 		logger.Info("auth provider: oidc", "issuer", cfg.OIDCIssuer)
 	default:
 		authProvider = auth.NoneProvider{}
-		logger.Info("auth provider: none (write actions blocked)")
+		logger.Info("auth provider: none (no login; reads and writes are open to anyone who can reach Jarvis)")
 	}
 
 	// ── Metrics ───────────────────────────────────────────────────────────────

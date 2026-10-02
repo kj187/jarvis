@@ -108,7 +108,7 @@ Kubernetes deployment including a CloudNativePG example are covered in
 
 | Variable | Default | Description |
 |---|---|---|
-| <a id="jarvis_auth_provider"></a>`JARVIS_AUTH_PROVIDER` | `none` | `none`, `internal` or `oidc` |
+| <a id="jarvis_auth_provider"></a>`JARVIS_AUTH_PROVIDER` | `none` | `none`, `internal` or `oidc`. With `none` nothing requires a login — anyone who can reach Jarvis can read alerts and create claims, comments and silences — and Jarvis logs a warning at startup |
 | <a id="jarvis_auth_mode"></a>`JARVIS_AUTH_MODE` | `write_protect` | Applies when the provider is not `none`. `write_protect` lets anyone read and requires a login to change anything; `full_protect` requires a login for everything |
 | <a id="jarvis_secret_key"></a>`JARVIS_SECRET_KEY` | — | Signing key for session tokens, at least 32 bytes. Required for `internal` and `oidc` |
 | <a id="jarvis_auth_oidc_issuer"></a>`JARVIS_AUTH_OIDC_ISSUER` | — | Issuer URL (required for `oidc`) |
