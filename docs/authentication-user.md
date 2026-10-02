@@ -224,6 +224,21 @@ Sessions are stored as signed JWT cookies:
 | SameSite | Lax |
 | Secure | yes when served over HTTPS (detected via `X-Forwarded-Proto`) |
 
+The cookie only identifies the account; Jarvis checks it against the user
+database on every request (cached for up to 30 seconds per pod). So:
+
+- **Logout is final.** It invalidates the session cookie everywhere, on every
+  replica and across restarts, and also every other session of the same
+  account (every browser and device is signed out). It also closes the open
+  live connections of that account.
+- **Deleting a user** ends their sessions at once on the pod that handled the
+  deletion and within about 30 seconds on other replicas.
+- **A role change applies without a new login** — the role comes from the
+  database, not from the cookie. A demoted admin loses the admin pages within
+  about 30 seconds on other replicas, immediately on the pod that handled the change.
+- If the database is unreachable and a user's session has not been checked
+  recently, requests get `503` instead of `401`, so nobody is logged out by an outage.
+
 ## User Settings Storage
 
 With an auth provider active, a signed-in user's Settings (theme, default

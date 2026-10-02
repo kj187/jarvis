@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"embed"
 	"io/fs"
 	"log/slog"
@@ -22,6 +23,12 @@ import (
 	"github.com/kj187/jarvis/backend/internal/users"
 	"github.com/kj187/jarvis/backend/internal/ws"
 )
+
+// sessionCacheTTL is how long a pod trusts its last database answer about a
+// user's session. It is the upper bound for a role change or deletion made on
+// another replica to take effect here; the same pod invalidates immediately.
+// A variable only so tests can shorten it.
+var sessionCacheTTL = 30 * time.Second
 
 // loginRateLimiter returns the one rate limit Jarvis applies: a single global
 // bucket for POST /auth/login, shared by all clients (0.5 req/s = 30/min,
@@ -136,9 +143,18 @@ func NewRouter(
 
 	srv := NewServer(alertStore, silenceStore, store, hub, registry, cfg, recorder, authProvider, userStore, settingsStore, globalSettingsStore, f)
 
-	// Wire JWT secret key into auth middleware.
+	// Sessions are validated against the users table (user exists, token version
+	// current, role from the database), not trusted from the signed cookie alone.
 	if len(cfg.SecretKey) > 0 {
-		auth.SetSecretKey(cfg.SecretKey)
+		sessions := auth.NewSessionVerifier(cfg.SecretKey, userStore, sessionCacheTTL)
+		auth.SetSessionVerifier(sessions)
+		hub.SetSessionCheck(func(userID string, tokenVersion int) bool {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			return sessions.StillValid(ctx, userID, tokenVersion)
+		})
+	} else {
+		auth.SetSessionVerifier(nil)
 	}
 
 	// First-run redirect: internal mode only, redirects to /setup when no users exist.
@@ -148,14 +164,20 @@ func NewRouter(
 	// full_protect: /ws streams the full alert snapshot plus claim/comment
 	// events, so it must be gated like the API routes below. The JWT session
 	// cookie is sent on the upgrade request, so RequireAuth works unchanged.
+	// A connection opened with a session carries its identity, so logout, user
+	// deletion and the hub's periodic check can end it.
 	wsHandler := func(c echo.Context) error {
-		hub.ServeWS(c.Response().Writer, c.Request())
+		var identity *ws.Identity
+		if u := auth.UserFromContext(c); u != nil {
+			identity = &ws.Identity{UserID: u.ID, TokenVersion: u.TokenVersion}
+		}
+		hub.ServeWSFor(c.Response().Writer, c.Request(), identity)
 		return nil
 	}
 	if cfg.AuthMode == "full_protect" {
 		e.GET("/ws", wsHandler, auth.RequireAuth(authProvider))
 	} else {
-		e.GET("/ws", wsHandler)
+		e.GET("/ws", wsHandler, auth.OptionalAuth(authProvider))
 	}
 
 	// ── Auth & Setup ──────────────────────────────────────────────────────────
@@ -167,7 +189,7 @@ func NewRouter(
 	authGroup := e.Group("/auth")
 	authGroup.GET("/info", srv.getAuthInfo)
 	authGroup.POST("/login", srv.postLogin, loginRateLimiter())
-	authGroup.POST("/logout", srv.postLogout)
+	authGroup.POST("/logout", srv.postLogout, auth.RequireAuth(authProvider))
 	authGroup.GET("/me", srv.getAuthMe, auth.RequireAuth(authProvider))
 	authGroup.GET("/oidc/start", srv.getOIDCStart)
 	authGroup.GET("/oidc/callback", srv.getOIDCCallback)

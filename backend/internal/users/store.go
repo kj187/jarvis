@@ -26,9 +26,12 @@ type User struct {
 	OIDCSub      string
 	// Groups are the values of the IdP's groups claim as of the user's last
 	// SSO login (empty for internal users and when no claim is configured).
-	Groups      []string
-	CreatedAt   time.Time
-	LastLoginAt *time.Time
+	Groups []string
+	// TokenVersion is embedded in every session token as "tv"; bumping it
+	// (logout) invalidates all tokens issued before.
+	TokenVersion int
+	CreatedAt    time.Time
+	LastLoginAt  *time.Time
 }
 
 // CreateUser holds the fields required to create a new user.
@@ -80,7 +83,7 @@ func (s *Store) scanUser(row interface{ Scan(...any) error }) (*User, error) {
 	var lastLoginAt sql.NullTime
 	err := row.Scan(
 		&u.ID, &u.Username, &email, &passwordHash,
-		&u.Role, &u.Provider, &oidcSub, &groupsJSON, &u.CreatedAt, &lastLoginAt,
+		&u.Role, &u.Provider, &oidcSub, &groupsJSON, &u.TokenVersion, &u.CreatedAt, &lastLoginAt,
 	)
 	if err != nil {
 		return nil, err
@@ -98,7 +101,7 @@ func (s *Store) scanUser(row interface{ Scan(...any) error }) (*User, error) {
 	return &u, nil
 }
 
-const selectCols = `id, username, email, password_hash, role, provider, oidc_sub, oidc_groups, created_at, last_login_at`
+const selectCols = `id, username, email, password_hash, role, provider, oidc_sub, oidc_groups, token_version, created_at, last_login_at`
 
 // encodeGroups serialises a group list for the oidc_groups column; nil and
 // empty both store '[]' so the column is never NULL.
@@ -349,5 +352,12 @@ func (s *Store) Delete(ctx context.Context, id string) error {
 func (s *Store) UpdateRole(ctx context.Context, id, role string) error {
 	q := s.rebind(`UPDATE users SET role = ? WHERE id = ?`)
 	_, err := s.db.ExecContext(ctx, q, role, id)
+	return err
+}
+
+// BumpTokenVersion invalidates every session token issued so far for the user.
+func (s *Store) BumpTokenVersion(ctx context.Context, id string) error {
+	q := s.rebind(`UPDATE users SET token_version = token_version + 1 WHERE id = ?`)
+	_, err := s.db.ExecContext(ctx, q, id)
 	return err
 }

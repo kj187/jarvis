@@ -130,6 +130,10 @@ updated_by TEXT NOT NULL DEFAULT ''
 	if err := addColumnIfNotExistsSQLite(database, "users", "oidc_groups", "TEXT NOT NULL DEFAULT '[]'"); err != nil {
 		return err
 	}
+	// Session tokens carry this version; a logout bumps it and thereby revokes them.
+	if err := addColumnIfNotExistsSQLite(database, "users", "token_version", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return err
+	}
 	// Add user_id column to alert_comments (nullable, for ownership checks by ID).
 	// SQLite does not support ADD COLUMN IF NOT EXISTS; use the helper.
 	if err := addColumnIfNotExistsSQLite(database, "alert_comments", "user_id", "TEXT"); err != nil {

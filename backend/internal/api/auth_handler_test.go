@@ -36,7 +36,6 @@ func newAuthServer(t *testing.T) (*Server, *users.Store) {
 		t.Fatalf("migrate: %v", err)
 	}
 	t.Cleanup(func() { _ = database.Close() })
-	auth.SetSecretKey(testSecretKey)
 
 	userStore := users.NewStore(database, dialect)
 	provider := auth.NewInternalProvider(userStore)
@@ -129,17 +128,13 @@ func TestPostLogin_WrongPassword(t *testing.T) {
 }
 
 func TestPostLogout(t *testing.T) {
-	srv, _ := newAuthServer(t)
-	u := &auth.User{ID: "u-logout", Username: "logout-user", Role: "user", Provider: "internal"}
-	tok, err := auth.CreateToken(testSecretKey, u)
-	if err != nil {
-		t.Fatalf("create token: %v", err)
-	}
+	srv, store := newAuthServer(t)
+	u := createTestUser(t, store, "logout-user", "pw-long-enough-1", "user")
 
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/auth/logout", nil)
-	req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: tok})
 	rec := httptest.NewRecorder()
 	c := echo.New().NewContext(req, rec)
+	c.Set(auth.ContextKey, &auth.User{ID: u.ID, Username: u.Username, Role: u.Role, Provider: u.Provider})
 	_ = srv.postLogout(c)
 
 	if rec.Code != http.StatusOK {
@@ -155,8 +150,12 @@ func TestPostLogout(t *testing.T) {
 	if !cleared {
 		t.Fatal("expected session cookie to be cleared")
 	}
-	if _, err := auth.ValidateToken(testSecretKey, tok); err == nil {
-		t.Fatal("expected logout to revoke token")
+	got, err := store.GetByID(context.Background(), u.ID)
+	if err != nil || got == nil {
+		t.Fatalf("get user: %v %v", got, err)
+	}
+	if got.TokenVersion != 1 {
+		t.Fatalf("TokenVersion = %d, want 1 (logout must revoke the session)", got.TokenVersion)
 	}
 }
 
@@ -194,7 +193,7 @@ func newOIDCAuthServer(t *testing.T, groupsClaim string, groups []string) (*Serv
 	if err := userStore.UpdateLastLogin(context.Background(), stored.ID); err != nil {
 		t.Fatalf("last login: %v", err)
 	}
-	// Exactly what ValidateToken yields: the session JWT carries no e-mail.
+	// getAuthMe reads e-mail and groups from the store, so the caller needs no e-mail.
 	return srv, &auth.User{ID: stored.ID, Username: stored.Username, Role: stored.Role, Provider: "oidc"}
 }
 

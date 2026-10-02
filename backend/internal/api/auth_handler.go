@@ -109,12 +109,20 @@ func (s *Server) postLogin(c echo.Context) error {
 	})
 }
 
-// POST /auth/logout — clears the session cookie.
+// POST /auth/logout — ends the session for good: the user's token version is
+// bumped, which invalidates this token and every other one issued before (on
+// every replica), and the user's open WebSocket connections are closed. The
+// route requires a valid session; without one there is nothing to end.
 func (s *Server) postLogout(c echo.Context) error {
-	if s.authProvider.Mode() != "none" && len(s.cfg.SecretKey) > 0 {
-		if cookie, err := c.Cookie(auth.SessionCookieName); err == nil && cookie.Value != "" {
-			_ = auth.RevokeToken(s.cfg.SecretKey, cookie.Value)
+	if u := auth.UserFromContext(c); u != nil {
+		if err := s.userStore.BumpTokenVersion(c.Request().Context(), u.ID); err != nil {
+			// The cookie is still dropped; the token just stays valid until it expires.
+			slog.Error("logout: bump token version", "err", err)
+			auth.ClearSessionCookie(c)
+			return echo.NewHTTPError(http.StatusInternalServerError)
 		}
+		auth.InvalidateUser(u.ID)
+		s.hub.CloseUser(u.ID)
 	}
 	auth.ClearSessionCookie(c)
 	return c.JSON(http.StatusOK, map[string]bool{"ok": true})
@@ -181,6 +189,7 @@ func (s *Server) getOIDCCallback(c echo.Context) error {
 		slog.Error("oidc callback exchange failed", "err", err)
 		return echo.NewHTTPError(http.StatusUnauthorized, "authentication failed")
 	}
+	auth.InvalidateUser(u.ID) // the IdP groups may have changed the role
 
 	tok, err := auth.CreateToken(s.cfg.SecretKey, u)
 	if err != nil {

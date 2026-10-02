@@ -35,6 +35,17 @@ Request bodies are limited to **1 MB**.
 
 ---
 
+## Sessions
+
+The session cookie is a signed JWT, but the signature alone is not trusted: every request is checked against the
+`users` table (the user must exist, the token's version must match `users.token_version`, and the role is read
+from the database). Logout bumps `token_version`, which revokes all of the account's sessions on every replica and
+survives restarts; deleting a user or changing a role takes effect immediately on the pod that handled it and
+within the 30-second per-pod cache on the others. Open WebSocket connections of a revoked session are closed.
+See [Sessions](authentication-user.md#sessions).
+
+---
+
 ## Deployment Assumptions
 
 Jarvis' internal-tool deployment model has the following security implications:

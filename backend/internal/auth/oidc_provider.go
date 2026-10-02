@@ -118,11 +118,12 @@ func (p *OIDCProvider) Exchange(ctx context.Context, code, codeVerifier string) 
 	_ = p.users.UpdateLastLogin(ctx, dbUser.ID)
 
 	return &User{
-		ID:       dbUser.ID,
-		Username: dbUser.Username,
-		Email:    dbUser.Email,
-		Role:     dbUser.Role,
-		Provider: dbUser.Provider,
+		ID:           dbUser.ID,
+		Username:     dbUser.Username,
+		Email:        dbUser.Email,
+		Role:         dbUser.Role,
+		Provider:     dbUser.Provider,
+		TokenVersion: dbUser.TokenVersion,
 	}, nil
 }
 

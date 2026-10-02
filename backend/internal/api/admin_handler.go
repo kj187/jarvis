@@ -124,6 +124,7 @@ func (s *Server) updateUser(c echo.Context) error {
 	if err := s.userStore.UpdateRole(c.Request().Context(), id, req.Role); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError)
 	}
+	auth.InvalidateUser(id)
 	u, _ := s.userStore.GetByID(c.Request().Context(), id)
 	if u == nil {
 		return echo.NewHTTPError(http.StatusNotFound)
@@ -146,6 +147,8 @@ func (s *Server) deleteUser(c echo.Context) error {
 	if err := s.userStore.Delete(c.Request().Context(), id); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError)
 	}
+	auth.InvalidateUser(id)
+	s.hub.CloseUser(id)
 	return c.NoContent(http.StatusNoContent)
 }
 
