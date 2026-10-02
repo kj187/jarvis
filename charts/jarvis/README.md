@@ -138,9 +138,11 @@ Tests cover four suites (`deployment`, `configmap`, `secret`, `ingress`) and run
 | `auth.provider` | string | `none` | Authentication mode: `none`, `internal`, or `oidc` |
 | `auth.mode` | string | `""` | Protection level when provider ≠ `none`: `write_protect` (default) or `full_protect` |
 | `auth.secretKey` | string | `""` | JWT signing key (min 32 random bytes). Use `auth.existingSecret` in production. |
+| `auth.setupToken` | string | `""` | Optional token the first-run `/setup` wizard must carry (`internal` auth only), rendered as `JARVIS_SETUP_TOKEN`. Empty leaves the wizard open. |
 | `auth.existingSecret` | string | `""` | Existing K8s Secret with `secret-key` (and `oidc-client-secret` for OIDC) |
 | `auth.existingSecretKeys.secretKey` | string | `secret-key` | Key in Secret for `JARVIS_SECRET_KEY` |
 | `auth.existingSecretKeys.oidcClientSecret` | string | `oidc-client-secret` | Key in Secret for `JARVIS_AUTH_OIDC_CLIENT_SECRET` |
+| `auth.existingSecretKeys.setupToken` | string | `setup-token` | Key in Secret for `JARVIS_SETUP_TOKEN` (optional; may be absent) |
 | `auth.oidc.issuer` | string | `""` | OIDC provider issuer URL |
 | `auth.oidc.clientId` | string | `""` | OIDC client ID |
 | `auth.oidc.clientSecret` | string | `""` | OIDC client secret (stored in Secret, not ConfigMap) |

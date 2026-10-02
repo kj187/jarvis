@@ -32,11 +32,13 @@ type User struct {
 
 // ProviderInfo is returned to the frontend via GET /auth/info.
 type ProviderInfo struct {
-	Mode           string `json:"mode"`           // "none" | "internal" | "oidc"
-	LoginURL       string `json:"loginUrl"`       // "/auth/oidc/start" for oidc; "" otherwise
-	SetupRequired  bool   `json:"setupRequired"`  // true when internal mode and no users exist
-	AuthMode       string `json:"authMode"`       // "none" | "write_protect" | "full_protect"
-	RunbookBaseURL string `json:"runbookBaseUrl"` // prepended to runbook label values when set
+	Mode          string `json:"mode"`          // "none" | "internal" | "oidc"
+	LoginURL      string `json:"loginUrl"`      // "/auth/oidc/start" for oidc; "" otherwise
+	SetupRequired bool   `json:"setupRequired"` // true when internal mode and no users exist
+	// SetupTokenRequired is true while setup is open and JARVIS_SETUP_TOKEN is set; the token itself is never exposed.
+	SetupTokenRequired bool   `json:"setupTokenRequired"`
+	AuthMode           string `json:"authMode"`       // "none" | "write_protect" | "full_protect"
+	RunbookBaseURL     string `json:"runbookBaseUrl"` // prepended to runbook label values when set
 }
 
 // ContextKey is used to store the authenticated user in Echo's context.

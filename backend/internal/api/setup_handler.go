@@ -1,6 +1,9 @@
 package api
 
 import (
+	"crypto/sha256"
+	"crypto/subtle"
+	"errors"
 	"net/http"
 	"regexp"
 	"strings"
@@ -17,17 +20,21 @@ var usernameRe = regexp.MustCompile(`^[a-zA-Z0-9_.\-]{3,64}$`)
 type setupRequest struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
+	// SetupToken must match JARVIS_SETUP_TOKEN when that is configured.
+	SetupToken string `json:"setupToken"`
 }
 
 // postSetup creates the first admin user (first-run wizard).
-// Returns 403 if users already exist.
+// Returns 403 if users already exist and, when JARVIS_SETUP_TOKEN is set, 401
+// if the request does not carry it.
 func (s *Server) postSetup(c echo.Context) error {
 	if s.authProvider.Mode() != "internal" {
 		return echo.NewHTTPError(http.StatusNotFound, "setup not available")
 	}
 	ctx := c.Request().Context()
 
-	// Guard: check DB on every call (no in-memory flag).
+	// Fast path: check DB on every call (no in-memory flag). The authoritative,
+	// race-free guard is CreateFirstAdmin below; this only skips the bcrypt work.
 	n, err := s.userStore.Count(ctx)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "database error")
@@ -39,6 +46,10 @@ func (s *Server) postSetup(c echo.Context) error {
 	var req setupRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request")
+	}
+
+	if token := s.cfg.SetupToken; token != "" && !setupTokenMatches(token, req.SetupToken) {
+		return echo.NewHTTPError(http.StatusUnauthorized, "invalid setup token")
 	}
 
 	if !usernameRe.MatchString(req.Username) {
@@ -53,17 +64,24 @@ func (s *Server) postSetup(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "password hashing failed")
 	}
 
-	_, err = s.userStore.Create(ctx, &users.CreateUser{
+	_, err = s.userStore.CreateFirstAdmin(ctx, &users.CreateUser{
 		Username:     req.Username,
-		Role:         "admin",
-		Provider:     "internal",
 		PasswordHash: hash,
 	})
+	if errors.Is(err, users.ErrAlreadyInitialized) {
+		return echo.NewHTTPError(http.StatusForbidden, "setup already completed")
+	}
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to create user")
 	}
 
 	return c.JSON(http.StatusOK, map[string]bool{"ok": true})
+}
+
+// setupTokenMatches compares in constant time; hashing first equalises lengths.
+func setupTokenMatches(want, got string) bool {
+	w, g := sha256.Sum256([]byte(want)), sha256.Sum256([]byte(got))
+	return subtle.ConstantTimeCompare(w[:], g[:]) == 1
 }
 
 // firstRunRedirect is a middleware that redirects to /setup when no users exist

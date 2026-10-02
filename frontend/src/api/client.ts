@@ -343,13 +343,19 @@ export function putGlobalSetting(section: string, value: unknown): Promise<void>
 
 // ── Setup ─────────────────────────────────────────────────────────────────────
 
-export function postSetup(username: string, password: string): Promise<{ ok: boolean }> {
+export class SetupError extends Error {
+  constructor(public readonly status: number) {
+    super('setup failed')
+  }
+}
+
+export function postSetup(username: string, password: string, setupToken?: string): Promise<{ ok: boolean }> {
   return fetch('/setup', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify({ username, password }),
+    body: JSON.stringify({ username, password, ...(setupToken ? { setupToken } : {}) }),
   }).then((r) => {
-    if (!r.ok) throw new Error('setup failed')
+    if (!r.ok) throw new SetupError(r.status)
     return r.json() as Promise<{ ok: boolean }>
   })
 }

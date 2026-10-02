@@ -213,12 +213,19 @@ auth:
   # Required when provider is "internal" or "oidc".
   # Use auth.existingSecret in production to avoid storing the key in values.
   secretKey: ""
+  # Optional one-time token for the first-run /setup wizard (provider "internal"
+  # only). When set, creating the first admin requires it, so whoever reaches the
+  # URL first on a fresh install cannot claim the instance. Leave empty to keep
+  # the wizard open. With auth.existingSecret, supply it under the Secret key
+  # auth.existingSecretKeys.setupToken instead (the key may be absent).
+  setupToken: ""
   # Use an existing Kubernetes Secret for auth credentials.
   # The Secret must contain the keys referenced by auth.existingSecretKeys.
   existingSecret: ""
   existingSecretKeys:
     secretKey: secret-key
     oidcClientSecret: oidc-client-secret
+    setupToken: setup-token
   oidc:
     # OIDC issuer URL (e.g. https://keycloak.example.com/realms/myrealm)
     issuer: ""

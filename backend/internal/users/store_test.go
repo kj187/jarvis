@@ -2,8 +2,14 @@ package users_test
 
 import (
 	"context"
+	"database/sql"
+	"errors"
+	"fmt"
+	"net/url"
 	"os"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/kj187/jarvis/backend/internal/db"
@@ -322,4 +328,112 @@ func TestUpsertOIDCUser_EmailFollowsTheIdPOnLogin(t *testing.T) {
 	if got.Email != "gina@new.example" {
 		t.Fatalf("email after an empty claim = %q, want it kept", got.Email)
 	}
+}
+
+func TestCreateFirstAdmin_CreatesAdminOnEmptyStore(t *testing.T) {
+	s := newTestStore(t)
+	u, err := s.CreateFirstAdmin(context.Background(), &users.CreateUser{
+		Username: "root", PasswordHash: "$2a$12$hash", Role: "user", Provider: "oidc",
+	})
+	if err != nil {
+		t.Fatalf("CreateFirstAdmin: %v", err)
+	}
+	if u.Role != "admin" || u.Provider != "internal" {
+		t.Fatalf("role/provider = %q/%q, want admin/internal regardless of the input", u.Role, u.Provider)
+	}
+}
+
+func TestCreateFirstAdmin_RefusesWhenAnyUserExists(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	if _, err := s.Create(ctx, &users.CreateUser{Username: "sso-user", Role: "user", Provider: "oidc", OIDCSub: "sub-1"}); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	_, err := s.CreateFirstAdmin(ctx, &users.CreateUser{Username: "root", PasswordHash: "$2a$12$hash"})
+	if !errors.Is(err, users.ErrAlreadyInitialized) {
+		t.Fatalf("err = %v, want ErrAlreadyInitialized", err)
+	}
+	if n, _ := s.Count(ctx); n != 1 {
+		t.Fatalf("count = %d, want 1", n)
+	}
+}
+
+// assertExactlyOneFirstAdmin fires n concurrent CreateFirstAdmin calls with
+// distinct usernames (the UNIQUE constraint on username cannot help) and
+// requires exactly one winner.
+func assertExactlyOneFirstAdmin(t *testing.T, s *users.Store, n int) {
+	t.Helper()
+	ctx := context.Background()
+	var wins, refused atomic.Int32
+	var wg sync.WaitGroup
+	start := make(chan struct{})
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			<-start
+			_, err := s.CreateFirstAdmin(ctx, &users.CreateUser{Username: fmt.Sprintf("admin-%d", i), PasswordHash: "$2a$12$hash"})
+			switch {
+			case err == nil:
+				wins.Add(1)
+			case errors.Is(err, users.ErrAlreadyInitialized):
+				refused.Add(1)
+			default:
+				t.Errorf("unexpected error: %v", err)
+			}
+		}(i)
+	}
+	close(start)
+	wg.Wait()
+	if wins.Load() != 1 || refused.Load() != int32(n-1) {
+		t.Fatalf("wins = %d, refused = %d, want 1 and %d", wins.Load(), refused.Load(), n-1)
+	}
+	if got, _ := s.Count(ctx); got != 1 {
+		t.Fatalf("count = %d, want 1", got)
+	}
+}
+
+func TestCreateFirstAdmin_Concurrent(t *testing.T) {
+	assertExactlyOneFirstAdmin(t, newTestStore(t), 8)
+}
+
+// Runs in a private schema so it sees an empty users table even while other
+// packages' tests use the shared PostgreSQL database.
+func TestCreateFirstAdmin_Concurrent_PostgreSQL(t *testing.T) {
+	dsn := os.Getenv("JARVIS_TEST_POSTGRES_DSN")
+	if dsn == "" {
+		t.Skip("JARVIS_TEST_POSTGRES_DSN not set — skipping PostgreSQL-backed test")
+	}
+	schema := fmt.Sprintf("first_admin_%d", os.Getpid())
+	admin, err := sql.Open("pgx", dsn)
+	if err != nil {
+		t.Fatalf("open admin conn: %v", err)
+	}
+	t.Cleanup(func() {
+		_, _ = admin.ExecContext(context.Background(), `DROP SCHEMA IF EXISTS `+schema+` CASCADE`)
+		_ = admin.Close()
+	})
+	if _, err := admin.ExecContext(context.Background(), `DROP SCHEMA IF EXISTS `+schema+` CASCADE`); err != nil {
+		t.Fatalf("drop schema: %v", err)
+	}
+	if _, err := admin.ExecContext(context.Background(), `CREATE SCHEMA `+schema); err != nil {
+		t.Fatalf("create schema: %v", err)
+	}
+
+	u, err := url.Parse(dsn)
+	if err != nil {
+		t.Fatalf("parse dsn: %v", err)
+	}
+	q := u.Query()
+	q.Set("search_path", schema)
+	u.RawQuery = q.Encode()
+	database, dialect, err := db.Open(u.String())
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	t.Cleanup(func() { _ = database.Close() })
+	if err := db.Migrate(database, dialect); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	assertExactlyOneFirstAdmin(t, users.NewStore(database, dialect), 8)
 }

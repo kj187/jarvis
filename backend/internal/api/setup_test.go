@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
+	"sync"
 	"testing"
 
 	"github.com/labstack/echo/v4"
@@ -50,7 +52,16 @@ func newSetupServer(t *testing.T) (*Server, *users.Store) {
 
 func postSetupReq(t *testing.T, srv *Server, username, password string) *httptest.ResponseRecorder {
 	t.Helper()
-	body, _ := json.Marshal(map[string]string{"username": username, "password": password})
+	return postSetupReqWithToken(t, srv, username, password, "")
+}
+
+func postSetupReqWithToken(t *testing.T, srv *Server, username, password, token string) *httptest.ResponseRecorder {
+	t.Helper()
+	payload := map[string]string{"username": username, "password": password}
+	if token != "" {
+		payload["setupToken"] = token
+	}
+	body, _ := json.Marshal(payload)
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/setup", bytes.NewReader(body))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
@@ -115,5 +126,102 @@ func TestPostSetup_NonInternalMode_NotAvailable(t *testing.T) {
 	rec := postSetupReq(t, srv, "admin", "supersecretpassword!")
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want 404", rec.Code)
+	}
+}
+
+func TestPostSetup_ConcurrentRequests_CreateExactlyOneAdmin(t *testing.T) {
+	srv, store := newSetupServer(t)
+	const n = 8
+	codes := make([]int, n)
+	var wg sync.WaitGroup
+	start := make(chan struct{})
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			<-start
+			codes[i] = postSetupReq(t, srv, "admin"+string(rune('a'+i)), "supersecretpassword!").Code
+		}(i)
+	}
+	close(start)
+	wg.Wait()
+
+	ok, forbidden := 0, 0
+	for _, c := range codes {
+		switch c {
+		case http.StatusOK:
+			ok++
+		case http.StatusForbidden:
+			forbidden++
+		default:
+			t.Errorf("unexpected status %d", c)
+		}
+	}
+	if ok != 1 || forbidden != n-1 {
+		t.Fatalf("200s = %d, 403s = %d, want 1 and %d", ok, forbidden, n-1)
+	}
+	if got, _ := store.Count(context.Background()); got != 1 {
+		t.Fatalf("users = %d, want 1", got)
+	}
+}
+
+func TestPostSetup_SetupToken(t *testing.T) {
+	cases := []struct {
+		name      string
+		token     string
+		wantCode  int
+		wantUsers int
+	}{
+		{"missing token", "", http.StatusUnauthorized, 0},
+		{"wrong token", "not-the-token", http.StatusUnauthorized, 0},
+		{"correct token", "s3cret-setup-token", http.StatusOK, 1},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			srv, store := newSetupServer(t)
+			srv.cfg.SetupToken = "s3cret-setup-token"
+			rec := postSetupReqWithToken(t, srv, "admin", "supersecretpassword!", tc.token)
+			if rec.Code != tc.wantCode {
+				t.Fatalf("status = %d, want %d; body: %s", rec.Code, tc.wantCode, rec.Body.String())
+			}
+			if got, _ := store.Count(context.Background()); got != tc.wantUsers {
+				t.Fatalf("users = %d, want %d", got, tc.wantUsers)
+			}
+		})
+	}
+}
+
+func TestPostSetup_NoTokenConfigured_IgnoresSuppliedToken(t *testing.T) {
+	srv, _ := newSetupServer(t)
+	rec := postSetupReqWithToken(t, srv, "admin", "supersecretpassword!", "anything")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+}
+
+func TestAuthInfo_SetupTokenRequired(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		token string
+		want  bool
+	}{{"token configured", "s3cret-setup-token", true}, {"no token", "", false}} {
+		t.Run(tc.name, func(t *testing.T) {
+			srv, _ := newSetupServer(t)
+			srv.cfg.SetupToken = tc.token
+			e := echo.New()
+			req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/auth/info", nil)
+			rec := httptest.NewRecorder()
+			if err := srv.getAuthInfo(e.NewContext(req, rec)); err != nil {
+				t.Fatalf("getAuthInfo: %v", err)
+			}
+			var info map[string]any
+			_ = json.Unmarshal(rec.Body.Bytes(), &info)
+			if got, _ := info["setupTokenRequired"].(bool); got != tc.want {
+				t.Fatalf("setupTokenRequired = %v, want %v (body %s)", got, tc.want, rec.Body.String())
+			}
+			if strings.Contains(rec.Body.String(), "s3cret") {
+				t.Fatal("auth info leaked the setup token")
+			}
+		})
 	}
 }

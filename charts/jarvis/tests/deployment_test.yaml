@@ -749,3 +749,52 @@ tests:
             name: vault-token
             mountPath: /vault/secrets
             readOnly: true
+
+  - it: adds JARVIS_SETUP_TOKEN from the chart secret when a setup token is set
+    template: templates/deployment.yaml
+    set:
+      auth.provider: internal
+      auth.secretKey: "deadbeef"
+      auth.setupToken: "first-run-token"
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: JARVIS_SETUP_TOKEN
+            valueFrom:
+              secretKeyRef:
+                name: RELEASE-NAME-jarvis
+                key: setup-token
+                optional: true
+
+  - it: reads JARVIS_SETUP_TOKEN as an optional key of existingSecret
+    template: templates/deployment.yaml
+    set:
+      auth.provider: internal
+      auth.existingSecret: jarvis-auth
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: JARVIS_SETUP_TOKEN
+            valueFrom:
+              secretKeyRef:
+                name: jarvis-auth
+                key: setup-token
+                optional: true
+
+  - it: does not add JARVIS_SETUP_TOKEN when no token and no existingSecret are set
+    template: templates/deployment.yaml
+    set:
+      auth.provider: internal
+      auth.secretKey: "deadbeef"
+    asserts:
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: JARVIS_SETUP_TOKEN
+            valueFrom:
+              secretKeyRef:
+                name: RELEASE-NAME-jarvis
+                key: setup-token
+                optional: true
