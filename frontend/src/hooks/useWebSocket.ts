@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useUIStore } from '@/store/uiStore'
 import { COMMENT_COUNTS_KEY } from '@/hooks/useAlertComments'
 import { alertKeySetChanged } from '@/lib/commentCounts'
+import { createWatchdog, WS_WATCHDOG_TIMEOUT_MS } from '@/lib/wsHeartbeat'
 import type {
   WSEvent,
   AlertsUpdatePayload,
@@ -37,6 +38,20 @@ export function useWebSocket() {
       }
     }
 
+    // A half-open connection never fires onclose, so a quiet socket would
+    // look healthy forever. The server sends a heartbeat on every ping tick;
+    // when nothing at all arrives for two of them the socket is abandoned and
+    // replaced, exactly as if it had closed.
+    const watchdog = createWatchdog(WS_WATCHDOG_TIMEOUT_MS, () => {
+      const dead = wsRef.current
+      if (!mountedRef.current || !dead) return
+      wsRef.current = null
+      setWsConnected(false)
+      dead.close()
+      clearReconnectTimeout()
+      reconnectTimeout = setTimeout(connect, getReconnectDelay())
+    })
+
     function connect() {
       if (!mountedRef.current) return
 
@@ -50,6 +65,7 @@ export function useWebSocket() {
       ws.onopen = () => {
         if (!mountedRef.current || wsRef.current !== ws) return
         clearReconnectTimeout()
+        watchdog.kick()
         setWsConnected(true)
         // WS delivers no replay: events broadcast while disconnected are
         // gone. Refetch everything on every (re)connect so the UI recovers
@@ -62,6 +78,7 @@ export function useWebSocket() {
 
       ws.onclose = () => {
         if (!mountedRef.current || wsRef.current !== ws) return
+        watchdog.stop()
         setWsConnected(false)
         clearReconnectTimeout()
         reconnectTimeout = setTimeout(connect, getReconnectDelay())
@@ -74,6 +91,7 @@ export function useWebSocket() {
 
       ws.onmessage = (event: MessageEvent<string>) => {
         if (!mountedRef.current || wsRef.current !== ws) return
+        watchdog.kick()
         try {
           const msg = JSON.parse(event.data) as WSEvent
           handleEvent(msg)
@@ -151,6 +169,7 @@ export function useWebSocket() {
 
     return () => {
       mountedRef.current = false
+      watchdog.stop()
       clearReconnectTimeout()
       wsRef.current?.close()
     }

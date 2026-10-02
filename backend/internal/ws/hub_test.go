@@ -354,3 +354,36 @@ func TestHub_SnapshotBurstToStuckClientLeavesHealthyPeerConnected(t *testing.T) 
 		}
 	}
 }
+
+// A browser cannot observe WebSocket ping frames, so a silently dead
+// connection is only detectable if the server also sends an application-level
+// message on every ping tick (frontend watchdog, useWebSocket).
+func TestHub_SendsHeartbeatMessageOnEveryPingTick(t *testing.T) {
+	hub := NewHub([]string{"http://localhost:5173"}, slog.Default(), nil)
+	hub.pingPeriod = 40 * time.Millisecond
+	go hub.Run()
+	srv := httptest.NewServer(hub.upgraderHandler())
+	defer srv.Close()
+
+	conn, resp, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(srv.URL, "http"), nil)
+	if err != nil {
+		t.Fatalf("dial ws: %v", err)
+	}
+	if resp != nil && resp.Body != nil {
+		_ = resp.Body.Close()
+	}
+	defer func() { _ = conn.Close() }()
+
+	for i := 0; i < 2; i++ {
+		if err := conn.SetReadDeadline(time.Now().Add(time.Second)); err != nil {
+			t.Fatalf("SetReadDeadline: %v", err)
+		}
+		_, msg, err := conn.ReadMessage()
+		if err != nil {
+			t.Fatalf("heartbeat %d: read message: %v (no application-level heartbeat sent)", i+1, err)
+		}
+		if !strings.Contains(string(msg), `"type":"heartbeat"`) {
+			t.Fatalf("heartbeat %d: got %s, want a heartbeat event", i+1, msg)
+		}
+	}
+}

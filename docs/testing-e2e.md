@@ -297,6 +297,7 @@ Quick reference: which spec file covers what. Use this to find the right place f
 | `no-auth-notice.spec.ts` | I1 | NoAuth notice appears and dismiss persists |
 | `websocket.spec.ts` | J1–J4 | Reconnect indicator (force-close via patched WebSocket), `alerts_update` / `claim_set` / `claim_released` / `comment_added` live events |
 | `ws-reconnect.spec.ts` | — | Reconnect jitter (P7): initial connect has no delay; a real disconnect reconnects within the 3-6s jitter window (real wall-clock bounds, not exact-ms fake-clock assertions — those interact unreliably with real WebSocket events); a reconnect triggers exactly one alerts refetch; a stale (superseded) socket's late close event schedules no extra reconnect attempt |
+| `data-status.spec.ts` | — | Honest data state: a failed first load shows an error + Retry instead of the empty state; a stale cluster (mocked `/api/v1/clusters`) gets a banner with the data age; a failed refresh keeps the data and shows a banner; a WebSocket down for 10s shows the interrupted notice; the heartbeat watchdog replaces a silent socket after ~114s (fake WebSocket + `page.clock`, no real socket I/O) |
 
 ### Mode: `internal`
 

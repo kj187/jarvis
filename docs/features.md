@@ -27,6 +27,13 @@ Sections are grouped by a label you choose from the **Grouped** control in the t
 
 Within each section, groups are sorted by recency — the group with the most recently fired alert first, not alphabetically by name — so the freshest problems surface at the top of every section instead of being scattered wherever their alert name happens to sort. The view updates in real time via WebSocket: new alerts appear, resolved alerts disappear, and claim/silence state refreshes without any page reload. If a browser tab falls behind (a slow network, a backgrounded tab) the server closes that stale connection rather than queuing updates indefinitely; the browser automatically reconnects and refetches the current state, so a dropped connection self-heals without user action.
 
+Jarvis never presents missing or old data as if it were current:
+
+- **Could not load alerts** — if the first load of the Active tab fails, an error with a **Retry** button replaces the list. It is never shown as "No alerts", which would read as an all-clear.
+- **Could not refresh alerts** — if a refresh fails while data is already on screen, the data stays and a banner above it says so, with **Retry**.
+- **Stale cluster** — when a cluster's last good poll is older than three poll intervals (at least 60 seconds), a yellow banner names the cluster and the age of its data: the alerts shown are the last known state, not live.
+- **Live connection interrupted** — if the WebSocket stays down for more than 10 seconds, a yellow banner says Jarvis is reconnecting and that alerts refresh every 60 seconds meanwhile. A connection that silently stops delivering (no close event, for example behind a proxy that drops idle connections) is detected too: the server sends a heartbeat every 54 seconds, and after two missed ones the browser replaces the socket.
+
 **Columns:** the grid lays out 1–4 columns depending on window width by default. Pin it to a fixed count (1–6) via **Card columns** in Settings if you'd rather it not reflow as you resize.
 
 ---

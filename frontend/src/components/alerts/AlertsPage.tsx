@@ -17,6 +17,7 @@ import { AlertCardGrid } from './AlertCardGrid'
 import { GroupingControl } from './GroupingControl'
 import { AlertListView } from './AlertListView'
 import { AlertDetailPanel } from './AlertDetailPanel'
+import { DataStatusBanners } from './DataStatusBanners'
 import { matchesAlertSearch, matchesLabelMatchers, matchesStateFilter } from '@/lib/alertUtils'
 import { findDefaultSavedFilter, hasAlertViewParams } from '@/lib/savedFilters'
 import { FILTER_PARAM, LEGACY_MATCHERS_PARAM, formatMatchers, readUrlMatchers } from '@/lib/filterUrl'
@@ -125,7 +126,8 @@ export function AlertsPage() {
   const isSuppressedMode = filters.state === 'suppressed'
   const isActiveMode = !isResolvedMode && !isSuppressedMode
 
-  const { data: liveAlerts = [], isLoading: liveLoading } = useAlerts()
+  const { data: liveData, isLoading: liveLoading, isError: liveError, refetch: retryLive } = useAlerts()
+  const liveAlerts = liveData ?? []
   const resolvedPageSize = useSettingsStore((s) => s.resolvedPageSize)
   const updateSettings = useSettingsStore((s) => s.update)
   const showRecentlyResolved = useSettingsStore((s) => s.showRecentlyResolved)
@@ -420,8 +422,23 @@ export function AlertsPage() {
         </div>
       )}
 
+      {!isResolvedMode && (
+        <DataStatusBanners refreshFailed={liveError && liveData !== undefined} onRetry={() => void retryLive()} />
+      )}
+
       {/* Content */}
-      {isResolvedMode && resolvedError && resolvedAlerts.length === 0 ? (
+      {!isResolvedMode && liveError && liveData === undefined ? (
+        <div className="flex items-center gap-3 px-4 text-sm text-destructive" role="alert" data-testid="live-load-failed">
+          <span>Could not load alerts. This is not an empty list; the alert data is unavailable.</span>
+          <button
+            type="button"
+            className="cursor-pointer rounded-control border border-border px-2 py-1 text-xs text-foreground hover:bg-accent"
+            onClick={() => void retryLive()}
+          >
+            Retry
+          </button>
+        </div>
+      ) : isResolvedMode && resolvedError && resolvedAlerts.length === 0 ? (
         <div className="flex items-center gap-3 px-4 text-sm text-destructive" role="alert">
           <span>Failed to load resolved alerts.</span>
           <button
