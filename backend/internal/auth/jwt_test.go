@@ -11,7 +11,7 @@ import (
 
 var testKey = []byte("aaaabbbbccccddddeeeeffffgggghhhh") // 32 bytes
 
-func TestCreateAndValidateToken(t *testing.T) {
+func TestCreateAndParseToken(t *testing.T) {
 	user := &auth.User{
 		ID:       "user-1",
 		Username: "alice",
@@ -27,7 +27,7 @@ func TestCreateAndValidateToken(t *testing.T) {
 		t.Fatal("empty token")
 	}
 
-	got, err := auth.ValidateToken(testKey, tok)
+	got, err := auth.ParseToken(testKey, tok)
 	if err != nil {
 		t.Fatalf("validate: %v", err)
 	}
@@ -39,18 +39,18 @@ func TestCreateAndValidateToken(t *testing.T) {
 	}
 }
 
-func TestValidateToken_WrongKey(t *testing.T) {
+func TestParseToken_WrongKey(t *testing.T) {
 	user := &auth.User{ID: "u1", Username: "bob", Role: "user", Provider: "internal"}
 	tok, _ := auth.CreateToken(testKey, user)
 
 	other := []byte("00000000111111112222222233333333")
-	_, err := auth.ValidateToken(other, tok)
+	_, err := auth.ParseToken(other, tok)
 	if err == nil {
 		t.Fatal("expected error for wrong key")
 	}
 }
 
-func TestValidateToken_Tampered(t *testing.T) {
+func TestParseToken_Tampered(t *testing.T) {
 	user := &auth.User{ID: "u1", Username: "bob", Role: "user", Provider: "internal"}
 	tok, _ := auth.CreateToken(testKey, user)
 
@@ -60,13 +60,13 @@ func TestValidateToken_Tampered(t *testing.T) {
 	}
 	parts[1] = parts[1] + "tampered"
 	tampered := strings.Join(parts, ".")
-	_, err := auth.ValidateToken(testKey, tampered)
+	_, err := auth.ParseToken(testKey, tampered)
 	if err == nil {
 		t.Fatal("expected error for tampered token")
 	}
 }
 
-func TestValidateToken_Expired(t *testing.T) {
+func TestParseToken_Expired(t *testing.T) {
 	// Build an already-expired token manually.
 	type claims struct {
 		jwt.RegisteredClaims
@@ -85,25 +85,22 @@ func TestValidateToken_Expired(t *testing.T) {
 	}
 	tok, _ := jwt.NewWithClaims(jwt.SigningMethodHS256, c).SignedString(testKey)
 
-	_, err := auth.ValidateToken(testKey, tok)
+	_, err := auth.ParseToken(testKey, tok)
 	if err == nil {
 		t.Fatal("expected error for expired token")
 	}
 }
 
-func TestValidateToken_Revoked(t *testing.T) {
-	user := &auth.User{ID: "u1", Username: "bob", Role: "user", Provider: "internal"}
-	tok, err := auth.CreateToken(testKey, user)
+func TestParseToken_CarriesTokenVersion(t *testing.T) {
+	tok, err := auth.CreateToken(testKey, &auth.User{ID: "u1", Username: "bob", Role: "user", Provider: "internal", TokenVersion: 7})
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
-
-	if err := auth.RevokeToken(testKey, tok); err != nil {
-		t.Fatalf("revoke: %v", err)
+	got, err := auth.ParseToken(testKey, tok)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
 	}
-
-	_, err = auth.ValidateToken(testKey, tok)
-	if err == nil {
-		t.Fatal("expected revoked token to fail validation")
+	if got.TokenVersion != 7 {
+		t.Fatalf("TokenVersion = %d, want 7", got.TokenVersion)
 	}
 }

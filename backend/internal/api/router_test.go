@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/kj187/jarvis/backend/internal/auth"
 	"github.com/kj187/jarvis/backend/internal/cluster"
@@ -208,7 +209,6 @@ func newTestEchoInternal(t *testing.T, authMode string) *echo.Echo {
 		t.Fatalf("migrate: %v", err)
 	}
 	t.Cleanup(func() { _ = database.Close() })
-	auth.SetSecretKey([]byte("aaaabbbbccccddddeeeeffffgggghhhh"))
 
 	userStore := users.NewStore(database, dialect)
 	provider := auth.NewInternalProvider(userStore)
@@ -305,8 +305,9 @@ func TestAuthMode_ReadRoutes(t *testing.T) {
 }
 
 func TestWebSocket_FullProtectRequiresAuth(t *testing.T) {
-	srv := newTestRouterWithAuthMode(t, "full_protect")
-	defer srv.Close()
+	env := newRevocationEnv(t)
+	srv := env.startMode("full_protect", time.Minute)
+	alice := env.addUser("alice", "user")
 	client := &http.Client{}
 
 	// Without a session cookie the request must be rejected by RequireAuth
@@ -325,14 +326,8 @@ func TestWebSocket_FullProtectRequiresAuth(t *testing.T) {
 	// With a valid session cookie the request must pass the middleware and
 	// reach the WS handler: a plain GET without upgrade headers then fails
 	// the websocket handshake with 400 — anything but 401 proves passthrough.
-	token, err := auth.CreateToken([]byte("aaaabbbbccccddddeeeeffffgggghhhh"), &auth.User{
-		ID: "u1", Username: "alice", Role: "user", Provider: "internal",
-	})
-	if err != nil {
-		t.Fatalf("create token: %v", err)
-	}
 	req2, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, srv.URL+"/ws", nil)
-	req2.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: token})
+	req2.AddCookie(env.cookie(alice))
 	resp2, err := client.Do(req2)
 	if err != nil {
 		t.Fatalf("GET /ws with session: %v", err)

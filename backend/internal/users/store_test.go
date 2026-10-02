@@ -437,3 +437,58 @@ func TestCreateFirstAdmin_Concurrent_PostgreSQL(t *testing.T) {
 	}
 	assertExactlyOneFirstAdmin(t, users.NewStore(database, dialect), 8)
 }
+
+func assertBumpTokenVersion(t *testing.T, s *users.Store, u *users.User) {
+	t.Helper()
+	ctx := context.Background()
+	if u.TokenVersion != 0 {
+		t.Fatalf("new user TokenVersion = %d, want 0", u.TokenVersion)
+	}
+	for want := 1; want <= 2; want++ {
+		if err := s.BumpTokenVersion(ctx, u.ID); err != nil {
+			t.Fatalf("bump: %v", err)
+		}
+		got, err := s.GetByID(ctx, u.ID)
+		if err != nil || got == nil {
+			t.Fatalf("get: %v %v", got, err)
+		}
+		if got.TokenVersion != want {
+			t.Fatalf("TokenVersion = %d, want %d", got.TokenVersion, want)
+		}
+	}
+}
+
+func TestBumpTokenVersion(t *testing.T) {
+	s := newTestStore(t)
+	u, err := s.Create(context.Background(), &users.CreateUser{Username: "ivy", Role: "user", Provider: "internal"})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	assertBumpTokenVersion(t, s, u)
+}
+
+func TestBumpTokenVersion_PostgreSQL(t *testing.T) {
+	dsn := os.Getenv("JARVIS_TEST_POSTGRES_DSN")
+	if dsn == "" {
+		t.Skip("JARVIS_TEST_POSTGRES_DSN not set — skipping PostgreSQL-backed test")
+	}
+	database, dialect, err := db.Open(dsn)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	t.Cleanup(func() { _ = database.Close() })
+	for i := 0; i < 2; i++ {
+		if err := db.Migrate(database, dialect); err != nil {
+			t.Fatalf("migrate #%d: %v", i+1, err)
+		}
+	}
+	s := users.NewStore(database, dialect)
+	ctx := context.Background()
+	name := "pg-bump-" + t.Name()
+	t.Cleanup(func() { _, _ = database.ExecContext(ctx, `DELETE FROM users WHERE username = $1`, name) })
+	u, err := s.Create(ctx, &users.CreateUser{Username: name, Role: "user", Provider: "internal"})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	assertBumpTokenVersion(t, s, u)
+}
