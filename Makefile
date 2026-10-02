@@ -2,7 +2,8 @@ COMPOSE_DEV        = podman compose -f compose.dev.yml
 COMPOSE_DEMO       = podman compose -p jarvis-demo -f compose.demo.yml
 COMPOSE_TEST_DEPS  = podman compose -f compose.dev-dependencies.yml
 COMPOSE_E2E        = podman compose -f compose.e2e.yml
-GITLEAKS           = podman run --rm -v "$(CURDIR):/repo:ro,z" zricethezav/gitleaks:latest
+GITLEAKS_IMAGE     = $(shell cat scripts/gitleaks-image)
+GITLEAKS           = podman run --rm -v "$(CURDIR):/repo:ro,z" $(GITLEAKS_IMAGE)
 FRONTEND_CONTAINER = jarvis_frontend_1
 DEMO_AM_URL        = http://localhost:$(DEMO_AM_PORT)
 
@@ -16,7 +17,7 @@ DEMO_AM_URL        = http://localhost:$(DEMO_AM_PORT)
         verify test-all test-backend test-frontend test-frontend-unit fuzz-backend \
         helm-lint helm-test \
         lint gosec govulncheck audit security-all check-agent-context test-scripts \
-        scan scan-history scan-staged scan-all \
+        scan scan-history scan-staged scan-canary scan-all \
         build \
         e2e-build e2e-down e2e e2e-mode e2e-fast e2e-screenshots e2e-screenshot release-video \
         fixtures-create fixtures-remove fixtures-partial-resolve fixtures-refire fixtures-silence fixtures-unsilence \
@@ -160,12 +161,15 @@ scan: ## gitleaks: scan all source files (respects .gitleaks.toml)
 	$(GITLEAKS) detect --source=/repo --no-git --verbose
 
 scan-history: ## gitleaks: scan full git history
-	podman run --rm -v "$(CURDIR):/repo:ro,z" -w /repo zricethezav/gitleaks:latest detect --verbose
+	podman run --rm -v "$(CURDIR):/repo:ro,z" -w /repo $(GITLEAKS_IMAGE) detect --verbose
 
 scan-staged: ## gitleaks: scan staged changes only (mirrors pre-commit behavior)
 	git diff --cached | $(GITLEAKS) detect --pipe --redact
 
-scan-all: scan scan-history scan-staged ## gitleaks: run all three scans (files + history + staged)
+scan-canary: ## gitleaks: assert .gitleaks.toml still detects synthetic secrets
+	scripts/check-gitleaks-canary.sh
+
+scan-all: scan scan-history scan-staged scan-canary ## gitleaks: run all scans (files + history + staged + canary)
 
 # ── Build ──────────────────────────────────────────────────────────────────────
 

@@ -57,10 +57,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # ratchet:actions/checkout@v7.0.1
         with:
           fetch-depth: 0
+      # Fails when .gitleaks.toml stops detecting synthetic secrets (a config without rules reports "no leaks found").
+      - name: Gitleaks canary
+        run: CONTAINER_CMD=docker scripts/check-gitleaks-canary.sh
       - name: Run gitleaks
         uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # ratchet:gitleaks/gitleaks-action@v3.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_VERSION: 8.24.3
 
   agent-context:
     name: Agent Context

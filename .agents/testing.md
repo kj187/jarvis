@@ -150,7 +150,8 @@ reported as skipped rather than passing. Container engine is overridable:
 
 `make verify` complements the pre-commit hook and CI, it does not replace
 them: it does not run the E2E suites (`make test-frontend`, ~8 min per auth
-mode) or the gitleaks history scan.
+mode) or the gitleaks history scan (`make scan-history`; run it from the
+main checkout — the container cannot follow a git worktree's `.git` file).
 
 ## Where the rest lives
 
@@ -175,7 +176,7 @@ mode) or the gitleaks history scan.
 | always | `scripts/check-changelogs.sh` — chart changes (outside `tests/`) must update `charts/jarvis/CHANGELOG.md`; every chart-changelog version section starts with a non-empty `### Breaking Changes`; changed `.github/release-notes/*.md` contain a Breaking Changes heading (a no-op when none of those paths are staged) |
 | always | `scripts/check-agent-context.sh` (also `make check-agent-context`) — adapters stay thin, skill frontmatter (`name` = directory, `description` ≤ 1024), `AGENTS.md` ≤ 12,000 bytes, every path mentioned in `AGENTS.md` and every `.agents/…` reference exists, backend/frontend resolved-filter conformance fixtures byte-identical, every cited `Invariant #<n>` exists (`docs/ai-agents.md`) |
 | always | `node scripts/check-design-drift.mjs` (also a CI step) — no raw Tailwind palette classes, colour literals or radius classes in `frontend/src` (semantic tokens only — `rounded-control`, `rounded-surface`, …; `lib/avatarUtils.ts` and `lib/heatmapUtils.ts` are allow-listed data-viz) · `node scripts/design-tokens.mjs --check` (also a CI step in the Agent Context job) — the generated colour files (`frontend/src/generated/tokens.css`, `website/.vitepress/theme/generated-tokens.css`, `frontend/e2e/video/generated-theme.ts`) must match `design/tokens.json`; `lib/themeTokens.test.ts` reads the generated CSS |
-| always | **gitleaks** secret scan of the staged diff (via podman, config `.gitleaks.toml`) |
+| always | **gitleaks** secret scan of the staged diff (via podman, config `.gitleaks.toml`, image pinned in `scripts/gitleaks-image`); when `.gitleaks.toml`, `scripts/gitleaks-image` or the canary script is staged, also `scripts/check-gitleaks-canary.sh` |
 
 ```bash
 git config core.hooksPath .githooks   # enable once (or: make setup)
@@ -187,14 +188,14 @@ Playwright E2E runs **only in CI** (too slow for pre-commit).
 
 ## CI Pipeline
 
-Split across five workflows.
+Split across six workflows.
 
 ### `.github/workflows/ci.yml`
 
 ```yaml
 pin-check:           # ratchet: verify all GitHub Actions are SHA-pinned (globs .github/workflows/*.yml)
 dco:                 # PR-only: every commit must carry a Signed-off-by trailer (git commit -s)
-secrets:             # gitleaks secret scanning
+secrets:             # scripts/check-gitleaks-canary.sh (config must still detect synthetic secrets, also under testdata/) + gitleaks over the PR commit range (action pinned to gitleaks 8.24.3)
 agent-context:       # scripts/check-agent-context.sh (same rules as the pre-commit hook) + test scripts/release-body.sh
 
 # Backend runs as three parallel jobs on separate runners (the PostgreSQL tests never share a
@@ -259,6 +260,12 @@ Never add a workflow-level `paths` filter to `ci.yml` / `e2e.yml` for the same r
 
 CodeQL analysis for `go` and `javascript-typescript` — on push/PR to `main` and
 weekly (Monday cron).
+
+### `.github/workflows/secret-scan-weekly.yml`
+
+Canary plus gitleaks over the full git history — weekly (Monday cron) and on
+demand (`workflow_dispatch`). Catches secrets that an earlier scan config
+missed.
 
 ### `.github/workflows/scorecard.yml`
 
