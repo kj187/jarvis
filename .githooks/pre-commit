@@ -52,6 +52,10 @@ if git diff --cached --name-only | grep -qE "^(scripts/(release-body|test-releas
   scripts/test-release-body.sh
 fi
 
+# ── Image pins (always; cheap) — every FROM carries a digest, pnpm is pinned ──
+echo "  [Image pins] Checking Containerfile digests and pnpm pin..."
+scripts/check-image-pins.sh
+
 # ── AI agent context (always; cheap, checks the working tree) ─────────────────
 echo "  [Agent context] Checking skills, tool adapters and AGENTS.md..."
 scripts/check-agent-context.sh

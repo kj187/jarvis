@@ -22,7 +22,7 @@ services:
   frontend:
     image: node:22-alpine
     working_dir: /app
-    command: sh -c "npm install -g pnpm --prefix /usr/local && pnpm config set store-dir /pnpm-store && pnpm install --ignore-scripts && pnpm dev --host"
+    command: sh -c "npm install -g pnpm@11.9.0 --prefix /usr/local && pnpm config set store-dir /pnpm-store && pnpm install --ignore-scripts && pnpm dev --host"
     depends_on:
       backend:
         condition: service_healthy
