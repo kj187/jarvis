@@ -103,10 +103,21 @@ can hammer it and keep the Alertmanager poll loop running constantly. Read-only 
 
 ---
 
+## Credentials in cluster URLs
+
+A `user:password@` in `JARVIS_CLUSTER_N_ALERTMANAGER_URL` (or `PROMETHEUS_URL`)
+is removed from everything the browser receives — `/api/v1/clusters`, the
+silence links and the Alertmanager link in the UI — and Jarvis logs a warning at
+startup. The URL Jarvis polls keeps the credentials. Prefer the cluster auth
+settings (basic auth, bearer token), which are kept out of the environment
+listing in Kubernetes when they come from a Secret.
+
 ## Metrics Endpoint
 
-`GET /metrics` is public by design, like `/health`, and exposes aggregate
-operational data but never alert names, labels, or annotations. See
+`GET /metrics` is public by default, like `/health`, and exposes aggregate
+operational data and the `host:port` of each Alertmanager member, but never
+alert names, labels, or annotations. `JARVIS_METRICS_TOKEN` makes it require a
+bearer token. See
 [Monitoring and metrics](metrics.md) for the exposure details, setup, and full
 metric reference.
 

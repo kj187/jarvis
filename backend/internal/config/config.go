@@ -31,6 +31,8 @@ type Config struct {
 	// AllowedHosts is the optional Host-header allow-list (lower-case, "host"
 	// or "host:port"); empty disables the check.
 	AllowedHosts []string
+	// MetricsToken, when set, is the bearer token GET /metrics requires.
+	MetricsToken string
 	// TrustedProxies are the peers whose X-Forwarded-For is believed when
 	// deriving the client IP; empty means the TCP peer address is always used.
 	TrustedProxies []*net.IPNet
@@ -328,6 +330,7 @@ func Load() (*Config, error) {
 		RunbookBaseURL:    getEnv("JARVIS_RUNBOOK_BASE_URL", ""),
 		AllowedOrigins:    allowedOrigins,
 		AllowedHosts:      allowedHosts,
+		MetricsToken:      getEnv("JARVIS_METRICS_TOKEN", ""),
 		TrustedProxies:    trustedProxies,
 		Clusters:          clusters,
 		PprofAddr:         getEnv("JARVIS_PPROF_ADDR", ""),
@@ -462,7 +465,7 @@ func parseClusters() ([]ClusterConfig, error) {
 			Name:                name,
 			AlertmanagerURL:     members[0].URL,
 			AlertmanagerLinkURL: members[0].LinkURL,
-			PrometheusURL:       os.Getenv(prefix + "PROMETHEUS_URL"),
+			PrometheusURL:       StripUserinfo(os.Getenv(prefix + "PROMETHEUS_URL")),
 			Auth:                auth,
 			Members:             members,
 		})
@@ -570,9 +573,13 @@ func parseClusterHeaders(prefix string) map[string]string {
 	return headers
 }
 
-// resolveAlertmanagerLinkURL returns the browser-visible Alertmanager URL.
-// When hostAlias is set its host/scheme replaces those of alertmanagerURL.
+// resolveAlertmanagerLinkURL returns the browser-visible Alertmanager URL,
+// without credentials. When hostAlias is set its host/scheme replaces those of alertmanagerURL.
 func resolveAlertmanagerLinkURL(alertmanagerURL, hostAlias string) string {
+	return StripUserinfo(applyHostAlias(alertmanagerURL, hostAlias))
+}
+
+func applyHostAlias(alertmanagerURL, hostAlias string) string {
 	if hostAlias == "" {
 		return alertmanagerURL
 	}
@@ -647,4 +654,22 @@ func parseTrustedProxies(raw string) ([]*net.IPNet, error) {
 		nets = append(nets, n)
 	}
 	return nets, nil
+}
+
+// StripUserinfo removes "user:password@" from a URL. Every URL shown to a
+// browser goes through it; the URL Jarvis itself polls keeps its credentials.
+// An unparsable value is returned unchanged.
+func StripUserinfo(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil || u.User == nil {
+		return raw
+	}
+	u.User = nil
+	return u.String()
+}
+
+// HasUserinfo reports whether a URL carries "user:password@" credentials.
+func HasUserinfo(raw string) bool {
+	u, err := url.Parse(raw)
+	return err == nil && u.User != nil
 }

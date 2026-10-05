@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -346,5 +347,36 @@ func TestGetClusters_NoFreshnessSource_FieldsOmitted(t *testing.T) {
 	got := getClustersResponse(t, srv)
 	if len(got) != 1 || got[0].Stale || got[0].LastSuccessfulPollAt != nil {
 		t.Errorf("got %+v, want fresh cluster without timestamp", got)
+	}
+}
+
+func TestGetClusters_NeverExposesURLCredentials(t *testing.T) {
+	registry := cluster.NewRegistry([]config.ClusterConfig{
+		{
+			Name:                "prod",
+			AlertmanagerURL:     "http://user:s3cretpw@am1:9093",
+			AlertmanagerLinkURL: "http://user:s3cretpw@am1:9093",
+			PrometheusURL:       "http://pu:ppw@prom:9090",
+			Members: []config.MemberConfig{
+				{Name: "am1:9093", URL: "http://user:s3cretpw@am1:9093", LinkURL: "http://user:s3cretpw@am1:9093"},
+				{Name: "am2:9093", URL: "http://user:s3cretpw@am2:9093", LinkURL: "http://user:s3cretpw@am2:9093"},
+			},
+		},
+	})
+	srv := newTestServerWithRegistry(t, registry)
+
+	rec := httptest.NewRecorder()
+	c := echo.New().NewContext(httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/clusters", nil), rec)
+	if err := srv.getClusters(c); err != nil {
+		t.Fatalf("getClusters: %v", err)
+	}
+	body := rec.Body.String()
+	for _, secret := range []string{"user:", "s3cretpw", "pu:", "ppw", "@"} {
+		if strings.Contains(body, secret) {
+			t.Errorf("/clusters body contains %q: %s", secret, body)
+		}
+	}
+	if !strings.Contains(body, "http://am1:9093") || !strings.Contains(body, "http://prom:9090") {
+		t.Errorf("/clusters lost the credential-free URLs: %s", body)
 	}
 }

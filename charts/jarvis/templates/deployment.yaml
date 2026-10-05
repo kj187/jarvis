@@ -121,6 +121,13 @@ spec:
                   key: {{ .Values.auth.existingSecretKeys.setupToken }}
                   optional: true
             {{- end }}
+            {{- if or .Values.metrics.token .Values.metrics.existingSecret }}
+            - name: JARVIS_METRICS_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.metrics.existingSecret | default (include "jarvis.fullname" .) }}
+                  key: {{ .Values.metrics.existingSecretKey }}
+            {{- end }}
             {{- if eq .Values.auth.provider "oidc" }}
             - name: JARVIS_AUTH_OIDC_CLIENT_SECRET
               valueFrom:

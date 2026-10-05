@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	amclient "github.com/kj187/jarvis/backend/internal/alertmanager"
 	"github.com/kj187/jarvis/backend/internal/auth"
+	"github.com/kj187/jarvis/backend/internal/config"
 	"github.com/kj187/jarvis/backend/internal/fanout"
 	"github.com/kj187/jarvis/backend/internal/models"
 	"github.com/labstack/echo/v4"
@@ -30,7 +31,7 @@ func (s *Server) getSilences(c echo.Context) error {
 			continue
 		}
 		for _, rs := range s.silenceStore.GetCluster(cl.Name) {
-			allSilences = append(allSilences, convertSilence(rs, cl.Name, cl.AlertmanagerLinkURL))
+			allSilences = append(allSilences, convertSilence(rs, cl.Name, config.StripUserinfo(cl.AlertmanagerLinkURL)))
 		}
 	}
 	return c.JSON(http.StatusOK, allSilences)

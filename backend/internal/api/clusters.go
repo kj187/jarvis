@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 
+	"github.com/kj187/jarvis/backend/internal/config"
 	"github.com/kj187/jarvis/backend/internal/history"
 	"github.com/kj187/jarvis/backend/internal/models"
 	"github.com/kj187/jarvis/backend/internal/version"
@@ -60,12 +61,12 @@ func (s *Server) getClusters(c echo.Context) error {
 			if up {
 				healthy = true
 			}
-			members = append(members, models.MemberInfo{Name: m.Name, URL: m.LinkURL, Healthy: up})
+			members = append(members, models.MemberInfo{Name: m.Name, URL: config.StripUserinfo(m.LinkURL), Healthy: up})
 		}
 		info := models.ClusterInfo{
 			Name:            cl.Name,
-			AlertmanagerURL: cl.AlertmanagerLinkURL,
-			PrometheusURL:   cl.PrometheusURL,
+			AlertmanagerURL: config.StripUserinfo(cl.AlertmanagerLinkURL),
+			PrometheusURL:   config.StripUserinfo(cl.PrometheusURL),
 			Healthy:         healthy,
 			AlertCount:      clusterAlertCount[cl.Name],
 		}

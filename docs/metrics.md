@@ -3,8 +3,10 @@
 Jarvis exposes a Prometheus-compatible `/metrics` endpoint so the alerting
 stack it fronts can also monitor Jarvis itself. The endpoint is **public**
 (like `/health`, `/health/live` and `/health/ready`) — it bypasses `JARVIS_AUTH_MODE=full_protect` — and exposes
-only aggregate counts and configured cluster names, never alert names,
-labels, or annotations.
+only aggregate counts, configured cluster names and the `host:port` of each
+Alertmanager member (the `member` label), never alert names, labels, or
+annotations. To restrict it, set [`JARVIS_METRICS_TOKEN`](configuration.md#jarvis_metrics_token)
+([Protecting the endpoint](#protecting-the-endpoint)).
 
 Monitoring Jarvis closes an easy blind spot: the UI can remain reachable while
 an Alertmanager member is no longer being polled, a PostgreSQL follower has a
@@ -23,6 +25,26 @@ scrape_configs:
     static_configs:
       - targets: ["jarvis:8080"]
 ```
+
+### Protecting the endpoint
+
+With `JARVIS_METRICS_TOKEN` set, `GET /metrics` answers `401` unless the request
+carries `Authorization: Bearer <token>`; every other route is unaffected. Without
+it the endpoint stays open, so existing scrape configurations keep working.
+Prometheus sends the token with `authorization`:
+
+```yaml
+scrape_configs:
+  - job_name: jarvis
+    authorization:
+      credentials_file: /etc/prometheus/secrets/jarvis-metrics-token
+    static_configs:
+      - targets: ["jarvis:8080"]
+```
+
+The Helm chart takes `metrics.token` (or `metrics.existingSecret`) and configures
+the ServiceMonitor to send it; annotation-based scraping (`metrics.podAnnotations`)
+cannot, so use a ServiceMonitor or your own scrape config when the token is set.
 
 For Kubernetes, the Helm chart supports Prometheus Operator discovery or pod
 annotations:

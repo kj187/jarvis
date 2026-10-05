@@ -55,9 +55,18 @@ service:
   port: 80
 
 # Prometheus metrics. The /metrics endpoint itself is always exposed by the
-# app (public, like /health) — this section only controls how a Prometheus
-# instance discovers and scrapes it.
+# app (public, like /health, unless a token is set) — this section controls how
+# a Prometheus instance discovers and scrapes it.
 metrics:
+  # Optional bearer token for /metrics (JARVIS_METRICS_TOKEN). Empty keeps the
+  # endpoint open. When set, every scrape needs "Authorization: Bearer <token>";
+  # the ServiceMonitor below sends it automatically, annotation-based scraping
+  # (podAnnotations) and other scrapers must be configured with it. Use
+  # existingSecret in production to keep the token out of values.
+  token: ""
+  # Use an existing Kubernetes Secret holding the token under existingSecretKey.
+  existingSecret: ""
+  existingSecretKey: metrics-token
   serviceMonitor:
     # Requires the Prometheus Operator CRDs (monitoring.coreos.com/v1) in the cluster.
     enabled: false
