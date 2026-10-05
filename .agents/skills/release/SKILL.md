@@ -481,9 +481,9 @@ artifacts and settings untouched.
 
 Background reference, not needed to run the flow — read
 `.agents/skills/release/references/github-actions.md` when debugging a
-failed release workflow run (step 18/19): the three jobs in
-`release.yml` (`build-and-push` → `chart` → `release`: build, sign, SBOM,
-GitHub Release) and the Helm chart workflow's existence/image guards.
+failed release workflow run (step 18/19): the four jobs in
+`release.yml` (`ci-gate` → `build-and-push` → `chart` → `release`: CI check,
+build, sign, SBOM, GitHub Release) and the Helm chart workflow's existence/image guards.
 
 ---
 
