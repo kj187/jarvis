@@ -46,6 +46,12 @@ cross-site form or bodyless `fetch` would still run the handler, so this closes
 login CSRF and bodyless writes. Non-browser clients (curl, scripts) send neither
 header and are unaffected.
 
+**Host and client IP.** `JARVIS_ALLOWED_HOSTS` (off by default) rejects requests
+whose `Host` header is not on the list with `421`, which stops DNS-rebinding and
+forged-Host requests from reaching the API. The client IP in the logs is the TCP
+peer; `X-Forwarded-For` and `X-Real-IP` only count when the peer is listed in
+`JARVIS_TRUSTED_PROXIES`, so a caller cannot choose its own `remote_ip`.
+
 The session cookie is `HttpOnly`, `SameSite=Lax` and `Secure` when the request
 is HTTPS or carries `X-Forwarded-Proto: https`. `JARVIS_COOKIE_SECURE=true`
 forces `Secure` for a TLS-terminating proxy that does not send that header.

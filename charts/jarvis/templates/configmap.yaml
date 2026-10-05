@@ -15,6 +15,12 @@ data:
   {{- if .Values.config.allowedOrigins }}
   JARVIS_ALLOWED_ORIGINS: {{ .Values.config.allowedOrigins | quote }}
   {{- end }}
+  {{- if .Values.config.allowedHosts }}
+  JARVIS_ALLOWED_HOSTS: {{ .Values.config.allowedHosts | quote }}
+  {{- end }}
+  {{- if .Values.config.trustedProxies }}
+  JARVIS_TRUSTED_PROXIES: {{ .Values.config.trustedProxies | quote }}
+  {{- end }}
   {{- if .Values.config.silenceDurations }}
   JARVIS_SILENCE_DURATIONS: {{ .Values.config.silenceDurations | quote }}
   {{- end }}

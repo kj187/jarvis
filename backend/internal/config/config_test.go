@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -792,6 +793,70 @@ func TestLoad_CookieSecure(t *testing.T) {
 			}
 			if cfg.CookieSecure != tc.want {
 				t.Errorf("CookieSecure = %q, want %q", cfg.CookieSecure, tc.want)
+			}
+		})
+	}
+}
+
+func TestLoad_AllowedHosts(t *testing.T) {
+	t.Setenv("JARVIS_AUTH_PROVIDER", "none")
+	t.Setenv("JARVIS_CLUSTER_1_NAME", "")
+
+	t.Setenv("JARVIS_ALLOWED_HOSTS", "")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	if len(cfg.AllowedHosts) != 0 {
+		t.Errorf("AllowedHosts = %v, want empty by default", cfg.AllowedHosts)
+	}
+
+	t.Setenv("JARVIS_ALLOWED_HOSTS", " Jarvis.Corp , jarvis.internal:8443,,")
+	cfg, err = Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	want := []string{"jarvis.corp", "jarvis.internal:8443"}
+	if !slices.Equal(cfg.AllowedHosts, want) {
+		t.Errorf("AllowedHosts = %v, want %v", cfg.AllowedHosts, want)
+	}
+}
+
+func TestLoad_TrustedProxies(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		env     string
+		want    []string
+		wantErr bool
+	}{
+		{"empty", "", nil, false},
+		{"cidr", "10.0.0.0/8", []string{"10.0.0.0/8"}, false},
+		{"plain IPv4 becomes /32", "192.0.2.7", []string{"192.0.2.7/32"}, false},
+		{"plain IPv6 becomes /128", "2001:db8::1", []string{"2001:db8::1/128"}, false},
+		{"list with spaces", "10.0.0.0/8, 172.16.0.0/12", []string{"10.0.0.0/8", "172.16.0.0/12"}, false},
+		{"garbage", "not-an-ip", nil, true},
+		{"bad prefix", "10.0.0.0/99", nil, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("JARVIS_AUTH_PROVIDER", "none")
+			t.Setenv("JARVIS_CLUSTER_1_NAME", "")
+			t.Setenv("JARVIS_TRUSTED_PROXIES", tc.env)
+			cfg, err := Load()
+			if tc.wantErr {
+				if err == nil {
+					t.Fatal("expected an error for an invalid JARVIS_TRUSTED_PROXIES")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("Load() error: %v", err)
+			}
+			var got []string
+			for _, n := range cfg.TrustedProxies {
+				got = append(got, n.String())
+			}
+			if !slices.Equal(got, tc.want) {
+				t.Errorf("TrustedProxies = %v, want %v", got, tc.want)
 			}
 		})
 	}

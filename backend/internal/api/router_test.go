@@ -42,6 +42,11 @@ func newTestRouterWithDB(t *testing.T, origins []string) (*httptest.Server, *sql
 // RemoteAddr and headers.
 func newTestEchoWithDB(t *testing.T, origins []string) (*echo.Echo, *sql.DB) {
 	t.Helper()
+	return newTestEchoWithConfig(t, &config.Config{AllowedOrigins: origins})
+}
+
+func newTestEchoWithConfig(t *testing.T, cfg *config.Config) (*echo.Echo, *sql.DB) {
+	t.Helper()
 	database, dialect, err := idb.Open(":memory:")
 	if err != nil {
 		t.Fatalf("open db: %v", err)
@@ -57,8 +62,6 @@ func newTestEchoWithDB(t *testing.T, origins []string) (*echo.Echo, *sql.DB) {
 	hub := ws.NewHub(nil, nil, metrics.New("test"))
 	go hub.Run()
 	registry := cluster.NewRegistry(nil)
-	cfg := &config.Config{AllowedOrigins: origins}
-
 	e := NewRouter(alertStore, history.NewSilenceStore(), store, hub, registry, cfg, embed.FS{}, &fakeTriggerer{}, auth.NoneProvider{}, userStore, settings.NewStore(database, dialect), globalsettings.NewStore(database, dialect), metrics.New("test"), fanout.NoopFanout{})
 	return e, database
 }
