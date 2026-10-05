@@ -23,7 +23,9 @@ CORS from `JARVIS_ALLOWED_ORIGINS` (credentials allowed).
 
 ```
 # ── Health / Metrics / Auth / Setup ──────────────────────────────────────────
-GET    /health                                   None        → { status: "ok" }
+GET    /health                                   None        → { status: "ok" }  (legacy, process only)
+GET    /health/live                              None        → { status: "ok" }  (process only, never touches the DB)
+GET    /health/ready                             None        → 200 { status: "ok" } | 503 { status: "unavailable" }  (DB ping, 2 s timeout, result cached 5 s; Alertmanager state is deliberately not part of it)
 GET    /metrics                                  None        → Prometheus exposition format (see internal/metrics below)
 GET    /auth/info                                None        → { mode, loginUrl, setupRequired, setupTokenRequired, runbookBaseUrl }
 POST   /auth/login                               None  (RL)  Body: { username, password } → user + Set-Cookie  (global 30/min rate limit)
@@ -44,7 +46,7 @@ WS     /ws                                       full_protect?  (origin checked 
 #        session cookie via RequireAuth — /ws streams the full alert snapshot)
 
 # ── Status / Version ─────────────────────────────────────────────────────────
-GET    /api/v1/status                            full_protect?  → { status, clusters, alerts, ws_clients, leader, poll_interval_seconds, resolved_buffer_ttl_seconds }
+GET    /api/v1/status                            full_protect?  → { status ("ok"|"degraded" when the DB ping fails), database, clusters, alerts, ws_clients, leader, poll_interval_seconds, resolved_buffer_ttl_seconds }
 #        leader: this pod's current leader-election state (internal/leader) — always true on SQLite
 GET    /api/v1/info                              full_protect?  → { version }
 

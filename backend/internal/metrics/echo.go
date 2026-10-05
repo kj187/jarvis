@@ -8,12 +8,14 @@ import (
 )
 
 // skipHTTPMetrics are routes excluded from HTTP metrics: /metrics to avoid
-// self-scraping noise, /health as a trivial liveness probe, /ws because a
+// self-scraping noise, /health, /health/live and /health/ready as kubelet probes, /ws because a
 // long-lived WebSocket upgrade has no meaningful "request duration".
 var skipHTTPMetrics = map[string]struct{}{
-	"/metrics": {},
-	"/health":  {},
-	"/ws":      {},
+	"/metrics":      {},
+	"/health":       {},
+	"/health/live":  {},
+	"/health/ready": {},
+	"/ws":           {},
 }
 
 // EchoMiddleware records jarvis_http_requests_total and

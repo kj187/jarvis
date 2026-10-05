@@ -368,6 +368,7 @@ export function fetchClusters(): Promise<ClusterInfo[]> {
 
 export function fetchStatus(): Promise<{
   status: string
+  database: string
   clusters: number
   alerts: number
   ws_clients: number

@@ -114,6 +114,9 @@ section is only the code map and what the prose there does not tell you. Read
   once. Not gated: `AlertStore`/resolved-buffer bookkeeping and WS broadcasts.
 - `jarvis_leader` is set from `Recorder.onLeadershipChange`; `GET /api/v1/status`
   reports `"leader"` through the `pollTriggerer` interface.
+- `GET /api/v1/clusters` takes member health from `Recorder.ClusterUpStates()`
+  (a follower answers from the last consumed snapshot, since its own registry
+  never polls) and `stale` from `ClusterFreshness()`.
 
 ### Leader-only polling and snapshot distribution (PostgreSQL only)
 

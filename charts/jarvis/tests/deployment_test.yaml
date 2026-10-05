@@ -15,6 +15,16 @@ tests:
       - isKind:
           of: Deployment
 
+  - it: splits liveness (process only) from readiness (database ping)
+    template: templates/deployment.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].livenessProbe.httpGet.path
+          value: /health/live
+      - equal:
+          path: spec.template.spec.containers[0].readinessProbe.httpGet.path
+          value: /health/ready
+
   - it: uses chart appVersion as image tag by default
     template: templates/deployment.yaml
     chart:
