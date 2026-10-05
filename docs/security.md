@@ -131,9 +131,15 @@ metric reference.
 ## Container Security
 
 ```dockerfile
-FROM gcr.io/distroless/static-debian12   # no shell, minimal attack surface
-USER nonroot:nonroot                       # non-root user
+FROM gcr.io/distroless/static-debian12@sha256:…   # no shell, minimal attack surface
+USER nonroot:nonroot                                # non-root user
 ```
+
+Every base image in the Containerfiles is pinned by digest, and the pnpm used
+in the frontend build is pinned to an exact version, so a build never silently
+picks up a different base layer. Dependabot opens a pull request when a base
+image has a newer digest; `scripts/check-image-pins.sh` fails CI when a `FROM`
+line without a digest is added.
 
 In production compose:
 

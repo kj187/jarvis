@@ -80,6 +80,11 @@ jobs:
       # Release body logic (curated RC notes, notes refresh) lives in a script so it is testable.
       - name: Test release body script
         run: scripts/test-release-body.sh
+      # Every FROM carries a @sha256 digest and pnpm is installed pinned — see scripts/check-image-pins.sh.
+      - name: Check image pins
+        run: |
+          scripts/test-check-image-pins.sh
+          scripts/check-image-pins.sh
       # Generated colour tokens (app, docs site, video) must match design/tokens.json.
       - name: Check design tokens
         run: node scripts/design-tokens.mjs --check
