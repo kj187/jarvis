@@ -214,7 +214,7 @@ func NewRouter(
 	e.GET("/health", srv.getHealth)
 	e.GET("/health/live", srv.getHealthLive)
 	e.GET("/health/ready", srv.getHealthReady)
-	e.GET("/metrics", echo.WrapHandler(m.Handler()))
+	e.GET("/metrics", echo.WrapHandler(m.Handler()), metricsAuth(cfg.MetricsToken))
 	apiV1.GET("/status", srv.getStatus)
 	apiV1.GET("/info", srv.getInfo)
 

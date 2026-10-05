@@ -124,3 +124,37 @@ tests:
       - equal:
           path: spec.endpoints[0].honorLabels
           value: true
+
+  - it: sends no authorization when no metrics token is configured
+    set:
+      metrics.serviceMonitor.enabled: true
+    asserts:
+      - notExists:
+          path: spec.endpoints[0].authorization
+
+  - it: scrapes with the chart's metrics-token Secret key when metrics.token is set
+    set:
+      metrics.serviceMonitor.enabled: true
+      metrics.token: scrape-me
+    asserts:
+      - equal:
+          path: spec.endpoints[0].authorization
+          value:
+            type: Bearer
+            credentials:
+              name: RELEASE-NAME-jarvis
+              key: metrics-token
+
+  - it: scrapes with the existing Secret when metrics.existingSecret is set
+    set:
+      metrics.serviceMonitor.enabled: true
+      metrics.existingSecret: my-metrics
+      metrics.existingSecretKey: tok
+    asserts:
+      - equal:
+          path: spec.endpoints[0].authorization
+          value:
+            type: Bearer
+            credentials:
+              name: my-metrics
+              key: tok

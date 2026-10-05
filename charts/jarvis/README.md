@@ -90,6 +90,8 @@ Tests cover four suites (`deployment`, `configmap`, `secret`, `ingress`) and run
 | `securityContext` | object | `{allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, ...}` | Container-level security context |
 | `service.type` | string | `ClusterIP` | Kubernetes Service type |
 | `service.port` | int | `80` | Service port |
+| `metrics.token` | string | `""` | Optional bearer token for `/metrics` (`JARVIS_METRICS_TOKEN`, stored in the chart Secret). Empty = endpoint open. The ServiceMonitor sends it automatically; other scrapers need the header |
+| `metrics.existingSecret` | string | `""` | Existing Secret holding the metrics token (key `metrics.existingSecretKey`, default `metrics-token`) instead of `metrics.token` |
 | `metrics.serviceMonitor.enabled` | bool | `false` | Create a Prometheus Operator `ServiceMonitor` for `/metrics` (requires the `monitoring.coreos.com/v1` CRDs) |
 | `metrics.serviceMonitor.interval` | string | `30s` | Scrape interval |
 | `metrics.serviceMonitor.scrapeTimeout` | string | `10s` | Scrape timeout |

@@ -21,6 +21,13 @@ spec:
       path: /metrics
       interval: {{ .Values.metrics.serviceMonitor.interval }}
       scrapeTimeout: {{ .Values.metrics.serviceMonitor.scrapeTimeout }}
+      {{- if or .Values.metrics.token .Values.metrics.existingSecret }}
+      authorization:
+        type: Bearer
+        credentials:
+          name: {{ .Values.metrics.existingSecret | default (include "jarvis.fullname" .) }}
+          key: {{ .Values.metrics.existingSecretKey }}
+      {{- end }}
       {{- if .Values.metrics.serviceMonitor.honorLabels }}
       honorLabels: true
       {{- end }}

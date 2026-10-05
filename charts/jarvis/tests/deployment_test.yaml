@@ -760,6 +760,44 @@ tests:
             mountPath: /vault/secrets
             readOnly: true
 
+  - it: adds JARVIS_METRICS_TOKEN from the chart secret when metrics.token is set
+    template: templates/deployment.yaml
+    set:
+      metrics.token: scrape-me
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: JARVIS_METRICS_TOKEN
+            valueFrom:
+              secretKeyRef:
+                name: RELEASE-NAME-jarvis
+                key: metrics-token
+
+  - it: reads JARVIS_METRICS_TOKEN from metrics.existingSecret
+    template: templates/deployment.yaml
+    set:
+      metrics.existingSecret: my-metrics
+      metrics.existingSecretKey: tok
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: JARVIS_METRICS_TOKEN
+            valueFrom:
+              secretKeyRef:
+                name: my-metrics
+                key: tok
+
+  - it: does not add JARVIS_METRICS_TOKEN by default
+    template: templates/deployment.yaml
+    asserts:
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: JARVIS_METRICS_TOKEN
+          any: true
+
   - it: adds JARVIS_SETUP_TOKEN from the chart secret when a setup token is set
     template: templates/deployment.yaml
     set:

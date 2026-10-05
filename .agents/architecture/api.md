@@ -33,7 +33,7 @@ private-range trust off); login rate limiting stays one global bucket.
 GET    /health                                   None        → { status: "ok" }  (legacy, process only)
 GET    /health/live                              None        → { status: "ok" }  (process only, never touches the DB)
 GET    /health/ready                             None        → 200 { status: "ok" } | 503 { status: "unavailable" }  (DB ping, 2 s timeout, result cached 5 s; Alertmanager state is deliberately not part of it)
-GET    /metrics                                  None        → Prometheus exposition format (see internal/metrics below)
+GET    /metrics                                  None        → Prometheus exposition format (see internal/metrics below); with JARVIS_METRICS_TOKEN: Bearer token required (api/metrics_auth.go), else 401
 GET    /auth/info                                None        → { mode, loginUrl, setupRequired, setupTokenRequired, runbookBaseUrl }
 POST   /auth/login                               None  (RL)  Body: { username, password } → user + Set-Cookie  (global 30/min rate limit)
 POST   /auth/logout                              Auth        → bumps users.token_version (revokes all the account's sessions), closes its /ws connections, clears the cookie; 401 without a session
@@ -162,7 +162,7 @@ DELETE /api/v1/silence-templates/:id             Auth  (write)
 
 # ── Poll / Clusters ──────────────────────────────────────────────────────────
 POST   /api/v1/poll                              None        → triggers an immediate Alertmanager poll
-GET    /api/v1/clusters                          full_protect?  → []ClusterInfo
+GET    /api/v1/clusters                          full_protect?  → []ClusterInfo (URLs always without userinfo: config.StripUserinfo)
 #        health from the cached per-member up-state of the last poll (Cluster.MemberUpStates) —
 #        never live-pings AM; members without poll state yet count as healthy (writeOrder optimism).
 #        lastSuccessfulPollAt / stale come from Recorder.ClusterFreshness() (cached, optional

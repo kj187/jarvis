@@ -861,3 +861,69 @@ func TestLoad_TrustedProxies(t *testing.T) {
 		})
 	}
 }
+
+func TestStripUserinfo(t *testing.T) {
+	for _, tc := range []struct{ in, want string }{
+		{"http://am:9093", "http://am:9093"},
+		{"http://user:s3cretpw@am:9093", "http://am:9093"},
+		{"https://token@am.example.com/path?x=1", "https://am.example.com/path?x=1"},
+		{"", ""},
+		{"not a url %%", "not a url %%"},
+	} {
+		if got := StripUserinfo(tc.in); got != tc.want {
+			t.Errorf("StripUserinfo(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+	if !HasUserinfo("http://u:p@am:9093") || HasUserinfo("http://am:9093") {
+		t.Error("HasUserinfo does not tell URLs with and without credentials apart")
+	}
+}
+
+func TestLoad_ClusterURLUserinfoNeverBrowserVisible(t *testing.T) {
+	t.Setenv("JARVIS_CLUSTER_1_NAME", "homelab")
+	t.Setenv("JARVIS_CLUSTER_1_ALERTMANAGER_URL", "http://user:s3cretpw@am:9093")
+	t.Setenv("JARVIS_CLUSTER_1_PROMETHEUS_URL", "http://pu:ppw@prom:9090")
+	t.Setenv("JARVIS_CLUSTER_2_NAME", "")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	cl := cfg.Clusters[0]
+	if cl.Members[0].URL != "http://user:s3cretpw@am:9093" {
+		t.Errorf("Members[0].URL = %q, the polling URL must keep its credentials", cl.Members[0].URL)
+	}
+	for name, got := range map[string]string{
+		"Members[0].LinkURL":  cl.Members[0].LinkURL,
+		"AlertmanagerLinkURL": cl.AlertmanagerLinkURL,
+		"PrometheusURL":       cl.PrometheusURL,
+	} {
+		if strings.Contains(got, "s3cretpw") || strings.Contains(got, "ppw") || strings.Contains(got, "@") {
+			t.Errorf("%s = %q leaks credentials", name, got)
+		}
+	}
+	if cl.Members[0].LinkURL != "http://am:9093" {
+		t.Errorf("Members[0].LinkURL = %q, want http://am:9093", cl.Members[0].LinkURL)
+	}
+}
+
+func TestLoad_MetricsToken(t *testing.T) {
+	t.Setenv("JARVIS_AUTH_PROVIDER", "none")
+	t.Setenv("JARVIS_CLUSTER_1_NAME", "")
+	t.Setenv("JARVIS_METRICS_TOKEN", "")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	if cfg.MetricsToken != "" {
+		t.Errorf("MetricsToken = %q, want empty by default", cfg.MetricsToken)
+	}
+	t.Setenv("JARVIS_METRICS_TOKEN", "scrape-me")
+	cfg, err = Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	if cfg.MetricsToken != "scrape-me" {
+		t.Errorf("MetricsToken = %q, want scrape-me", cfg.MetricsToken)
+	}
+}
