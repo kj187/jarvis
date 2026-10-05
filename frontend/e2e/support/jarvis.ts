@@ -60,9 +60,9 @@ export interface SilenceMatcher {
 export class JarvisClient {
   constructor(private readonly baseURL: string) {}
 
-  /** Forces an immediate poll of all Alertmanager clusters. */
+  /** Forces an immediate poll of all Alertmanager clusters (e2e route: no login, no minimum interval). */
   async poll(): Promise<void> {
-    const res = await fetch(`${this.baseURL}/api/v1/poll`, { method: 'POST' })
+    const res = await fetch(`${this.baseURL}/api/v1/test/poll`, { method: 'POST' })
     if (!res.ok) throw new Error(`poll failed: ${res.status} ${await res.text()}`)
   }
 

@@ -31,6 +31,8 @@ type Config struct {
 	// AllowedHosts is the optional Host-header allow-list (lower-case, "host"
 	// or "host:port"); empty disables the check.
 	AllowedHosts []string
+	// WSMaxConnections caps simultaneous WebSocket clients per pod; 0 = unlimited.
+	WSMaxConnections int
 	// MetricsToken, when set, is the bearer token GET /metrics requires.
 	MetricsToken string
 	// TrustedProxies are the peers whose X-Forwarded-For is believed when
@@ -310,6 +312,12 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 
+	wsMaxConnectionsRaw := getEnv("JARVIS_WS_MAX_CONNECTIONS", "500")
+	wsMaxConnections, err := strconv.Atoi(wsMaxConnectionsRaw)
+	if err != nil || wsMaxConnections < 0 {
+		return nil, fmt.Errorf("invalid JARVIS_WS_MAX_CONNECTIONS: must be an integer >= 0 (0 = unlimited), got %q", wsMaxConnectionsRaw)
+	}
+
 	dbMaxOpenConnsRaw := getEnv("JARVIS_DB_MAX_OPEN_CONNS", "10")
 	dbMaxOpenConns, err := strconv.Atoi(dbMaxOpenConnsRaw)
 	if err != nil {
@@ -330,6 +338,7 @@ func Load() (*Config, error) {
 		RunbookBaseURL:    getEnv("JARVIS_RUNBOOK_BASE_URL", ""),
 		AllowedOrigins:    allowedOrigins,
 		AllowedHosts:      allowedHosts,
+		WSMaxConnections:  wsMaxConnections,
 		MetricsToken:      getEnv("JARVIS_METRICS_TOKEN", ""),
 		TrustedProxies:    trustedProxies,
 		Clusters:          clusters,

@@ -93,6 +93,7 @@ sync with reality.
 | `jarvis_cluster_fetch_duration_seconds` | `cluster`, `member` | Histogram of a single Alertmanager HA member's response time (alerts or silences) — use this to find *which* member is slow |
 | `jarvis_alert_events_total` | `cluster`, `status` (`firing`/`suppressed`/`expired`/`resolved`) | A genuine alert lifecycle transition is recorded |
 | `jarvis_ws_broadcasts_total` | `type` | A WebSocket event is broadcast to clients |
+| `jarvis_ws_rejected_total` | — | A WebSocket connection is refused because [`JARVIS_WS_MAX_CONNECTIONS`](configuration.md#jarvis_ws_max_connections) is reached. Anything above 0 in normal operation means the cap is too low or something is opening connections it does not close |
 | `jarvis_http_requests_total` | `method`, `path`, `status` | Every HTTP request (labeled by route pattern, not raw URL) |
 | `jarvis_http_request_duration_seconds` | `method`, `path`, `status` | Histogram of HTTP request duration |
 | `jarvis_retention_sweeps_total` | — | A data-retention sweep completes (see [docs/retention.md](retention.md)). Only increments while retention is enabled — stays 0 forever on a default install |

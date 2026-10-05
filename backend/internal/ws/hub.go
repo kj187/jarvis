@@ -67,6 +67,8 @@ type Hub struct {
 	sessionCheck SessionCheck
 	mu           sync.RWMutex
 	clients      map[*Client]struct{}
+	maxClients   int // 0 = unlimited
+	reserved     int // handshakes in flight, counted against maxClients
 	broadcast    chan outbound
 	unregister   chan *Client
 	logger       *slog.Logger
@@ -235,6 +237,27 @@ func metricEventType(eventType string) string {
 	}
 }
 
+// SetMaxConnections caps the number of simultaneously connected clients; a
+// connection over the cap is refused with 503 before the upgrade. Zero or less
+// means unlimited. Call it before serving connections.
+func (h *Hub) SetMaxConnections(n int) {
+	h.mu.Lock()
+	h.maxClients = n
+	h.mu.Unlock()
+}
+
+// reserveSlot claims a connection slot ahead of the upgrade, so concurrent
+// handshakes cannot slip past the cap between check and registration.
+func (h *Hub) reserveSlot() bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.maxClients > 0 && len(h.clients)+h.reserved >= h.maxClients {
+		return false
+	}
+	h.reserved++
+	return true
+}
+
 // SetSessionCheck installs the check run on every ping tick for identified
 // clients. This is what ends a stream whose session was revoked on another pod.
 // Call it before serving connections.
@@ -267,8 +290,20 @@ func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request) {
 // ServeWSFor is ServeWS for a connection that belongs to a session; a nil
 // identity is an anonymous connection that is never closed on revocation.
 func (h *Hub) ServeWSFor(w http.ResponseWriter, r *http.Request, identity *Identity) {
+	if !h.reserveSlot() {
+		if h.metrics != nil {
+			h.metrics.WSRejectedTotal.Inc()
+		}
+		h.logger.Warn("rejecting ws connection: connection limit reached")
+		w.Header().Set("Retry-After", "30")
+		http.Error(w, "too many websocket connections", http.StatusServiceUnavailable)
+		return
+	}
 	conn, err := h.upgrader.Upgrade(w, r, nil)
 	if err != nil {
+		h.mu.Lock()
+		h.reserved--
+		h.mu.Unlock()
 		h.logger.Error("ws upgrade", "err", err)
 		return
 	}
@@ -280,6 +315,7 @@ func (h *Hub) ServeWSFor(w http.ResponseWriter, r *http.Request, identity *Ident
 	// through the hub loop loses such events — the loop's select gives no
 	// ordering guarantee between a pending registration and a broadcast.
 	h.mu.Lock()
+	h.reserved--
 	h.clients[client] = struct{}{}
 	h.mu.Unlock()
 	go client.writePump()

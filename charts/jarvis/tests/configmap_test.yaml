@@ -77,6 +77,27 @@ tests:
           path: data.JARVIS_TRUSTED_PROXIES
           value: "10.0.0.0/8"
 
+  - it: omits JARVIS_WS_MAX_CONNECTIONS by default so the app keeps its own default
+    asserts:
+      - notExists:
+          path: data.JARVIS_WS_MAX_CONNECTIONS
+
+  - it: renders JARVIS_WS_MAX_CONNECTIONS when set, including 0 for unlimited
+    set:
+      config.wsMaxConnections: 0
+    asserts:
+      - equal:
+          path: data.JARVIS_WS_MAX_CONNECTIONS
+          value: "0"
+
+  - it: renders a positive JARVIS_WS_MAX_CONNECTIONS
+    set:
+      config.wsMaxConnections: 200
+    asserts:
+      - equal:
+          path: data.JARVIS_WS_MAX_CONNECTIONS
+          value: "200"
+
   - it: omits JARVIS_COOKIE_SECURE by default so the app keeps its auto behavior
     asserts:
       - notExists:

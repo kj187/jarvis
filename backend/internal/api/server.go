@@ -3,6 +3,8 @@ package api
 import (
 	"context"
 	"net/http"
+	"strconv"
+	"time"
 
 	"github.com/labstack/echo/v4"
 
@@ -53,6 +55,7 @@ type Server struct {
 	globalSettingsStore *globalsettings.Store
 	fanout              fanout.Fanout
 	dbHealth            dbHealth
+	pollGate            pollGate
 }
 
 // NewServer creates a new Server with the given dependencies.
@@ -108,8 +111,14 @@ func (s *Server) broadcastAndFanout(ctx context.Context, eventType string, paylo
 	s.fanout.Publish(ctx, data, ref)
 }
 
-// POST /api/v1/poll — triggers an immediate Alertmanager poll.
+// POST /api/v1/poll — triggers an immediate Alertmanager poll. Polls closer
+// together than manualPollMinInterval are refused with 429; the recorder's own
+// interval keeps the data fresh in the meantime.
 func (s *Server) triggerPoll(c echo.Context) error {
+	if wait, ok := s.pollGate.allow(time.Now(), manualPollMinInterval); !ok {
+		c.Response().Header().Set(echo.HeaderRetryAfter, strconv.Itoa(retryAfterSeconds(wait)))
+		return echo.NewHTTPError(http.StatusTooManyRequests, "poll requested too recently")
+	}
 	if s.pollTrigger != nil {
 		s.pollTrigger.Trigger()
 	}

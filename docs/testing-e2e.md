@@ -54,6 +54,7 @@ alerts — so functional tests and screenshots exercise the actual system.
 | Endpoint | Effect |
 |---|---|
 | `POST /api/v1/test/reset` | Truncate all history tables + clear in-memory store. |
+| `POST /api/v1/test/poll`  | Force an immediate poll (`jarvis.poll()`). The real `POST /api/v1/poll` needs a login from `write_protect` upward and has a 5 s minimum interval, neither of which a spec that polls after every seed can live with. |
 | `POST /api/v1/test/seed`  | Insert resolved-alert lifecycles directly into the DB (`resolved` body key), or backfill multi-cycle firing history for the heatmap (`heatmapHistory` body key — see `jarvis.seedHeatmapHistory()`). |
 | `POST /api/v1/test/claim` | Set a claim on an alert (bypasses auth). Used by `jarvis.setClaim()`. |
 | `POST /api/v1/test/comment` | Add a comment to an alert (bypasses auth). Note: does **not** broadcast a WS event — use the production endpoint `/api/v1/alerts/:fingerprint/comments` when testing WebSocket behaviour. |

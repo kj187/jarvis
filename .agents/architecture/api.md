@@ -50,7 +50,9 @@ POST   /setup                                    None        Body: { username, p
 # ── WebSocket ────────────────────────────────────────────────────────────────
 WS     /ws                                       full_protect?  (origin checked against JARVIS_ALLOWED_ORIGINS;
 #        in full_protect mode the upgrade request additionally requires a valid
-#        session cookie via RequireAuth — /ws streams the full alert snapshot)
+#        session cookie via RequireAuth — /ws streams the full alert snapshot;
+#        capped at JARVIS_WS_MAX_CONNECTIONS per pod: one over → 503 + Retry-After before the upgrade,
+#        counted in jarvis_ws_rejected_total; Hub.reserveSlot claims the slot ahead of the upgrade)
 
 # ── Status / Version ─────────────────────────────────────────────────────────
 GET    /api/v1/status                            full_protect?  → { status ("ok"|"degraded" when the DB ping fails), database, clusters, alerts, ws_clients, leader, poll_interval_seconds, resolved_buffer_ttl_seconds }
@@ -161,7 +163,7 @@ PUT    /api/v1/silence-templates/:id             Auth  (write)  Body: { name, ma
 DELETE /api/v1/silence-templates/:id             Auth  (write)
 
 # ── Poll / Clusters ──────────────────────────────────────────────────────────
-POST   /api/v1/poll                              None        → triggers an immediate Alertmanager poll
+POST   /api/v1/poll                              Auth  (write)  → triggers an immediate Alertmanager poll; 429 + Retry-After within 5 s of the last accepted one (global per pod; e2e build: 0)
 GET    /api/v1/clusters                          full_protect?  → []ClusterInfo (URLs always without userinfo: config.StripUserinfo)
 #        health from the cached per-member up-state of the last poll (Cluster.MemberUpStates) —
 #        never live-pings AM; members without poll state yet count as healthy (writeOrder optimism).
