@@ -16,6 +16,7 @@ func dialIdentified(t *testing.T, hub *Hub, id *Identity) (*websocket.Conn, func
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		hub.ServeWSFor(w, r, id)
 	}))
+	before := hub.ClientCount()
 	conn, resp, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(srv.URL, "http"), nil)
 	if err != nil {
 		srv.Close()
@@ -24,6 +25,9 @@ func dialIdentified(t *testing.T, hub *Hub, id *Identity) (*websocket.Conn, func
 	if resp != nil && resp.Body != nil {
 		_ = resp.Body.Close()
 	}
+	// Dial returns once the 101 is on the wire; the hub registers the client a
+	// moment later, so wait for it before the test acts on the hub.
+	waitForClientCount(t, hub, before+1)
 	return conn, func() { _ = conn.Close(); srv.Close() }
 }
 
