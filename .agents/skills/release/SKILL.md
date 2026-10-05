@@ -238,9 +238,10 @@ Record the decision; it drives two later steps (step 10a and step 13).
     helm show chart oci://ghcr.io/kj187/charts/jarvis --version <chart version>
     scripts/verify-release-smoke.sh vX.Y.Z
     ```
-    The smoke script verifies image, SBOM and chart signatures with the exact
-    workflow identities and checks that other identities are rejected; a
-    failure means the release is not done.
+    The smoke script verifies image, SBOM and chart signatures and the SBOM
+    attestation with the exact workflow identities, checks that the SBOM is
+    complete and that other identities are rejected; a failure means the
+    release is not done.
     Final report must include: release URL, image ref
     `ghcr.io/kj187/jarvis:X.Y.Z`, chart version (flag it if it is a new
     major with breaking changes), and whether `sbom.spdx.json` and

@@ -183,6 +183,7 @@ section "Repository gates"
 
 step "agent context" scripts/check-agent-context.sh
 step "release body script" scripts/test-release-body.sh
+step "SBOM script" scripts/test-sbom.sh
 step "image pins (test + check)" bash -c "scripts/test-check-image-pins.sh && scripts/check-image-pins.sh"
 
 changelog_check() {

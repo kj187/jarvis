@@ -144,6 +144,9 @@ has "$OUT" '--certificate-identity="https://github.com/kj187/jarvis/.github/work
 [ "$(count "$OUT" 'release.yml@refs/tags/v1.13.0')" -eq 2 ] && pass "stable with notes: exact identity for image and SBOM" || fail "stable with notes: exact identity for image and SBOM"
 has "$OUT" 'chart-release\.yml@refs/(heads/main|tags/v' && pass "stable with notes: chart pinned to chart-release.yml" || fail "stable with notes: chart pinned to chart-release.yml"
 lacks "$OUT" 'kj187/jarvis/.*' && pass "stable with notes: no wildcard identity" || fail "stable with notes: no wildcard identity"
+has "$OUT" "gh attestation verify oci://ghcr.io/kj187/jarvis@$DIGEST" && pass "stable with notes: SBOM attestation verified against the digest" || fail "stable with notes: SBOM attestation verified against the digest"
+has "$OUT" '--predicate-type https://spdx.dev/Document/v2.3' && pass "stable with notes: SBOM attestation predicate type" || fail "stable with notes: SBOM attestation predicate type"
+has "$OUT" '--signer-workflow kj187/jarvis/.github/workflows/release.yml' && pass "stable with notes: SBOM attestation pinned to release.yml" || fail "stable with notes: SBOM attestation pinned to release.yml"
 
 repo="$(new_repo stable-missing)"
 run "$repo" build v1.13.0 "$DIGEST" 2.1.0
