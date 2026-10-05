@@ -19,11 +19,14 @@ and claims are isolated per cluster. Frontend hooks pass `clusterName` according
 
 Global middleware (all responses): `Secure` headers (nosniff, X-Frame-Options
 DENY, Referrer-Policy same-origin, HSTS, CSP `default-src 'self'; … frame-ancestors 'none'`),
-`Permissions-Policy`, body limit 1 MB, CORS from `JARVIS_ALLOWED_ORIGINS`
+`Permissions-Policy`, optional `hostGuard` (`internal/api/hostguard.go`, `JARVIS_ALLOWED_HOSTS`,
+421; health/metrics paths exempt), body limit 1 MB, CORS from `JARVIS_ALLOWED_ORIGINS`
 (credentials allowed), then `originGuard` (`internal/api/origin.go`): `POST`/`PUT`/
 `PATCH`/`DELETE` need an own-host or allow-listed `Origin`, else 403; no `Origin` passes
 unless `Sec-Fetch-Site: cross-site`. Session cookie `Secure` follows
-`JARVIS_COOKIE_SECURE` (`auto`|`true`).
+`JARVIS_COOKIE_SECURE` (`auto`|`true`). Client IP: `e.IPExtractor` is the TCP peer unless
+`JARVIS_TRUSTED_PROXIES` lists the peer (then `X-Forwarded-For`, Echo's implicit
+private-range trust off); login rate limiting stays one global bucket.
 
 ```
 # ── Health / Metrics / Auth / Setup ──────────────────────────────────────────

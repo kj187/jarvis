@@ -53,6 +53,13 @@ the browser marked `Sec-Fetch-Site: cross-site`. Requests without either header
 behind a proxy, the proxy rewrites `Host` and `JARVIS_ALLOWED_ORIGINS` is
 missing the browser's URL — the same fix as for a dead WebSocket.
 
+**Optional hardening.** `JARVIS_ALLOWED_HOSTS` rejects any `Host` header you did
+not list (`421`) — set it to the names users reach Jarvis under, and mind that the
+proxy must forward the original `Host`. `JARVIS_TRUSTED_PROXIES` lists the proxy
+addresses (CIDRs) whose `X-Forwarded-For` Jarvis believes for the client IP in its
+logs; without it the logs show the proxy's address, never a forged one. Both are
+off by default; see [Configuration](configuration.md#jarvis_allowed_hosts).
+
 ---
 
 ## WebSocket passthrough

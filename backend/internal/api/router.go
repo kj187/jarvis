@@ -83,6 +83,8 @@ func NewRouter(
 	e.HideBanner = true
 	e.HidePort = true
 
+	e.IPExtractor = clientIPExtractor(cfg.TrustedProxies)
+
 	// ── Middleware ────────────────────────────────────────────────────────────
 	e.Use(middleware.Recover())
 	e.Use(m.EchoMiddleware())
@@ -123,6 +125,7 @@ func NewRouter(
 			return nil
 		},
 	}))
+	e.Use(hostGuard(cfg.AllowedHosts))
 	e.Use(middleware.SecureWithConfig(middleware.SecureConfig{
 		ContentTypeNosniff:    "nosniff",
 		XFrameOptions:         "DENY",

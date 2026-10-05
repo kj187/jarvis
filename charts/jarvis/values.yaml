@@ -124,6 +124,16 @@ config:
   # (e.g. when accessed via an ingress). Example: "https://jarvis.example.com"
   # Leave empty for same-origin-only access.
   allowedOrigins: ""
+  # Optional Host-header allow-list, comma-separated "host" or "host:port"
+  # (a host without port matches any port). A request with another Host gets
+  # 421; /health*, /metrics are exempt so probes and scrapes by pod IP keep
+  # working. Empty disables the check. Example: "jarvis.example.com"
+  allowedHosts: ""
+  # Comma-separated CIDRs or IPs of the reverse proxies in front of Jarvis.
+  # Only their X-Forwarded-For is believed when logging the client IP
+  # (remote_ip); empty always logs the direct TCP peer, so the header cannot be
+  # forged. Example: "10.0.0.0/8"
+  trustedProxies: ""
   # Instance-wide default durations of the Fast-Silence and Extend-silence
   # menus — comma-separated, each a number plus m, h, d, w or y, at most 12,
   # each between 1m and 365d. Empty keeps the built-in defaults. Users can still

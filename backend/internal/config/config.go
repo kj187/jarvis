@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/hex"
 	"fmt"
+	"net"
 	"net/url"
 	"os"
 	"strconv"
@@ -27,6 +28,12 @@ type Config struct {
 	DBMaxOpenConns int
 	RunbookBaseURL string
 	AllowedOrigins []string
+	// AllowedHosts is the optional Host-header allow-list (lower-case, "host"
+	// or "host:port"); empty disables the check.
+	AllowedHosts []string
+	// TrustedProxies are the peers whose X-Forwarded-For is believed when
+	// deriving the client IP; empty means the TCP peer address is always used.
+	TrustedProxies []*net.IPNet
 	Clusters       []ClusterConfig
 
 	// PprofAddr enables the opt-in loopback-only pprof debug server
@@ -241,6 +248,18 @@ func Load() (*Config, error) {
 		}
 	}
 
+	var allowedHosts []string
+	for _, h := range strings.Split(getEnv("JARVIS_ALLOWED_HOSTS", ""), ",") {
+		if trimmed := strings.ToLower(strings.TrimSpace(h)); trimmed != "" {
+			allowedHosts = append(allowedHosts, trimmed)
+		}
+	}
+
+	trustedProxies, err := parseTrustedProxies(getEnv("JARVIS_TRUSTED_PROXIES", ""))
+	if err != nil {
+		return nil, err
+	}
+
 	clusters, err := parseClusters()
 	if err != nil {
 		return nil, err
@@ -308,6 +327,8 @@ func Load() (*Config, error) {
 		DBMaxOpenConns:    dbMaxOpenConns,
 		RunbookBaseURL:    getEnv("JARVIS_RUNBOOK_BASE_URL", ""),
 		AllowedOrigins:    allowedOrigins,
+		AllowedHosts:      allowedHosts,
+		TrustedProxies:    trustedProxies,
 		Clusters:          clusters,
 		PprofAddr:         getEnv("JARVIS_PPROF_ADDR", ""),
 		AuthProvider:      authProvider,
@@ -597,4 +618,33 @@ func getEnvBool(key string, fallback bool) bool {
 	default:
 		return fallback
 	}
+}
+
+// parseTrustedProxies reads a comma-separated list of CIDRs or plain IPs.
+func parseTrustedProxies(raw string) ([]*net.IPNet, error) {
+	var nets []*net.IPNet
+	for _, entry := range strings.Split(raw, ",") {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
+			continue
+		}
+		if !strings.Contains(entry, "/") {
+			ip := net.ParseIP(entry)
+			if ip == nil {
+				return nil, fmt.Errorf("invalid JARVIS_TRUSTED_PROXIES entry %q: not an IP address or CIDR", entry)
+			}
+			bits := 128
+			if ip.To4() != nil {
+				bits = 32
+			}
+			nets = append(nets, &net.IPNet{IP: ip, Mask: net.CIDRMask(bits, bits)})
+			continue
+		}
+		_, n, err := net.ParseCIDR(entry)
+		if err != nil {
+			return nil, fmt.Errorf("invalid JARVIS_TRUSTED_PROXIES entry %q: %w", entry, err)
+		}
+		nets = append(nets, n)
+	}
+	return nets, nil
 }

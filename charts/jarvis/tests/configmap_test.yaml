@@ -58,6 +58,25 @@ tests:
           path: data.JARVIS_RESOLVED_BUFFER_TTL
           value: "1h"
 
+  - it: omits JARVIS_ALLOWED_HOSTS and JARVIS_TRUSTED_PROXIES by default
+    asserts:
+      - notExists:
+          path: data.JARVIS_ALLOWED_HOSTS
+      - notExists:
+          path: data.JARVIS_TRUSTED_PROXIES
+
+  - it: renders JARVIS_ALLOWED_HOSTS and JARVIS_TRUSTED_PROXIES when set
+    set:
+      config.allowedHosts: jarvis.example.com
+      config.trustedProxies: 10.0.0.0/8
+    asserts:
+      - equal:
+          path: data.JARVIS_ALLOWED_HOSTS
+          value: "jarvis.example.com"
+      - equal:
+          path: data.JARVIS_TRUSTED_PROXIES
+          value: "10.0.0.0/8"
+
   - it: omits JARVIS_COOKIE_SECURE by default so the app keeps its auto behavior
     asserts:
       - notExists:
