@@ -324,9 +324,8 @@ tests:
       - equal:
           path: data.JARVIS_CLUSTER_1_OAUTH2_SCOPES
           value: openid,profile
-      - equal:
+      - notExists:
           path: data.JARVIS_CLUSTER_1_HEADER_X-Scope-OrgID
-          value: tenant1
       - notExists:
           path: data.JARVIS_CLUSTER_1_BEARER_TOKEN
       - notExists:
@@ -340,3 +339,15 @@ tests:
           path: data.JARVIS_CLUSTER_1_BASIC_AUTH_USER
       - notExists:
           path: data.JARVIS_CLUSTER_1_OAUTH2_CLIENT_ID
+
+  - it: never renders an Authorization header into the ConfigMap
+    set:
+      clusters:
+        - name: production
+          alertmanagerUrl: http://am:9093
+          auth:
+            headers:
+              Authorization: Bearer abc
+    asserts:
+      - notExists:
+          path: data.JARVIS_CLUSTER_1_HEADER_Authorization

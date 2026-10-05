@@ -131,6 +131,69 @@ For HA debugging beyond "is the process up" — which pod currently holds
 leadership — see `GET /api/v1/status` in
 [PostgreSQL & HA](postgres-ha.md#observability).
 
+## Network policy
+
+`networkPolicy.enabled: true` renders one `NetworkPolicy` that selects every
+pod of the release and restricts both directions. It is off by default, so an
+existing release renders unchanged, and it needs a CNI that enforces
+NetworkPolicy (Calico, Cilium and most managed clusters do).
+
+- **Ingress** allows only TCP 8080. `networkPolicy.ingress.from` limits the
+  sources (the ingress controller, and Prometheus if it scrapes `/metrics`);
+  empty allows every source.
+- **Egress** allows DNS only (`networkPolicy.egress.allowDns`) plus the rules
+  you list in `networkPolicy.egress.rules`. Jarvis connects to Alertmanager (and
+  Prometheus), the database, the OIDC issuer, and, with
+  `leaderElection.podLabel.enabled`, the Kubernetes API, so each of those needs a
+  rule. Without one the pod cannot reach it.
+
+```yaml
+networkPolicy:
+  enabled: true
+  ingress:
+    from:
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: ingress-nginx
+  egress:
+    rules:
+      - to:
+          - namespaceSelector:
+              matchLabels:
+                kubernetes.io/metadata.name: monitoring
+        ports:
+          - port: 9093
+            protocol: TCP
+      - to:
+          - namespaceSelector:
+              matchLabels:
+                kubernetes.io/metadata.name: databases
+        ports:
+          - port: 5432
+            protocol: TCP
+```
+
+The Kubernetes API has no stable selector; allow its address from
+`kubectl get endpoints kubernetes` on port 443 (or 6443), or turn the leader pod
+label off. Check a new policy by watching the clusters in the UI: an unreachable
+Alertmanager shows as a stale banner within a few poll intervals.
+
+## Pin the image by digest
+
+`image.digest` pins the pod to the exact image you verified, so a re-pushed tag
+cannot change what runs. [Verify the signature](verify-release.md) first, then
+set the digest of the tag you deploy:
+
+```yaml
+image:
+  tag: 2.0.0
+  digest: sha256:<64 hex characters>
+```
+
+The reference becomes `ghcr.io/kj187/jarvis:2.0.0@sha256:...`. When you bump
+`image.tag`, update the digest in the same change; with the two out of step the
+digest wins and the old image keeps running.
+
 ## Configuration changes roll the pods
 
 Jarvis reads its environment once, at startup. The chart therefore puts a

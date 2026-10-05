@@ -127,3 +127,13 @@ runtime, per cluster, with no render-time signal.
 {{- end }}
 {{- end }}
 {{- end }}
+
+{{/*
+Validate image.digest. A malformed digest would only fail at image-pull time
+(InvalidImageName), which neither `helm lint` nor `helm template` surfaces.
+*/}}
+{{- define "jarvis.validateImage" -}}
+{{- if and .Values.image.digest (not (regexMatch "^sha256:[a-f0-9]{64}$" .Values.image.digest)) }}
+{{-   fail "Invalid configuration: image.digest must look like sha256:<64 hex characters>." }}
+{{- end }}
+{{- end }}
