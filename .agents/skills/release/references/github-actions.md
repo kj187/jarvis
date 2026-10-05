@@ -6,9 +6,16 @@ release.
 
 From `.github/workflows/release.yml`:
 
-Three jobs, strictly in this order — a failure stops everything after it, so
+Four jobs, strictly in this order — a failure stops everything after it, so
 neither a chart nor a GitHub Release ever points at an image that wasn't
 built.
+
+**Job `ci-gate`:** the tagged commit must be reachable from `main` (compare
+API status `identical` or `behind`) and have a successful `ci.yml` push run.
+Otherwise nothing is built, so a tag on an untested or off-main commit never
+yields a signed image. Fix CI (or push the commit through a PR), delete the
+tag, and re-tag. The GitHub Release is created with the job's own
+`GITHUB_TOKEN`; there is no PAT.
 
 **Job `build-and-push`:**
 1. Derive image tags via `docker/metadata-action` → `{{version}}` (e.g.

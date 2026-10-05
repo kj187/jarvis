@@ -8,14 +8,43 @@ on:
 permissions:
   contents: read
 
-# Job order: image (build, sign, attest) → Helm chart (published only after
+# Job order: CI gate → image (build, sign, attest) → Helm chart (published only after
 # the image exists, stable releases only) → GitHub Release (SBOM + signature
 # bundle, release body). A failure in an earlier job stops the later ones, so
 # neither a chart nor a release ever points at an image that wasn't built.
 
 jobs:
+  # Runs before anything is built or pushed: the tagged commit must be on main
+  # and its CI run on main must have succeeded, so a tag pushed on an untested
+  # or off-main commit never produces a signed image.
+  ci-gate:
+    name: CI Gate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read # list the CI run of the tagged commit
+    steps:
+      - name: Require tagged commit on main with green CI
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          status=$(gh api "repos/${REPO}/compare/main...${SHA}" --jq .status)
+          if [[ "${status}" != "identical" && "${status}" != "behind" ]]; then
+            echo "::error::Tagged commit ${SHA} is not on main (compare status: ${status})."
+            exit 1
+          fi
+          ok=$(gh run list --repo "${REPO}" --workflow ci.yml --commit "${SHA}" \
+            --event push --status success --json databaseId --jq length)
+          if [[ "${ok}" -lt 1 ]]; then
+            echo "::error::No successful CI run on main for ${SHA}. Wait for CI or fix it, then re-tag."
+            exit 1
+          fi
+
   build-and-push:
     name: Build & Push
+    needs: ci-gate
     runs-on: ubuntu-latest
     permissions:
       packages: write
@@ -203,7 +232,7 @@ jobs:
 
       - name: Create GitHub Release
         env:
-          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.ref_name }}
         run: |
           # Releases are immutable: if one already exists for this tag, fail
