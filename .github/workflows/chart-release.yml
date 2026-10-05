@@ -133,7 +133,7 @@ jobs:
             REF="ghcr.io/kj187/charts/jarvis:${{ steps.chart.outputs.version }}"
           fi
           if cosign verify "${REF}" \
-               --certificate-identity-regexp="https://github.com/kj187/jarvis/.*" \
+               --certificate-identity-regexp='^https://github\.com/kj187/jarvis/\.github/workflows/chart-release\.yml@refs/(heads/main|tags/v[0-9].*)$' \
                --certificate-oidc-issuer="https://token.actions.githubusercontent.com" \
                >/dev/null 2>&1; then
             echo "${REF} is already signed — nothing to do."

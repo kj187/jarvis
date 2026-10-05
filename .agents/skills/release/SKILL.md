@@ -236,7 +236,11 @@ Record the decision; it drives two later steps (step 10a and step 13).
     ```bash
     gh release view vX.Y.Z --json url,assets
     helm show chart oci://ghcr.io/kj187/charts/jarvis --version <chart version>
+    scripts/verify-release-smoke.sh vX.Y.Z
     ```
+    The smoke script verifies image, SBOM and chart signatures with the exact
+    workflow identities and checks that other identities are rejected; a
+    failure means the release is not done.
     Final report must include: release URL, image ref
     `ghcr.io/kj187/jarvis:X.Y.Z`, chart version (flag it if it is a new
     major with breaking changes), and whether `sbom.spdx.json` and
@@ -450,7 +454,9 @@ Release, no app CHANGELOG, no release-notes file; `appVersion` stays.
    `appVersion` exists, so it publishes and signs the chart. Watch it
    (`gh run list --workflow=chart-release.yml --limit 1`, `gh run watch`),
    then verify with `helm show chart oci://ghcr.io/kj187/charts/jarvis
-   --version <version>` and report.
+   --version <version>` and report. A chart-only release is signed on `main`
+   (`chart-release.yml@refs/heads/main`), which the documented chart identity
+   pattern accepts.
 
 ---
 
