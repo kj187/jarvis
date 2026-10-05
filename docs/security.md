@@ -141,6 +141,19 @@ picks up a different base layer. Dependabot opens a pull request when a base
 image has a newer digest; `scripts/check-image-pins.sh` fails CI when a `FROM`
 line without a digest is added.
 
+CI also scans the image it builds from the `Containerfile` with
+[Trivy](https://trivy.dev): a `HIGH` or `CRITICAL` vulnerability that has a fix
+fails the build. The same job checks the Containerfiles, the Helm chart and the
+compose files for misconfigurations. Accepted findings are listed with a reason
+in `.trivyignore.yaml`. To reproduce locally:
+
+```bash
+podman build -f Containerfile -t jarvis:scan .
+podman save -o /tmp/jarvis.tar jarvis:scan
+trivy image --input /tmp/jarvis.tar --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1
+trivy config --severity HIGH,CRITICAL --ignorefile .trivyignore.yaml --exit-code 1 .
+```
+
 In production compose:
 
 ```yaml

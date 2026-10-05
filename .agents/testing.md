@@ -237,6 +237,16 @@ frontend:
 helm:
   - scripts/check-changelogs.sh on the PR diff (PR-only; same rules as the pre-commit hook)
   - helm lint + helm unittest
+
+image-scan:          # "Image Scan" — builds ./Containerfile, then Trivy (action pinned by commit SHA,
+                     # Trivy pinned via `version:`, bumped by hand with the action):
+  - image scan: HIGH/CRITICAL with a fix fail (`ignore-unfixed`)
+  - config scan of Containerfiles, chart and compose files: HIGH/CRITICAL fail; accepted
+    findings only in `.trivyignore.yaml`, each with a statement
+  - self-test: the same settings against `alpine:3.10` must fail with reported vulnerabilities
+    (`continue-on-error` step + assertion), so a scanner that finds nothing cannot pass silently
+    # a new finding in the Debian base can turn this red without a code change: bump the base
+    # image or add a reasoned ignore entry. Not (yet) a required check of the `protect-main` ruleset
 ```
 
 ### `.github/workflows/e2e.yml`

@@ -336,3 +336,68 @@ jobs:
 
       - name: Run unit tests
         run: helm unittest charts/jarvis/
+
+  # Scans the image CI builds from ./Containerfile (HIGH/CRITICAL findings that
+  # have a fix fail the job) and every Containerfile/chart/compose file for
+  # misconfigurations. A new finding in the Debian base can turn this red
+  # without a code change: bump the base image (Dependabot) or, for a finding
+  # with no fix, add a reasoned entry to .trivyignore.yaml.
+  # The Trivy version is pinned below and bumped by hand together with the action.
+  image-scan:
+    name: Image Scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # ratchet:actions/checkout@v7.0.1
+
+      - name: Build image
+        run: docker build -f Containerfile -t jarvis:scan .
+
+      - name: Scan image (HIGH and CRITICAL with a fix)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # ratchet:aquasecurity/trivy-action@v0.36.0
+        with:
+          version: v0.70.0
+          scan-type: image
+          image-ref: jarvis:scan
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+
+      - name: Scan Containerfiles, chart and compose files (misconfiguration)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # ratchet:aquasecurity/trivy-action@v0.36.0
+        with:
+          skip-setup-trivy: true
+          scan-type: config
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          trivyignores: .trivyignore.yaml
+          exit-code: '1'
+
+      # Scanner self-test: the same settings against a deliberately outdated
+      # image must fail with findings. A scanner that silently finds nothing
+      # (stale database, wrong flags) would otherwise pass every build.
+      - name: Scanner self-test (alpine:3.10 must be flagged)
+        id: selftest
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # ratchet:aquasecurity/trivy-action@v0.36.0
+        with:
+          skip-setup-trivy: true
+          scan-type: image
+          image-ref: alpine:3.10
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+          format: json
+          output: selftest.json
+
+      - name: Require the self-test to fail with findings
+        run: |
+          if [ "${{ steps.selftest.outcome }}" != "failure" ]; then
+            echo "::error::trivy did not fail on alpine:3.10, so the image gate would not catch anything"
+            exit 1
+          fi
+          jq -e '[.Results[]?.Vulnerabilities[]?] | length > 0' selftest.json >/dev/null \
+            || { echo "::error::the self-test failed without reporting vulnerabilities (scanner error, not a finding)"; exit 1; }
