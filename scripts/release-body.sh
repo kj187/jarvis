@@ -121,7 +121,7 @@ Digest: `@DIGEST@`
 
 ```shell
 cosign verify ghcr.io/kj187/jarvis@@DIGEST@ \
-  --certificate-identity-regexp="https://github.com/kj187/jarvis/.*" \
+  --certificate-identity="https://github.com/kj187/jarvis/.github/workflows/release.yml@refs/tags/@TAG@" \
   --certificate-oidc-issuer="https://token.actions.githubusercontent.com"
 ```
 
@@ -157,7 +157,7 @@ Chart changes and breaking changes: [charts/jarvis/CHANGELOG.md](https://github.
 
 ```shell
 cosign verify ghcr.io/kj187/charts/jarvis:@CHART_VERSION@ \
-  --certificate-identity-regexp="https://github.com/kj187/jarvis/.*" \
+  --certificate-identity-regexp='^https://github\.com/kj187/jarvis/\.github/workflows/chart-release\.yml@refs/(heads/main|tags/v[0-9].*)$' \
   --certificate-oidc-issuer="https://token.actions.githubusercontent.com"
 ```
 
@@ -171,7 +171,7 @@ The SPDX SBOM is attached to this release (`sbom.spdx.json`) together with its k
 ```shell
 cosign verify-blob sbom.spdx.json \
   --bundle sbom.spdx.json.sigstore.json \
-  --certificate-identity-regexp="https://github.com/kj187/jarvis/.*" \
+  --certificate-identity="https://github.com/kj187/jarvis/.github/workflows/release.yml@refs/tags/@TAG@" \
   --certificate-oidc-issuer="https://token.actions.githubusercontent.com"
 ```
 EOF

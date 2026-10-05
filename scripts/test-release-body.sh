@@ -6,6 +6,11 @@
 
 set -uo pipefail
 
+# Git hooks export GIT_DIR, GIT_INDEX_FILE etc.; without this the throwaway
+# repos below would commit, tag and configure the real repository.
+# shellcheck disable=SC2046
+unset $(git rev-parse --local-env-vars)
+
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SCRIPT="$ROOT/scripts/release-body.sh"
 MARKER='<!-- jarvis:artifacts -->'
@@ -135,6 +140,10 @@ lacks "$OUT" 'Release candidate' && pass "stable with notes: no RC hint" || fail
 has "$OUT" 'cosign verify ghcr.io/kj187/charts/jarvis:2.1.0' && pass "stable with notes: chart signature section" || fail "stable with notes: chart signature section"
 has "$OUT" 'blob/v1.13.0/charts/jarvis/CHANGELOG.md' && pass "stable with notes: tag substituted in changelog link" || fail "stable with notes: tag substituted in changelog link"
 [ "$(count "$OUT" "$MARKER")" -eq 1 ] && pass "stable with notes: exactly one marker" || fail "stable with notes: exactly one marker"
+has "$OUT" '--certificate-identity="https://github.com/kj187/jarvis/.github/workflows/release.yml@refs/tags/v1.13.0"' && pass "stable with notes: image and SBOM pinned to release.yml at the tag" || fail "stable with notes: image and SBOM pinned to release.yml at the tag"
+[ "$(count "$OUT" 'release.yml@refs/tags/v1.13.0')" -eq 2 ] && pass "stable with notes: exact identity for image and SBOM" || fail "stable with notes: exact identity for image and SBOM"
+has "$OUT" 'chart-release\.yml@refs/(heads/main|tags/v' && pass "stable with notes: chart pinned to chart-release.yml" || fail "stable with notes: chart pinned to chart-release.yml"
+lacks "$OUT" 'kj187/jarvis/.*' && pass "stable with notes: no wildcard identity" || fail "stable with notes: no wildcard identity"
 
 repo="$(new_repo stable-missing)"
 run "$repo" build v1.13.0 "$DIGEST" 2.1.0
