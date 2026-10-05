@@ -106,12 +106,26 @@ topologySpreadConstraints:
 
 ## Health checks
 
-The chart's liveness and readiness probes both call `GET /health`
-(`charts/jarvis/templates/deployment.yaml`) — a plain `{"status": "ok"}`
-handler with no dependency checks, so a `200` only means the process is up
-and serving HTTP. Like `/metrics` ([Monitoring and metrics](metrics.md)), it is
-intentionally public and bypasses `JARVIS_AUTH_MODE=full_protect`, so probes
-never need credentials.
+The chart's probes use two endpoints (`charts/jarvis/templates/deployment.yaml`):
+
+| Probe | Path | Answers |
+|---|---|---|
+| liveness | `GET /health/live` | `200` while the process serves HTTP. No dependency checks, so a database outage never restarts the pod. |
+| readiness | `GET /health/ready` | `200` while the database answers a ping (2 s timeout, result cached for 5 s), otherwise `503`. A pod that loses its database leaves the Service endpoints and returns when the database does. |
+
+An unreachable Alertmanager deliberately does **not** turn readiness red:
+every pod would drop out of the Service at once and take the UI down with it.
+That state shows up per cluster in the UI (stale banner) and in
+`jarvis_snapshot_stale` / `jarvis_alertmanager_up` instead. `GET /health` stays as
+a plain `{"status": "ok"}` for existing probes and compose healthchecks.
+
+All three endpoints are intentionally public like `/metrics` ([Monitoring and
+metrics](metrics.md)) and bypass `JARVIS_AUTH_MODE=full_protect`, so probes
+never need credentials. They return no error details.
+
+**Upgrading the chart:** the probe paths exist from the Jarvis version that
+ships with this chart. Keep `image.tag` at the chart default, or use a Jarvis
+version that has `/health/live` and `/health/ready`.
 
 For HA debugging beyond "is the process up" — which pod currently holds
 leadership — see `GET /api/v1/status` in

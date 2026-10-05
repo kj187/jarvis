@@ -2,7 +2,7 @@
 
 Jarvis exposes a Prometheus-compatible `/metrics` endpoint so the alerting
 stack it fronts can also monitor Jarvis itself. The endpoint is **public**
-(like `/health`) — it bypasses `JARVIS_AUTH_MODE=full_protect` — and exposes
+(like `/health`, `/health/live` and `/health/ready`) — it bypasses `JARVIS_AUTH_MODE=full_protect` — and exposes
 only aggregate counts and configured cluster names, never alert names,
 labels, or annotations.
 

@@ -12,6 +12,10 @@ Entries up to and including 1.7.6 were reconstructed from the git history when t
 
 - No breaking changes.
 
+### Changed
+
+- The liveness probe now calls `/health/live` (process only) and the readiness probe `/health/ready` (database ping), instead of both calling `/health`. A database outage now takes the pod out of the Service endpoints, while an Alertmanager outage does not. The new paths exist from the app version that ships with this chart, so an `image.tag` override pointing at an older Jarvis release fails its probes — not breaking for a release that keeps the chart's default tag.
+
 ### Added
 
 - `auth.setupToken` value (and `auth.existingSecretKeys.setupToken`, default `setup-token`), rendered as `JARVIS_SETUP_TOKEN` from the chart's Secret when `auth.provider` is `internal`. When set, creating the first admin through `/setup` requires the token. Empty by default, so an existing release renders unchanged and keeps the open wizard; with `auth.existingSecret` the Secret key is optional (`optional: true`), so a Secret without it does not block the rollout — not breaking.

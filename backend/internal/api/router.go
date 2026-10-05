@@ -204,6 +204,8 @@ func NewRouter(
 
 	// Health / Metrics — public, bypasses full_protect like /health.
 	e.GET("/health", srv.getHealth)
+	e.GET("/health/live", srv.getHealthLive)
+	e.GET("/health/ready", srv.getHealthReady)
 	e.GET("/metrics", echo.WrapHandler(m.Handler()))
 	apiV1.GET("/status", srv.getStatus)
 	apiV1.GET("/info", srv.getInfo)

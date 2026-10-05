@@ -297,7 +297,12 @@ func TestGetClusters_NoPollYet_OptimisticallyHealthy(t *testing.T) {
 
 type freshnessTriggerer struct {
 	fakeTriggerer
-	fresh map[string]history.ClusterFreshness
+	fresh    map[string]history.ClusterFreshness
+	upStates map[string]map[string]bool
+}
+
+func (f *freshnessTriggerer) ClusterUpStates() map[string]map[string]bool {
+	return f.upStates
 }
 
 func (f *freshnessTriggerer) ClusterFreshness() map[string]history.ClusterFreshness {

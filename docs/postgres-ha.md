@@ -271,12 +271,18 @@ version lack the field; the snapshot's own age is used then.
   {
     "status": "ok",
     "clusters": 2,
+    "database": "ok",
     "alerts": 143,
     "ws_clients": 4,
     "leader": true,
     "poll_interval_seconds": 30
   }
   ```
+  `status` is `"degraded"` (and `database` `"unavailable"`) while the database
+  does not answer a ping; `GET /health/ready` returns `503` in the same state.
+  A follower reports each cluster's health in `GET /api/v1/clusters` from the
+  last snapshot it consumed, and flags the cluster `stale` once that snapshot
+  is older than the stale threshold.
   `leader` is always `true` on SQLite (single replica by design). Unlike
   `/health` and `/metrics`, this endpoint is not public — it follows
   `JARVIS_AUTH_MODE` like any other `/api/v1/*` route.

@@ -31,6 +31,13 @@ type clusterFreshnessSource interface {
 	ClusterFreshness() map[string]history.ClusterFreshness
 }
 
+// clusterUpStateSource is implemented by the recorder. A follower never polls
+// Alertmanager itself, so it reports member health from the leader's last
+// consumed snapshot instead of the registry's (empty) poll state.
+type clusterUpStateSource interface {
+	ClusterUpStates() map[string]map[string]bool
+}
+
 // Server holds shared dependencies for all API handlers.
 type Server struct {
 	alertStore          *history.AlertStore
@@ -45,6 +52,7 @@ type Server struct {
 	settingsStore       *settings.Store
 	globalSettingsStore *globalsettings.Store
 	fanout              fanout.Fanout
+	dbHealth            dbHealth
 }
 
 // NewServer creates a new Server with the given dependencies.
