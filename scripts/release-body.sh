@@ -166,13 +166,18 @@ EOF
   cat <<'EOF'
 ## SBOM
 
-The SPDX SBOM is attached to this release (`sbom.spdx.json`) together with its keyless signature bundle (`sbom.spdx.json.sigstore.json`), and also embedded in the image manifest (`docker buildx imagetools inspect`).
+The SPDX SBOM covers the image (OS packages and the Go binary's modules) and the frontend production dependencies. It is attached to this release (`sbom.spdx.json`) together with its keyless signature bundle (`sbom.spdx.json.sigstore.json`) and attested to the image digest. The image manifest additionally embeds BuildKit's own SBOM (`docker buildx imagetools inspect`).
 
 ```shell
 cosign verify-blob sbom.spdx.json \
   --bundle sbom.spdx.json.sigstore.json \
   --certificate-identity="https://github.com/kj187/jarvis/.github/workflows/release.yml@refs/tags/@TAG@" \
   --certificate-oidc-issuer="https://token.actions.githubusercontent.com"
+
+gh attestation verify oci://ghcr.io/kj187/jarvis@@DIGEST@ \
+  --repo kj187/jarvis \
+  --signer-workflow kj187/jarvis/.github/workflows/release.yml \
+  --predicate-type https://spdx.dev/Document/v2.3
 ```
 EOF
 }

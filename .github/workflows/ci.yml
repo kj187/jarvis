@@ -80,6 +80,9 @@ jobs:
       # Release body logic (curated RC notes, notes refresh) lives in a script so it is testable.
       - name: Test release body script
         run: scripts/test-release-body.sh
+      # SBOM merge and completeness check (fixtures, no network) — see scripts/sbom.sh.
+      - name: Test SBOM script
+        run: scripts/test-sbom.sh
       # Every FROM carries a @sha256 digest and pnpm is installed pinned — see scripts/check-image-pins.sh.
       - name: Check image pins
         run: |
@@ -401,3 +404,40 @@ jobs:
           fi
           jq -e '[.Results[]?.Vulnerabilities[]?] | length > 0' selftest.json >/dev/null \
             || { echo "::error::the self-test failed without reporting vulnerabilities (scanner error, not a finding)"; exit 1; }
+
+  # Release SBOM dry run: the same scripts/sbom.sh build the release workflow
+  # uses, against the image built from this PR. Fails when the SBOM misses the
+  # frontend packages (react), a Go module or a base package, or when 10 % or
+  # more of the packages have no license, so the release cannot first discover it.
+  sbom:
+    name: SBOM
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # ratchet:actions/checkout@v7.0.1
+
+      - name: Build image
+        run: docker build -f Containerfile -t jarvis:sbom .
+
+      - name: Install syft
+        id: syft
+        uses: anchore/sbom-action/download-syft@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # ratchet:anchore/sbom-action/download-syft@v0.24.2
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # ratchet:pnpm/action-setup@v6.1.0
+        with:
+          version: 11.9.0
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # ratchet:actions/setup-node@v7.0.0
+        with:
+          node-version: '22'
+
+      - name: Build and check SBOM
+        run: |
+          SYFT="${{ steps.syft.outputs.cmd }}"
+          if [ -z "${SYFT}" ]; then SYFT=$(command -v syft); fi
+          mkdir -p "${RUNNER_TEMP}/bin"
+          ln -sf "${SYFT}" "${RUNNER_TEMP}/bin/syft"
+          PATH="${RUNNER_TEMP}/bin:${PATH}" scripts/sbom.sh build docker:jarvis:sbom sbom.spdx.json ci

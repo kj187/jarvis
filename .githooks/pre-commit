@@ -52,6 +52,12 @@ if git diff --cached --name-only | grep -qE "^(scripts/(release-body|test-releas
   scripts/test-release-body.sh
 fi
 
+# ── SBOM script (only if it, its test or the release workflow changed) ───────
+if git diff --cached --name-only | grep -qE "^(scripts/(sbom|test-sbom)\.sh|\.github/workflows/release\.yml)$"; then
+  echo "  [SBOM] Testing scripts/sbom.sh..."
+  scripts/test-sbom.sh
+fi
+
 # ── Image pins (always; cheap) — every FROM carries a digest, pnpm is pinned ──
 echo "  [Image pins] Checking Containerfile digests and pnpm pin..."
 scripts/check-image-pins.sh

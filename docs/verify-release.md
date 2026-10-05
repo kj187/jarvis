@@ -66,25 +66,37 @@ deploys; verify both artifacts.
 ## Software bill of materials
 
 `sbom.spdx.json` and its signature bundle are attached to every GitHub
-release. The SBOM is also embedded in the image manifest and can be inspected
-with `docker buildx imagetools inspect`.
+release. The SBOM lists the OS packages of the image, the modules compiled into
+the Go binary and the frontend production dependencies, with licenses where the
+package metadata declares them. It is also attested to the image digest, so you
+can check it against the exact image you run. The image manifest additionally
+embeds BuildKit's own SBOM (`docker buildx imagetools inspect`).
 
 ```bash
 cosign verify-blob sbom.spdx.json \
   --bundle sbom.spdx.json.sigstore.json \
   --certificate-identity="https://github.com/kj187/jarvis/.github/workflows/release.yml@refs/tags/v<version>" \
   --certificate-oidc-issuer="https://token.actions.githubusercontent.com"
+
+gh attestation verify oci://ghcr.io/kj187/jarvis@sha256:<digest> \
+  --repo kj187/jarvis \
+  --signer-workflow kj187/jarvis/.github/workflows/release.yml \
+  --predicate-type https://spdx.dev/Document/v2.3
 ```
+
+SBOMs of releases up to v2.0.0 cover only the image and have no attestation.
 
 Keep the verified SBOM with your deployment evidence or feed it into your
 normal vulnerability and license-policy tooling.
 
 ## Smoke test for maintainers
 
-`scripts/verify-release-smoke.sh [vX.Y.Z]` runs the three verifications above
-against a published release and also checks that a signature identity from
-another workflow (`ci.yml`) or ref is rejected. Run it after every release; it
-needs network access, `cosign`, `crane` and `gh`.
+`scripts/verify-release-smoke.sh [--skip-sbom] [vX.Y.Z]` runs the verifications
+above against a published release, checks that the SBOM is complete (image and
+frontend packages, licenses present) and that a signature identity from another
+workflow (`ci.yml`) or ref is rejected. Run it after every release; it needs
+network access, `cosign`, `crane`, `jq` and `gh`. Releases up to v2.0.0 need
+`--skip-sbom`.
 
 ## Where to go next
 

@@ -64,8 +64,8 @@ helm unittest charts/jarvis/       # Unit tests (deployment, configmap, secret, 
 make verify                        # full working-tree verification — see "make verify" below
 make verify FAST=1                 # same, without the production image build + smoke test
 make test-all                      # backend + frontend + helm lint + helm unittest
-make test-scripts                  # test scripts/release-body.sh and scripts/check-image-pins.sh; no network needed
-scripts/verify-release-smoke.sh vX.Y.Z  # after a release: exact cosign identities accepted, other workflows rejected (network, cosign, crane, gh)
+make test-scripts                  # test scripts/release-body.sh, scripts/sbom.sh and scripts/check-image-pins.sh; no network needed
+scripts/verify-release-smoke.sh vX.Y.Z  # after a release: exact cosign identities accepted, other workflows rejected, SBOM complete + attested (network, cosign, crane, jq, gh; --skip-sbom up to v2.0.0)
 make check-image-pins              # every Containerfile FROM has a @sha256 digest, pnpm installs are pinned
 make test-backend                  # go test -race ./...
 make fuzz-backend                  # Go native fuzz targets (FUZZTIME=30s per target)
@@ -175,6 +175,7 @@ main checkout — the container cannot follow a git worktree's `.git` file).
 | `frontend/**` | `pnpm audit --audit-level=high` + `pnpm lint` (eslint) + `pnpm test:unit:coverage` (Vitest + 100% coverage gate, `lib/alertUtils.ts`) + `pnpm duplication` (jscpd) — executed **inside the running dev container** (`jarvis_frontend_1`); hook fails if the container is not running |
 | `charts/**` | `helm lint` + `helm unittest` |
 | `scripts/release-body.sh`, `scripts/test-release-body.sh`, `.github/workflows/release*.yml` | `scripts/test-release-body.sh` — tests the release body script, including the exact cosign identities it prints |
+| `scripts/sbom.sh`, `scripts/test-sbom.sh`, `.github/workflows/release.yml` | `scripts/test-sbom.sh` — tests the SBOM merge (frontend packages added, root pseudo-packages dropped, no duplicates) and the completeness check (required packages, licenses); jq fixtures, no network or syft needed |
 | always | `scripts/check-changelogs.sh` — chart changes (outside `tests/`) must update `charts/jarvis/CHANGELOG.md`; every chart-changelog version section starts with a non-empty `### Breaking Changes`; changed `.github/release-notes/*.md` contain a Breaking Changes heading (a no-op when none of those paths are staged) |
 | always | `scripts/check-image-pins.sh` (also `make check-image-pins`, tested by `scripts/test-check-image-pins.sh`) — every `FROM` in `Containerfile*` carries `@sha256:<digest>` (stage references and `scratch` exempt), and `npm install -g pnpm` always names a version (`pnpm@<version>`, also in `compose*.yml` and the `Makefile`) |
 | always | `scripts/check-agent-context.sh` (also `make check-agent-context`) — adapters stay thin, skill frontmatter (`name` = directory, `description` ≤ 1024), `AGENTS.md` ≤ 12,000 bytes, every path mentioned in `AGENTS.md` and every `.agents/…` reference exists, backend/frontend resolved-filter conformance fixtures byte-identical, every cited `Invariant #<n>` exists (`docs/ai-agents.md`) |
@@ -248,6 +249,11 @@ image-scan:          # "Image Scan" — builds ./Containerfile, then Trivy (acti
     (`continue-on-error` step + assertion), so a scanner that finds nothing cannot pass silently
     # a new finding in the Debian base can turn this red without a code change: bump the base
     # image or add a reasoned ignore entry. Not (yet) a required check of the `protect-main` ruleset
+
+sbom:                # "SBOM" — builds ./Containerfile, then `scripts/sbom.sh build` (syft, pnpm, Node):
+                     # image + frontend production dependencies merged, must contain react, echo and
+                     # base-files and under 10 % unlicensed packages. The only full run of the build
+                     # path before a release. Not (yet) a required check of the `protect-main` ruleset
 ```
 
 ### `.github/workflows/e2e.yml`

@@ -152,8 +152,9 @@ security-all: gosec govulncheck audit ## Run all security tools (gosec + govulnc
 check-agent-context: ## Validate agent context: adapters, skills, AGENTS.md, paths, fixtures, invariants
 	scripts/check-agent-context.sh
 
-test-scripts: ## Test the release body and image-pin scripts; no network needed
+test-scripts: ## Test the release body, SBOM and image-pin scripts; no network needed
 	scripts/test-release-body.sh
+	scripts/test-sbom.sh
 	scripts/test-check-image-pins.sh
 
 check-image-pins: ## Every Containerfile FROM has a @sha256 digest, pnpm installs are pinned
