@@ -1,0 +1,96 @@
+suite: networkpolicy
+templates:
+  - templates/networkpolicy.yaml
+
+tests:
+  - it: renders nothing by default
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: renders a NetworkPolicy selecting the Jarvis pods when enabled
+    set:
+      networkPolicy.enabled: true
+    asserts:
+      - hasDocuments:
+          count: 1
+      - isKind:
+          of: NetworkPolicy
+      - equal:
+          path: spec.podSelector.matchLabels
+          value:
+            app.kubernetes.io/name: jarvis
+            app.kubernetes.io/instance: RELEASE-NAME
+      - equal:
+          path: spec.policyTypes
+          value: [Ingress, Egress]
+
+  - it: allows ingress on the container port from anywhere unless peers are given
+    set:
+      networkPolicy.enabled: true
+    asserts:
+      - equal:
+          path: spec.ingress
+          value:
+            - ports:
+                - port: 8080
+                  protocol: TCP
+
+  - it: restricts ingress to the configured peers
+    set:
+      networkPolicy.enabled: true
+      networkPolicy.ingress.from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+    asserts:
+      - equal:
+          path: spec.ingress[0].from
+          value:
+            - namespaceSelector:
+                matchLabels:
+                  kubernetes.io/metadata.name: ingress-nginx
+      - equal:
+          path: spec.ingress[0].ports[0].port
+          value: 8080
+
+  - it: allows DNS egress by default and nothing else
+    set:
+      networkPolicy.enabled: true
+    asserts:
+      - equal:
+          path: spec.egress
+          value:
+            - ports:
+                - port: 53
+                  protocol: UDP
+                - port: 53
+                  protocol: TCP
+
+  - it: appends the configured egress rules after the DNS rule
+    set:
+      networkPolicy.enabled: true
+      networkPolicy.egress.rules:
+        - to:
+            - namespaceSelector:
+                matchLabels:
+                  kubernetes.io/metadata.name: monitoring
+          ports:
+            - port: 9093
+              protocol: TCP
+    asserts:
+      - lengthEqual:
+          path: spec.egress
+          count: 2
+      - equal:
+          path: spec.egress[1].ports[0].port
+          value: 9093
+
+  - it: denies all egress when DNS is off and no rules are given
+    set:
+      networkPolicy.enabled: true
+      networkPolicy.egress.allowDns: false
+    asserts:
+      - equal:
+          path: spec.egress
+          value: []

@@ -1,6 +1,7 @@
 {{- include "jarvis.validateReplicas" . }}
 {{- include "jarvis.validateAuth" . }}
 {{- include "jarvis.validateClusterAuth" . }}
+{{- include "jarvis.validateImage" . }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -66,7 +67,7 @@ spec:
         - name: {{ .Chart.Name }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}{{ if .Values.image.digest }}@{{ .Values.image.digest }}{{ end }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - name: http
@@ -166,6 +167,15 @@ spec:
                   name: {{ $secretName }}
                   key: {{ $keys.oauth2ClientSecret | default (printf "cluster-%d-oauth2-client-secret" $n) }}
                   optional: {{ $usingExisting }}
+            {{- end }}
+            {{- /* Header values always live in the chart-managed Secret (never the ConfigMap), even
+                   when the cluster's other credentials come from an existingSecret. */}}
+            {{- range $name, $value := ($auth.headers | default dict) }}
+            - name: JARVIS_CLUSTER_{{ $n }}_HEADER_{{ $name }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "jarvis.fullname" $ }}
+                  key: cluster-{{ $n }}-header-{{ $name }}
             {{- end }}
             {{- end }}
             {{- with .Values.extraEnv }}

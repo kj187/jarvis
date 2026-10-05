@@ -846,3 +846,66 @@ tests:
                 name: RELEASE-NAME-jarvis
                 key: setup-token
                 optional: true
+
+  - it: pins the image to a digest when image.digest is set
+    template: templates/deployment.yaml
+    set:
+      image.tag: v1.2.3
+      image.digest: sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: ghcr.io/kj187/jarvis:v1.2.3@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+
+  - it: appends the digest to the chart appVersion tag when image.tag is empty
+    template: templates/deployment.yaml
+    chart:
+      appVersion: 9.9.9-test
+    set:
+      image.digest: sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: ghcr.io/kj187/jarvis:9.9.9-test@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+
+  - it: fails when image.digest is not a sha256 digest
+    template: templates/deployment.yaml
+    set:
+      image.digest: latest
+    asserts:
+      - failedTemplate:
+          errorMessage: "Invalid configuration: image.digest must look like sha256:<64 hex characters>."
+
+  - it: reads a cluster header value from the chart Secret instead of the ConfigMap
+    template: templates/deployment.yaml
+    values:
+      - ./values/cluster-auth.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: JARVIS_CLUSTER_1_HEADER_X-Scope-OrgID
+            valueFrom:
+              secretKeyRef:
+                name: RELEASE-NAME-jarvis
+                key: cluster-1-header-X-Scope-OrgID
+
+  - it: keeps reading cluster headers from the chart Secret when the cluster uses an existingSecret
+    template: templates/deployment.yaml
+    set:
+      clusters:
+        - name: production
+          alertmanagerUrl: http://am:9093
+          auth:
+            existingSecret: external-am
+            headers:
+              Authorization: Bearer abc
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: JARVIS_CLUSTER_1_HEADER_Authorization
+            valueFrom:
+              secretKeyRef:
+                name: RELEASE-NAME-jarvis
+                key: cluster-1-header-Authorization

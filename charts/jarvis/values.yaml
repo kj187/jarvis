@@ -13,6 +13,11 @@ image:
   pullPolicy: IfNotPresent
   # Overrides the image tag. Defaults to the chart appVersion.
   tag: ""
+  # Optional image digest, e.g. sha256:0123...cdef. When set, the pod pulls
+  # <repository>:<tag>@<digest>: the digest is authoritative (the tag is only
+  # a label), so a re-pushed tag cannot change what runs. Verify the digest
+  # first (docs/verify-release.md). Empty keeps a tag-only reference.
+  digest: ""
 
 imagePullSecrets: []
 nameOverride: ""
@@ -87,6 +92,34 @@ metrics:
     honorLabels: false
   # Alternative to serviceMonitor for annotation-based scraping setups.
   podAnnotations: false
+
+# Optional NetworkPolicy for the Jarvis pods. Off by default so an existing
+# release renders unchanged. When on, it selects every pod of this release and
+# restricts BOTH directions, so it needs to know where Jarvis may connect:
+# egress allows DNS only (egress.allowDns) plus whatever you list in
+# egress.rules — Alertmanager, Prometheus, PostgreSQL, the OIDC issuer and, with
+# leaderElection.podLabel.enabled, the Kubernetes API. Without those rules the
+# pod can reach nothing. See docs/deploy-kubernetes.md for an example.
+networkPolicy:
+  enabled: false
+  ingress:
+    # NetworkPolicyPeer list allowed to reach the HTTP port (8080) — the ingress
+    # controller, plus Prometheus when it scrapes /metrics. Empty allows every
+    # source. Passed through verbatim.
+    from: []
+  egress:
+    # Allow DNS (port 53, UDP and TCP) to any destination.
+    allowDns: true
+    # NetworkPolicyEgressRule list appended after the DNS rule, passed through
+    # verbatim. Example:
+    #   - to:
+    #       - namespaceSelector:
+    #           matchLabels:
+    #             kubernetes.io/metadata.name: monitoring
+    #     ports:
+    #       - port: 9093
+    #         protocol: TCP
+    rules: []
 
 ingress:
   enabled: false
@@ -211,7 +244,11 @@ clusters:
         tokenUrl: ""
         # Comma-separated, e.g. "openid,profile"
         scopes: ""
-      # Arbitrary headers sent with every request, e.g. {X-Scope-OrgID: tenant1}
+      # Arbitrary headers sent with every request, e.g. {X-Scope-OrgID: tenant1}.
+      # Values are stored in the chart-managed Secret (never the ConfigMap), so a
+      # header like Authorization stays out of the ConfigMap even though it is
+      # given here in plain text. Keep real credentials out of values files:
+      # use bearerToken/basicAuth/oauth2 with existingSecret instead.
       headers: {}
       # Use an existing Secret instead of storing bearerToken/basicAuth.password/
       # oauth2.clientSecret above in values. Missing keys are treated as unset,

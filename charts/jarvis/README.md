@@ -76,6 +76,7 @@ Tests cover four suites (`deployment`, `configmap`, `secret`, `ingress`) and run
 | `replicaCount` | int | `1` | Number of replicas (for `>1`, use PostgreSQL backend) |
 | `image.repository` | string | `ghcr.io/kj187/jarvis` | Container image repository |
 | `image.tag` | string | `""` | Image tag (defaults to chart appVersion) |
+| `image.digest` | string | `""` | Optional image digest (`sha256:<64 hex>`). When set the pod pulls `<repository>:<tag>@<digest>` and the digest decides what runs; a malformed value fails the render. [Verify the digest](../../docs/verify-release.md) before pinning |
 | `image.pullPolicy` | string | `IfNotPresent` | Image pull policy |
 | `imagePullSecrets` | list | `[]` | Image pull secrets |
 | `nameOverride` | string | `""` | Override chart name |
@@ -134,7 +135,7 @@ Tests cover four suites (`deployment`, `configmap`, `secret`, `ingress`) and run
 | `clusters[].auth.oauth2.clientSecret` | string | `""` | OAuth2 client secret. Stored in a Secret. |
 | `clusters[].auth.oauth2.tokenUrl` | string | `""` | OAuth2 token endpoint. Required when `clientId` is set — the render fails otherwise |
 | `clusters[].auth.oauth2.scopes` | string | `""` | Comma-separated OAuth2 scopes, e.g. `openid,profile` |
-| `clusters[].auth.headers` | object | `{}` | Arbitrary headers sent with every request, e.g. `{X-Scope-OrgID: tenant1}` |
+| `clusters[].auth.headers` | object | `{}` | Arbitrary headers sent with every request, e.g. `{X-Scope-OrgID: tenant1}`. The values are stored in the chart's Secret, never the ConfigMap; keep real credentials out of values files and use `bearerToken`/`basicAuth`/`oauth2` with `existingSecret` instead |
 | `clusters[].auth.existingSecret` | string | `""` | Existing Secret to read `bearerToken`/`basicAuth.password`/`oauth2.clientSecret` from instead of the values above. Missing keys are treated as unset. |
 | `clusters[].auth.existingSecretKeys` | object | `{}` | Key names in `existingSecret`; unset entries fall back to `cluster-<n>-bearer-token` / `cluster-<n>-basic-auth-password` / `cluster-<n>-oauth2-client-secret` |
 | `database.dsn` | string | `/data/jarvis.db` | Database DSN (SQLite path or `postgres://` URL; PostgreSQL recommended for production) |
@@ -162,6 +163,10 @@ Tests cover four suites (`deployment`, `configmap`, `secret`, `ingress`) and run
 | `persistence.size` | string | `1Gi` | PVC size |
 | `persistence.annotations` | object | `{}` | PVC annotations (e.g. `helm.sh/resource-policy: keep`) |
 | `resources` | object | `{}` | Resource requests/limits |
+| `networkPolicy.enabled` | bool | `false` | Render a `NetworkPolicy` that restricts ingress and egress of the Jarvis pods. It denies everything it does not list, so also set `networkPolicy.egress.rules` (Alertmanager, database, OIDC issuer, Kubernetes API) — see [Kubernetes deployment](../../docs/deploy-kubernetes.md#network-policy) |
+| `networkPolicy.ingress.from` | list | `[]` | `NetworkPolicyPeer` list allowed to reach port 8080 (ingress controller, Prometheus). Empty allows every source |
+| `networkPolicy.egress.allowDns` | bool | `true` | Allow DNS (port 53 UDP/TCP) to any destination |
+| `networkPolicy.egress.rules` | list | `[]` | `NetworkPolicyEgressRule` list appended after the DNS rule, passed through verbatim |
 | `updateStrategy.type` | string | `""` | Deployment update strategy. Empty auto-selects: `Recreate` when `persistence.enabled` — an RWO volume (EBS and friends) cannot be mounted by two pods at once, so a rolling update forces a detachment and the old pod hits disk I/O errors — and `RollingUpdate` otherwise. Set it explicitly to override (e.g. `RollingUpdate` on PostgreSQL) |
 | `autoscaling.enabled` | bool | `false` | Enable HPA (requires PostgreSQL — same reasoning as `replicaCount` above) |
 | `autoscaling.minReplicas` | int | `1` | Lower bound for the HPA |

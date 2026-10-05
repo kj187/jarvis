@@ -90,7 +90,4 @@ data:
   JARVIS_CLUSTER_{{ $n }}_OAUTH2_SCOPES: {{ $oauth2.scopes | quote }}
   {{- end }}
   {{- end }}
-  {{- range $key, $value := ($auth.headers | default dict) }}
-  JARVIS_CLUSTER_{{ $n }}_HEADER_{{ $key }}: {{ $value | quote }}
-  {{- end }}
   {{- end }}
