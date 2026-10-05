@@ -13,12 +13,17 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
+// defaultManualPollMinInterval is 0 in the e2e build: specs force a poll after
+// every seed and must never be throttled.
+const defaultManualPollMinInterval time.Duration = 0
+
 // registerTestRoutes wires the e2e-only seed/reset endpoints. These are gated
 // behind the "e2e" build tag and MUST NOT be present in production builds.
 func (s *Server) registerTestRoutes(g *echo.Group) {
 	slog.Warn("e2e test routes enabled (/api/v1/test/*) — never run this build in production")
 	g.POST("/test/reset", s.testReset)
 	g.POST("/test/seed", s.testSeed)
+	g.POST("/test/poll", s.testPoll)
 	g.POST("/test/silence", s.testCreateSilence)
 	g.POST("/test/comment", s.testAddComment)
 	g.POST("/test/claim", s.testSetClaim)
@@ -92,6 +97,15 @@ func (s *Server) testReset(c echo.Context) error {
 	}
 	s.alertStore.Reset()
 	s.silenceStore.Reset()
+	return c.NoContent(http.StatusNoContent)
+}
+
+// POST /api/v1/test/poll — forces a poll like POST /api/v1/poll, but without the
+// login the real route requires from write_protect upward.
+func (s *Server) testPoll(c echo.Context) error {
+	if s.pollTrigger != nil {
+		s.pollTrigger.Trigger()
+	}
 	return c.NoContent(http.StatusNoContent)
 }
 

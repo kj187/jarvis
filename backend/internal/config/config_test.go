@@ -927,3 +927,32 @@ func TestLoad_MetricsToken(t *testing.T) {
 		t.Errorf("MetricsToken = %q, want scrape-me", cfg.MetricsToken)
 	}
 }
+
+func TestLoad_WSMaxConnections(t *testing.T) {
+	for _, tc := range []struct {
+		raw  string
+		want int
+	}{
+		{"", 500},
+		{"25", 25},
+		{"0", 0},
+	} {
+		t.Setenv("JARVIS_WS_MAX_CONNECTIONS", tc.raw)
+		cfg, err := Load()
+		if err != nil {
+			t.Fatalf("Load() with %q: %v", tc.raw, err)
+		}
+		if cfg.WSMaxConnections != tc.want {
+			t.Errorf("WSMaxConnections with %q = %d, want %d", tc.raw, cfg.WSMaxConnections, tc.want)
+		}
+	}
+}
+
+func TestLoad_WSMaxConnections_Invalid(t *testing.T) {
+	for _, raw := range []string{"-1", "many", "1.5"} {
+		t.Setenv("JARVIS_WS_MAX_CONNECTIONS", raw)
+		if _, err := Load(); err == nil {
+			t.Errorf("Load() with JARVIS_WS_MAX_CONNECTIONS=%q: expected error, got nil", raw)
+		}
+	}
+}

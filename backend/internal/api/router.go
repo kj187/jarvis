@@ -153,6 +153,7 @@ func NewRouter(
 
 	// Sessions are validated against the users table (user exists, token version
 	// current, role from the database), not trusted from the signed cookie alone.
+	hub.SetMaxConnections(cfg.WSMaxConnections)
 	if len(cfg.SecretKey) > 0 {
 		sessions := auth.NewSessionVerifier(cfg.SecretKey, userStore, sessionCacheTTL)
 		auth.SetSessionVerifier(sessions)
@@ -251,7 +252,7 @@ func NewRouter(
 	apiV1.PUT("/silence-templates/:id", srv.updateSilenceTemplate, requireAuth)
 	apiV1.DELETE("/silence-templates/:id", srv.deleteSilenceTemplate, requireAuth)
 
-	apiV1.POST("/poll", srv.triggerPoll)
+	apiV1.POST("/poll", srv.triggerPoll, requireAuth)
 
 	apiV1.GET("/clusters", srv.getClusters)
 

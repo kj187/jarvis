@@ -21,6 +21,9 @@ data:
   {{- if .Values.config.trustedProxies }}
   JARVIS_TRUSTED_PROXIES: {{ .Values.config.trustedProxies | quote }}
   {{- end }}
+  {{- if ne (toString .Values.config.wsMaxConnections) "" }}
+  JARVIS_WS_MAX_CONNECTIONS: {{ .Values.config.wsMaxConnections | toString | quote }}
+  {{- end }}
   {{- if .Values.config.silenceDurations }}
   JARVIS_SILENCE_DURATIONS: {{ .Values.config.silenceDurations | quote }}
   {{- end }}

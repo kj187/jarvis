@@ -404,8 +404,10 @@ func TestLoginRateLimit_IsGlobal(t *testing.T) {
 	}
 }
 
-// TestNoPerIPRateLimits: Jarvis is an internal tool; only /auth/login is
-// rate limited. Poll, setup and the write endpoints must never answer 429.
+// TestNoPerIPRateLimits: Jarvis is an internal tool, so there are no per-client
+// limits. /auth/login has one global bucket and /poll one global minimum
+// interval (poll_limit_test.go); setup and the write endpoints must never
+// answer 429.
 func TestNoPerIPRateLimits(t *testing.T) {
 	none, _ := newTestEchoWithDB(t, nil)
 	internal := newTestEchoInternal(t, "write_protect")
@@ -416,7 +418,6 @@ func TestNoPerIPRateLimits(t *testing.T) {
 		e            *echo.Echo
 		method, path string
 	}{
-		{"poll", none, http.MethodPost, "/api/v1/poll"},
 		{"setup", internal, http.MethodPost, "/setup"},
 		{"comment", none, http.MethodPost, "/api/v1/alerts/abc/comments"},
 		{"claim", none, http.MethodPost, "/api/v1/alerts/abc/claim"},

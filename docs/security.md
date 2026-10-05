@@ -89,9 +89,14 @@ account; every later request gets `403`. Until setup is complete, anyone who can
 instance: set [`JARVIS_SETUP_TOKEN`](configuration.md#jarvis_setup_token) to require a token for the first
 admin, complete the setup immediately after deployment, or restrict network access to the endpoint until then.
 
-**`POST /api/v1/poll`**: This endpoint needs no authentication (unless `JARVIS_AUTH_MODE=full_protect`) and has no rate limit. A hostile client
-can hammer it and keep the Alertmanager poll loop running constantly. Read-only access is available in
-`write_protect` mode; this endpoint affects performance only, not data integrity.
+**`POST /api/v1/poll`**: In `none` mode this endpoint is open; from `write_protect` upward it needs a login like every other
+write. Independent of the mode, polls closer together than 5 seconds apart are refused with `429` and a `Retry-After`
+header. The interval is global per pod, not per client, so rotating addresses does not get around it, and the recorder's own
+`JARVIS_POLL_INTERVAL` keeps the data fresh in between. A refused poll never reaches Alertmanager.
+
+**WebSocket `/ws`**: connections are capped per pod ([`JARVIS_WS_MAX_CONNECTIONS`](configuration.md#jarvis_ws_max_connections),
+default 500); one over the cap gets `503`. A client that stops reading is disconnected once its backlog of events is full, and
+reconnects on its own.
 
 ## Input Validation
 

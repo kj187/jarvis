@@ -24,6 +24,7 @@ type Metrics struct {
 	ClusterFetchDurationSeconds *prometheus.HistogramVec
 	AlertEventsTotal            *prometheus.CounterVec
 	WSBroadcastsTotal           *prometheus.CounterVec
+	WSRejectedTotal             prometheus.Counter
 	HTTPRequestsTotal           *prometheus.CounterVec
 	HTTPRequestDuration         *prometheus.HistogramVec
 
@@ -79,6 +80,10 @@ func New(version string) *Metrics {
 			Name: "jarvis_ws_broadcasts_total",
 			Help: "Total number of WebSocket broadcasts, by event type.",
 		}, []string{"type"}),
+		WSRejectedTotal: f.NewCounter(prometheus.CounterOpts{
+			Name: "jarvis_ws_rejected_total",
+			Help: "Total number of WebSocket connections refused because JARVIS_WS_MAX_CONNECTIONS was reached.",
+		}),
 		HTTPRequestsTotal: f.NewCounterVec(prometheus.CounterOpts{
 			Name: "jarvis_http_requests_total",
 			Help: "Total number of HTTP requests, by method, route pattern and status.",

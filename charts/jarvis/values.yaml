@@ -143,6 +143,10 @@ config:
   # (remote_ip); empty always logs the direct TCP peer, so the header cannot be
   # forged. Example: "10.0.0.0/8"
   trustedProxies: ""
+  # Cap on simultaneous WebSocket connections per pod
+  # (JARVIS_WS_MAX_CONNECTIONS). One over the cap gets 503; the browser retries
+  # on its own. Empty keeps the app default (500); 0 removes the cap.
+  wsMaxConnections: ""
   # Instance-wide default durations of the Fast-Silence and Extend-silence
   # menus — comma-separated, each a number plus m, h, d, w or y, at most 12,
   # each between 1m and 365d. Empty keeps the built-in defaults. Users can still
