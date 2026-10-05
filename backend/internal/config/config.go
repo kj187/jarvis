@@ -41,6 +41,7 @@ type Config struct {
 	AuthProvider     string // "none" | "internal" | "oidc"
 	AuthMode         string // "none" | "write_protect" | "full_protect"
 	SecretKey        []byte // HMAC key for JWTs; required when AuthProvider != "none"
+	CookieSecure     string // "auto" (Secure when the request is HTTPS) | "true" (always Secure)
 	SetupToken       string // optional; when set, POST /setup must carry it (internal auth only)
 	OIDCIssuer       string
 	OIDCClientID     string
@@ -268,6 +269,11 @@ func Load() (*Config, error) {
 		}
 	}
 
+	cookieSecure := getEnv("JARVIS_COOKIE_SECURE", "auto")
+	if cookieSecure != "auto" && cookieSecure != "true" {
+		return nil, fmt.Errorf("invalid JARVIS_COOKIE_SECURE=%q: must be auto or true", cookieSecure)
+	}
+
 	oidcScopes := []string{"openid", "profile", "email"}
 	if raw := getEnv("JARVIS_AUTH_OIDC_SCOPES", ""); raw != "" {
 		oidcScopes = strings.Split(raw, ",")
@@ -307,6 +313,7 @@ func Load() (*Config, error) {
 		AuthProvider:      authProvider,
 		AuthMode:          authMode,
 		SecretKey:         secretKey,
+		CookieSecure:      cookieSecure,
 		SetupToken:        getEnv("JARVIS_SETUP_TOKEN", ""),
 		OIDCIssuer:        getEnv("JARVIS_AUTH_OIDC_ISSUER", ""),
 		OIDCClientID:      getEnv("JARVIS_AUTH_OIDC_CLIENT_ID", ""),

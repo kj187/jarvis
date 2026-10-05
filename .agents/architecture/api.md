@@ -17,9 +17,13 @@ apply and writes are anonymous; startup logs a WARN (`config.Warnings()`).
 the same fingerprint can exist in multiple clusters, so history, stats, comments,
 and claims are isolated per cluster. Frontend hooks pass `clusterName` accordingly.
 
-Global middleware (all responses): `Secure` headers (X-XSS-Protection, nosniff,
-X-Frame-Options SAMEORIGIN, HSTS, CSP `default-src 'self'; …`), body limit 1 MB,
-CORS from `JARVIS_ALLOWED_ORIGINS` (credentials allowed).
+Global middleware (all responses): `Secure` headers (nosniff, X-Frame-Options
+DENY, Referrer-Policy same-origin, HSTS, CSP `default-src 'self'; … frame-ancestors 'none'`),
+`Permissions-Policy`, body limit 1 MB, CORS from `JARVIS_ALLOWED_ORIGINS`
+(credentials allowed), then `originGuard` (`internal/api/origin.go`): `POST`/`PUT`/
+`PATCH`/`DELETE` need an own-host or allow-listed `Origin`, else 403; no `Origin` passes
+unless `Sec-Fetch-Site: cross-site`. Session cookie `Secure` follows
+`JARVIS_COOKIE_SECURE` (`auto`|`true`).
 
 ```
 # ── Health / Metrics / Auth / Setup ──────────────────────────────────────────

@@ -124,12 +124,13 @@ func NewRouter(
 		},
 	}))
 	e.Use(middleware.SecureWithConfig(middleware.SecureConfig{
-		XSSProtection:         "1; mode=block",
 		ContentTypeNosniff:    "nosniff",
-		XFrameOptions:         "SAMEORIGIN",
+		XFrameOptions:         "DENY",
+		ReferrerPolicy:        "same-origin",
 		HSTSMaxAge:            31536000,
-		ContentSecurityPolicy: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'",
+		ContentSecurityPolicy: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'",
 	}))
+	e.Use(permissionsPolicy)
 	e.Use(middleware.BodyLimit("1M"))
 
 	if len(cfg.AllowedOrigins) > 0 {
@@ -140,6 +141,10 @@ func NewRouter(
 			AllowCredentials: true,
 		}))
 	}
+
+	e.Use(originGuard(cfg.AllowedOrigins))
+
+	auth.SetCookieSecure(cfg.CookieSecure == "true")
 
 	srv := NewServer(alertStore, silenceStore, store, hub, registry, cfg, recorder, authProvider, userStore, settingsStore, globalSettingsStore, f)
 
@@ -296,4 +301,13 @@ func spaHandler(fsys fs.FS) http.Handler {
 		r2.URL.Path = "/"
 		fileServer.ServeHTTP(w, r2)
 	})
+}
+
+// permissionsPolicy switches off browser features Jarvis never uses, so an
+// injected script or embedded frame cannot reach them.
+func permissionsPolicy(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		c.Response().Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=(), usb=()")
+		return next(c)
+	}
 }

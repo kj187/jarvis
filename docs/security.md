@@ -14,12 +14,19 @@ This document describes the security measures built into the application itself.
 
 All HTTP responses include security headers via Echo's `SecureWithConfig` middleware:
 
-- `X-XSS-Protection: 1; mode=block`
 - `X-Content-Type-Options: nosniff`
-- `X-Frame-Options: SAMEORIGIN`
+- `X-Frame-Options: DENY`
+- `Referrer-Policy: same-origin`
+- `Permissions-Policy` denying camera, microphone, geolocation, payment and USB
 - `Strict-Transport-Security` (when served over HTTPS)
 - `Content-Security-Policy: default-src 'self'; script-src 'self'; style-src
-  'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'`
+  'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self';
+  frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'`
+
+`X-XSS-Protection` is no longer sent: browsers dropped the XSS auditor, and the
+header could itself introduce vulnerabilities in old ones. Jarvis cannot be
+embedded in a frame on another site (or its own); an iframe embed needs a
+proxy that rewrites these headers.
 
 The CSP's `connect-src 'self'` means the browser API and WebSocket connection
 must be same-origin. A deployment that exposes them under another origin needs
@@ -30,6 +37,18 @@ CORS is configured with a strict origin allowlist (`JARVIS_ALLOWED_ORIGINS`).
 No wildcard `*` is used. WebSocket upgrades validate the `Origin` header
 against the same allowlist. Setting it correctly behind a proxy is described
 in [Running behind a proxy](reverse-proxy.md).
+
+**State-changing requests are origin-checked.** `POST`, `PUT`, `PATCH` and
+`DELETE` with an `Origin` that is neither this server's host nor in
+`JARVIS_ALLOWED_ORIGINS` — and requests without `Origin` that the browser marks
+`Sec-Fetch-Site: cross-site` — get `403`. CORS alone only hides the response; a
+cross-site form or bodyless `fetch` would still run the handler, so this closes
+login CSRF and bodyless writes. Non-browser clients (curl, scripts) send neither
+header and are unaffected.
+
+The session cookie is `HttpOnly`, `SameSite=Lax` and `Secure` when the request
+is HTTPS or carries `X-Forwarded-Proto: https`. `JARVIS_COOKIE_SECURE=true`
+forces `Secure` for a TLS-terminating proxy that does not send that header.
 
 Request bodies are limited to **1 MB**.
 
