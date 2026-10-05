@@ -136,6 +136,11 @@ config:
   # docs/configuration.md). Must be identical on every replica, which the
   # shared ConfigMap guarantees. Example: "1h"
   resolvedBufferTTL: ""
+  # Session-cookie Secure flag. Empty or "auto" sets it when the request is
+  # HTTPS (directly or via X-Forwarded-Proto); "true" always sets it, for a
+  # TLS-terminating proxy that does not send X-Forwarded-Proto. Any other
+  # value makes the app refuse to start.
+  cookieSecure: ""
   # Data-retention sweep. Fully opt-in — everything here is unset by default,
   # which disables the sweep entirely and keeps history forever, matching the
   # backend's own default. See docs/configuration.md for the full semantics

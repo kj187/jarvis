@@ -109,6 +109,7 @@ Tests cover four suites (`deployment`, `configmap`, `secret`, `ingress`) and run
 | `config.runbookBaseURL` | string | `""` | Base URL prepended to runbook label values |
 | `config.allowedOrigins` | string | `""` | Comma-separated allowed CORS/WebSocket origins |
 | `config.silenceDurations` | string | `""` | Instance default durations of the Fast-Silence and Extend-silence menus, e.g. `15m,1h,4h,1d,1w,30d` (`m`/`h`/`d`/`w`/`y`, max 12, 1m–365d). Empty = built-in defaults; users can override it in Settings |
+| `config.cookieSecure` | string | `""` | Session-cookie `Secure` flag: empty/`auto` follows the request (HTTPS or `X-Forwarded-Proto`), `true` always sets it. Use `true` behind a TLS-terminating proxy that does not send `X-Forwarded-Proto` |
 | `config.resolvedBufferTTL` | string | `""` | How long a resolved alert stays in the live snapshot (Go duration, 1m–24h). Empty = app default `20m`. A longer window costs memory and payload size per resolved alert in the window; see the configuration docs |
 | `config.retention.days` | string | `""` | Fallback retention age (days) for every history type. Empty disables the sweep entirely |
 | `config.retention.eventsDays` | string | `""` | Retention override (days) for alert lifecycle events; inherits `days` when unset |

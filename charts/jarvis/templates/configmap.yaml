@@ -21,6 +21,9 @@ data:
   {{- if .Values.config.resolvedBufferTTL }}
   JARVIS_RESOLVED_BUFFER_TTL: {{ .Values.config.resolvedBufferTTL | quote }}
   {{- end }}
+  {{- if .Values.config.cookieSecure }}
+  JARVIS_COOKIE_SECURE: {{ .Values.config.cookieSecure | quote }}
+  {{- end }}
   {{- if .Values.config.retention.days }}
   JARVIS_RETENTION_DAYS: {{ .Values.config.retention.days | quote }}
   {{- end }}

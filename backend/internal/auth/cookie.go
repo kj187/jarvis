@@ -2,6 +2,7 @@ package auth
 
 import (
 	"net/http"
+	"sync/atomic"
 	"time"
 
 	"github.com/labstack/echo/v4"
@@ -13,9 +14,19 @@ const (
 	sessionMaxAge       = 86400 // 24 h
 )
 
-// isSecure returns true when the request was received over HTTPS.
-// Checks X-Forwarded-Proto first, then falls back to JARVIS_TLS env flag.
+var forceSecureCookies atomic.Bool
+
+// SetCookieSecure makes every cookie Secure regardless of the request
+// (JARVIS_COOKIE_SECURE=true), for proxies that do not send X-Forwarded-Proto.
+func SetCookieSecure(force bool) { forceSecureCookies.Store(force) }
+
+// isSecure reports whether cookies should carry the Secure flag: always with
+// JARVIS_COOKIE_SECURE=true, otherwise when the request arrived over HTTPS
+// directly or via X-Forwarded-Proto.
 func isSecure(c echo.Context) bool {
+	if forceSecureCookies.Load() {
+		return true
+	}
 	if c.Request().Header.Get("X-Forwarded-Proto") == "https" {
 		return true
 	}

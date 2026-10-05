@@ -763,3 +763,36 @@ func TestWarnings_SetupTokenWithoutInternalAuth(t *testing.T) {
 		})
 	}
 }
+
+func TestLoad_CookieSecure(t *testing.T) {
+	for _, tc := range []struct {
+		env     string
+		want    string
+		wantErr bool
+	}{
+		{"", "auto", false},
+		{"auto", "auto", false},
+		{"true", "true", false},
+		{"false", "", true},
+		{"yes", "", true},
+	} {
+		t.Run(tc.env, func(t *testing.T) {
+			t.Setenv("JARVIS_AUTH_PROVIDER", "none")
+			t.Setenv("JARVIS_CLUSTER_1_NAME", "")
+			t.Setenv("JARVIS_COOKIE_SECURE", tc.env)
+			cfg, err := Load()
+			if tc.wantErr {
+				if err == nil {
+					t.Fatal("expected an error for an invalid JARVIS_COOKIE_SECURE")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("Load() error: %v", err)
+			}
+			if cfg.CookieSecure != tc.want {
+				t.Errorf("CookieSecure = %q, want %q", cfg.CookieSecure, tc.want)
+			}
+		})
+	}
+}

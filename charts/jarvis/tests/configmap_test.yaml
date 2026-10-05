@@ -58,6 +58,19 @@ tests:
           path: data.JARVIS_RESOLVED_BUFFER_TTL
           value: "1h"
 
+  - it: omits JARVIS_COOKIE_SECURE by default so the app keeps its auto behavior
+    asserts:
+      - notExists:
+          path: data.JARVIS_COOKIE_SECURE
+
+  - it: renders JARVIS_COOKIE_SECURE when config.cookieSecure is set
+    set:
+      config.cookieSecure: "true"
+    asserts:
+      - equal:
+          path: data.JARVIS_COOKIE_SECURE
+          value: "true"
+
   - it: omits all JARVIS_RETENTION_* by default
     asserts:
       - notExists:
