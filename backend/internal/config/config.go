@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/hex"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/url"
 	"os"
@@ -11,6 +12,8 @@ import (
 	"time"
 
 	"github.com/joho/godotenv"
+
+	"github.com/kj187/jarvis/backend/internal/db"
 )
 
 // Config holds all application configuration.
@@ -327,13 +330,22 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("invalid JARVIS_DB_MAX_OPEN_CONNS: must be >= 1, got %d", dbMaxOpenConns)
 	}
 
+	dbDSN := getEnv("JARVIS_DB_DSN", "/data/jarvis.db")
+	// Critical Invariant #8: a PostgreSQL pool is never 1. A configured 1 is
+	// raised to 2 instead of failing the start. SQLite ignores the value (it is
+	// always a single writer), so 1 stays harmless there.
+	if db.DetectDialect(dbDSN) == db.DialectPostgres && dbMaxOpenConns < 2 {
+		slog.Warn("JARVIS_DB_MAX_OPEN_CONNS=1 is not supported with PostgreSQL; using 2", "configured", dbMaxOpenConns)
+		dbMaxOpenConns = 2
+	}
+
 	return &Config{
 		Port:              getEnv("JARVIS_PORT", "8080"),
 		LogLevel:          getEnv("JARVIS_LOG_LEVEL", "info"),
 		LogRequests:       getEnvBool("JARVIS_LOG_REQUESTS", false),
 		PollInterval:      pollInterval,
 		ResolvedBufferTTL: resolvedBufferTTL,
-		DBDSN:             getEnv("JARVIS_DB_DSN", "/data/jarvis.db"),
+		DBDSN:             dbDSN,
 		DBMaxOpenConns:    dbMaxOpenConns,
 		RunbookBaseURL:    getEnv("JARVIS_RUNBOOK_BASE_URL", ""),
 		AllowedOrigins:    allowedOrigins,
