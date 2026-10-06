@@ -83,7 +83,7 @@ An attacker with network access to the login endpoint can exhaust this bucket an
 for all users. However, read access remains available in `write_protect` mode. All other endpoints
 (`/poll`, `/setup`, write routes, admin endpoints) have no rate limits.
 
-**Failed-login wait (per username)**: on top of that bucket, repeated failed logins for the same
+**Failed-login wait (per username)**: with `JARVIS_AUTH_PROVIDER=internal`, on top of that bucket, repeated failed logins for the same
 username slow down that username only. The first 5 failures are free; each further failure doubles the
 wait (2 s, 4 s, 8 s, …, capped at 5 minutes), and `POST /auth/login` answers `429` with `Retry-After`
 until it has passed. Attempts during the wait are rejected without being checked and do not extend it, a
@@ -91,7 +91,8 @@ successful login resets the counter, and unused counters expire after 15 minutes
 submitted name whether or not the account exists, so the response does not reveal which accounts exist. There is
 no per-IP limit (Jarvis is an internal tool, and behind a proxy the peer address is the proxy's). Trade-off: someone
 who can reach the login endpoint can keep one named user waiting for up to 5 minutes at a time; that is why it is
-a wait and not a lockout. Counters are per pod and not shared across replicas.
+a wait and not a lockout. Counters are per pod and not shared across replicas. With `oidc` there is no password in
+Jarvis; failed-login handling is the identity provider's job.
 
 **`POST /setup`**: This endpoint is open (no authentication, no rate limit) as long as no user exists
 in the database. The first admin is created atomically, so concurrent requests cannot create more than one
