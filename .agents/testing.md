@@ -221,6 +221,9 @@ backend-lint:        # "Backend Lint and Vulnerabilities"
   - golangci-lint run   # includes gosec and the gofmt formatter (both enabled in .golangci.yml) —
                         # golangci-lint is the only Go gate here, so formatting is unchecked
                         # anywhere else; that is how struct-alignment drift once accumulated
+                        # .golangci.yml has no path or rule exclusions, test files included: a gosec
+                        # exception is a `// #nosec Gxxx -- reason` (or `//nolint:gosec // reason`)
+                        # on the finding, never a global rule
 backend-fuzz:        # "Backend Fuzz" (no PostgreSQL service)
   - fuzz targets, 20s each, `-parallel 2` (FuzzRedactDSN, FuzzParseNullableTimeString,
     FuzzParseSecretKey, FuzzValidateSilenceMatchers, FuzzSanitizeAMMessage), run one after another —

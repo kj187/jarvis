@@ -102,7 +102,7 @@ func newTestServer(t *testing.T) (baseURL string, cancel context.CancelFunc) {
 
 func get(t *testing.T, url string) *http.Response {
 	t.Helper()
-	resp, err := http.Get(url) //nolint:noctx // test helper, no need for context plumbing
+	resp, err := http.Get(url) //nolint:noctx,gosec // test helper, G107: url is always a local httptest server
 	if err != nil {
 		t.Fatalf("GET %s: %v", url, err)
 	}

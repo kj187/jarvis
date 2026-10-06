@@ -1179,7 +1179,7 @@ func (s *Store) ReleaseClaimsForResolved(fingerprints []string) error {
 		placeholders += "?"
 		args = append(args, fp)
 	}
-	_, err := s.exec(context.Background(), // #nosec G202 -- placeholders are ? params, not user input
+	_, err := s.exec(context.Background(),
 		`UPDATE alert_claims SET released_at = ?, released_by = ?, release_reason = ?
 		 WHERE released_at IS NULL AND fingerprint IN (`+placeholders+`)`,
 		args...,
