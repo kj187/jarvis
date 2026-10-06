@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/labstack/echo/v4"
 
@@ -339,5 +340,71 @@ func TestGetAuthMe_NoCookie_Returns401(t *testing.T) {
 	_ = srv.getAuthMe(c)
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("status = %d, want 401", rec.Code)
+	}
+}
+
+func postLoginAs(t *testing.T, srv *Server, username, password string) *httptest.ResponseRecorder {
+	t.Helper()
+	body, _ := json.Marshal(map[string]string{"username": username, "password": password})
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/auth/login", bytes.NewReader(body))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	_ = srv.postLogin(echo.New().NewContext(req, rec))
+	return rec
+}
+
+func TestPostLogin_RepeatedFailuresThrottleOnlyThatUser(t *testing.T) {
+	srv, store := newAuthServer(t)
+	createTestUser(t, store, "alice", "correctpassword123!", "user")
+	createTestUser(t, store, "bob", "correctpassword123!", "user")
+
+	for i := 0; i < 10; i++ {
+		postLoginAs(t, srv, "alice", "wrong-password-1!")
+	}
+
+	locked := postLoginAs(t, srv, "alice", "correctpassword123!")
+	if locked.Code != http.StatusTooManyRequests {
+		t.Fatalf("alice with the right password while throttled: status = %d, want 429", locked.Code)
+	}
+	if locked.Header().Get("Retry-After") == "" {
+		t.Error("429 without Retry-After")
+	}
+	if ok := postLoginAs(t, srv, "bob", "correctpassword123!"); ok.Code != http.StatusOK {
+		t.Fatalf("bob status = %d, want 200 (a throttled alice must not affect bob)", ok.Code)
+	}
+}
+
+func TestPostLogin_ThrottleDoesNotRevealWhetherTheAccountExists(t *testing.T) {
+	srv, store := newAuthServer(t)
+	createTestUser(t, store, "alice", "correctpassword123!", "user")
+
+	for i := 0; i < 10; i++ {
+		postLoginAs(t, srv, "alice", "wrong-password-1!")
+		postLoginAs(t, srv, "ghost", "wrong-password-1!")
+	}
+	existing := postLoginAs(t, srv, "alice", "wrong-password-1!")
+	missing := postLoginAs(t, srv, "ghost", "wrong-password-1!")
+
+	if existing.Code != missing.Code || existing.Body.String() != missing.Body.String() {
+		t.Fatalf("responses differ: existing = %d %q, missing = %d %q",
+			existing.Code, existing.Body.String(), missing.Code, missing.Body.String())
+	}
+}
+
+func TestPostLogin_LoginWorksAgainAfterTheWait(t *testing.T) {
+	srv, store := newAuthServer(t)
+	createTestUser(t, store, "alice", "correctpassword123!", "user")
+	now := time.Now()
+	srv.loginThrottle.SetClock(func() time.Time { return now })
+
+	for i := 0; i < 10; i++ {
+		postLoginAs(t, srv, "alice", "wrong-password-1!")
+	}
+	if rec := postLoginAs(t, srv, "alice", "correctpassword123!"); rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("status = %d, want 429 while throttled", rec.Code)
+	}
+	now = now.Add(time.Hour)
+	if rec := postLoginAs(t, srv, "alice", "correctpassword123!"); rec.Code != http.StatusOK {
+		t.Fatalf("status after the wait = %d, want 200", rec.Code)
 	}
 }
