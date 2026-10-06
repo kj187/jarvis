@@ -93,7 +93,7 @@ func (e *revocationEnv) cookie(u *users.User) *http.Cookie {
 	if err != nil {
 		e.t.Fatalf("create token: %v", err)
 	}
-	return &http.Cookie{Name: auth.SessionCookieName, Value: tok}
+	return &http.Cookie{Name: auth.SessionCookieName, Value: tok} // #nosec G124 -- request cookie, Secure/HttpOnly/SameSite only matter on Set-Cookie
 }
 
 func do(t *testing.T, ts *httptest.Server, method, path string, ck *http.Cookie) int {
@@ -229,7 +229,7 @@ func TestSession_LogoutWithoutSessionIsUnauthorized(t *testing.T) {
 	if got := do(t, ts, http.MethodPost, "/auth/logout", nil); got != http.StatusUnauthorized {
 		t.Fatalf("logout without cookie = %d, want 401", got)
 	}
-	garbage := &http.Cookie{Name: auth.SessionCookieName, Value: "not-a-jwt"}
+	garbage := &http.Cookie{Name: auth.SessionCookieName, Value: "not-a-jwt"} // #nosec G124 -- request cookie, Secure/HttpOnly/SameSite only matter on Set-Cookie
 	if got := do(t, ts, http.MethodPost, "/auth/logout", garbage); got != http.StatusUnauthorized {
 		t.Fatalf("logout with garbage cookie = %d, want 401", got)
 	}

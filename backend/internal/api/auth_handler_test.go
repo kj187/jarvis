@@ -165,7 +165,7 @@ func TestGetAuthMe_Authenticated(t *testing.T) {
 	tok, _ := auth.CreateToken(testSecretKey, u)
 
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/auth/me", nil)
-	req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: tok})
+	req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: tok}) // #nosec G124 -- request cookie, Secure/HttpOnly/SameSite only matter on Set-Cookie
 	rec := httptest.NewRecorder()
 	c := echo.New().NewContext(req, rec)
 	c.Set(auth.ContextKey, u)

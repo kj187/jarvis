@@ -31,7 +31,7 @@ func makeSessionCookie(t *testing.T, user *auth.User) *http.Cookie {
 	if err != nil {
 		t.Fatalf("create token: %v", err)
 	}
-	return &http.Cookie{Name: "jarvis_session", Value: tok}
+	return &http.Cookie{Name: "jarvis_session", Value: tok} // #nosec G124 -- request cookie, Secure/HttpOnly/SameSite only matter on Set-Cookie
 }
 
 // RequireAuth — none mode passes through without any cookie
