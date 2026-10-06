@@ -25,8 +25,10 @@ and which gates apply — see [AI and engineering](ai-development.md).
 Codex and Copilot behavior is taken from the vendors' documentation and has not
 been re-tested in this repository. There is deliberately no
 `.github/copilot-instructions.md`: a symlink to `AGENTS.md` made Copilot load
-the instructions twice. `.claude/settings.json` only pre-approves test and lint
-commands; hard rules live in `.githooks/pre-commit`, the `Makefile` and CI.
+the instructions twice. The repository ships no tool permissions
+(`.claude/settings.json` is git-ignored): which commands an agent may run without
+asking is a personal setting. Hard rules live in `.githooks/pre-commit`, the
+`Makefile` and CI.
 
 ## Why `AGENTS.md` has a byte budget
 

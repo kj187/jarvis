@@ -52,7 +52,8 @@ backend/tmp/
 
 tmp/
 
-# Claude Code local settings (machine-specific permissions)
+# Claude Code settings and permissions are personal, never shared via the repo
+.claude/settings.json
 .claude/settings.local.json
 # Release video: per-release storyboard, narration and render work dir (videos go to VIDEO_OUT, never the repo)
 frontend/e2e/_video/
