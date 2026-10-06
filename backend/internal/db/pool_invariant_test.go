@@ -2,8 +2,11 @@ package db
 
 import (
 	"go/ast"
+	"go/constant"
+	"go/importer"
 	"go/parser"
 	"go/token"
+	"go/types"
 	"os"
 	"strconv"
 	"testing"
@@ -49,6 +52,19 @@ func poolInvariantViolations(t *testing.T, src string) []string {
 		})
 	}
 
+	// Constant-fold the arguments (named constants, negative literals, 2-1, …);
+	// unresolved imports are tolerated, only constant values matter here.
+	info := &types.Info{Types: map[ast.Expr]types.TypeAndValue{}}
+	tc := types.Config{Importer: importer.Default(), Error: func(error) {}}
+	_, _ = tc.Check("db", fset, []*ast.File{file}, info)
+	constInt := func(e ast.Expr) (int64, bool) {
+		tv, ok := info.Types[e]
+		if !ok || tv.Value == nil || tv.Value.Kind() != constant.Int {
+			return 0, false
+		}
+		return constant.Int64Val(tv.Value)
+	}
+
 	exprString := func(e ast.Expr) string {
 		if e == nil {
 			return ""
@@ -59,7 +75,7 @@ func poolInvariantViolations(t *testing.T, src string) []string {
 	var out []string
 
 	sqlite := calls["openSQLite"]["SetMaxOpenConns"]
-	if lit, ok := sqlite.(*ast.BasicLit); !ok || lit.Kind != token.INT || lit.Value != "1" {
+	if v, ok := constInt(sqlite); !ok || v != 1 {
 		out = append(out, "openSQLite must call SetMaxOpenConns(1), got "+strconv.Quote(exprString(sqlite)))
 	}
 
@@ -68,8 +84,8 @@ func poolInvariantViolations(t *testing.T, src string) []string {
 	if open == nil {
 		out = append(out, "openPostgres must cap the pool with SetMaxOpenConns (unbounded exhausts server connection slots)")
 	} else {
-		if _, literal := open.(*ast.BasicLit); literal {
-			out = append(out, "openPostgres must take the cap from configuration, not the literal "+strconv.Quote(exprString(open)))
+		if _, constantCap := constInt(open); constantCap {
+			out = append(out, "openPostgres must take the cap from configuration, not the constant "+strconv.Quote(exprString(open)))
 		}
 		if exprString(idle) != exprString(open) {
 			out = append(out, "openPostgres must set SetMaxIdleConns to the same value as SetMaxOpenConns, got "+strconv.Quote(exprString(idle)))
@@ -102,6 +118,10 @@ func openPostgres(d D, cfg C) { d.SetMaxOpenConns(cfg.n); d.SetMaxIdleConns(cfg.
 		{"sqlite cap removed", head + "func openSQLite(d D) {}\nfunc openPostgres(d D, cfg C) { d.SetMaxOpenConns(cfg.n); d.SetMaxIdleConns(cfg.n) }"},
 		{"postgres hard-coded 1", head + "func openSQLite(d D) { d.SetMaxOpenConns(1) }\nfunc openPostgres(d D, cfg C) { d.SetMaxOpenConns(1); d.SetMaxIdleConns(1) }"},
 		{"postgres unbounded literal", head + "func openSQLite(d D) { d.SetMaxOpenConns(1) }\nfunc openPostgres(d D, cfg C) { d.SetMaxOpenConns(0); d.SetMaxIdleConns(0) }"},
+		{"postgres named constant", head + "const one = 1\nfunc openSQLite(d D) { d.SetMaxOpenConns(1) }\nfunc openPostgres(d D, cfg C) { d.SetMaxOpenConns(one); d.SetMaxIdleConns(one) }"},
+		{"postgres negative literal", head + "func openSQLite(d D) { d.SetMaxOpenConns(1) }\nfunc openPostgres(d D, cfg C) { d.SetMaxOpenConns(-1); d.SetMaxIdleConns(-1) }"},
+		{"postgres constant expression", head + "func openSQLite(d D) { d.SetMaxOpenConns(1) }\nfunc openPostgres(d D, cfg C) { d.SetMaxOpenConns(2 - 1); d.SetMaxIdleConns(2 - 1) }"},
+		{"sqlite named constant not 1", head + "const n = 3\nfunc openSQLite(d D) { d.SetMaxOpenConns(n) }\nfunc openPostgres(d D, cfg C) { d.SetMaxOpenConns(cfg.n); d.SetMaxIdleConns(cfg.n) }"},
 		{"postgres cap removed", head + "func openSQLite(d D) { d.SetMaxOpenConns(1) }\nfunc openPostgres(d D, cfg C) { d.SetMaxIdleConns(cfg.n) }"},
 		{"postgres idle differs", head + "func openSQLite(d D) { d.SetMaxOpenConns(1) }\nfunc openPostgres(d D, cfg C) { d.SetMaxOpenConns(cfg.n); d.SetMaxIdleConns(2) }"},
 	}
