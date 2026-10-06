@@ -6,7 +6,9 @@ import (
 	"crypto/subtle"
 	"encoding/base64"
 	"log/slog"
+	"math"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/labstack/echo/v4"
@@ -88,11 +90,20 @@ func (s *Server) postLogin(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request")
 	}
 
+	// The wait applies to every submitted username, existing or not, so the
+	// response never reveals whether an account exists.
+	if wait := s.loginThrottle.Wait(req.Username); wait > 0 {
+		c.Response().Header().Set("Retry-After", strconv.Itoa(int(math.Ceil(wait.Seconds()))))
+		return c.JSON(http.StatusTooManyRequests, map[string]string{"error": "too many failed attempts, try again later"})
+	}
+
 	u, err := s.authProvider.Authenticate(c.Request().Context(), req.Username, req.Password)
 	if err != nil {
+		s.loginThrottle.Fail(req.Username)
 		// Always return the same message to prevent user enumeration.
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid credentials"})
 	}
+	s.loginThrottle.Succeed(req.Username)
 
 	tok, err := auth.CreateToken(s.cfg.SecretKey, u)
 	if err != nil {

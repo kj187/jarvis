@@ -56,6 +56,7 @@ type Server struct {
 	fanout              fanout.Fanout
 	dbHealth            dbHealth
 	pollGate            pollGate
+	loginThrottle       *auth.LoginThrottle
 }
 
 // NewServer creates a new Server with the given dependencies.
@@ -86,6 +87,7 @@ func NewServer(
 		settingsStore:       settingsStore,
 		globalSettingsStore: globalSettingsStore,
 		fanout:              f,
+		loginThrottle:       auth.NewLoginThrottle(),
 	}
 }
 
