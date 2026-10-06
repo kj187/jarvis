@@ -6,9 +6,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"regexp"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/labstack/echo/v4"
 
@@ -61,18 +63,15 @@ func validRouteQuery(route, extra string) string {
 }
 
 // unreachableReadRoutes are GET routes that cannot reach their handler in
-// this harness (auth mode none, no OIDC provider, no embedded frontend) or
-// that judge an unknown fingerprint before touching any data. Each is
-// reviewed by hand; a new unreached route fails the test until it is listed.
+// this harness (an admin session on internal auth, a seeded alert, no OIDC
+// provider, no embedded frontend). Each is reviewed by hand; a new unreached
+// route fails the test until it is listed, and a listed route that exists no
+// more or that now answers fails it too (stale exception).
 var unreachableReadRoutes = map[string]string{
-	"/api/v1/alerts/:fingerprint/stats": "fingerprint is not in the empty snapshot (404)",
-	"/api/v1/admin/users":               "admin only, auth mode none has no admin session",
-	"/api/v1/admin/settings":            "admin only, auth mode none has no admin session",
-	"/api/v1/admin/settings/:section":   "admin only, auth mode none has no admin session",
-	"/auth/me":                          "no session in auth mode none",
-	"/auth/oidc/start":                  "no OIDC provider configured",
-	"/auth/oidc/callback":               "no OIDC provider configured",
-	"/*":                                "static frontend, nothing embedded in tests",
+	"/api/v1/admin/settings/:section": "no settings section is registered yet, every name is a 404",
+	"/auth/oidc/start":                "no OIDC provider configured (internal auth)",
+	"/auth/oidc/callback":             "no OIDC provider configured (internal auth)",
+	"/*":                              "static frontend, nothing embedded in tests",
 }
 
 // Critical Invariant #13: client-facing read endpoints never call
@@ -110,14 +109,16 @@ func TestRouter_ReadEndpointsNeverCallAlertmanager(t *testing.T) {
 		{Name: "staging", AlertmanagerURL: am.URL},
 	})
 	trigger := &fakeTriggerer{}
-	e := newRouterWithRegistryAndTrigger(t, registry, trigger)
+	e, session := newRouterWithRegistryAndTrigger(t, registry, trigger, am.URL)
 
 	checked := 0
+	registered := map[string]bool{}
 	var unreached []string
 	for _, r := range e.Routes() {
 		if r.Method != http.MethodGet {
 			continue
 		}
+		registered[r.Path] = true
 		path := upstreamRouteParam.ReplaceAllStringFunc(r.Path, validRouteParam)
 		// The WebSocket route needs an upgrade handshake; it streams the same
 		// snapshots and is covered by the hub tests.
@@ -130,6 +131,7 @@ func TestRouter_ReadEndpointsNeverCallAlertmanager(t *testing.T) {
 		reached := false
 		for _, target := range []string{path + validRouteQuery(r.Path, ""), path + validRouteQuery(r.Path, "cluster=prod")} {
 			req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, target, nil)
+			req.AddCookie(session)
 			rec := httptest.NewRecorder()
 			e.ServeHTTP(rec, req)
 			if n := hits.Load(); n != 0 {
@@ -155,15 +157,26 @@ func TestRouter_ReadEndpointsNeverCallAlertmanager(t *testing.T) {
 			t.Errorf("GET %s never reached its handler (400/404/401/403 on every request) — fix the request or list it in unreachableReadRoutes with a reason", route)
 		}
 	}
+	for route, why := range unreachableReadRoutes {
+		if !registered[route] {
+			t.Errorf("unreachableReadRoutes lists %s (%s), but no such GET route is registered — remove the stale exception", route, why)
+		}
+		if !slices.Contains(unreached, route) {
+			t.Errorf("unreachableReadRoutes lists %s (%s), but it answers now — remove the stale exception", route, why)
+		}
+	}
 	if checked < 10 {
 		t.Fatalf("only %d GET routes reached their handler — the route walk is not seeing the router (unreached: %v)", checked, unreached)
 	}
 }
 
-// newRouterWithRegistryAndTrigger builds the full router (auth mode none)
-// around the given cluster registry and a caller-owned poll trigger, so a test
-// can assert the router never fired it.
-func newRouterWithRegistryAndTrigger(t *testing.T, registry *cluster.Registry, trigger *fakeTriggerer) *echo.Echo {
+// newRouterWithRegistryAndTrigger builds the full router (internal auth,
+// write_protect) around the given cluster registry and a caller-owned poll
+// trigger, so a test can assert the router never fired it. It seeds one alert
+// event (fingerprint 0123456789abcdef, cluster prod) and returns the session
+// cookie of an admin user, so admin-only and per-alert read routes are
+// reachable.
+func newRouterWithRegistryAndTrigger(t *testing.T, registry *cluster.Registry, trigger *fakeTriggerer, amURL string) (*echo.Echo, *http.Cookie) {
 	t.Helper()
 	database, dialect, err := idb.Open(":memory:")
 	if err != nil {
@@ -174,7 +187,31 @@ func newRouterWithRegistryAndTrigger(t *testing.T, registry *cluster.Registry, t
 	}
 	t.Cleanup(func() { _ = database.Close() })
 
+	userStore := users.NewStore(database, dialect)
+	hash, err := auth.HashPassword("a-long-enough-password")
+	if err != nil {
+		t.Fatalf("hash: %v", err)
+	}
+	admin, err := userStore.Create(context.Background(), &users.CreateUser{Username: "admin", Role: "admin", Provider: "internal", PasswordHash: hash})
+	if err != nil {
+		t.Fatalf("create admin: %v", err)
+	}
+	token, err := auth.CreateToken(testSecretKey, &auth.User{ID: admin.ID, Username: admin.Username, Role: admin.Role, Provider: admin.Provider, TokenVersion: admin.TokenVersion})
+	if err != nil {
+		t.Fatalf("create token: %v", err)
+	}
+	session := &http.Cookie{Name: auth.SessionCookieName, Value: token} // #nosec G124 -- request cookie, flags only matter on Set-Cookie
+
+	historyStore := history.NewStore(database, dialect)
+	if err := historyStore.UpsertFingerprint("0123456789abcdef", "TestAlert", "prod", map[string]string{"alertname": "TestAlert"}); err != nil {
+		t.Fatalf("seed fingerprint: %v", err)
+	}
+	if _, _, err := historyStore.RecordStatusChange("0123456789abcdef", "prod", amURL, "firing", time.Now(), nil); err != nil {
+		t.Fatalf("seed alert event: %v", err)
+	}
+
 	hub := ws.NewHub(nil, nil, metrics.New("test"))
 	go hub.Run()
-	return NewRouter(&history.AlertStore{}, history.NewSilenceStore(), history.NewStore(database, dialect), hub, registry, &config.Config{}, embed.FS{}, trigger, auth.NoneProvider{}, users.NewStore(database, dialect), settings.NewStore(database, dialect), globalsettings.NewStore(database, dialect), metrics.New("test"), fanout.NoopFanout{})
+	cfg := &config.Config{AuthProvider: "internal", AuthMode: "write_protect", SecretKey: testSecretKey}
+	return NewRouter(&history.AlertStore{}, history.NewSilenceStore(), historyStore, hub, registry, cfg, embed.FS{}, trigger, auth.NewInternalProvider(userStore), userStore, settings.NewStore(database, dialect), globalsettings.NewStore(database, dialect), metrics.New("test"), fanout.NoopFanout{}), session
 }
