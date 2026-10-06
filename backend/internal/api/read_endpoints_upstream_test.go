@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"regexp"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -38,6 +39,40 @@ func validRouteParam(name string) string {
 	default:
 		return "x"
 	}
+}
+
+// validRouteQuery adds the query parameters a route requires to get past its
+// input validation, plus the caller's extra query.
+func validRouteQuery(route, extra string) string {
+	var parts []string
+	switch {
+	case strings.HasSuffix(route, "/heatmap"):
+		parts = append(parts, "range=24h")
+	case strings.HasSuffix(route, "/comments"):
+		parts = append(parts, "cluster=prod")
+	}
+	if extra != "" && (len(parts) == 0 || parts[0] != extra) {
+		parts = append(parts, extra)
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return "?" + strings.Join(parts, "&")
+}
+
+// unreachableReadRoutes are GET routes that cannot reach their handler in
+// this harness (auth mode none, no OIDC provider, no embedded frontend) or
+// that judge an unknown fingerprint before touching any data. Each is
+// reviewed by hand; a new unreached route fails the test until it is listed.
+var unreachableReadRoutes = map[string]string{
+	"/api/v1/alerts/:fingerprint/stats": "fingerprint is not in the empty snapshot (404)",
+	"/api/v1/admin/users":               "admin only, auth mode none has no admin session",
+	"/api/v1/admin/settings":            "admin only, auth mode none has no admin session",
+	"/api/v1/admin/settings/:section":   "admin only, auth mode none has no admin session",
+	"/auth/me":                          "no session in auth mode none",
+	"/auth/oidc/start":                  "no OIDC provider configured",
+	"/auth/oidc/callback":               "no OIDC provider configured",
+	"/*":                                "static frontend, nothing embedded in tests",
 }
 
 // Critical Invariant #13: client-facing read endpoints never call
@@ -74,9 +109,11 @@ func TestRouter_ReadEndpointsNeverCallAlertmanager(t *testing.T) {
 		{Name: "prod", AlertmanagerURL: am.URL},
 		{Name: "staging", AlertmanagerURL: am.URL},
 	})
-	e := newRouterWithRegistry(t, registry)
+	trigger := &fakeTriggerer{}
+	e := newRouterWithRegistryAndTrigger(t, registry, trigger)
 
 	checked := 0
+	var unreached []string
 	for _, r := range e.Routes() {
 		if r.Method != http.MethodGet {
 			continue
@@ -87,21 +124,46 @@ func TestRouter_ReadEndpointsNeverCallAlertmanager(t *testing.T) {
 		if path == "/ws" {
 			continue
 		}
-		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, path, nil)
-		e.ServeHTTP(httptest.NewRecorder(), req)
-		checked++
-		if n := hits.Load(); n != 0 {
-			t.Fatalf("GET %s called Alertmanager %d time(s); read endpoints must serve snapshots only (Invariant #13)", r.Path, n)
+		// Once plain and once with a cluster filter: a handler that goes
+		// upstream only when a cluster is named must not hide behind the
+		// unfiltered request.
+		reached := false
+		for _, target := range []string{path + validRouteQuery(r.Path, ""), path + validRouteQuery(r.Path, "cluster=prod")} {
+			req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, target, nil)
+			rec := httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+			if n := hits.Load(); n != 0 {
+				t.Fatalf("GET %s called Alertmanager %d time(s); read endpoints must serve snapshots only (Invariant #13)", target, n)
+			}
+			if n := trigger.calls; n != 0 {
+				t.Fatalf("GET %s triggered a poll %d time(s); read endpoints must not drive the recorder (Invariant #13)", target, n)
+			}
+			// A 400/404 means the request was rejected before the handler
+			// did its work, so it proves nothing about upstream calls.
+			if rec.Code == http.StatusOK || rec.Code == http.StatusNoContent {
+				reached = true
+			}
+		}
+		if reached {
+			checked++
+		} else {
+			unreached = append(unreached, r.Path)
+		}
+	}
+	for _, route := range unreached {
+		if _, known := unreachableReadRoutes[route]; !known {
+			t.Errorf("GET %s never reached its handler (400/404/401/403 on every request) — fix the request or list it in unreachableReadRoutes with a reason", route)
 		}
 	}
 	if checked < 10 {
-		t.Fatalf("only %d GET routes checked — the route walk is not seeing the router", checked)
+		t.Fatalf("only %d GET routes reached their handler — the route walk is not seeing the router (unreached: %v)", checked, unreached)
 	}
 }
 
-// newRouterWithRegistry builds the full router (auth mode none) around the
-// given cluster registry.
-func newRouterWithRegistry(t *testing.T, registry *cluster.Registry) *echo.Echo {
+// newRouterWithRegistryAndTrigger builds the full router (auth mode none)
+// around the given cluster registry and a caller-owned poll trigger, so a test
+// can assert the router never fired it.
+func newRouterWithRegistryAndTrigger(t *testing.T, registry *cluster.Registry, trigger *fakeTriggerer) *echo.Echo {
 	t.Helper()
 	database, dialect, err := idb.Open(":memory:")
 	if err != nil {
@@ -114,5 +176,5 @@ func newRouterWithRegistry(t *testing.T, registry *cluster.Registry) *echo.Echo 
 
 	hub := ws.NewHub(nil, nil, metrics.New("test"))
 	go hub.Run()
-	return NewRouter(&history.AlertStore{}, history.NewSilenceStore(), history.NewStore(database, dialect), hub, registry, &config.Config{}, embed.FS{}, &fakeTriggerer{}, auth.NoneProvider{}, users.NewStore(database, dialect), settings.NewStore(database, dialect), globalsettings.NewStore(database, dialect), metrics.New("test"), fanout.NoopFanout{})
+	return NewRouter(&history.AlertStore{}, history.NewSilenceStore(), history.NewStore(database, dialect), hub, registry, &config.Config{}, embed.FS{}, trigger, auth.NoneProvider{}, users.NewStore(database, dialect), settings.NewStore(database, dialect), globalsettings.NewStore(database, dialect), metrics.New("test"), fanout.NoopFanout{})
 }
