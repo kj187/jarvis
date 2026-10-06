@@ -18,6 +18,9 @@ const tokenRefreshBuffer = 30 * time.Second
 // tokenFallbackTTL is used when the token endpoint does not return expires_in.
 const tokenFallbackTTL = 5 * time.Minute
 
+// maxTokenResponseBytes caps the token endpoint response.
+const maxTokenResponseBytes = 1 << 20
+
 // OAuth2ClientConfig holds OAuth2 client credentials for the client_credentials grant.
 type OAuth2ClientConfig struct {
 	ClientID     string
@@ -90,7 +93,7 @@ func (s *oauth2TokenSource) fetch(ctx context.Context) (string, error) {
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxTokenResponseBytes))
 	if err != nil {
 		return "", fmt.Errorf("oauth2: read token response: %w", err)
 	}

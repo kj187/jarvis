@@ -145,7 +145,7 @@ func (p *PodLabeler) patch(body string) {
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode >= 300 {
-		respBody, _ := io.ReadAll(resp.Body)
+		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
 		p.logger.Error("leader pod label: PATCH non-2xx", "status", resp.StatusCode, "body", string(respBody))
 	}
 }

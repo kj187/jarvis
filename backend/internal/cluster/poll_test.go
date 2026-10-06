@@ -350,7 +350,7 @@ func TestDeleteSilence_FirstMemberDown_RetriesSecondMember(t *testing.T) {
 	defer srv.Close()
 
 	cl := twoMemberCluster("prod", down.URL, srv.URL)
-	if err := cl.DeleteSilence(context.Background(), "id1"); err != nil {
+	if err := cl.DeleteSilence(context.Background(), "0b8c1f3e-5d2a-4c6b-9e7f-1a2b3c4d5e6f"); err != nil {
 		t.Fatalf("DeleteSilence: %v", err)
 	}
 	if !deleted {
@@ -363,7 +363,7 @@ func TestDeleteSilence_AllMembersDown_ReturnsError(t *testing.T) {
 	down2 := downServer(t)
 	cl := twoMemberCluster("prod", down1.URL, down2.URL)
 
-	if err := cl.DeleteSilence(context.Background(), "id1"); err == nil {
+	if err := cl.DeleteSilence(context.Background(), "0b8c1f3e-5d2a-4c6b-9e7f-1a2b3c4d5e6f"); err == nil {
 		t.Fatal("expected error when all members are down")
 	}
 }
@@ -412,7 +412,7 @@ func TestDeleteSilence_FirstMember4xx_DoesNotRetrySecondMember(t *testing.T) {
 	defer second.Close()
 
 	cl := twoMemberCluster("prod", rejecting.URL, second.URL)
-	err := cl.DeleteSilence(context.Background(), "id1")
+	err := cl.DeleteSilence(context.Background(), "0b8c1f3e-5d2a-4c6b-9e7f-1a2b3c4d5e6f")
 	if err == nil {
 		t.Fatal("expected the 4xx to be returned, not retried away")
 	}

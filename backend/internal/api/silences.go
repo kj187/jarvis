@@ -83,6 +83,9 @@ func (s *Server) createSilence(c echo.Context) error {
 	if body.Cluster == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "cluster is required")
 	}
+	if body.ID != "" && !amclient.ValidSilenceID(body.ID) {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid silence id")
+	}
 
 	cl := s.registry.Get(body.Cluster)
 	if cl == nil {
@@ -189,6 +192,9 @@ func (s *Server) deleteSilence(c echo.Context) error {
 	silenceID := c.Param("id")
 	if silenceID == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "silence id is required")
+	}
+	if !amclient.ValidSilenceID(silenceID) {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid silence id")
 	}
 	clusterName := c.QueryParam("cluster")
 	if clusterName == "" {
