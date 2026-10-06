@@ -1,0 +1,14 @@
+root = "."
+tmp_dir = "tmp"
+
+[build]
+cmd = "go build -o ./tmp/main ./cmd/jarvis"
+bin = "./tmp/main"
+full_bin = "./tmp/main"
+include_ext = ["go"]
+include_dir = ["cmd", "internal"]
+exclude_dir = ["tmp", "vendor"]
+exclude_regex = ["_test\\.go"]
+
+[log]
+time = true

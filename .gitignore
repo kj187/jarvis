@@ -43,8 +43,7 @@ backend/.config/
 *.swo
 .DS_Store
 
-# Air (Go hot-reload)
-backend/.air.toml
+# Air (Go hot-reload): build output only; backend/.air.toml is tracked
 backend/tmp/
 
 # golangci-lint cache
