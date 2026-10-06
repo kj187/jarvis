@@ -12,9 +12,9 @@ type NoneProvider struct{}
 
 func (NoneProvider) Mode() string { return "none" }
 
-func (NoneProvider) AuthURL(_, _ string) string { return "" }
+func (NoneProvider) AuthURL(_, _, _ string) string { return "" }
 
-func (NoneProvider) Exchange(_ context.Context, _, _ string) (*User, error) {
+func (NoneProvider) Exchange(_ context.Context, _, _, _ string) (*User, error) {
 	return nil, errors.New("auth disabled")
 }
 

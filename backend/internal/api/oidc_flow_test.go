@@ -50,10 +50,10 @@ func TestOIDCStateRoundTrip(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			raw := encodeOIDCState("st", "ver", tt.popup, tt.returnTo)
-			state, verifier, target, ok := decodeOIDCState(raw)
-			if !ok || state != "st" || verifier != "ver" {
-				t.Fatalf("decode(%q) = %q %q %v", raw, state, verifier, ok)
+			raw := encodeOIDCState("st", "ver", "non", tt.popup, tt.returnTo)
+			state, verifier, nonce, target, ok := decodeOIDCState(raw)
+			if !ok || state != "st" || verifier != "ver" || nonce != "non" {
+				t.Fatalf("decode(%q) = %q %q %q %v", raw, state, verifier, nonce, ok)
 			}
 			if target != tt.wantTarget {
 				t.Errorf("landing target = %q, want %q", target, tt.wantTarget)
@@ -62,17 +62,20 @@ func TestOIDCStateRoundTrip(t *testing.T) {
 	}
 }
 
-func TestDecodeOIDCState_LegacyTwoFieldCookie(t *testing.T) {
-	// Cookies issued before the popup/return_to flow have only state|verifier.
-	state, verifier, target, ok := decodeOIDCState("st|ver")
-	if !ok || state != "st" || verifier != "ver" || target != "/" {
-		t.Fatalf("got %q %q %q %v", state, verifier, target, ok)
+// A cookie without a nonce (issued before nonce support, or forged) must not be
+// accepted: the callback could otherwise skip the nonce check. A login that was
+// in flight during an upgrade simply has to be started again.
+func TestDecodeOIDCState_RejectsCookieWithoutNonce(t *testing.T) {
+	for _, raw := range []string{"st|ver", "st|ver||popup", "st||non"} {
+		if _, _, _, _, ok := decodeOIDCState(raw); ok {
+			t.Errorf("decodeOIDCState(%q) accepted a cookie with a missing field", raw)
+		}
 	}
 }
 
 func TestDecodeOIDCState_RejectsMalformed(t *testing.T) {
 	for _, raw := range []string{"", "onlystate"} {
-		if _, _, _, ok := decodeOIDCState(raw); ok {
+		if _, _, _, _, ok := decodeOIDCState(raw); ok {
 			t.Errorf("decodeOIDCState(%q) accepted malformed input", raw)
 		}
 	}
@@ -80,7 +83,7 @@ func TestDecodeOIDCState_RejectsMalformed(t *testing.T) {
 
 func TestDecodeOIDCState_TamperedReturnToFallsBackToRoot(t *testing.T) {
 	// A cookie is client-controlled: even a forged return_to must not redirect off-site.
-	_, _, target, ok := decodeOIDCState("st|ver|r:" + "Ly9ldmlsLmV4YW1wbGU") // base64url("//evil.example")
+	_, _, _, target, ok := decodeOIDCState("st|ver|non|r:" + "Ly9ldmlsLmV4YW1wbGU") // base64url("//evil.example")
 	if !ok || target != "/" {
 		t.Fatalf("target = %q ok=%v, want / true", target, ok)
 	}

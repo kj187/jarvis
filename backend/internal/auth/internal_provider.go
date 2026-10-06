@@ -21,9 +21,9 @@ func NewInternalProvider(store *users.Store) *InternalProvider {
 
 func (p *InternalProvider) Mode() string { return "internal" }
 
-func (p *InternalProvider) AuthURL(_, _ string) string { return "" }
+func (p *InternalProvider) AuthURL(_, _, _ string) string { return "" }
 
-func (p *InternalProvider) Exchange(_ context.Context, _, _ string) (*User, error) {
+func (p *InternalProvider) Exchange(_ context.Context, _, _, _ string) (*User, error) {
 	return nil, errors.New("exchange not supported in internal mode")
 }
 

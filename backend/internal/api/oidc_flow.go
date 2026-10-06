@@ -48,10 +48,10 @@ func sanitizeReturnTo(raw string) string {
 }
 
 // encodeOIDCState packs everything the callback needs into the PKCE state
-// cookie value: state|verifier[|popup | |r:<base64url(return_to)>]. All parts
-// are base64url or a fixed token, so "|" is a safe separator.
-func encodeOIDCState(state, verifier string, popup bool, returnTo string) string {
-	v := state + "|" + verifier
+// cookie value: state|verifier|nonce[|popup | |r:<base64url(return_to)>]. All
+// parts are base64url or a fixed token, so "|" is a safe separator.
+func encodeOIDCState(state, verifier, nonce string, popup bool, returnTo string) string {
+	v := state + "|" + verifier + "|" + nonce
 	switch {
 	case popup:
 		return v + "|" + oidcFlowPopup
@@ -63,16 +63,17 @@ func encodeOIDCState(state, verifier string, popup bool, returnTo string) string
 
 // decodeOIDCState is the inverse of encodeOIDCState and resolves where to send
 // the browser after a successful login. The cookie is client-controlled, so the
-// return path is re-validated here — a forged value falls back to "/". Cookies
-// issued before the popup/return_to flow (two fields) still decode.
-func decodeOIDCState(raw string) (state, verifier, landing string, ok bool) {
-	parts := strings.SplitN(raw, "|", 3)
-	if len(parts) < 2 {
-		return "", "", "", false
+// return path is re-validated here — a forged value falls back to "/". State,
+// verifier and nonce must all be present: a cookie without a nonce (issued
+// before nonce support) is rejected rather than skipping the nonce check.
+func decodeOIDCState(raw string) (state, verifier, nonce, landing string, ok bool) {
+	parts := strings.SplitN(raw, "|", 4)
+	if len(parts) < 3 || parts[0] == "" || parts[1] == "" || parts[2] == "" {
+		return "", "", "", "", false
 	}
-	state, verifier, landing = parts[0], parts[1], "/"
-	if len(parts) == 3 {
-		switch flow := parts[2]; {
+	state, verifier, nonce, landing = parts[0], parts[1], parts[2], "/"
+	if len(parts) == 4 {
+		switch flow := parts[3]; {
 		case flow == oidcFlowPopup:
 			landing = oidcPopupLanding
 		case strings.HasPrefix(flow, oidcFlowReturnTo):
@@ -83,5 +84,5 @@ func decodeOIDCState(raw string) (state, verifier, landing string, ok bool) {
 			}
 		}
 	}
-	return state, verifier, landing, true
+	return state, verifier, nonce, landing, true
 }

@@ -130,7 +130,10 @@ The panel is only accessible to users with the `admin` role. Open it from the us
 
 ## OIDC Provider
 
-Jarvis uses the **Authorization Code Flow with PKCE**. No client-side secrets are exposed to the browser.
+Jarvis uses the **Authorization Code Flow with PKCE**. No client-side secrets are exposed to the browser. Each login also
+carries a one-time `nonce` that the ID token must echo back, so a token issued for another login cannot be replayed into
+this one, and an ID token whose `email_verified` claim is present but not `true` (`false`, `"false"`, anything else) is
+refused (a provider that does not send the claim is not affected). Neither the ID token nor its claim values are written to the log.
 
 The login modal shows a single **Login with SSO** button:
 
@@ -223,6 +226,9 @@ Sessions are stored as signed JWT cookies:
 | HttpOnly | yes (not accessible via JavaScript) |
 | SameSite | Lax |
 | Secure | yes when served over HTTPS (detected via `X-Forwarded-Proto`) |
+
+The token is accepted only if it is signed with `HS256`, carries an expiry, and has issuer and audience `jarvis`;
+anything else (another algorithm, `alg=none`, no `exp`, a foreign issuer or audience) is refused with 401.
 
 The cookie only identifies the account; Jarvis checks it against the user
 database on every request (cached for up to 30 seconds per pod). So:
