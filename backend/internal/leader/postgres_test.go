@@ -6,9 +6,12 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // postgresTestDSN returns the PostgreSQL test DSN from JARVIS_TEST_POSTGRES_DSN,
@@ -248,6 +251,13 @@ func TestPGElector_BlackholedLeaderStepsDownAndFollowerTakesOver(t *testing.T) {
 func TestPGElector_BlackholedFollowerReconnects(t *testing.T) {
 	dsn := postgresTestDSN(t)
 	proxy, proxiedDSN := newBlackholeProxy(t, dsn)
+	// Tag the proxied session so it can be found in pg_stat_activity.
+	const appName = "jarvis-test-blackholed-follower"
+	sep := "?"
+	if strings.Contains(proxiedDSN, "?") {
+		sep = "&"
+	}
+	proxiedDSN += sep + "application_name=" + appName
 
 	ctx, cancel := context.WithCancel(context.Background())
 	var wg sync.WaitGroup
@@ -272,11 +282,28 @@ func TestPGElector_BlackholedFollowerReconnects(t *testing.T) {
 	go func() { defer wg.Done(); follower.Run(ctx) }()
 	waitFor(t, 20*time.Second, func() bool { return proxy.Accepted() >= 1 })
 
+	// Blackhole only after a try-lock round-trip completed on the proxied
+	// session (visible server-side as an idle session whose last statement is
+	// the try-lock). Otherwise a handshake or CancelRequest dial could also
+	// raise Accepted() and the test would not prove the query deadline.
+	admin, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	t.Cleanup(func() { _ = admin.Close(context.Background()) })
+	waitFor(t, 20*time.Second, func() bool {
+		var n int
+		err := admin.QueryRow(ctx, `SELECT count(*) FROM pg_stat_activity
+			WHERE application_name = $1 AND state = 'idle' AND query LIKE 'SELECT pg_try_advisory_lock%'`, appName).Scan(&n)
+		return err == nil && n > 0
+	})
+
 	before := proxy.Accepted()
 	proxy.Blackhole()
 
 	// One retry interval until the hung try-lock times out, then a redial.
-	waitFor(t, 5*time.Second, func() bool { return proxy.Accepted() > before })
+	// The ceiling follows the waitFor convention (CI load), not the expected time.
+	waitFor(t, 20*time.Second, func() bool { return proxy.Accepted() > before })
 	if follower.IsLeader() {
 		t.Fatal("follower became leader while the holder still owns the lock")
 	}

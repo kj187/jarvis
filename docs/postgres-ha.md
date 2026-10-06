@@ -100,7 +100,8 @@ partition, crash) releases the lock automatically — there is no TTL or
 lease-renewal bookkeeping, PostgreSQL's own session cleanup is the failure
 detector. The elector's connection uses aggressive TCP keepalives (idle 5s /
 interval 3s / count 3), and every round-trip on it (connect, heartbeat,
-try-lock, close) has a deadline of one interval (5s). TCP keepalive alone is
+try-lock, close) has a deadline of one interval (5s; the connect step
+takes a `connect_timeout` from `JARVIS_DB_DSN` instead, if one is set). TCP keepalive alone is
 not enough: probes only fire on an *idle* connection, and a blackholed path
 leaves the leader's own heartbeat unacknowledged, which the kernel retransmits
 for minutes. With the deadline, a leader cut off from PostgreSQL steps down
@@ -271,6 +272,10 @@ acquire the lock once the **second** has expired:
   below is safe, a 5s detection is not), a follower can take the lock while
   the old leader still believes it leads, and the two overlap for up to about
   10s. Keep the server-side detection time above the client's step-down bound.
+  The 20s example below is safe for the leader flags only: a history
+  transaction that began before the step-down (cap 30s) can still overlap with
+  the new leader. It is serialized only by the per-episode advisory lock
+  (invariant 16), not by leadership.
 - **PostgreSQL server (releases the lock):** the session lock is freed only
   when the server notices its client is gone. On a graceful shutdown or a
   closed socket that is instant; after a hard node failure it depends on the
