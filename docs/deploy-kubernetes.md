@@ -31,7 +31,9 @@ helm install jarvis oci://ghcr.io/kj187/charts/jarvis \
 ```
 
 Leader election, snapshot distribution and failover behaviour are described in
-[PostgreSQL & HA](postgres-ha.md).
+[PostgreSQL & HA](postgres-ha.md). After a hard node failure, how fast a
+follower takes over also depends on the PostgreSQL server's `tcp_keepalives_*`
+settings (recommended values there).
 
 Jarvis keeps recorded history, claims, comments, and silence events forever by
 default. Configure [Data retention](retention.md) deliberately for long-running

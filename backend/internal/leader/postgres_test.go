@@ -157,3 +157,74 @@ func TestPGElector_Subscribe_FiresImmediatelyThenOnPromotion(t *testing.T) {
 		t.Fatalf("expected [false, true] (immediate + promotion), got %v", transitions)
 	}
 }
+
+// TestPGElector_BlackholedLeaderStepsDownAndFollowerTakesOver is the failover
+// proof behind docs/postgres-ha.md: a leader whose network path to PostgreSQL
+// is blackholed (no FIN, no RST — TCP keepalive never fires while data is
+// unacknowledged) must notice through its heartbeat timeout and give up
+// leadership within a bounded time, and only then may the follower take over.
+// There is never a moment with two leaders.
+func TestPGElector_BlackholedLeaderStepsDownAndFollowerTakesOver(t *testing.T) {
+	dsn := postgresTestDSN(t)
+	proxy, proxiedDSN := newBlackholeProxy(t, dsn)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Same lock for both: the leader reaches PostgreSQL through the proxy, the
+	// follower directly.
+	leader := NewPGElector(proxiedDSN, testLogger())
+	follower := NewPGElector(dsn, testLogger())
+	classID, id := testLockID(t)
+	for _, e := range []*PGElector{leader, follower} {
+		e.SetRetryInterval(300 * time.Millisecond)
+		e.SetLockID(classID, id)
+	}
+
+	go leader.Run(ctx)
+	waitFor(t, 20*time.Second, leader.IsLeader)
+	go follower.Run(ctx)
+
+	// Sample for a double leader for the whole rest of the test.
+	var doubleLeader sync.Once
+	var sawDouble bool
+	stopSampling := make(chan struct{})
+	samplerDone := make(chan struct{})
+	go func() {
+		defer close(samplerDone)
+		for {
+			select {
+			case <-stopSampling:
+				return
+			case <-time.After(5 * time.Millisecond):
+				if leader.IsLeader() && follower.IsLeader() {
+					doubleLeader.Do(func() { sawDouble = true })
+				}
+			}
+		}
+	}()
+
+	blackholedAt := time.Now()
+	proxy.Blackhole()
+
+	// Bound: one heartbeat interval until the next probe plus the probe
+	// timeout, with slack for a loaded CI runner. Without a heartbeat timeout
+	// this waits for the kernel's TCP retransmission give-up (minutes).
+	waitFor(t, 5*time.Second, func() bool { return !leader.IsLeader() })
+	if d := time.Since(blackholedAt); d > 3*time.Second {
+		t.Fatalf("blackholed leader took %v to step down, want a few heartbeat intervals", d)
+	}
+	if follower.IsLeader() {
+		t.Fatal("follower took over while PostgreSQL still held the old leader's session lock")
+	}
+
+	// The server reaps the dead session (server-side keepalive): lock freed.
+	proxy.DropUpstream()
+	waitFor(t, 20*time.Second, follower.IsLeader)
+
+	close(stopSampling)
+	<-samplerDone
+	if sawDouble {
+		t.Fatal("observed two leaders at the same time")
+	}
+}
