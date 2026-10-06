@@ -204,6 +204,34 @@ func TestOIDC_Exchange_UnverifiedEmailIsNotTheUsername(t *testing.T) {
 	}
 }
 
+// A later login with an unverified e-mail keeps what is already stored: the
+// address is not overwritten or deleted, the username stays, and the identity
+// is the same account via sub.
+func TestOIDC_Exchange_UnverifiedEmailKeepsStoredEmailOfExistingUser(t *testing.T) {
+	idp := newMockIdP(t)
+	idp.claims = map[string]any{"nonce": "n-1"}
+	p := newOIDC(t, idp)
+	first, err := p.Exchange(context.Background(), "code", "verifier", "n-1")
+	if err != nil {
+		t.Fatalf("first login: %v", err)
+	}
+
+	idp.claims = map[string]any{"nonce": "n-1", "email_verified": false, "email": "attacker@example.com", "preferred_username": nil}
+	second, err := p.Exchange(context.Background(), "code", "verifier", "n-1")
+	if err != nil {
+		t.Fatalf("second login: %v", err)
+	}
+	if second.ID != first.ID {
+		t.Errorf("id = %q, want the same account %q", second.ID, first.ID)
+	}
+	if second.Email != "dana@example.com" {
+		t.Errorf("stored email = %q, want it untouched", second.Email)
+	}
+	if second.Username != first.Username {
+		t.Errorf("username = %q, want %q", second.Username, first.Username)
+	}
+}
+
 // An empty expected nonce must never validate, even for a token without one.
 func TestOIDC_Exchange_EmptyExpectedNonceIsRefused(t *testing.T) {
 	idp := newMockIdP(t)
