@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -457,6 +458,9 @@ func TestPostLogin_ConcurrentAttemptsForOneNameAreSerialized(t *testing.T) {
 	if rec.Header().Get("Retry-After") == "" {
 		t.Error("429 without Retry-After")
 	}
+	if strings.Contains(rec.Body.String(), "failed attempts") || !strings.Contains(rec.Body.String(), "already in progress") {
+		t.Errorf("in-flight 429 body = %s, want a message about a login in progress", rec.Body.String())
+	}
 	// Another name is not held up.
 	if other := postLoginAs(t, srv, "bob", "wrong-password-3!"); other.Code != http.StatusUnauthorized {
 		t.Fatalf("other name: status = %d, want 401", other.Code)
@@ -561,5 +565,56 @@ func TestPostLogin_ThrottledResponseDoesNotExtendTheWait(t *testing.T) {
 	}
 	if after := srv.loginThrottle.Wait("alice"); after != before {
 		t.Fatalf("wait after 429 responses = %v, want unchanged %v", after, before)
+	}
+}
+
+func TestPostLogin_ProvidersWithoutPasswordLoginAnswer401WithoutErrorLogOrCounting(t *testing.T) {
+	providers := map[string]auth.Provider{
+		"none": auth.NoneProvider{},
+		"oidc": &auth.OIDCProvider{},
+	}
+	for name, p := range providers {
+		t.Run(name, func(t *testing.T) {
+			srv, _ := newAuthServer(t)
+			srv.authProvider = p
+			var buf bytes.Buffer
+			prev := slog.Default()
+			slog.SetDefault(slog.New(slog.NewTextHandler(&buf, nil)))
+			t.Cleanup(func() { slog.SetDefault(prev) })
+
+			for i := 0; i < 10; i++ {
+				rec := postLoginAs(t, srv, "alice", "whatever-password-1!")
+				if rec.Code != http.StatusUnauthorized {
+					t.Fatalf("attempt %d: status = %d, want 401", i+1, rec.Code)
+				}
+				if !strings.Contains(rec.Body.String(), "invalid credentials") {
+					t.Fatalf("body = %s, want the generic message", rec.Body.String())
+				}
+			}
+			if buf.Len() != 0 {
+				t.Errorf("anonymous login attempt was logged: %s", buf.String())
+			}
+			if w := srv.loginThrottle.Wait("alice"); w != 0 {
+				t.Errorf("wait = %v, want 0 (not a failed attempt)", w)
+			}
+		})
+	}
+}
+
+func TestPostLogin_PanicInAuthenticateDoesNotLeaveTheNameReserved(t *testing.T) {
+	srv, _ := newAuthServer(t)
+	srv.authProvider = &fakeAuthProvider{fn: func(context.Context, string, string) (*auth.User, error) {
+		panic("boom")
+	}}
+	func() {
+		defer func() { _ = recover() }()
+		postLoginAs(t, srv, "alice", "pw-long-enough-1")
+	}()
+
+	srv.authProvider = &fakeAuthProvider{fn: func(context.Context, string, string) (*auth.User, error) {
+		return nil, auth.ErrInvalidCredentials
+	}}
+	if rec := postLoginAs(t, srv, "alice", "pw-long-enough-1"); rec.Code != http.StatusUnauthorized {
+		t.Fatalf("after a panic: status = %d, want 401 (name must be usable again)", rec.Code)
 	}
 }

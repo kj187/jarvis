@@ -18,5 +18,8 @@ export function loginErrorMessage(err: unknown): string {
   if (err instanceof LoginError && err.status === 429) {
     return 'Too many login attempts. Please try again in a moment.'
   }
+  if (err instanceof LoginError && err.status >= 500) {
+    return 'Login temporarily unavailable. Please try again in a moment.'
+  }
   return 'Invalid username or password.'
 }

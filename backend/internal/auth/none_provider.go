@@ -19,7 +19,7 @@ func (NoneProvider) Exchange(_ context.Context, _, _, _ string) (*User, error) {
 }
 
 func (NoneProvider) Authenticate(_ context.Context, _, _ string) (*User, error) {
-	return nil, errors.New("auth disabled")
+	return nil, ErrLoginUnsupported
 }
 
 func (NoneProvider) Info() ProviderInfo {

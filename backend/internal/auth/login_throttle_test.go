@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"errors"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -129,10 +130,22 @@ func TestLoginThrottle_NilIsDisabled(t *testing.T) {
 	if w := th.Wait("alice"); w != 0 {
 		t.Fatalf("nil throttle wait = %v, want 0", w)
 	}
-	th.Release("alice")
-	if _, ok := th.TryAcquire("alice"); !ok {
-		t.Fatal("nil throttle rejected an attempt")
+	a, wait, err := th.TryAcquire("alice")
+	if a != nil || wait != 0 || err != nil {
+		t.Fatalf("nil throttle TryAcquire = %v %v %v, want nil 0 nil", a, wait, err)
 	}
+	a.Fail() // nil attempt is a no-op
+	a.Succeed()
+	a.Release()
+}
+
+func mustAcquire(t *testing.T, th *LoginThrottle, name string) *LoginAttempt {
+	t.Helper()
+	a, _, err := th.TryAcquire(name)
+	if err != nil {
+		t.Fatalf("TryAcquire(%q): %v", name, err)
+	}
+	return a
 }
 
 func TestLoginThrottle_TryAcquireAdmitsExactlyOneParallelAttempt(t *testing.T) {
@@ -144,7 +157,7 @@ func TestLoginThrottle_TryAcquireAdmitsExactlyOneParallelAttempt(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if _, ok := th.TryAcquire("alice"); ok {
+			if _, _, err := th.TryAcquire("alice"); err == nil {
 				admitted.Add(1)
 			}
 		}()
@@ -157,24 +170,18 @@ func TestLoginThrottle_TryAcquireAdmitsExactlyOneParallelAttempt(t *testing.T) {
 
 func TestLoginThrottle_InflightRejectionCarriesRetryHintAndOtherNamesPass(t *testing.T) {
 	th, _ := newTestThrottle()
-	if _, ok := th.TryAcquire("alice"); !ok {
-		t.Fatal("first attempt rejected")
+	mustAcquire(t, th, "alice")
+	a, wait, err := th.TryAcquire("ALICE ")
+	if a != nil || !errors.Is(err, ErrLoginInProgress) || wait != loginInflightWait {
+		t.Fatalf("second attempt: %v %v %v, want nil, %v, ErrLoginInProgress", a, wait, err, loginInflightWait)
 	}
-	if wait, ok := th.TryAcquire("ALICE "); ok || wait != loginInflightWait {
-		t.Fatalf("second attempt: wait = %v ok = %v, want %v false", wait, ok, loginInflightWait)
-	}
-	if _, ok := th.TryAcquire("bob"); !ok {
-		t.Fatal("another name was held up")
-	}
+	mustAcquire(t, th, "bob")
 }
 
 func TestLoginThrottle_ReleaseFreesTheNameWithoutCountingAFailure(t *testing.T) {
 	th, _ := newTestThrottle()
 	for i := 0; i < 20; i++ {
-		if _, ok := th.TryAcquire("alice"); !ok {
-			t.Fatalf("attempt %d rejected", i+1)
-		}
-		th.Release("alice")
+		mustAcquire(t, th, "alice").Release()
 	}
 	if w := th.Wait("alice"); w != 0 || th.size() != 0 {
 		t.Fatalf("wait = %v, entries = %d, want none", w, th.size())
@@ -183,28 +190,33 @@ func TestLoginThrottle_ReleaseFreesTheNameWithoutCountingAFailure(t *testing.T) 
 
 func TestLoginThrottle_FailAndSucceedFreeTheName(t *testing.T) {
 	th, _ := newTestThrottle()
-	th.TryAcquire("alice")
-	th.Fail("alice")
-	if _, ok := th.TryAcquire("alice"); !ok {
-		t.Fatal("name still held after Fail")
+	mustAcquire(t, th, "alice").Fail()
+	mustAcquire(t, th, "alice").Succeed()
+	mustAcquire(t, th, "alice")
+}
+
+func TestLoginThrottle_LateReleaseDoesNotFreeAFollowUpReservation(t *testing.T) {
+	th, _ := newTestThrottle()
+	first := mustAcquire(t, th, "alice")
+	first.Fail() // frees the name; a deferred Release will still run later
+	second := mustAcquire(t, th, "alice")
+	first.Release() // stale: must not drop second's reservation
+	if _, _, err := th.TryAcquire("alice"); !errors.Is(err, ErrLoginInProgress) {
+		t.Fatalf("err = %v, want ErrLoginInProgress (stale Release freed the follow-up)", err)
 	}
-	th.Succeed("alice")
-	if _, ok := th.TryAcquire("alice"); !ok {
-		t.Fatal("name still held after Succeed")
-	}
+	second.Release()
+	mustAcquire(t, th, "alice")
 }
 
 func TestLoginThrottle_TryAcquireRejectsDuringTheWaitAndAdmitsAfter(t *testing.T) {
 	th, now := newTestThrottle()
 	for i := 0; i <= loginFreeAttempts; i++ {
-		th.TryAcquire("alice")
-		th.Fail("alice")
+		mustAcquire(t, th, "alice").Fail()
 	}
-	if wait, ok := th.TryAcquire("alice"); ok || wait != loginBaseWait {
-		t.Fatalf("during wait: wait = %v ok = %v, want %v false", wait, ok, loginBaseWait)
+	a, wait, err := th.TryAcquire("alice")
+	if a != nil || !errors.Is(err, ErrLoginLocked) || wait != loginBaseWait {
+		t.Fatalf("during wait: %v %v %v, want nil, %v, ErrLoginLocked", a, wait, err, loginBaseWait)
 	}
 	*now = now.Add(loginBaseWait)
-	if _, ok := th.TryAcquire("alice"); !ok {
-		t.Fatal("rejected after the wait passed")
-	}
+	mustAcquire(t, th, "alice")
 }

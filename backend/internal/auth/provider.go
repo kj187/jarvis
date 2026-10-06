@@ -10,6 +10,11 @@ import (
 // database) and must not be counted as a failed login attempt.
 var ErrInvalidCredentials = errors.New("invalid credentials")
 
+// ErrLoginUnsupported is returned by Authenticate when the provider has no
+// password login at all (none and oidc modes). It is neither a failed attempt
+// nor a server fault.
+var ErrLoginUnsupported = errors.New("password login not supported")
+
 // Provider defines the authentication interface.
 type Provider interface {
 	// Mode returns the configured provider name.

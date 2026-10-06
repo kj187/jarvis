@@ -95,25 +95,35 @@ func (s *Server) postLogin(c echo.Context) error {
 	// response never reveals whether an account exists.
 	// TryAcquire checks and reserves atomically, so parallel requests cannot all
 	// pass the check before the first failure is recorded.
-	wait, ok := s.loginThrottle.TryAcquire(req.Username)
-	if !ok {
+	attempt, wait, err := s.loginThrottle.TryAcquire(req.Username)
+	if err != nil {
+		msg := "too many failed attempts, try again later"
+		if errors.Is(err, auth.ErrLoginInProgress) {
+			msg = "a login for this user is already in progress, try again in a moment"
+		}
 		c.Response().Header().Set("Retry-After", strconv.Itoa(int(math.Ceil(wait.Seconds()))))
-		return c.JSON(http.StatusTooManyRequests, map[string]string{"error": "too many failed attempts, try again later"})
+		return c.JSON(http.StatusTooManyRequests, map[string]string{"error": msg})
 	}
+	// Frees the name on every other exit, including a panic; a no-op once
+	// Fail or Succeed has run.
+	defer attempt.Release()
 
 	u, err := s.authProvider.Authenticate(c.Request().Context(), req.Username, req.Password)
 	if err != nil {
-		if !errors.Is(err, auth.ErrInvalidCredentials) {
+		switch {
+		case errors.Is(err, auth.ErrInvalidCredentials):
+			attempt.Fail()
+		case errors.Is(err, auth.ErrLoginUnsupported):
+			// none/oidc mode: there is no password login; not a failed attempt, not a fault.
+		default:
 			// Not the user's fault (e.g. the database): no failed attempt, no detail.
-			s.loginThrottle.Release(req.Username)
 			slog.Error("login: authenticate", "err", err)
 			return echo.NewHTTPError(http.StatusInternalServerError, "login failed")
 		}
-		s.loginThrottle.Fail(req.Username)
 		// Always return the same message to prevent user enumeration.
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid credentials"})
 	}
-	s.loginThrottle.Succeed(req.Username)
+	attempt.Succeed()
 
 	tok, err := auth.CreateToken(s.cfg.SecretKey, u)
 	if err != nil {
