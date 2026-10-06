@@ -2,10 +2,10 @@ package api
 
 import (
 	"net/http"
-	"net/url"
-	"slices"
 
 	"github.com/labstack/echo/v4"
+
+	"github.com/kj187/jarvis/backend/internal/originpolicy"
 )
 
 // originGuard rejects state-changing requests that a foreign page could have
@@ -37,11 +37,5 @@ func mutationOriginAllowed(r *http.Request, allowedOrigins []string) bool {
 	if origin == "" {
 		return r.Header.Get("Sec-Fetch-Site") != "cross-site"
 	}
-	if slices.Contains(allowedOrigins, origin) {
-		return true
-	}
-	// Host only, not scheme: behind a TLS-terminating proxy the backend sees
-	// http while the browser sends an https Origin.
-	u, err := url.Parse(origin)
-	return err == nil && u.Host != "" && u.Host == r.Host
+	return originpolicy.Allowed(origin, r.Host, allowedOrigins)
 }

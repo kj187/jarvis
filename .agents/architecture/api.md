@@ -48,7 +48,7 @@ GET    /auth/oidc/callback                       None        → exchanges code,
 POST   /setup                                    None        Body: { username, password, setupToken? } (internal mode only; atomic first-admin insert via users.Store.CreateFirstAdmin; 403 if users exist; 401 if JARVIS_SETUP_TOKEN is set and the token is wrong)
 
 # ── WebSocket ────────────────────────────────────────────────────────────────
-WS     /ws                                       full_protect?  (origin checked against JARVIS_ALLOWED_ORIGINS;
+WS     /ws                                       full_protect?  (origin: allow-list or own host, same predicate as originGuard;
 #        in full_protect mode the upgrade request additionally requires a valid
 #        session cookie via RequireAuth — /ws streams the full alert snapshot;
 #        capped at JARVIS_WS_MAX_CONNECTIONS per pod: one over → 503 + Retry-After before the upgrade,

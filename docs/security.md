@@ -35,7 +35,7 @@ not override CSP.
 
 CORS is configured with a strict origin allowlist (`JARVIS_ALLOWED_ORIGINS`).
 No wildcard `*` is used. WebSocket upgrades validate the `Origin` header
-against the same allowlist. Setting it correctly behind a proxy is described
+by the same rule as state-changing requests (allowlist or this server's own host). Setting it correctly behind a proxy is described
 in [Running behind a proxy](reverse-proxy.md).
 
 **State-changing requests are origin-checked.** `POST`, `PUT`, `PATCH` and
