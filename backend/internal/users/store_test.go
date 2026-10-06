@@ -385,7 +385,7 @@ func assertExactlyOneFirstAdmin(t *testing.T, s *users.Store, n int) {
 	}
 	close(start)
 	wg.Wait()
-	if wins.Load() != 1 || refused.Load() != int32(n-1) {
+	if wins.Load() != 1 || int(refused.Load()) != n-1 {
 		t.Fatalf("wins = %d, refused = %d, want 1 and %d", wins.Load(), refused.Load(), n-1)
 	}
 	if got, _ := s.Count(ctx); got != 1 {
