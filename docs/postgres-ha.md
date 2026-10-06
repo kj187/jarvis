@@ -60,6 +60,18 @@ JARVIS_DB_DSN=postgres://jarvis:secret@postgres:5432/jarvis?sslmode=require
   exhausted the connection slots of a shared RDS instance in production
   (`FATAL: remaining connection slots are reserved …`, SQLSTATE 53300).
   Ignored for SQLite, which is always single-connection.
+- **Connection poolers (PgBouncer and similar)**: point `JARVIS_DB_DSN` at
+  PostgreSQL directly, or at a pooler in **session mode** — never
+  transaction mode. Each pod relies on session state that a
+  transaction-mode pooler does not keep on one server connection: the
+  session-level advisory locks (leader election, migration lock) and the
+  `LISTEN` connections of the WS fanout and the snapshot distribution. In
+  transaction mode a lock outlives the client that took it and
+  notifications are never delivered, so you get no leader, a stuck leader,
+  or followers that never see a new snapshot. The pooler also has to
+  accommodate the dedicated connections counted in the pool-cap bullet
+  above. Jarvis is not tested behind a pooler; direct connections are the
+  supported setup.
 - **Local PostgreSQL for testing**: `make up-postgres` starts a disposable
   container on port 5432 (`jarvis`/`jarvis`/`jarvis`); point
   `JARVIS_DB_DSN=postgres://jarvis:jarvis@localhost:5432/jarvis?sslmode=disable`
