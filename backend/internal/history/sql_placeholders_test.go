@@ -12,7 +12,8 @@ import (
 	"testing"
 )
 
-// Critical Invariant #10: SQL in this package uses ? placeholders only;
+// Critical Invariant #10: SQL in these packages (history, users, settings,
+// globalsettings) uses ? placeholders only;
 // rebind() turns them into $N for PostgreSQL. A $1 literal would work on
 // PostgreSQL and silently break SQLite. The check looks at string literals
 // (not comments) so documentation may still mention $N.
@@ -43,13 +44,26 @@ func placeholderViolations(t *testing.T, filename, src string) []string {
 	return out
 }
 
+// Every package that builds SQL through rebind() is scanned, not only
+// history. pgOnlyFiles lists files that are PostgreSQL-only by design and may
+// use $N (paths as globbed from the history package directory, e.g. ../users/x.go); keep it empty unless a
+// file really never runs on SQLite.
+var (
+	rebindPackages = []string{".", "../users", "../settings", "../globalsettings"}
+	pgOnlyFiles    = map[string]bool{}
+)
+
 func TestSQLUsesQuestionMarkPlaceholdersOnly(t *testing.T) {
-	files, err := filepath.Glob("*.go")
-	if err != nil || len(files) == 0 {
-		t.Fatalf("no source files found (err=%v)", err)
+	var files []string
+	for _, dir := range rebindPackages {
+		matches, err := filepath.Glob(filepath.Join(dir, "*.go"))
+		if err != nil || len(matches) == 0 {
+			t.Fatalf("no source files found in %s (err=%v)", dir, err)
+		}
+		files = append(files, matches...)
 	}
 	for _, f := range files {
-		if strings.HasSuffix(f, "_test.go") {
+		if strings.HasSuffix(f, "_test.go") || pgOnlyFiles[filepath.ToSlash(filepath.Clean(f))] {
 			continue
 		}
 		raw, err := os.ReadFile(f) // #nosec G304 -- file names come from Glob("*.go") in the package directory
