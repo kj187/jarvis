@@ -69,6 +69,8 @@ PostgreSQL uses a **capped** pool (`JARVIS_DB_MAX_OPEN_CONNS`, default 10,
 MaxIdle = MaxOpen) — never unbounded (it exhausted RDS connection slots in
 production) and never `SetMaxOpenConns(1)`.
 
+*Enforced by:* `internal/db/pool_invariant_test.go` (AST check of `openSQLite` / `openPostgres`: SQLite literal 1, PostgreSQL cap from configuration, never a literal, MaxIdle equal to MaxOpen; violating fixtures must fail) and `db_test.go` (runtime `MaxOpenConnections`).
+
 ### 9.
 
 **`JARVIS_DB_DSN` never logged raw**: `db.RedactDSN()` must wrap the DSN
@@ -79,6 +81,8 @@ before any log call. Password stays out of logs.
 **`rebind()` in `history/store.go`**: All SQL queries use `?`
 placeholders — `rebind()` converts them to `$N` for PostgreSQL at call
 time. Never write `$1` literals directly in query strings.
+
+*Enforced by:* `TestSQLUsesQuestionMarkPlaceholdersOnly` (`internal/history/sql_placeholders_test.go`): no string literal in the package's non-test sources may contain `$<digit>`; violating fixtures must fail.
 
 ### 11.
 
@@ -109,6 +113,8 @@ cached member up-state); only the recorder poll and explicit user
 mutations (silence create/delete) go upstream — otherwise AM load scales
 with open browser tabs (live proxying in `getSilences`/`getClusters`
 roughly doubled AM CPU in a real deployment; `.agents/lessons/history-and-ha.md`).
+
+*Enforced by:* `TestRouter_ReadEndpointsNeverCallAlertmanager` (`internal/api/read_endpoints_upstream_test.go`): every registered GET route is requested against a counting mock Alertmanager; any upstream hit fails.
 
 ### 14.
 
@@ -184,6 +190,8 @@ must never reach `getFilterableLabels`, `matchesLabelMatchers`,
 `silenceWouldMatchAlert`/`silenceMatchesAlert`, the affected-alerts
 preview, `findRelatedAlerts`, or the detail panel's Labels section — a
 hidden label is invisible, not absent (same bug class as #12).
+
+*Enforced by:* `src/lib/labelDisplayInvariant.test.ts`: only the listed reader files may mention `labelDisplay` / `labelColors`, and there only as an argument of `partitionLabelsForDisplay` / `labelColorStyle` (plus the store selector, declarations and prop hand-over). A new reader fails the test until it is added on purpose.
 
 ### 20.
 

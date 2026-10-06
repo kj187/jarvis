@@ -39,6 +39,7 @@ to `src/lib/**` only:
   inside a list row; reduced motion). `alert-ack.spec.ts` additionally asserts that the
   "Silence…" entry's bell sits within 2px of the trigger's bell — measured layout, not just
   "on screen".
+- `frontend/src/lib/labelDisplayInvariant.test.ts` — Critical Invariant #19, over the real source tree (TypeScript AST): only the listed reader files may mention `labelDisplay` / `labelColors`, and only as an argument of `partitionLabelsForDisplay` / `labelColorStyle`, the store selector, a declaration or a prop hand-over; negative fixtures (a filter reading the hidden list, a new reader, a leak into another function) must be flagged. A new reader must be added to the list on purpose.
 - `frontend/src/lib/alertUtils.test.ts` — example-based tests for every
   exported function (formatting/escaping helpers, matching/state functions),
   including the byte-mirrored Resolved-filter corpus from
