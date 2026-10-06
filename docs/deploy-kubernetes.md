@@ -217,6 +217,22 @@ Deployment, and it is a plain SHA-256 of the rendered manifest. Use strong,
 random values for the database password and any client secret you give the chart,
 or keep them in an `existingSecret`.
 
+## Operational prerequisites
+
+**Jarvis is never the only alerting path.** It mirrors alerts for people who
+work with them; it does not page anyone. Notifications stay with the
+Alertmanager receivers (pager, mail, chat). A Jarvis outage, a failover or
+stale data (see [Data age](postgres-ha.md#data-age)) must never be the reason
+an alert does not reach a human. Keep those receivers configured as if Jarvis
+did not exist, and watch Jarvis itself from outside the cluster it runs in
+(probes above, [metrics](metrics.md)) together with an independent
+dead-man's-switch for Alertmanager.
+
+**The database connection must be session-based.** With PostgreSQL, connect
+directly or through a pooler in session mode. Transaction-mode poolers break
+leader election and the cross-pod `LISTEN`/`NOTIFY` fanout, see
+[PostgreSQL & HA](postgres-ha.md#configuration).
+
 ## Where to go next
 
 - [PostgreSQL & HA](postgres-ha.md) — leader election, snapshot distribution, failover
