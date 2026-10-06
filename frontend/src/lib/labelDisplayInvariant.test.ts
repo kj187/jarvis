@@ -63,14 +63,19 @@ function jsxTagOf(attr: ts.JsxAttribute): string | undefined {
   return ts.isJsxOpeningElement(el) || ts.isJsxSelfClosingElement(el) ? el.tagName.getText() : undefined
 }
 
-/** `useSettingsStore((s) => s.<name>)` — exactly the property, nothing deeper. */
-function isStoreSelector(pae: ts.PropertyAccessExpression): boolean {
+/**
+ * `const <name> = useSettingsStore((s) => s.<name>)` — exactly the property, nothing
+ * deeper, bound to a variable of the same name so every later use is checked too.
+ */
+function isStoreSelector(pae: ts.PropertyAccessExpression, name: string): boolean {
   let body: ts.Node = pae
   if (ts.isParenthesizedExpression(body.parent)) body = body.parent
   const fn = body.parent
   if (!fn || !ts.isArrowFunction(fn) || fn.body !== body) return false
   const call = fn.parent
-  return ts.isCallExpression(call) && call.arguments.includes(fn) && calleeName(call) === 'useSettingsStore'
+  if (!ts.isCallExpression(call) || !call.arguments.includes(fn) || calleeName(call) !== 'useSettingsStore') return false
+  const decl = call.parent
+  return ts.isVariableDeclaration(decl) && decl.initializer === call && ts.isIdentifier(decl.name) && decl.name.text === name
 }
 
 /** Is this identifier one of the sanctioned ways to touch the configuration? */
@@ -92,7 +97,7 @@ function isSanctioned(node: ts.Identifier): boolean {
   if (ts.isJsxExpression(parent) && ts.isJsxAttribute(parent.parent)) return PROP_TARGETS.has(jsxTagOf(parent.parent) ?? '')
 
   // useSettingsStore((s) => s.labelDisplay) — and not s.labelDisplay.hidden
-  if (ts.isPropertyAccessExpression(parent) && parent.name === node) return isStoreSelector(parent)
+  if (ts.isPropertyAccessExpression(parent) && parent.name === node) return isStoreSelector(parent, node.text)
 
   // partitionLabelsForDisplay(labels, labelDisplay) / labelColorStyle(key, labelColors, theme)
   if (ts.isCallExpression(parent) && parent.arguments.includes(node)) {
@@ -189,6 +194,18 @@ describe('Invariant #19: label display config is display-only', () => {
 
     it('a selector that reaches into the hidden list', () => {
       const src = `const hidden = useSettingsStore((s) => s.labelDisplay.hidden)`
+      expect(violationsIn('components/alerts/AlertCard.tsx', src).length).toBeGreaterThan(0)
+    })
+
+    it('a selector result aliased under another name and used in a filter', () => {
+      const src = `
+        const cfg = useSettingsStore((s) => s.labelDisplay)
+        const shown = alerts.filter((a) => !cfg.hidden.includes(a.name))`
+      expect(violationsIn('components/alerts/AlertCard.tsx', src).length).toBeGreaterThan(0)
+    })
+
+    it('a selector result handed straight to another function', () => {
+      const src = `const related = findRelatedAlerts(alert, all, useSettingsStore((s) => s.labelDisplay))`
       expect(violationsIn('components/alerts/AlertCard.tsx', src).length).toBeGreaterThan(0)
     })
 

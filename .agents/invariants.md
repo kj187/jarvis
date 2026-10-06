@@ -191,7 +191,7 @@ must never reach `getFilterableLabels`, `matchesLabelMatchers`,
 preview, `findRelatedAlerts`, or the detail panel's Labels section — a
 hidden label is invisible, not absent (same bug class as #12).
 
-*Enforced by:* `src/lib/labelDisplayInvariant.test.ts`: only the listed reader files may mention `labelDisplay` / `labelColors`, and there only as an argument of `partitionLabelsForDisplay` / `labelColorStyle` (plus the store selector, declarations and prop hand-over). A new reader fails the test until it is added on purpose.
+*Enforced by:* `src/lib/labelDisplayInvariant.test.ts`: only the listed reader files may mention `labelDisplay` / `labelColors`, each only its own identifier (the detail panel may read `labelColors`, never `labelDisplay`), and there only as an argument of `partitionLabelsForDisplay` / `labelColorStyle`. Also allowed: the store selector, exactly `const <name> = useSettingsStore((s) => s.<name>)` (no `s.labelDisplay.hidden`, no alias, no element access), declarations, and a prop hand-over to a component listed in `PROP_TARGETS`. A new reader, identifier or prop target fails the test until it is added on purpose.
 
 ### 20.
 
