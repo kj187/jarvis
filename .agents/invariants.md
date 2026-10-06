@@ -90,7 +90,7 @@ time. Never write `$1` literals directly in query strings.
 allow-list for HTTP CORS, the WebSocket upgrade and the `originGuard` on
 state-changing methods. Upgrade and guard share one predicate,
 `originpolicy.Allowed` (`internal/originpolicy`): listed, or the request's own
-host (scheme not compared); never keep a second copy that can drift.
+host (http/https only, http-vs-https not compared); never keep a second copy that can drift.
 
 ### 12.
 

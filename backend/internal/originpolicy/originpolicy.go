@@ -6,13 +6,13 @@ package originpolicy
 
 import (
 	"net/url"
-	"slices"
+	"strings"
 )
 
 // Allowed reports whether a non-empty Origin header may act on this server:
-// it is listed in allowed (JARVIS_ALLOWED_ORIGINS, exact match, no wildcard),
-// or its host equals the request's own Host. The scheme is deliberately not
-// compared for the own-host case: behind a TLS-terminating proxy the backend
+// it is listed in allowed (JARVIS_ALLOWED_ORIGINS, no wildcard), or it is an
+// http(s) origin whose host equals the request's own Host. The http-vs-https
+// choice is deliberately not compared for the own-host case: behind a TLS-terminating proxy the backend
 // sees http while the browser sends an https Origin. With an empty allow-list
 // this is the same-origin-only rule.
 //
@@ -22,9 +22,15 @@ func Allowed(origin, requestHost string, allowed []string) bool {
 	if origin == "" {
 		return false
 	}
-	if slices.Contains(allowed, origin) {
-		return true
+	// Scheme and host are case-insensitive; browsers send them lower-case.
+	for _, a := range allowed {
+		if strings.EqualFold(a, origin) {
+			return true
+		}
 	}
 	u, err := url.Parse(origin)
-	return err == nil && u.Host != "" && u.Host == requestHost
+	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
+		return false
+	}
+	return strings.EqualFold(u.Host, requestHost)
 }

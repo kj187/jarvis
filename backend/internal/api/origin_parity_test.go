@@ -22,7 +22,7 @@ func TestOriginVerdict_HTTPAndWebSocketAgree(t *testing.T) {
 	cases := []struct {
 		name    string
 		allowed []string
-		origin  string // "OWN" = the server's own http origin; "" = no header
+		origin  string // "OWN" = the server's own http origin, "OWNFTP" the same host over ftp://; "" = no header
 		want    bool
 	}{
 		{"list: listed origin", list, "https://jarvis.example.com", true},
@@ -32,6 +32,8 @@ func TestOriginVerdict_HTTPAndWebSocketAgree(t *testing.T) {
 		{"empty list: own host", nil, "OWN", true},
 		{"empty list: foreign origin", nil, "https://evil.example", false},
 		{"empty list: no Origin", nil, "", true},
+		{"list: own host over a non-http scheme", list, "OWNFTP", false},
+		{"empty list: own host over a non-http scheme", nil, "OWNFTP", false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -46,8 +48,11 @@ func TestOriginVerdict_HTTPAndWebSocketAgree(t *testing.T) {
 			t.Cleanup(httpSrv.Close)
 
 			origin := func(srv *httptest.Server) string {
-				if tc.origin == "OWN" {
+				switch tc.origin {
+				case "OWN":
 					return srv.URL
+				case "OWNFTP":
+					return "ftp" + strings.TrimPrefix(srv.URL, "http")
 				}
 				return tc.origin
 			}
