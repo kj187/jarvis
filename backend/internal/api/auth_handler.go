@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base64"
+	"errors"
 	"log/slog"
 	"math"
 	"net/http"
@@ -92,13 +93,22 @@ func (s *Server) postLogin(c echo.Context) error {
 
 	// The wait applies to every submitted username, existing or not, so the
 	// response never reveals whether an account exists.
-	if wait := s.loginThrottle.Wait(req.Username); wait > 0 {
+	// TryAcquire checks and reserves atomically, so parallel requests cannot all
+	// pass the check before the first failure is recorded.
+	wait, ok := s.loginThrottle.TryAcquire(req.Username)
+	if !ok {
 		c.Response().Header().Set("Retry-After", strconv.Itoa(int(math.Ceil(wait.Seconds()))))
 		return c.JSON(http.StatusTooManyRequests, map[string]string{"error": "too many failed attempts, try again later"})
 	}
 
 	u, err := s.authProvider.Authenticate(c.Request().Context(), req.Username, req.Password)
 	if err != nil {
+		if !errors.Is(err, auth.ErrInvalidCredentials) {
+			// Not the user's fault (e.g. the database): no failed attempt, no detail.
+			s.loginThrottle.Release(req.Username)
+			slog.Error("login: authenticate", "err", err)
+			return echo.NewHTTPError(http.StatusInternalServerError, "login failed")
+		}
 		s.loginThrottle.Fail(req.Username)
 		// Always return the same message to prevent user enumeration.
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid credentials"})

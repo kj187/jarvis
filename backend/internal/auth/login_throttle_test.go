@@ -1,6 +1,8 @@
 package auth
 
 import (
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -126,5 +128,83 @@ func TestLoginThrottle_NilIsDisabled(t *testing.T) {
 	th.Succeed("alice")
 	if w := th.Wait("alice"); w != 0 {
 		t.Fatalf("nil throttle wait = %v, want 0", w)
+	}
+	th.Release("alice")
+	if _, ok := th.TryAcquire("alice"); !ok {
+		t.Fatal("nil throttle rejected an attempt")
+	}
+}
+
+func TestLoginThrottle_TryAcquireAdmitsExactlyOneParallelAttempt(t *testing.T) {
+	th, _ := newTestThrottle()
+	const n = 50
+	var admitted atomic.Int32
+	var wg sync.WaitGroup
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if _, ok := th.TryAcquire("alice"); ok {
+				admitted.Add(1)
+			}
+		}()
+	}
+	wg.Wait()
+	if got := admitted.Load(); got != 1 {
+		t.Fatalf("admitted = %d, want 1", got)
+	}
+}
+
+func TestLoginThrottle_InflightRejectionCarriesRetryHintAndOtherNamesPass(t *testing.T) {
+	th, _ := newTestThrottle()
+	if _, ok := th.TryAcquire("alice"); !ok {
+		t.Fatal("first attempt rejected")
+	}
+	if wait, ok := th.TryAcquire("ALICE "); ok || wait != loginInflightWait {
+		t.Fatalf("second attempt: wait = %v ok = %v, want %v false", wait, ok, loginInflightWait)
+	}
+	if _, ok := th.TryAcquire("bob"); !ok {
+		t.Fatal("another name was held up")
+	}
+}
+
+func TestLoginThrottle_ReleaseFreesTheNameWithoutCountingAFailure(t *testing.T) {
+	th, _ := newTestThrottle()
+	for i := 0; i < 20; i++ {
+		if _, ok := th.TryAcquire("alice"); !ok {
+			t.Fatalf("attempt %d rejected", i+1)
+		}
+		th.Release("alice")
+	}
+	if w := th.Wait("alice"); w != 0 || th.size() != 0 {
+		t.Fatalf("wait = %v, entries = %d, want none", w, th.size())
+	}
+}
+
+func TestLoginThrottle_FailAndSucceedFreeTheName(t *testing.T) {
+	th, _ := newTestThrottle()
+	th.TryAcquire("alice")
+	th.Fail("alice")
+	if _, ok := th.TryAcquire("alice"); !ok {
+		t.Fatal("name still held after Fail")
+	}
+	th.Succeed("alice")
+	if _, ok := th.TryAcquire("alice"); !ok {
+		t.Fatal("name still held after Succeed")
+	}
+}
+
+func TestLoginThrottle_TryAcquireRejectsDuringTheWaitAndAdmitsAfter(t *testing.T) {
+	th, now := newTestThrottle()
+	for i := 0; i <= loginFreeAttempts; i++ {
+		th.TryAcquire("alice")
+		th.Fail("alice")
+	}
+	if wait, ok := th.TryAcquire("alice"); ok || wait != loginBaseWait {
+		t.Fatalf("during wait: wait = %v ok = %v, want %v false", wait, ok, loginBaseWait)
+	}
+	*now = now.Add(loginBaseWait)
+	if _, ok := th.TryAcquire("alice"); !ok {
+		t.Fatal("rejected after the wait passed")
 	}
 }

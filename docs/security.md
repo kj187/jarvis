@@ -92,7 +92,7 @@ for all users. However, read access remains available in `write_protect` mode. A
 **Failed-login wait (per username)**: with `JARVIS_AUTH_PROVIDER=internal`, on top of that bucket, repeated failed logins for the same
 username slow down that username only. The first 5 failures are free; each further failure doubles the
 wait (2 s, 4 s, 8 s, …, capped at 5 minutes), and `POST /auth/login` answers `429` with `Retry-After`
-until it has passed. Attempts during the wait are rejected without being checked and do not extend it, a
+until it has passed. Attempts during the wait are rejected without being checked and do not extend it; so is a second attempt for a name whose previous attempt is still being checked (`429`, retry after 1 s), which keeps parallel requests from all getting through when a wait has just ended. Only wrong credentials count as a failure, a database error does not. A
 successful login resets the counter, and unused counters expire after 15 minutes. The wait applies to every
 submitted name whether or not the account exists, so the response does not reveal which accounts exist. There is
 no per-IP limit (Jarvis is an internal tool, and behind a proxy the peer address is the proxy's). Trade-off: someone
