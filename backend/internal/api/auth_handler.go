@@ -159,15 +159,23 @@ func (s *Server) getOIDCStart(c echo.Context) error {
 	}
 	state := base64.RawURLEncoding.EncodeToString(stateBytes)
 
+	// Nonce (16 random bytes): sent to the IdP, echoed in the ID token, and kept
+	// here in the cookie so the callback can check the token belongs to this login.
+	nonceBytes := make([]byte, 16)
+	if _, err := rand.Read(nonceBytes); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError)
+	}
+	nonce := base64.RawURLEncoding.EncodeToString(nonceBytes)
+
 	// Remember where to send the browser afterwards: ?popup=1 (login in a popup
 	// window that then closes) or ?return_to=<in-app path> (full-page redirect back
 	// to the page the user came from). Both live in the state cookie, so the IdP
 	// round trip needs no server-side state.
 	popup := c.QueryParam("popup") == "1"
 	returnTo := sanitizeReturnTo(c.QueryParam("return_to"))
-	auth.SetOIDCStateCookie(c, encodeOIDCState(state, codeVerifier, popup, returnTo))
+	auth.SetOIDCStateCookie(c, encodeOIDCState(state, codeVerifier, nonce, popup, returnTo))
 
-	return c.Redirect(http.StatusFound, s.authProvider.AuthURL(state, codeChallenge))
+	return c.Redirect(http.StatusFound, s.authProvider.AuthURL(state, nonce, codeChallenge))
 }
 
 // GET /auth/oidc/callback — handles the OIDC redirect callback.
@@ -185,7 +193,7 @@ func (s *Server) getOIDCCallback(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "missing state cookie")
 	}
 
-	cookieState, codeVerifier, landing, ok := decodeOIDCState(cookie.Value)
+	cookieState, codeVerifier, nonce, landing, ok := decodeOIDCState(cookie.Value)
 	if !ok {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid state cookie")
 	}
@@ -195,7 +203,7 @@ func (s *Server) getOIDCCallback(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "state mismatch")
 	}
 
-	u, err := s.authProvider.Exchange(c.Request().Context(), code, codeVerifier)
+	u, err := s.authProvider.Exchange(c.Request().Context(), code, codeVerifier, nonce)
 	if err != nil {
 		slog.Error("oidc callback exchange failed", "err", err)
 		return echo.NewHTTPError(http.StatusUnauthorized, "authentication failed")

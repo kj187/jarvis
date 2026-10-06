@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"crypto/subtle"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -57,9 +58,11 @@ func NewOIDCProvider(ctx context.Context, issuer, clientID, clientSecret, redire
 
 func (p *OIDCProvider) Mode() string { return "oidc" }
 
-// AuthURL returns the OIDC authorization URL with PKCE challenge.
-func (p *OIDCProvider) AuthURL(state, codeChallenge string) string {
+// AuthURL returns the OIDC authorization URL with PKCE challenge and the
+// nonce the ID token must echo back.
+func (p *OIDCProvider) AuthURL(state, nonce, codeChallenge string) string {
 	return p.oauth2Cfg.AuthCodeURL(state,
+		gooidc.Nonce(nonce),
 		oauth2.SetAuthURLParam("code_challenge", codeChallenge),
 		oauth2.SetAuthURLParam("code_challenge_method", "S256"),
 	)
@@ -67,7 +70,7 @@ func (p *OIDCProvider) AuthURL(state, codeChallenge string) string {
 
 // Exchange exchanges the authorization code for a User.
 // The OIDC access/refresh tokens are never stored — only the derived user record.
-func (p *OIDCProvider) Exchange(ctx context.Context, code, codeVerifier string) (*User, error) {
+func (p *OIDCProvider) Exchange(ctx context.Context, code, codeVerifier, nonce string) (*User, error) {
 	tok, err := p.oauth2Cfg.Exchange(ctx, code,
 		oauth2.SetAuthURLParam("code_verifier", codeVerifier),
 	)
@@ -85,11 +88,24 @@ func (p *OIDCProvider) Exchange(ctx context.Context, code, codeVerifier string) 
 		return nil, fmt.Errorf("id_token verification: %w", err)
 	}
 
+	// The nonce ties this ID token to the login this browser started; without
+	// it a token issued for another session could be replayed into this one.
+	if nonce == "" || subtle.ConstantTimeCompare([]byte(idToken.Nonce), []byte(nonce)) != 1 {
+		return nil, errors.New("id_token nonce mismatch")
+	}
+
 	var rawClaims map[string]any
 	if err := idToken.Claims(&rawClaims); err != nil {
 		return nil, fmt.Errorf("claims parse: %w", err)
 	}
-	slog.Debug("oidc id_token claims", "claims", rawClaims)
+	// Never log the token or its claim values: a bearer credential and personal
+	// data. The claim names are enough to debug a missing groups claim.
+	slog.Debug("oidc id_token received", "claim_names", sortedKeys(rawClaims))
+
+	// An unverified e-mail is attacker-chosen; it can become the username.
+	if v, present := rawClaims["email_verified"]; present && !emailVerified(v) {
+		return nil, errors.New("id_token email is not verified")
+	}
 
 	var claims struct {
 		Sub               string `json:"sub"`
@@ -133,6 +149,29 @@ func (p *OIDCProvider) Authenticate(_ context.Context, _, _ string) (*User, erro
 
 func (p *OIDCProvider) Info() ProviderInfo {
 	return ProviderInfo{Mode: "oidc", LoginURL: "/auth/oidc/start"}
+}
+
+// emailVerified reports whether a present email_verified claim asserts a
+// verified address. Providers send a bool, Cognito sends the strings
+// "true"/"false"; anything else is treated as not verified. (An absent claim is
+// the caller's case: the IdP simply does not assert it.)
+func emailVerified(v any) bool {
+	switch x := v.(type) {
+	case bool:
+		return x
+	case string:
+		return x == "true"
+	}
+	return false
+}
+
+func sortedKeys(m map[string]any) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	slices.Sort(keys)
+	return keys
 }
 
 // resolveRole returns "admin" when the user is in at least one of the

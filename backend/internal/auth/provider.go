@@ -9,10 +9,10 @@ type Provider interface {
 
 	// AuthURL returns the OIDC authorization URL (oidc mode only).
 	// Returns "" for other modes.
-	AuthURL(state, codeChallenge string) string
+	AuthURL(state, nonce, codeChallenge string) string
 
 	// Exchange exchanges an OIDC code for a User (oidc mode only).
-	Exchange(ctx context.Context, code, codeVerifier string) (*User, error)
+	Exchange(ctx context.Context, code, codeVerifier, nonce string) (*User, error)
 
 	// Authenticate validates internal credentials (internal mode only).
 	Authenticate(ctx context.Context, username, password string) (*User, error)
