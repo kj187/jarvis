@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -105,7 +107,7 @@ func TestGetSilences_EmptyStore_ReturnsEmptyArray(t *testing.T) {
 
 func TestGetSilences_ServedFromSnapshot_NoAMCall(t *testing.T) {
 	srv := newTestServerWithAM(t, guardAM(t).URL)
-	srv.silenceStore.Set("testcluster", []amclient.GettableSilence{testGettableSilence("silence-1")})
+	srv.silenceStore.Set("testcluster", []amclient.GettableSilence{testGettableSilence(testSilenceID)})
 
 	e := echo.New()
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/silences", nil)
@@ -115,7 +117,7 @@ func TestGetSilences_ServedFromSnapshot_NoAMCall(t *testing.T) {
 	if err := srv.getSilences(c); err != nil {
 		t.Fatalf("getSilences: %v", err)
 	}
-	if !contains(rec.Body.String(), "silence-1") {
+	if !contains(rec.Body.String(), testSilenceID) {
 		t.Errorf("expected silence-1 in response: %s", rec.Body.String())
 	}
 	if !contains(rec.Body.String(), `"clusterName":"testcluster"`) {
@@ -321,6 +323,72 @@ func TestCreateSilence_AMError(t *testing.T) {
 	}
 }
 
+const (
+	testSilenceID     = "0b8c1f3e-5d2a-4c6b-9e7f-1a2b3c4d5e6f"
+	testOldSilenceID  = "11111111-2222-4333-8444-555555555555"
+	testSameSilenceID = "66666666-7777-4888-9999-aaaaaaaaaaaa"
+)
+
+func TestDeleteSilence_RejectsInvalidID(t *testing.T) {
+	var requests atomic.Int32
+	am := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests.Add(1)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer am.Close()
+
+	srv := newTestServerWithAM(t, am.URL)
+	e := echo.New()
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodDelete, "/?cluster=testcluster", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues("../status")
+
+	err := srv.deleteSilence(c)
+	var he *echo.HTTPError
+	if !errors.As(err, &he) || he.Code != http.StatusBadRequest {
+		t.Fatalf("deleteSilence err = %v, want 400", err)
+	}
+	if n := requests.Load(); n != 0 {
+		t.Errorf("upstream received %d requests, want 0", n)
+	}
+}
+
+func TestCreateSilence_RejectsInvalidID(t *testing.T) {
+	var requests atomic.Int32
+	am := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests.Add(1)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer am.Close()
+
+	srv := newTestServerWithAM(t, am.URL)
+	e := echo.New()
+	now := time.Now().UTC()
+	b, _ := json.Marshal(map[string]interface{}{
+		"cluster":   "testcluster",
+		"id":        "../status",
+		"matchers":  []interface{}{map[string]interface{}{"name": "alertname", "isEqual": true, "isRegex": false, "value": "Test"}},
+		"startsAt":  now.Format(time.RFC3339),
+		"endsAt":    now.Add(time.Hour).Format(time.RFC3339),
+		"createdBy": "alice",
+		"comment":   "x",
+	})
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/silences", bytes.NewReader(b))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	c := e.NewContext(req, httptest.NewRecorder())
+
+	err := srv.createSilence(c)
+	var he *echo.HTTPError
+	if !errors.As(err, &he) || he.Code != http.StatusBadRequest {
+		t.Fatalf("createSilence err = %v, want 400", err)
+	}
+	if n := requests.Load(); n != 0 {
+		t.Errorf("upstream received %d requests, want 0", n)
+	}
+}
+
 func TestDeleteSilence_Success(t *testing.T) {
 	tests := []struct {
 		name string
@@ -342,7 +410,7 @@ func TestDeleteSilence_Success(t *testing.T) {
 			rec := httptest.NewRecorder()
 			c := e.NewContext(req, rec)
 			c.SetParamNames("id")
-			c.SetParamValues("silence-1")
+			c.SetParamValues(testSilenceID)
 
 			if err := srv.deleteSilence(c); err != nil {
 				t.Fatalf("deleteSilence: %v", err)
@@ -375,7 +443,7 @@ func TestDeleteSilence_ClusterErrors(t *testing.T) {
 			rec := httptest.NewRecorder()
 			c := e.NewContext(req, rec)
 			c.SetParamNames("id")
-			c.SetParamValues("silence-1")
+			c.SetParamValues(testSilenceID)
 
 			err := srv.deleteSilence(c)
 			if err == nil {
@@ -401,7 +469,7 @@ func TestDeleteSilence_AMError(t *testing.T) {
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	c.SetParamNames("id")
-	c.SetParamValues("silence-1")
+	c.SetParamValues(testSilenceID)
 
 	err := srv.deleteSilence(c)
 	if err == nil {
@@ -441,7 +509,7 @@ func TestCreateSilence_ExpireOldSilenceWhenAMReturnsNewID(t *testing.T) {
 	now := time.Now().UTC()
 	body := map[string]interface{}{
 		"cluster":   "testcluster",
-		"id":        "old-silence-id",
+		"id":        testOldSilenceID,
 		"matchers":  []interface{}{map[string]interface{}{"name": "alertname", "isEqual": true, "isRegex": false, "value": "Test"}},
 		"startsAt":  now.Format(time.RFC3339),
 		"endsAt":    now.Add(time.Hour).Format(time.RFC3339),
@@ -463,8 +531,8 @@ func TestCreateSilence_ExpireOldSilenceWhenAMReturnsNewID(t *testing.T) {
 	if !contains(rec.Body.String(), "new-silence-id") {
 		t.Errorf("expected new-silence-id in response: %s", rec.Body.String())
 	}
-	if len(deletedIDs) != 1 || deletedIDs[0] != "old-silence-id" {
-		t.Errorf("expected old-silence-id to be deleted, got: %v", deletedIDs)
+	if len(deletedIDs) != 1 || deletedIDs[0] != testOldSilenceID {
+		t.Errorf("expected old silence id to be deleted, got: %v", deletedIDs)
 	}
 }
 
@@ -475,7 +543,7 @@ func TestCreateSilence_NoDeleteWhenSameIDReturned(t *testing.T) {
 			deleteCallCount++
 		}
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(amclient.PostSilenceResponse{SilenceID: "same-silence-id"}) //nolint:errcheck
+		json.NewEncoder(w).Encode(amclient.PostSilenceResponse{SilenceID: testSameSilenceID}) //nolint:errcheck
 	}))
 	defer am.Close()
 
@@ -485,7 +553,7 @@ func TestCreateSilence_NoDeleteWhenSameIDReturned(t *testing.T) {
 	now := time.Now().UTC()
 	body := map[string]interface{}{
 		"cluster":   "testcluster",
-		"id":        "same-silence-id",
+		"id":        testSameSilenceID,
 		"matchers":  []interface{}{map[string]interface{}{"name": "alertname", "isEqual": true, "isRegex": false, "value": "Test"}},
 		"startsAt":  now.Format(time.RFC3339),
 		"endsAt":    now.Add(time.Hour).Format(time.RFC3339),
@@ -727,7 +795,7 @@ func TestDeleteSilence_AMValidationErrorPassthrough(t *testing.T) {
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	c.SetParamNames("id")
-	c.SetParamValues("silence-1")
+	c.SetParamValues(testSilenceID)
 
 	err := srv.deleteSilence(c)
 	if err == nil {
@@ -809,13 +877,13 @@ func TestCreateSilence_UpdateIDChange_ExpiresOldInSnapshot(t *testing.T) {
 	srv := newTestServerWithAM(t, am.URL)
 	ft := &fakeTriggerer{}
 	srv.pollTrigger = ft
-	srv.silenceStore.Set("testcluster", []amclient.GettableSilence{testGettableSilence("old-id")})
+	srv.silenceStore.Set("testcluster", []amclient.GettableSilence{testGettableSilence(testOldSilenceID)})
 	e := echo.New()
 
 	now := time.Now().UTC()
 	body := map[string]interface{}{
 		"cluster":   "testcluster",
-		"id":        "old-id",
+		"id":        testOldSilenceID,
 		"matchers":  []interface{}{map[string]interface{}{"name": "alertname", "isEqual": true, "isRegex": false, "value": "Test"}},
 		"startsAt":  now.Format(time.RFC3339),
 		"endsAt":    now.Add(time.Hour).Format(time.RFC3339),
@@ -837,8 +905,8 @@ func TestCreateSilence_UpdateIDChange_ExpiresOldInSnapshot(t *testing.T) {
 	for _, s := range snap {
 		states[s.ID] = s.Status.State
 	}
-	if states["old-id"] != "expired" {
-		t.Errorf("old-id state = %q, want expired (snapshot: %+v)", states["old-id"], snap)
+	if states[testOldSilenceID] != "expired" {
+		t.Errorf("old state = %q, want expired (snapshot: %+v)", states[testOldSilenceID], snap)
 	}
 	if states["new-id"] != "active" {
 		t.Errorf("new-id state = %q, want active (snapshot: %+v)", states["new-id"], snap)
@@ -857,14 +925,14 @@ func TestDeleteSilence_WriteThroughMarksExpired(t *testing.T) {
 	srv := newTestServerWithAM(t, am.URL)
 	ft := &fakeTriggerer{}
 	srv.pollTrigger = ft
-	srv.silenceStore.Set("testcluster", []amclient.GettableSilence{testGettableSilence("silence-1")})
+	srv.silenceStore.Set("testcluster", []amclient.GettableSilence{testGettableSilence(testSilenceID)})
 	e := echo.New()
 
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodDelete, "/?cluster=testcluster", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	c.SetParamNames("id")
-	c.SetParamValues("silence-1")
+	c.SetParamValues(testSilenceID)
 
 	if err := srv.deleteSilence(c); err != nil {
 		t.Fatalf("deleteSilence: %v", err)

@@ -279,7 +279,7 @@ The detail panel is the central hub for working with a single alert. It slides i
 - **Dynamic link buttons**: any label or annotation whose value is an absolute URL (`http://` or `https://`) automatically renders as a clickable button using the key name as the label — no configuration needed. Examples: `dashboard=https://grafana.example.com/d/abc`, `ticket=https://jira.example.com/ISSUE-1`
 - **Runbook**: the `runbook` key (label or annotation) is handled specially:
   - If the value is an absolute URL → used directly as the link
-  - If the value is a plain string and `JARVIS_RUNBOOK_BASE_URL` is configured → the final URL is `RUNBOOK_BASE_URL` + value (e.g. `https://wiki.example.com/runbooks/my-alert`)
+  - If the value is a plain string and `JARVIS_RUNBOOK_BASE_URL` is configured → the final URL is `RUNBOOK_BASE_URL` + value (e.g. `https://wiki.example.com/runbooks/my-alert`); the result must be an `http(s)` URL on the same origin as the base, otherwise no button is shown
   - If the value is a plain string and `JARVIS_RUNBOOK_BASE_URL` is not set → no button is shown
 
 **History**

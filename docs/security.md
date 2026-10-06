@@ -102,7 +102,7 @@ reconnects on its own.
 
 - Fingerprint path params: validated against `[a-f0-9]{16}` regex
 - Pagination: `limit` accepts 10, 25, 50, or 100; `offset` ≥ 0
-- Silence fields: `comment` is required; length limits enforced
+- Silence fields: `comment` is required; length limits enforced; a silence `id` must be a UUID, so it can never alter the upstream request path
 - Outbound HTTP (Alertmanager client): 10s timeout on all requests
 - JSON decoding uses `DisallowUnknownFields` where appropriate
 
