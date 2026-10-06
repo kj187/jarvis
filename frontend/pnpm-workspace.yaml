@@ -5,3 +5,4 @@ onlyBuiltDependencies:
 overrides:
   browserslist: ">=4.28.7"
   brace-expansion: ">=5.0.12 <6"
+  source-map-js: ">=1.2.2"
