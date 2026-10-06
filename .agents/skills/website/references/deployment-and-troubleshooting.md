@@ -8,7 +8,10 @@ Reference for the `website` skill — start at `../SKILL.md`. Load this only whe
 
 `.github/workflows/docs.yml` builds and deploys to GitHub Pages on push to
 `main` (path-filtered to the docs sources and `website/**`) and on
-`workflow_dispatch`. It runs the website helper tests before the build. All
+`workflow_dispatch`. It runs `pnpm audit --audit-level=high` (a known high or
+critical vulnerability blocks the deploy; fix it with a version bump or an entry
+under `overrides:` in `website/pnpm-workspace.yaml`) and the website helper
+tests before the build. Dependabot watches `/website` like `/frontend`. All
 actions are SHA-pinned — `ratchet check` runs in CI.
 
 `fetch-depth: 0` on the checkout is required: without full history the

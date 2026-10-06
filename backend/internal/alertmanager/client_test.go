@@ -12,6 +12,8 @@ import (
 	"time"
 )
 
+const testSilenceID = "0b8c1f3e-5d2a-4c6b-9e7f-1a2b3c4d5e6f"
+
 func TestGetAlerts(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
 	alerts := []GettableAlert{
@@ -197,7 +199,7 @@ func TestCreateSilence(t *testing.T) {
 func TestDeleteSilence(t *testing.T) {
 	deleted := false
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodDelete && r.URL.Path == "/api/v2/silence/silence-1" {
+		if r.Method == http.MethodDelete && r.URL.Path == "/api/v2/silence/"+testSilenceID {
 			deleted = true
 			w.WriteHeader(http.StatusOK)
 			return
@@ -207,10 +209,65 @@ func TestDeleteSilence(t *testing.T) {
 	defer srv.Close()
 
 	client := NewClient(srv.URL)
-	if err := client.DeleteSilence(context.Background(), "silence-1"); err != nil {
+	if err := client.DeleteSilence(context.Background(), testSilenceID); err != nil {
 		t.Fatalf("DeleteSilence() error: %v", err)
 	}
 	if !deleted {
 		t.Error("DELETE request was not made")
+	}
+}
+
+func TestDeleteSilence_RejectsInvalidID(t *testing.T) {
+	var requests atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	client := NewClient(srv.URL)
+	for _, id := range []string{"", "../api/v2/status", "abc/../../status", "silence-1", testSilenceID + "/x", testSilenceID + "?q=1", "%2e%2e%2fstatus"} {
+		if err := client.DeleteSilence(context.Background(), id); err == nil {
+			t.Errorf("DeleteSilence(%q) = nil, want error", id)
+		}
+	}
+	if n := requests.Load(); n != 0 {
+		t.Errorf("upstream received %d requests for invalid IDs, want 0", n)
+	}
+}
+
+func TestGet_RejectsOversizedResponse(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte("["))
+		chunk := []byte(strings.Repeat(" ", 1<<20))
+		for i := 0; i <= maxResponseBytes>>20; i++ {
+			if _, err := w.Write(chunk); err != nil {
+				return
+			}
+		}
+		_, _ = w.Write([]byte("]"))
+	}))
+	defer srv.Close()
+
+	if _, err := NewClient(srv.URL).GetAlerts(context.Background()); err == nil {
+		t.Fatal("GetAlerts() = nil error for a response above the size limit")
+	}
+}
+
+func TestGet_ErrorBodyIsTruncated(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(strings.Repeat("x", maxErrorBodyBytes*4)))
+	}))
+	defer srv.Close()
+
+	err := NewClient(srv.URL).Ping(context.Background())
+	amErr, ok := err.(*AMError)
+	if !ok {
+		t.Fatalf("Ping() error = %T, want *AMError", err)
+	}
+	if len(amErr.Body) > maxErrorBodyBytes {
+		t.Errorf("error body = %d bytes, want <= %d", len(amErr.Body), maxErrorBodyBytes)
 	}
 }

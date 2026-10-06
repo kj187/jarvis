@@ -64,7 +64,9 @@ helm unittest charts/jarvis/       # Unit tests (deployment, configmap, secret, 
 make verify                        # full working-tree verification — see "make verify" below
 make verify FAST=1                 # same, without the production image build + smoke test
 make test-all                      # backend + frontend + helm lint + helm unittest
-make test-scripts                  # test scripts/release-body.sh; no network needed
+make test-scripts                  # test scripts/release-body.sh, scripts/sbom.sh and scripts/check-image-pins.sh; no network needed
+scripts/verify-release-smoke.sh vX.Y.Z  # after a release: exact cosign identities accepted, other workflows rejected, SBOM complete + attested (network, cosign, crane, jq, gh; --skip-sbom up to v2.0.0)
+make check-image-pins              # every Containerfile FROM has a @sha256 digest, pnpm installs are pinned
 make test-backend                  # go test -race ./...
 make fuzz-backend                  # Go native fuzz targets (FUZZTIME=30s per target)
 make test-frontend                 # functional E2E (none + internal + oidc)
@@ -73,6 +75,7 @@ make helm-lint                     # helm lint only
 make helm-test                     # helm unittest only
 
 # ── Docs website (VitePress, website/) ───────────────────────
+cd website && pnpm audit --audit-level=high   # known-vulnerability gate (blocks the deploy in docs.yml)
 cd website && pnpm test             # Media wiring/assets, release-version consistency, every docs/*.md in PAGES (runs in docs.yml after merge to main)
 make website                       # build to website/.vitepress/dist — fails on dead internal links
 make website-dev                   # hot-reload preview on http://localhost:5174/jarvis/
@@ -172,8 +175,10 @@ main checkout — the container cannot follow a git worktree's `.git` file).
 | `backend/**` | `go test ./... -count=1 -timeout 60s` + golangci-lint (incl. gosec and the gofmt formatter; govulncheck runs in CI only) |
 | `frontend/**` | `pnpm audit --audit-level=high` + `pnpm lint` (eslint) + `pnpm test:unit:coverage` (Vitest + 100% coverage gate, `lib/alertUtils.ts`) + `pnpm duplication` (jscpd) — executed **inside the running dev container** (`jarvis_frontend_1`); hook fails if the container is not running |
 | `charts/**` | `helm lint` + `helm unittest` |
-| `scripts/release-body.sh`, `scripts/test-release-body.sh`, `.github/workflows/release*.yml` | `scripts/test-release-body.sh` — tests the release body script |
+| `scripts/release-body.sh`, `scripts/test-release-body.sh`, `.github/workflows/release*.yml` | `scripts/test-release-body.sh` — tests the release body script, including the exact cosign identities it prints |
+| `scripts/sbom.sh`, `scripts/test-sbom.sh`, `.github/workflows/release.yml` | `scripts/test-sbom.sh` — tests the SBOM merge (frontend packages added, root pseudo-packages dropped, no duplicates) and the completeness check (required packages, licenses); jq fixtures, no network or syft needed |
 | always | `scripts/check-changelogs.sh` — chart changes (outside `tests/`) must update `charts/jarvis/CHANGELOG.md`; every chart-changelog version section starts with a non-empty `### Breaking Changes`; changed `.github/release-notes/*.md` contain a Breaking Changes heading (a no-op when none of those paths are staged) |
+| always | `scripts/check-image-pins.sh` (also `make check-image-pins`, tested by `scripts/test-check-image-pins.sh`) — every `FROM` in `Containerfile*` carries `@sha256:<digest>` (stage references and `scratch` exempt), and `npm install -g pnpm` always names a version (`pnpm@<version>`, also in `compose*.yml` and the `Makefile`) |
 | always | `scripts/check-agent-context.sh` (also `make check-agent-context`) — adapters stay thin, skill frontmatter (`name` = directory, `description` ≤ 1024), `AGENTS.md` ≤ 12,000 bytes, every path mentioned in `AGENTS.md` and every `.agents/…` reference exists, backend/frontend resolved-filter conformance fixtures byte-identical, every cited `Invariant #<n>` exists (`docs/ai-agents.md`) |
 | always | `node scripts/check-design-drift.mjs` (also a CI step) — no raw Tailwind palette classes, colour literals or radius classes in `frontend/src` (semantic tokens only — `rounded-control`, `rounded-surface`, …; `lib/avatarUtils.ts` and `lib/heatmapUtils.ts` are allow-listed data-viz) · `node scripts/design-tokens.mjs --check` (also a CI step in the Agent Context job) — the generated colour files (`frontend/src/generated/tokens.css`, `website/.vitepress/theme/generated-tokens.css`, `frontend/e2e/video/generated-theme.ts`) must match `design/tokens.json`; `lib/themeTokens.test.ts` reads the generated CSS |
 | always | **gitleaks** secret scan of the staged diff (via podman, config `.gitleaks.toml`, image pinned in `scripts/gitleaks-image`); when `.gitleaks.toml`, `scripts/gitleaks-image` or the canary script is staged, also `scripts/check-gitleaks-canary.sh` |
@@ -196,7 +201,7 @@ Split across six workflows.
 pin-check:           # ratchet: verify all GitHub Actions are SHA-pinned (globs .github/workflows/*.yml)
 dco:                 # PR-only: every commit must carry a Signed-off-by trailer (git commit -s)
 secrets:             # scripts/check-gitleaks-canary.sh (config must still detect synthetic secrets, also under testdata/) + gitleaks over the PR commit range (action pinned to gitleaks 8.24.3)
-agent-context:       # scripts/check-agent-context.sh (same rules as the pre-commit hook) + test scripts/release-body.sh
+agent-context:       # scripts/check-agent-context.sh (same rules as the pre-commit hook) + test scripts/release-body.sh + scripts/check-image-pins.sh (self-test and repository check)
 
 # Backend runs as three parallel jobs on separate runners (the PostgreSQL tests never share a
 # runner with the fuzz targets — see .agents/lessons/testing-and-e2e.md). All three set up Go with
@@ -216,6 +221,9 @@ backend-lint:        # "Backend Lint and Vulnerabilities"
   - golangci-lint run   # includes gosec and the gofmt formatter (both enabled in .golangci.yml) —
                         # golangci-lint is the only Go gate here, so formatting is unchecked
                         # anywhere else; that is how struct-alignment drift once accumulated
+                        # .golangci.yml has no path or rule exclusions, test files included: a gosec
+                        # exception is a `// #nosec Gxxx -- reason` (or `//nolint:gosec // reason`)
+                        # on the finding, never a global rule
 backend-fuzz:        # "Backend Fuzz" (no PostgreSQL service)
   - fuzz targets, 20s each, `-parallel 2` (FuzzRedactDSN, FuzzParseNullableTimeString,
     FuzzParseSecretKey, FuzzValidateSilenceMatchers, FuzzSanitizeAMMessage), run one after another —
@@ -235,6 +243,21 @@ frontend:
 helm:
   - scripts/check-changelogs.sh on the PR diff (PR-only; same rules as the pre-commit hook)
   - helm lint + helm unittest
+
+image-scan:          # "Image Scan" — builds ./Containerfile, then Trivy (action pinned by commit SHA,
+                     # Trivy pinned via `version:`, bumped by hand with the action):
+  - image scan: HIGH/CRITICAL with a fix fail (`ignore-unfixed`)
+  - config scan of Containerfiles, chart and compose files: HIGH/CRITICAL fail; accepted
+    findings only in `.trivyignore.yaml`, each with a statement
+  - self-test: the same settings against `alpine:3.10` must fail with reported vulnerabilities
+    (`continue-on-error` step + assertion), so a scanner that finds nothing cannot pass silently
+    # a new finding in the Debian base can turn this red without a code change: bump the base
+    # image or add a reasoned ignore entry. Not (yet) a required check of the `protect-main` ruleset
+
+sbom:                # "SBOM" — builds ./Containerfile, then `scripts/sbom.sh build` (syft, pnpm, Node):
+                     # image + frontend production dependencies merged, must contain react, echo and
+                     # base-files and under 10 % unlicensed packages. The only full run of the build
+                     # path before a release. Not (yet) a required check of the `protect-main` ruleset
 ```
 
 ### `.github/workflows/e2e.yml`

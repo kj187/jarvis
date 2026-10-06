@@ -107,7 +107,7 @@ func (s *Server) firstRunRedirect(next echo.HandlerFunc) echo.HandlerFunc {
 // first-run redirect: API routes, auth routes, WebSocket, static assets.
 func isSkippedPath(path string) bool {
 	switch path {
-	case "/setup", "/health", "/metrics", "/ws", "/favicon.ico":
+	case "/setup", "/health", "/health/live", "/health/ready", "/metrics", "/ws", "/favicon.ico":
 		return true
 	}
 	for _, prefix := range []string{"/api", "/auth", "/assets"} {

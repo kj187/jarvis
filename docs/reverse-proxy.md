@@ -41,8 +41,24 @@ consequences worth knowing before debugging for an hour:
 - **No wildcards.** `*` is not accepted, by design. List every hostname you
   serve Jarvis under, separated by commas.
 
-The same list governs both HTTP CORS and the WebSocket upgrade, so getting it
-wrong breaks the live updates and the API calls in one go.
+The same list governs HTTP CORS, the WebSocket upgrade and the check on
+state-changing requests (see below), so getting it wrong breaks the live
+updates and the API calls in one go.
+
+**Cross-origin writes are rejected.** `POST`, `PUT`, `PATCH` and `DELETE`
+requests whose `Origin` is neither this server's own host nor in the list get
+`403 cross-origin request rejected`; so do requests without an `Origin` that
+the browser marked `Sec-Fetch-Site: cross-site`. Requests without either header
+(curl, scripts) are not affected. If every write in the UI fails with this 403
+behind a proxy, the proxy rewrites `Host` and `JARVIS_ALLOWED_ORIGINS` is
+missing the browser's URL — the same fix as for a dead WebSocket.
+
+**Optional hardening.** `JARVIS_ALLOWED_HOSTS` rejects any `Host` header you did
+not list (`421`) — set it to the names users reach Jarvis under, and mind that the
+proxy must forward the original `Host`. `JARVIS_TRUSTED_PROXIES` lists the proxy
+addresses (CIDRs) whose `X-Forwarded-For` Jarvis believes for the client IP in its
+logs; without it the logs show the proxy's address, never a forged one. Both are
+off by default; see [Configuration](configuration.md#jarvis_allowed_hosts).
 
 ---
 

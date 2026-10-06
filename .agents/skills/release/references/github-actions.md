@@ -6,9 +6,16 @@ release.
 
 From `.github/workflows/release.yml`:
 
-Three jobs, strictly in this order — a failure stops everything after it, so
+Four jobs, strictly in this order — a failure stops everything after it, so
 neither a chart nor a GitHub Release ever points at an image that wasn't
 built.
+
+**Job `ci-gate`:** the tagged commit must be reachable from `main` (compare
+API status `identical` or `behind`) and have a successful `ci.yml` push run.
+Otherwise nothing is built, so a tag on an untested or off-main commit never
+yields a signed image. Fix CI (or push the commit through a PR), delete the
+tag, and re-tag. The GitHub Release is created with the job's own
+`GITHUB_TOKEN`; there is no PAT.
 
 **Job `build-and-push`:**
 1. Derive image tags via `docker/metadata-action` → `{{version}}` (e.g.
@@ -28,12 +35,18 @@ below.
 
 **Job `release`** (after `build-and-push`, and `chart` unless skipped for a
 pre-release):
-1. Generate a standalone **SPDX SBOM** (syft, installed via
-   `anchore/sbom-action/download-syft`, run directly against the pushed image
-   digest) → `sbom.spdx.json`.
+1. Generate one standalone **SPDX SBOM** with `scripts/sbom.sh build` (syft,
+   installed via `anchore/sbom-action/download-syft`): the pushed image digest
+   plus the frontend production dependencies (hoisted `pnpm install --prod`
+   in a temp dir), merged and checked for completeness and licenses →
+   `sbom.spdx.json`. Needs pnpm and Node; `scripts/test-sbom.sh` covers merge
+   and check, the CI job `sbom` runs the full build.
 2. Sign it keylessly: `cosign sign-blob --bundle sbom.spdx.json.sigstore.json`
    — consumers verify with `cosign verify-blob`; the `*.sigstore.json` asset
-   is also what OpenSSF Scorecard's *Signed-Releases* check looks for.
+   is also what OpenSSF Scorecard's *Signed-Releases* check looks for. Also
+   attest it to the image digest (`actions/attest-sbom`, needs
+   `attestations: write`); consumers use `gh attestation verify … --predicate-type
+   https://spdx.dev/Document/v2.3`.
 3. Build the release body: stable tags **require**
    `.github/release-notes/vX.Y.Z.md` (the job fails without it — no silent
    CHANGELOG fallback), then appends image pull + digest, cosign verify,

@@ -28,6 +28,8 @@ type User struct {
 	Email    string
 	Role     string // "user" | "admin"
 	Provider string // "internal" | "oidc"
+	// TokenVersion is the user's session version (users.token_version).
+	TokenVersion int
 }
 
 // ProviderInfo is returned to the frontend via GET /auth/info.

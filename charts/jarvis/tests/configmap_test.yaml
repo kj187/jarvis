@@ -58,6 +58,59 @@ tests:
           path: data.JARVIS_RESOLVED_BUFFER_TTL
           value: "1h"
 
+  - it: omits JARVIS_ALLOWED_HOSTS and JARVIS_TRUSTED_PROXIES by default
+    asserts:
+      - notExists:
+          path: data.JARVIS_ALLOWED_HOSTS
+      - notExists:
+          path: data.JARVIS_TRUSTED_PROXIES
+
+  - it: renders JARVIS_ALLOWED_HOSTS and JARVIS_TRUSTED_PROXIES when set
+    set:
+      config.allowedHosts: jarvis.example.com
+      config.trustedProxies: 10.0.0.0/8
+    asserts:
+      - equal:
+          path: data.JARVIS_ALLOWED_HOSTS
+          value: "jarvis.example.com"
+      - equal:
+          path: data.JARVIS_TRUSTED_PROXIES
+          value: "10.0.0.0/8"
+
+  - it: omits JARVIS_WS_MAX_CONNECTIONS by default so the app keeps its own default
+    asserts:
+      - notExists:
+          path: data.JARVIS_WS_MAX_CONNECTIONS
+
+  - it: renders JARVIS_WS_MAX_CONNECTIONS when set, including 0 for unlimited
+    set:
+      config.wsMaxConnections: 0
+    asserts:
+      - equal:
+          path: data.JARVIS_WS_MAX_CONNECTIONS
+          value: "0"
+
+  - it: renders a positive JARVIS_WS_MAX_CONNECTIONS
+    set:
+      config.wsMaxConnections: 200
+    asserts:
+      - equal:
+          path: data.JARVIS_WS_MAX_CONNECTIONS
+          value: "200"
+
+  - it: omits JARVIS_COOKIE_SECURE by default so the app keeps its auto behavior
+    asserts:
+      - notExists:
+          path: data.JARVIS_COOKIE_SECURE
+
+  - it: renders JARVIS_COOKIE_SECURE when config.cookieSecure is set
+    set:
+      config.cookieSecure: "true"
+    asserts:
+      - equal:
+          path: data.JARVIS_COOKIE_SECURE
+          value: "true"
+
   - it: omits all JARVIS_RETENTION_* by default
     asserts:
       - notExists:
@@ -271,9 +324,8 @@ tests:
       - equal:
           path: data.JARVIS_CLUSTER_1_OAUTH2_SCOPES
           value: openid,profile
-      - equal:
+      - notExists:
           path: data.JARVIS_CLUSTER_1_HEADER_X-Scope-OrgID
-          value: tenant1
       - notExists:
           path: data.JARVIS_CLUSTER_1_BEARER_TOKEN
       - notExists:
@@ -287,3 +339,15 @@ tests:
           path: data.JARVIS_CLUSTER_1_BASIC_AUTH_USER
       - notExists:
           path: data.JARVIS_CLUSTER_1_OAUTH2_CLIENT_ID
+
+  - it: never renders an Authorization header into the ConfigMap
+    set:
+      clusters:
+        - name: production
+          alertmanagerUrl: http://am:9093
+          auth:
+            headers:
+              Authorization: Bearer abc
+    asserts:
+      - notExists:
+          path: data.JARVIS_CLUSTER_1_HEADER_Authorization

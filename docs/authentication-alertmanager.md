@@ -124,9 +124,11 @@ clusters:
         scopes: "openid,profile"
 ```
 
-`oauth2.clientSecret`, `bearerToken`, and `basicAuth.password` are the only
+`oauth2.clientSecret`, `bearerToken`, and `basicAuth.password` are the
 secret-shaped fields — the chart renders them into a Secret (`stringData`),
-never the ConfigMap, regardless of whether they are set. `oauth2.clientId`
+never the ConfigMap, regardless of whether they are set. Custom `headers` values
+go to the same Secret (`cluster-<n>-header-<name>`), because a header such as
+`Authorization` is a credential too. `oauth2.clientId`
 without `oauth2.tokenUrl` fails the Helm render, the same validation the
 backend applies at startup, just earlier.
 
@@ -214,7 +216,9 @@ clusters:
 ### Check what was rendered
 
 Before installing, confirm that no secret value landed in the ConfigMap and
-that the numbering matches the cluster you meant:
+that the numbering matches the cluster you meant. Headers, tokens and
+passwords appear only as `secretKeyRef` entries on the Deployment, never as a
+value in the ConfigMap:
 
 ```bash
 helm template jarvis oci://ghcr.io/kj187/charts/jarvis -f values.yaml \

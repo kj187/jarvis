@@ -74,7 +74,8 @@ or reuse one; retire in place (`docs/ai-agents.md`).
 10. **`rebind()` in `history/store.go`**: SQL uses `?` placeholders only,
     never `$1` literals.
 11. **CORS/WS Origin**: no wildcard `*`; `JARVIS_ALLOWED_ORIGINS` is the
-    allow-list for both HTTP CORS and the WebSocket upgrade.
+    allow-list for HTTP CORS, the WebSocket upgrade and the origin check on
+    mutating requests (`internal/api/origin.go`).
 12. **Silence coverage mirrors Alertmanager, not the UI filter**: decided only
     by `silenceWouldMatchAlert` / `silenceMatchesAlert` (`lib/alertUtils.ts`,
     anchored regex, real labels only). Never use `matchesLabelMatchers` for it.

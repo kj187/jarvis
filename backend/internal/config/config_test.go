@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -761,5 +762,197 @@ func TestWarnings_SetupTokenWithoutInternalAuth(t *testing.T) {
 				t.Fatalf("Warnings() = %v, want %d entries", got, tc.want)
 			}
 		})
+	}
+}
+
+func TestLoad_CookieSecure(t *testing.T) {
+	for _, tc := range []struct {
+		env     string
+		want    string
+		wantErr bool
+	}{
+		{"", "auto", false},
+		{"auto", "auto", false},
+		{"true", "true", false},
+		{"false", "", true},
+		{"yes", "", true},
+	} {
+		t.Run(tc.env, func(t *testing.T) {
+			t.Setenv("JARVIS_AUTH_PROVIDER", "none")
+			t.Setenv("JARVIS_CLUSTER_1_NAME", "")
+			t.Setenv("JARVIS_COOKIE_SECURE", tc.env)
+			cfg, err := Load()
+			if tc.wantErr {
+				if err == nil {
+					t.Fatal("expected an error for an invalid JARVIS_COOKIE_SECURE")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("Load() error: %v", err)
+			}
+			if cfg.CookieSecure != tc.want {
+				t.Errorf("CookieSecure = %q, want %q", cfg.CookieSecure, tc.want)
+			}
+		})
+	}
+}
+
+func TestLoad_AllowedHosts(t *testing.T) {
+	t.Setenv("JARVIS_AUTH_PROVIDER", "none")
+	t.Setenv("JARVIS_CLUSTER_1_NAME", "")
+
+	t.Setenv("JARVIS_ALLOWED_HOSTS", "")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	if len(cfg.AllowedHosts) != 0 {
+		t.Errorf("AllowedHosts = %v, want empty by default", cfg.AllowedHosts)
+	}
+
+	t.Setenv("JARVIS_ALLOWED_HOSTS", " Jarvis.Corp , jarvis.internal:8443,,")
+	cfg, err = Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	want := []string{"jarvis.corp", "jarvis.internal:8443"}
+	if !slices.Equal(cfg.AllowedHosts, want) {
+		t.Errorf("AllowedHosts = %v, want %v", cfg.AllowedHosts, want)
+	}
+}
+
+func TestLoad_TrustedProxies(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		env     string
+		want    []string
+		wantErr bool
+	}{
+		{"empty", "", nil, false},
+		{"cidr", "10.0.0.0/8", []string{"10.0.0.0/8"}, false},
+		{"plain IPv4 becomes /32", "192.0.2.7", []string{"192.0.2.7/32"}, false},
+		{"plain IPv6 becomes /128", "2001:db8::1", []string{"2001:db8::1/128"}, false},
+		{"list with spaces", "10.0.0.0/8, 172.16.0.0/12", []string{"10.0.0.0/8", "172.16.0.0/12"}, false},
+		{"garbage", "not-an-ip", nil, true},
+		{"bad prefix", "10.0.0.0/99", nil, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("JARVIS_AUTH_PROVIDER", "none")
+			t.Setenv("JARVIS_CLUSTER_1_NAME", "")
+			t.Setenv("JARVIS_TRUSTED_PROXIES", tc.env)
+			cfg, err := Load()
+			if tc.wantErr {
+				if err == nil {
+					t.Fatal("expected an error for an invalid JARVIS_TRUSTED_PROXIES")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("Load() error: %v", err)
+			}
+			var got []string
+			for _, n := range cfg.TrustedProxies {
+				got = append(got, n.String())
+			}
+			if !slices.Equal(got, tc.want) {
+				t.Errorf("TrustedProxies = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestStripUserinfo(t *testing.T) {
+	for _, tc := range []struct{ in, want string }{
+		{"http://am:9093", "http://am:9093"},
+		{"http://user:s3cretpw@am:9093", "http://am:9093"},
+		{"https://token@am.example.com/path?x=1", "https://am.example.com/path?x=1"},
+		{"", ""},
+		{"not a url %%", "not a url %%"},
+	} {
+		if got := StripUserinfo(tc.in); got != tc.want {
+			t.Errorf("StripUserinfo(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+	if !HasUserinfo("http://u:p@am:9093") || HasUserinfo("http://am:9093") {
+		t.Error("HasUserinfo does not tell URLs with and without credentials apart")
+	}
+}
+
+func TestLoad_ClusterURLUserinfoNeverBrowserVisible(t *testing.T) {
+	t.Setenv("JARVIS_CLUSTER_1_NAME", "homelab")
+	t.Setenv("JARVIS_CLUSTER_1_ALERTMANAGER_URL", "http://user:s3cretpw@am:9093")
+	t.Setenv("JARVIS_CLUSTER_1_PROMETHEUS_URL", "http://pu:ppw@prom:9090")
+	t.Setenv("JARVIS_CLUSTER_2_NAME", "")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	cl := cfg.Clusters[0]
+	if cl.Members[0].URL != "http://user:s3cretpw@am:9093" {
+		t.Errorf("Members[0].URL = %q, the polling URL must keep its credentials", cl.Members[0].URL)
+	}
+	for name, got := range map[string]string{
+		"Members[0].LinkURL":  cl.Members[0].LinkURL,
+		"AlertmanagerLinkURL": cl.AlertmanagerLinkURL,
+		"PrometheusURL":       cl.PrometheusURL,
+	} {
+		if strings.Contains(got, "s3cretpw") || strings.Contains(got, "ppw") || strings.Contains(got, "@") {
+			t.Errorf("%s = %q leaks credentials", name, got)
+		}
+	}
+	if cl.Members[0].LinkURL != "http://am:9093" {
+		t.Errorf("Members[0].LinkURL = %q, want http://am:9093", cl.Members[0].LinkURL)
+	}
+}
+
+func TestLoad_MetricsToken(t *testing.T) {
+	t.Setenv("JARVIS_AUTH_PROVIDER", "none")
+	t.Setenv("JARVIS_CLUSTER_1_NAME", "")
+	t.Setenv("JARVIS_METRICS_TOKEN", "")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	if cfg.MetricsToken != "" {
+		t.Errorf("MetricsToken = %q, want empty by default", cfg.MetricsToken)
+	}
+	t.Setenv("JARVIS_METRICS_TOKEN", "scrape-me")
+	cfg, err = Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	if cfg.MetricsToken != "scrape-me" {
+		t.Errorf("MetricsToken = %q, want scrape-me", cfg.MetricsToken)
+	}
+}
+
+func TestLoad_WSMaxConnections(t *testing.T) {
+	for _, tc := range []struct {
+		raw  string
+		want int
+	}{
+		{"", 500},
+		{"25", 25},
+		{"0", 0},
+	} {
+		t.Setenv("JARVIS_WS_MAX_CONNECTIONS", tc.raw)
+		cfg, err := Load()
+		if err != nil {
+			t.Fatalf("Load() with %q: %v", tc.raw, err)
+		}
+		if cfg.WSMaxConnections != tc.want {
+			t.Errorf("WSMaxConnections with %q = %d, want %d", tc.raw, cfg.WSMaxConnections, tc.want)
+		}
+	}
+}
+
+func TestLoad_WSMaxConnections_Invalid(t *testing.T) {
+	for _, raw := range []string{"-1", "many", "1.5"} {
+		t.Setenv("JARVIS_WS_MAX_CONNECTIONS", raw)
+		if _, err := Load(); err == nil {
+			t.Errorf("Load() with JARVIS_WS_MAX_CONNECTIONS=%q: expected error, got nil", raw)
+		}
 	}
 }

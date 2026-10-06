@@ -106,16 +106,93 @@ topologySpreadConstraints:
 
 ## Health checks
 
-The chart's liveness and readiness probes both call `GET /health`
-(`charts/jarvis/templates/deployment.yaml`) — a plain `{"status": "ok"}`
-handler with no dependency checks, so a `200` only means the process is up
-and serving HTTP. Like `/metrics` ([Monitoring and metrics](metrics.md)), it is
-intentionally public and bypasses `JARVIS_AUTH_MODE=full_protect`, so probes
-never need credentials.
+The chart's probes use two endpoints (`charts/jarvis/templates/deployment.yaml`):
+
+| Probe | Path | Answers |
+|---|---|---|
+| liveness | `GET /health/live` | `200` while the process serves HTTP. No dependency checks, so a database outage never restarts the pod. |
+| readiness | `GET /health/ready` | `200` while the database answers a ping (2 s timeout, result cached for 5 s), otherwise `503`. A pod that loses its database leaves the Service endpoints and returns when the database does. |
+
+An unreachable Alertmanager deliberately does **not** turn readiness red:
+every pod would drop out of the Service at once and take the UI down with it.
+That state shows up per cluster in the UI (stale banner) and in
+`jarvis_snapshot_stale` / `jarvis_alertmanager_up` instead. `GET /health` stays as
+a plain `{"status": "ok"}` for existing probes and compose healthchecks.
+
+All three endpoints are intentionally public like `/metrics` ([Monitoring and
+metrics](metrics.md)) and bypass `JARVIS_AUTH_MODE=full_protect`, so probes
+never need credentials. They return no error details.
+
+**Upgrading the chart:** the probe paths exist from the Jarvis version that
+ships with this chart. Keep `image.tag` at the chart default, or use a Jarvis
+version that has `/health/live` and `/health/ready`.
 
 For HA debugging beyond "is the process up" — which pod currently holds
 leadership — see `GET /api/v1/status` in
 [PostgreSQL & HA](postgres-ha.md#observability).
+
+## Network policy
+
+`networkPolicy.enabled: true` renders one `NetworkPolicy` that selects every
+pod of the release and restricts both directions. It is off by default, so an
+existing release renders unchanged, and it needs a CNI that enforces
+NetworkPolicy (Calico, Cilium and most managed clusters do).
+
+- **Ingress** allows only TCP 8080. `networkPolicy.ingress.from` limits the
+  sources (the ingress controller, and Prometheus if it scrapes `/metrics`);
+  empty allows every source.
+- **Egress** allows DNS only (`networkPolicy.egress.allowDns`) plus the rules
+  you list in `networkPolicy.egress.rules`. Jarvis connects to Alertmanager (and
+  Prometheus), the database, the OIDC issuer, and, with
+  `leaderElection.podLabel.enabled`, the Kubernetes API, so each of those needs a
+  rule. Without one the pod cannot reach it.
+
+```yaml
+networkPolicy:
+  enabled: true
+  ingress:
+    from:
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: ingress-nginx
+  egress:
+    rules:
+      - to:
+          - namespaceSelector:
+              matchLabels:
+                kubernetes.io/metadata.name: monitoring
+        ports:
+          - port: 9093
+            protocol: TCP
+      - to:
+          - namespaceSelector:
+              matchLabels:
+                kubernetes.io/metadata.name: databases
+        ports:
+          - port: 5432
+            protocol: TCP
+```
+
+The Kubernetes API has no stable selector; allow its address from
+`kubectl get endpoints kubernetes` on port 443 (or 6443), or turn the leader pod
+label off. Check a new policy by watching the clusters in the UI: an unreachable
+Alertmanager shows as a stale banner within a few poll intervals.
+
+## Pin the image by digest
+
+`image.digest` pins the pod to the exact image you verified, so a re-pushed tag
+cannot change what runs. [Verify the signature](verify-release.md) first, then
+set the digest of the tag you deploy:
+
+```yaml
+image:
+  tag: 2.0.0
+  digest: sha256:<64 hex characters>
+```
+
+The reference becomes `ghcr.io/kj187/jarvis:2.0.0@sha256:...`. When you bump
+`image.tag`, update the digest in the same change; with the two out of step the
+digest wins and the old image keeps running.
 
 ## Configuration changes roll the pods
 
@@ -139,6 +216,22 @@ The checksum of the chart-created Secret is visible to anyone who may read the
 Deployment, and it is a plain SHA-256 of the rendered manifest. Use strong,
 random values for the database password and any client secret you give the chart,
 or keep them in an `existingSecret`.
+
+## Operational prerequisites
+
+**Jarvis is never the only alerting path.** It mirrors alerts for people who
+work with them; it does not page anyone. Notifications stay with the
+Alertmanager receivers (pager, mail, chat). A Jarvis outage, a failover or
+stale data (see [Data age](postgres-ha.md#data-age)) must never be the reason
+an alert does not reach a human. Keep those receivers configured as if Jarvis
+did not exist, and watch Jarvis itself from outside the cluster it runs in
+(probes above, [metrics](metrics.md)) together with an independent
+dead-man's-switch for Alertmanager.
+
+**The database connection must be session-based.** With PostgreSQL, connect
+directly or through a pooler in session mode. Transaction-mode poolers break
+leader election and the cross-pod `LISTEN`/`NOTIFY` fanout, see
+[PostgreSQL & HA](postgres-ha.md#configuration).
 
 ## Where to go next
 

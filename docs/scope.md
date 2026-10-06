@@ -49,7 +49,7 @@ Jarvis deliberately does **not**:
 - **Measure or graph anything** — Jarvis is not a metrics dashboard and not a
   Grafana replacement; it shows alerts, not time series
 - **Send notifications** — paging, mail, and push stay with Alertmanager and
-  its receivers
+  its receivers; Jarvis must never be the only way an alert reaches a human
 - **Remediate automatically** — Jarvis is a tool for humans making decisions,
   not an automation or runbook-execution platform
 - **Manage incidents or tickets** — an alert is not a ticket; once something

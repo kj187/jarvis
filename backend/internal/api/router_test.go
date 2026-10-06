@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/kj187/jarvis/backend/internal/auth"
 	"github.com/kj187/jarvis/backend/internal/cluster"
@@ -41,6 +42,11 @@ func newTestRouterWithDB(t *testing.T, origins []string) (*httptest.Server, *sql
 // RemoteAddr and headers.
 func newTestEchoWithDB(t *testing.T, origins []string) (*echo.Echo, *sql.DB) {
 	t.Helper()
+	return newTestEchoWithConfig(t, &config.Config{AllowedOrigins: origins})
+}
+
+func newTestEchoWithConfig(t *testing.T, cfg *config.Config) (*echo.Echo, *sql.DB) {
+	t.Helper()
 	database, dialect, err := idb.Open(":memory:")
 	if err != nil {
 		t.Fatalf("open db: %v", err)
@@ -56,8 +62,6 @@ func newTestEchoWithDB(t *testing.T, origins []string) (*echo.Echo, *sql.DB) {
 	hub := ws.NewHub(nil, nil, metrics.New("test"))
 	go hub.Run()
 	registry := cluster.NewRegistry(nil)
-	cfg := &config.Config{AllowedOrigins: origins}
-
 	e := NewRouter(alertStore, history.NewSilenceStore(), store, hub, registry, cfg, embed.FS{}, &fakeTriggerer{}, auth.NoneProvider{}, userStore, settings.NewStore(database, dialect), globalsettings.NewStore(database, dialect), metrics.New("test"), fanout.NoopFanout{})
 	return e, database
 }
@@ -208,7 +212,6 @@ func newTestEchoInternal(t *testing.T, authMode string) *echo.Echo {
 		t.Fatalf("migrate: %v", err)
 	}
 	t.Cleanup(func() { _ = database.Close() })
-	auth.SetSecretKey([]byte("aaaabbbbccccddddeeeeffffgggghhhh"))
 
 	userStore := users.NewStore(database, dialect)
 	provider := auth.NewInternalProvider(userStore)
@@ -305,8 +308,9 @@ func TestAuthMode_ReadRoutes(t *testing.T) {
 }
 
 func TestWebSocket_FullProtectRequiresAuth(t *testing.T) {
-	srv := newTestRouterWithAuthMode(t, "full_protect")
-	defer srv.Close()
+	env := newRevocationEnv(t)
+	srv := env.startMode("full_protect", time.Minute)
+	alice := env.addUser("alice", "user")
 	client := &http.Client{}
 
 	// Without a session cookie the request must be rejected by RequireAuth
@@ -325,14 +329,8 @@ func TestWebSocket_FullProtectRequiresAuth(t *testing.T) {
 	// With a valid session cookie the request must pass the middleware and
 	// reach the WS handler: a plain GET without upgrade headers then fails
 	// the websocket handshake with 400 — anything but 401 proves passthrough.
-	token, err := auth.CreateToken([]byte("aaaabbbbccccddddeeeeffffgggghhhh"), &auth.User{
-		ID: "u1", Username: "alice", Role: "user", Provider: "internal",
-	})
-	if err != nil {
-		t.Fatalf("create token: %v", err)
-	}
 	req2, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, srv.URL+"/ws", nil)
-	req2.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: token})
+	req2.AddCookie(env.cookie(alice))
 	resp2, err := client.Do(req2)
 	if err != nil {
 		t.Fatalf("GET /ws with session: %v", err)
@@ -406,8 +404,10 @@ func TestLoginRateLimit_IsGlobal(t *testing.T) {
 	}
 }
 
-// TestNoPerIPRateLimits: Jarvis is an internal tool; only /auth/login is
-// rate limited. Poll, setup and the write endpoints must never answer 429.
+// TestNoPerIPRateLimits: Jarvis is an internal tool, so there are no per-client
+// limits. /auth/login has one global bucket and /poll one global minimum
+// interval (poll_limit_test.go); setup and the write endpoints must never
+// answer 429.
 func TestNoPerIPRateLimits(t *testing.T) {
 	none, _ := newTestEchoWithDB(t, nil)
 	internal := newTestEchoInternal(t, "write_protect")
@@ -418,7 +418,6 @@ func TestNoPerIPRateLimits(t *testing.T) {
 		e            *echo.Echo
 		method, path string
 	}{
-		{"poll", none, http.MethodPost, "/api/v1/poll"},
 		{"setup", internal, http.MethodPost, "/setup"},
 		{"comment", none, http.MethodPost, "/api/v1/alerts/abc/comments"},
 		{"claim", none, http.MethodPost, "/api/v1/alerts/abc/claim"},

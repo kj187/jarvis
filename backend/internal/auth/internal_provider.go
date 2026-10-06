@@ -53,11 +53,12 @@ func (p *InternalProvider) Authenticate(ctx context.Context, username, password 
 
 	_ = p.users.UpdateLastLogin(ctx, u.ID)
 	return &User{
-		ID:       u.ID,
-		Username: u.Username,
-		Email:    u.Email,
-		Role:     u.Role,
-		Provider: u.Provider,
+		ID:           u.ID,
+		Username:     u.Username,
+		Email:        u.Email,
+		Role:         u.Role,
+		Provider:     u.Provider,
+		TokenVersion: u.TokenVersion,
 	}, nil
 }
 

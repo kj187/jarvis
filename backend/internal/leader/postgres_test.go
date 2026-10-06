@@ -52,7 +52,7 @@ func testLockID(t *testing.T) (int32, int32) {
 	t.Helper()
 	h := fnv.New32a()
 	_, _ = h.Write([]byte(t.Name()))
-	return int32(os.Getpid()), int32(h.Sum32() & 0x7fffffff)
+	return int32(os.Getpid()), int32(h.Sum32() & 0x7fffffff) // #nosec G115 -- a PID and a 31-bit masked hash fit int32
 }
 
 // waitFor polls cond every 20ms until it returns true or timeout elapses,

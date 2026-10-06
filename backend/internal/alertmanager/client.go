@@ -7,8 +7,28 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"regexp"
 	"time"
 )
+
+const (
+	// maxResponseBytes caps a successful Alertmanager response; far above any
+	// realistic alert list, but bounded so a misbehaving upstream cannot OOM Jarvis.
+	maxResponseBytes = 128 << 20
+	// maxErrorBodyBytes caps the upstream error body kept in an AMError.
+	maxErrorBodyBytes = 64 << 10
+)
+
+var silenceIDPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
+
+// ValidSilenceID reports whether id is a UUID, the only form Alertmanager issues.
+func ValidSilenceID(id string) bool { return silenceIDPattern.MatchString(id) }
+
+func readErrorBody(r io.Reader) string {
+	b, _ := io.ReadAll(io.LimitReader(r, maxErrorBodyBytes))
+	return string(b)
+}
 
 // Client is a thin HTTP client for Alertmanager API v2.
 type Client struct {
@@ -97,12 +117,11 @@ func (c *Client) CreateSilence(ctx context.Context, s PostableSilence) (string, 
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		b, _ := io.ReadAll(resp.Body)
-		return "", &AMError{StatusCode: resp.StatusCode, Body: string(b)}
+		return "", &AMError{StatusCode: resp.StatusCode, Body: readErrorBody(resp.Body)}
 	}
 
 	var result PostSilenceResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxResponseBytes)).Decode(&result); err != nil {
 		return "", fmt.Errorf("decode silence response: %w", err)
 	}
 	return result.SilenceID, nil
@@ -110,7 +129,10 @@ func (c *Client) CreateSilence(ctx context.Context, s PostableSilence) (string, 
 
 // DeleteSilence deletes a silence by ID.
 func (c *Client) DeleteSilence(ctx context.Context, id string) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, c.baseURL+"/api/v2/silence/"+id, nil)
+	if !ValidSilenceID(id) {
+		return fmt.Errorf("delete silence: invalid silence id")
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, c.baseURL+"/api/v2/silence/"+url.PathEscape(id), nil)
 	if err != nil {
 		return fmt.Errorf("create request: %w", err)
 	}
@@ -122,8 +144,7 @@ func (c *Client) DeleteSilence(ctx context.Context, id string) error {
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
-		b, _ := io.ReadAll(resp.Body)
-		return &AMError{StatusCode: resp.StatusCode, Body: string(b)}
+		return &AMError{StatusCode: resp.StatusCode, Body: readErrorBody(resp.Body)}
 	}
 	return nil
 }
@@ -149,12 +170,15 @@ func (c *Client) get(ctx context.Context, path string, v interface{}) error {
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		b, _ := io.ReadAll(resp.Body)
-		return &AMError{StatusCode: resp.StatusCode, Body: string(b)}
+		return &AMError{StatusCode: resp.StatusCode, Body: readErrorBody(resp.Body)}
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(v); err != nil {
+	lr := &io.LimitedReader{R: resp.Body, N: maxResponseBytes + 1}
+	if err := json.NewDecoder(lr).Decode(v); err != nil {
 		return fmt.Errorf("decode response from %s: %w", path, err)
+	}
+	if lr.N <= 0 {
+		return fmt.Errorf("response from %s exceeds %d bytes", path, maxResponseBytes)
 	}
 
 	// Drain any bytes the JSON decoder left unread (e.g. trailing whitespace)

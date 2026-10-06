@@ -50,16 +50,31 @@ type outbound struct {
 	snapshot bool
 }
 
+// Identity ties a WebSocket connection to the session it was opened with, so
+// the hub can end the stream when that session is revoked.
+type Identity struct {
+	UserID       string
+	TokenVersion int
+}
+
+// SessionCheck reports whether the session behind an identified connection is
+// still valid. It must fail open on infrastructure errors: a database blip
+// must not disconnect every browser.
+type SessionCheck func(userID string, tokenVersion int) bool
+
 // Hub manages all active WebSocket connections.
 type Hub struct {
-	mu         sync.RWMutex
-	clients    map[*Client]struct{}
-	broadcast  chan outbound
-	unregister chan *Client
-	logger     *slog.Logger
-	pingPeriod time.Duration // a field only so tests can shorten it
-	upgrader   websocket.Upgrader
-	metrics    *metrics.Metrics
+	sessionCheck SessionCheck
+	mu           sync.RWMutex
+	clients      map[*Client]struct{}
+	maxClients   int // 0 = unlimited
+	reserved     int // handshakes in flight, counted against maxClients
+	broadcast    chan outbound
+	unregister   chan *Client
+	logger       *slog.Logger
+	pingPeriod   time.Duration // a field only so tests can shorten it
+	upgrader     websocket.Upgrader
+	metrics      *metrics.Metrics
 }
 
 // NewHub creates a new Hub. A nil logger is replaced with a no-op logger so
@@ -222,20 +237,85 @@ func metricEventType(eventType string) string {
 	}
 }
 
+// SetMaxConnections caps the number of simultaneously connected clients; a
+// connection over the cap is refused with 503 before the upgrade. Zero or less
+// means unlimited. Call it before serving connections.
+func (h *Hub) SetMaxConnections(n int) {
+	h.mu.Lock()
+	h.maxClients = n
+	h.mu.Unlock()
+}
+
+// reserveSlot claims a connection slot ahead of the upgrade, so concurrent
+// handshakes cannot slip past the cap between check and registration.
+func (h *Hub) reserveSlot() bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.maxClients > 0 && len(h.clients)+h.reserved >= h.maxClients {
+		return false
+	}
+	h.reserved++
+	return true
+}
+
+// SetSessionCheck installs the check run on every ping tick for identified
+// clients. This is what ends a stream whose session was revoked on another pod.
+// Call it before serving connections.
+func (h *Hub) SetSessionCheck(check SessionCheck) {
+	h.sessionCheck = check
+}
+
+// CloseUser disconnects every connection opened with the given user's session.
+func (h *Hub) CloseUser(userID string) {
+	var closing []*Client
+	h.mu.Lock()
+	for client := range h.clients {
+		if client.identity != nil && client.identity.UserID == userID {
+			delete(h.clients, client)
+			client.closeSend()
+			closing = append(closing, client)
+		}
+	}
+	h.mu.Unlock()
+	for _, client := range closing {
+		_ = client.conn.Close()
+	}
+}
+
 // ServeWS upgrades an HTTP connection to a WebSocket and registers the client.
 func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request) {
+	h.ServeWSFor(w, r, nil)
+}
+
+// ServeWSFor is ServeWS for a connection that belongs to a session; a nil
+// identity is an anonymous connection that is never closed on revocation.
+func (h *Hub) ServeWSFor(w http.ResponseWriter, r *http.Request, identity *Identity) {
+	if !h.reserveSlot() {
+		if h.metrics != nil {
+			h.metrics.WSRejectedTotal.Inc()
+		}
+		h.logger.Warn("rejecting ws connection: connection limit reached")
+		w.Header().Set("Retry-After", "30")
+		http.Error(w, "too many websocket connections", http.StatusServiceUnavailable)
+		return
+	}
 	conn, err := h.upgrader.Upgrade(w, r, nil)
 	if err != nil {
+		h.mu.Lock()
+		h.reserved--
+		h.mu.Unlock()
 		h.logger.Error("ws upgrade", "err", err)
 		return
 	}
 	client := newClient(h, conn)
+	client.identity = identity
 	// Register synchronously: the browser considers the socket open as soon as
 	// the 101 handshake completes, so a broadcast fired right after connect
 	// (e.g. claim_set) must already see this client. Routing registration
 	// through the hub loop loses such events — the loop's select gives no
 	// ordering guarantee between a pending registration and a broadcast.
 	h.mu.Lock()
+	h.reserved--
 	h.clients[client] = struct{}{}
 	h.mu.Unlock()
 	go client.writePump()
@@ -261,8 +341,9 @@ func (h *Hub) upgraderHandler() http.Handler {
 
 // Client represents a single WebSocket connection.
 type Client struct {
-	hub  *Hub
-	conn *websocket.Conn
+	hub      *Hub
+	conn     *websocket.Conn
+	identity *Identity
 
 	mu sync.Mutex
 	// queue holds pending envelopes in broadcast order. At most one of them is
@@ -389,6 +470,12 @@ func (c *Client) writePump() {
 			}
 
 		case <-ticker.C:
+			if c.identity != nil && c.hub.sessionCheck != nil &&
+				!c.hub.sessionCheck(c.identity.UserID, c.identity.TokenVersion) {
+				_ = c.conn.SetWriteDeadline(time.Now().Add(writeWait))
+				_ = c.conn.WriteMessage(websocket.CloseMessage, []byte{})
+				return
+			}
 			_ = c.conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				return

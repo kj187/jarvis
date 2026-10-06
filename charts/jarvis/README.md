@@ -76,6 +76,7 @@ Tests cover four suites (`deployment`, `configmap`, `secret`, `ingress`) and run
 | `replicaCount` | int | `1` | Number of replicas (for `>1`, use PostgreSQL backend) |
 | `image.repository` | string | `ghcr.io/kj187/jarvis` | Container image repository |
 | `image.tag` | string | `""` | Image tag (defaults to chart appVersion) |
+| `image.digest` | string | `""` | Optional image digest (`sha256:<64 hex>`). When set the pod pulls `<repository>:<tag>@<digest>` and the digest decides what runs; a malformed value fails the render. [Verify the digest](../../docs/verify-release.md) before pinning |
 | `image.pullPolicy` | string | `IfNotPresent` | Image pull policy |
 | `imagePullSecrets` | list | `[]` | Image pull secrets |
 | `nameOverride` | string | `""` | Override chart name |
@@ -90,6 +91,8 @@ Tests cover four suites (`deployment`, `configmap`, `secret`, `ingress`) and run
 | `securityContext` | object | `{allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, ...}` | Container-level security context |
 | `service.type` | string | `ClusterIP` | Kubernetes Service type |
 | `service.port` | int | `80` | Service port |
+| `metrics.token` | string | `""` | Optional bearer token for `/metrics` (`JARVIS_METRICS_TOKEN`, stored in the chart Secret). Empty = endpoint open. The ServiceMonitor sends it automatically; other scrapers need the header |
+| `metrics.existingSecret` | string | `""` | Existing Secret holding the metrics token (key `metrics.existingSecretKey`, default `metrics-token`) instead of `metrics.token` |
 | `metrics.serviceMonitor.enabled` | bool | `false` | Create a Prometheus Operator `ServiceMonitor` for `/metrics` (requires the `monitoring.coreos.com/v1` CRDs) |
 | `metrics.serviceMonitor.interval` | string | `30s` | Scrape interval |
 | `metrics.serviceMonitor.scrapeTimeout` | string | `10s` | Scrape timeout |
@@ -108,7 +111,11 @@ Tests cover four suites (`deployment`, `configmap`, `secret`, `ingress`) and run
 | `config.pollInterval` | string | `15s` | Alertmanager poll interval |
 | `config.runbookBaseURL` | string | `""` | Base URL prepended to runbook label values |
 | `config.allowedOrigins` | string | `""` | Comma-separated allowed CORS/WebSocket origins |
+| `config.allowedHosts` | string | `""` | Optional Host-header allow-list, comma-separated `host` or `host:port`; other hosts get `421` (probe and metrics paths exempt). Empty = off |
+| `config.wsMaxConnections` | string/int | `""` | Cap on simultaneous WebSocket connections per pod; one over the cap gets `503`. Empty = app default (`500`), `0` = no cap |
+| `config.trustedProxies` | string | `""` | Comma-separated CIDRs/IPs of the reverse proxies whose `X-Forwarded-For` is believed for the logged client IP. Empty = always the direct peer |
 | `config.silenceDurations` | string | `""` | Instance default durations of the Fast-Silence and Extend-silence menus, e.g. `15m,1h,4h,1d,1w,30d` (`m`/`h`/`d`/`w`/`y`, max 12, 1m–365d). Empty = built-in defaults; users can override it in Settings |
+| `config.cookieSecure` | string | `""` | Session-cookie `Secure` flag: empty/`auto` follows the request (HTTPS or `X-Forwarded-Proto`), `true` always sets it. Use `true` behind a TLS-terminating proxy that does not send `X-Forwarded-Proto` |
 | `config.resolvedBufferTTL` | string | `""` | How long a resolved alert stays in the live snapshot (Go duration, 1m–24h). Empty = app default `20m`. A longer window costs memory and payload size per resolved alert in the window; see the configuration docs |
 | `config.retention.days` | string | `""` | Fallback retention age (days) for every history type. Empty disables the sweep entirely |
 | `config.retention.eventsDays` | string | `""` | Retention override (days) for alert lifecycle events; inherits `days` when unset |
@@ -128,7 +135,7 @@ Tests cover four suites (`deployment`, `configmap`, `secret`, `ingress`) and run
 | `clusters[].auth.oauth2.clientSecret` | string | `""` | OAuth2 client secret. Stored in a Secret. |
 | `clusters[].auth.oauth2.tokenUrl` | string | `""` | OAuth2 token endpoint. Required when `clientId` is set — the render fails otherwise |
 | `clusters[].auth.oauth2.scopes` | string | `""` | Comma-separated OAuth2 scopes, e.g. `openid,profile` |
-| `clusters[].auth.headers` | object | `{}` | Arbitrary headers sent with every request, e.g. `{X-Scope-OrgID: tenant1}` |
+| `clusters[].auth.headers` | object | `{}` | Arbitrary headers sent with every request, e.g. `{X-Scope-OrgID: tenant1}`. The values are stored in the chart's Secret, never the ConfigMap; keep real credentials out of values files and use `bearerToken`/`basicAuth`/`oauth2` with `existingSecret` instead |
 | `clusters[].auth.existingSecret` | string | `""` | Existing Secret to read `bearerToken`/`basicAuth.password`/`oauth2.clientSecret` from instead of the values above. Missing keys are treated as unset. |
 | `clusters[].auth.existingSecretKeys` | object | `{}` | Key names in `existingSecret`; unset entries fall back to `cluster-<n>-bearer-token` / `cluster-<n>-basic-auth-password` / `cluster-<n>-oauth2-client-secret` |
 | `database.dsn` | string | `/data/jarvis.db` | Database DSN (SQLite path or `postgres://` URL; PostgreSQL recommended for production) |
@@ -156,6 +163,10 @@ Tests cover four suites (`deployment`, `configmap`, `secret`, `ingress`) and run
 | `persistence.size` | string | `1Gi` | PVC size |
 | `persistence.annotations` | object | `{}` | PVC annotations (e.g. `helm.sh/resource-policy: keep`) |
 | `resources` | object | `{}` | Resource requests/limits |
+| `networkPolicy.enabled` | bool | `false` | Render a `NetworkPolicy` that restricts ingress and egress of the Jarvis pods. It denies everything it does not list, so also set `networkPolicy.egress.rules` (Alertmanager, database, OIDC issuer, Kubernetes API) — see [Kubernetes deployment](../../docs/deploy-kubernetes.md#network-policy) |
+| `networkPolicy.ingress.from` | list | `[]` | `NetworkPolicyPeer` list allowed to reach port 8080 (ingress controller, Prometheus). Empty allows every source |
+| `networkPolicy.egress.allowDns` | bool | `true` | Allow DNS (port 53 UDP/TCP) to any destination |
+| `networkPolicy.egress.rules` | list | `[]` | `NetworkPolicyEgressRule` list appended after the DNS rule, passed through verbatim |
 | `updateStrategy.type` | string | `""` | Deployment update strategy. Empty auto-selects: `Recreate` when `persistence.enabled` — an RWO volume (EBS and friends) cannot be mounted by two pods at once, so a rolling update forces a detachment and the old pod hits disk I/O errors — and `RollingUpdate` otherwise. Set it explicitly to override (e.g. `RollingUpdate` on PostgreSQL) |
 | `autoscaling.enabled` | bool | `false` | Enable HPA (requires PostgreSQL — same reasoning as `replicaCount` above) |
 | `autoscaling.minReplicas` | int | `1` | Lower bound for the HPA |

@@ -8,14 +8,43 @@ on:
 permissions:
   contents: read
 
-# Job order: image (build, sign, attest) → Helm chart (published only after
+# Job order: CI gate → image (build, sign, attest) → Helm chart (published only after
 # the image exists, stable releases only) → GitHub Release (SBOM + signature
 # bundle, release body). A failure in an earlier job stops the later ones, so
 # neither a chart nor a release ever points at an image that wasn't built.
 
 jobs:
+  # Runs before anything is built or pushed: the tagged commit must be on main
+  # and its CI run on main must have succeeded, so a tag pushed on an untested
+  # or off-main commit never produces a signed image.
+  ci-gate:
+    name: CI Gate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read # list the CI run of the tagged commit
+    steps:
+      - name: Require tagged commit on main with green CI
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          status=$(gh api "repos/${REPO}/compare/main...${SHA}" --jq .status)
+          if [[ "${status}" != "identical" && "${status}" != "behind" ]]; then
+            echo "::error::Tagged commit ${SHA} is not on main (compare status: ${status})."
+            exit 1
+          fi
+          ok=$(gh run list --repo "${REPO}" --workflow ci.yml --commit "${SHA}" \
+            --event push --status success --json databaseId --jq length)
+          if [[ "${ok}" -lt 1 ]]; then
+            echo "::error::No successful CI run on main for ${SHA}. Wait for CI or fix it, then re-tag."
+            exit 1
+          fi
+
   build-and-push:
     name: Build & Push
+    needs: ci-gate
     runs-on: ubuntu-latest
     permissions:
       packages: write
@@ -118,7 +147,8 @@ jobs:
     permissions:
       contents: write # create the release
       packages: read # syft pulls the image
-      id-token: write # keyless cosign signing of the SBOM
+      id-token: write # keyless cosign signing of the SBOM and its attestation
+      attestations: write # SBOM attestation bound to the image digest
 
     steps:
       # fetch-depth: 0 (full history + tags) so the pre-release notes step
@@ -135,20 +165,37 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       # Standalone SPDX SBOM attached to the GitHub Release as an asset, so
-      # users can inspect dependencies without pulling the image. syft is run
-      # directly because the sbom-action wrapper no longer supports writing to
-      # a workspace file (output-file/upload-* inputs were removed).
+      # users can inspect dependencies without pulling the image. It covers
+      # the image (Debian base, Go modules) and the frontend production
+      # dependencies, which are compiled into the binary and so invisible to
+      # an image scan. scripts/sbom.sh builds, merges and checks it (react
+      # present, under 10 % without license); the release stops if the check
+      # fails. syft is run directly because the sbom-action wrapper no longer
+      # supports writing to a workspace file (output-file/upload-* inputs were
+      # removed).
       - name: Install syft
         id: syft
-        uses: anchore/sbom-action/download-syft@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # ratchet:anchore/sbom-action/download-syft@v0.24.2
+        uses: anchore/sbom-action/download-syft@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # ratchet:anchore/sbom-action/download-syft@v0.24.3
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # ratchet:pnpm/action-setup@v6.1.0
+        with:
+          version: 11.9.0
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # ratchet:actions/setup-node@v7.0.0
+        with:
+          node-version: '22'
 
       - name: Generate SBOM (SPDX)
         run: |
           SYFT="${{ steps.syft.outputs.cmd }}"
           if [ -z "${SYFT}" ]; then SYFT=$(command -v syft); fi
-          "${SYFT}" "ghcr.io/kj187/jarvis@${{ needs.build-and-push.outputs.digest }}" \
-            -o spdx-json > sbom.spdx.json
-          test -s sbom.spdx.json
+          mkdir -p "${RUNNER_TEMP}/bin"
+          ln -sf "${SYFT}" "${RUNNER_TEMP}/bin/syft"
+          PATH="${RUNNER_TEMP}/bin:${PATH}" scripts/sbom.sh build \
+            "ghcr.io/kj187/jarvis@${{ needs.build-and-push.outputs.digest }}" \
+            sbom.spdx.json "${{ github.ref_name }}"
 
       - name: Install cosign
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # ratchet:sigstore/cosign-installer@v4.1.2
@@ -158,6 +205,15 @@ jobs:
       # Signed-Releases check looks for (*.sigstore.json) on release assets.
       - name: Sign SBOM (keyless, GitHub OIDC)
         run: cosign sign-blob --yes --bundle sbom.spdx.json.sigstore.json sbom.spdx.json
+
+      # Binds the SBOM to the image digest: `gh attestation verify` proves
+      # this SBOM was produced for exactly this image by this workflow.
+      - name: Attest SBOM (GitHub)
+        uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # ratchet:actions/attest-sbom@v4.1.0
+        with:
+          subject-name: ghcr.io/kj187/jarvis
+          subject-digest: ${{ needs.build-and-push.outputs.digest }}
+          sbom-path: sbom.spdx.json
 
       # Body = notes + artifact sections, split by an HTML comment marker that
       # the manual "Refresh release notes" workflow relies on. Notes come from
@@ -176,7 +232,7 @@ jobs:
 
       - name: Create GitHub Release
         env:
-          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.ref_name }}
         run: |
           # Releases are immutable: if one already exists for this tag, fail

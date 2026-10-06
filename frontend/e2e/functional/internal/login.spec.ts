@@ -1,3 +1,4 @@
+import { request as pwRequest } from '@playwright/test'
 import { test, expect, waitForActiveAlerts, expandComments, JARVIS_BASE_URL } from '../../support/fixtures'
 import { ensureInternalAdmin, loginInternal, INTERNAL_ADMIN } from '../../support/auth'
 
@@ -20,6 +21,21 @@ test('internal setup + login authenticates the user', async ({ page }) => {
   // The authenticated user menu is visible in the header.
   await page.goto('/?state=active')
   await expect(page.getByTestId('user-menu')).toBeVisible()
+
+  // Logout is final: the cookie the browser held no longer works afterwards.
+  // Reuses this test's login — /auth/login is globally rate limited and the
+  // internal suite sits right at that budget.
+  const cookie = (await page.context().cookies()).find((c) => c.name === 'jarvis_session')
+  expect(cookie).toBeTruthy()
+  const statusWithOldCookie = async () => {
+    const ctx = await pwRequest.newContext({ baseURL: JARVIS_BASE_URL })
+    const res = await ctx.get('/auth/me', { headers: { cookie: `jarvis_session=${cookie!.value}` } })
+    await ctx.dispose()
+    return res.status()
+  }
+  expect(await statusWithOldCookie()).toBe(200)
+  expect((await page.request.post('/auth/logout')).ok()).toBeTruthy()
+  expect(await statusWithOldCookie()).toBe(401)
 })
 
 test('I2 write_protect mode shows internal username+password login modal on write attempt', async ({ page, am, jarvis }) => {

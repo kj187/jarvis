@@ -2,17 +2,25 @@ package auth_test
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/kj187/jarvis/backend/internal/auth"
+	"github.com/kj187/jarvis/backend/internal/users"
 	"github.com/labstack/echo/v4"
 )
 
 func setupEcho(t *testing.T) *echo.Echo {
 	t.Helper()
-	auth.SetSecretKey(testKey)
+	lookup := &fakeLookup{users: map[string]*users.User{
+		"u1": {ID: "u1", Username: "alice", Role: "user", Provider: "internal"},
+		"u2": {ID: "u2", Username: "bob", Role: "user", Provider: "internal"},
+		"u3": {ID: "u3", Username: "carol", Role: "admin", Provider: "internal"},
+	}}
+	auth.SetSessionVerifier(auth.NewSessionVerifier(testKey, lookup, time.Minute))
 	e := echo.New()
 	return e
 }
@@ -23,7 +31,7 @@ func makeSessionCookie(t *testing.T, user *auth.User) *http.Cookie {
 	if err != nil {
 		t.Fatalf("create token: %v", err)
 	}
-	return &http.Cookie{Name: "jarvis_session", Value: tok}
+	return &http.Cookie{Name: "jarvis_session", Value: tok} // #nosec G124 -- request cookie, Secure/HttpOnly/SameSite only matter on Set-Cookie
 }
 
 // RequireAuth — none mode passes through without any cookie
@@ -49,15 +57,15 @@ func TestRequireAuth_NoneProvider_PassesThrough(t *testing.T) {
 	}
 }
 
-// RequireAuth — JWT validation works end-to-end (CreateToken → ValidateToken)
+// RequireAuth — JWT validation works end-to-end (CreateToken → ParseToken)
 func TestRequireAuth_ValidToken(t *testing.T) {
 	tok, err := auth.CreateToken(testKey, &auth.User{ID: "u1", Username: "alice", Role: "user", Provider: "internal"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	u, err := auth.ValidateToken(testKey, tok)
+	u, err := auth.ParseToken(testKey, tok)
 	if err != nil {
-		t.Fatalf("ValidateToken: %v", err)
+		t.Fatalf("ParseToken: %v", err)
 	}
 	if u.Username != "alice" {
 		t.Errorf("username = %q, want alice", u.Username)
@@ -108,5 +116,35 @@ func TestRequireAdmin_AdminRole(t *testing.T) {
 	}
 	if !called {
 		t.Fatal("next handler was not called for admin")
+	}
+}
+
+// RequireAuth — a revoked or unknown session is 401, an unreachable user store 503
+func TestRequireAuth_SessionFailures(t *testing.T) {
+	provider := auth.NewInternalProvider(nil)
+	run := func(lookup *fakeLookup, cookie *http.Cookie) int {
+		auth.SetSessionVerifier(auth.NewSessionVerifier(testKey, lookup, time.Minute))
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
+		if cookie != nil {
+			req.AddCookie(cookie)
+		}
+		rec := httptest.NewRecorder()
+		c := echo.New().NewContext(req, rec)
+		_ = auth.RequireAuth(provider)(func(echo.Context) error {
+			t.Fatal("next must not run")
+			return nil
+		})(c)
+		return rec.Code
+	}
+	ck := makeSessionCookie(t, &auth.User{ID: "u9", Username: "x", Role: "user", Provider: "internal"})
+
+	if got := run(&fakeLookup{users: map[string]*users.User{}}, ck); got != http.StatusUnauthorized {
+		t.Errorf("deleted user: %d, want 401", got)
+	}
+	if got := run(&fakeLookup{users: map[string]*users.User{}}, nil); got != http.StatusUnauthorized {
+		t.Errorf("no cookie: %d, want 401", got)
+	}
+	if got := run(&fakeLookup{users: map[string]*users.User{}, err: errors.New("db down")}, ck); got != http.StatusServiceUnavailable {
+		t.Errorf("db down: %d, want 503", got)
 	}
 }

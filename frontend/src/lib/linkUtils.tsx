@@ -7,6 +7,18 @@ export function isUrl(value: string): boolean {
   return URL_START_RE.test(value)
 }
 
+function composeRunbookUrl(base: string, raw: string): string | null {
+  try {
+    const baseUrl = new URL(base)
+    const url = new URL(`${base}${raw}`)
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null
+    if (url.origin !== baseUrl.origin) return null
+    return url.toString()
+  } catch {
+    return null
+  }
+}
+
 export type LinkButton = {
   label: string
   url: string
@@ -40,7 +52,8 @@ export function extractLinkButtons(
   if (!map.has('runbook')) {
     const runbookRaw = labels['runbook'] ?? annotations['runbook']
     if (runbookRaw && runbookBaseUrl) {
-      map.set('runbook', { label: 'runbook', url: `${runbookBaseUrl}${runbookRaw}`, isRunbook: true })
+      const url = composeRunbookUrl(runbookBaseUrl, runbookRaw)
+      if (url) map.set('runbook', { label: 'runbook', url, isRunbook: true })
     }
   }
 

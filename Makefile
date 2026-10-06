@@ -16,7 +16,7 @@ DEMO_AM_URL        = http://localhost:$(DEMO_AM_PORT)
         demo-up demo-seed demo-resolve demo-reset demo-down \
         verify test-all test-backend test-frontend test-frontend-unit fuzz-backend \
         helm-lint helm-test \
-        lint gosec govulncheck audit security-all check-agent-context test-scripts \
+        lint gosec govulncheck audit security-all check-agent-context check-image-pins test-scripts \
         scan scan-history scan-staged scan-canary scan-all \
         build \
         e2e-build e2e-down e2e e2e-mode e2e-fast e2e-screenshots e2e-screenshot release-video \
@@ -152,8 +152,13 @@ security-all: gosec govulncheck audit ## Run all security tools (gosec + govulnc
 check-agent-context: ## Validate agent context: adapters, skills, AGENTS.md, paths, fixtures, invariants
 	scripts/check-agent-context.sh
 
-test-scripts: ## Test the release body script (scripts/release-body.sh); no network needed
+test-scripts: ## Test the release body, SBOM and image-pin scripts; no network needed
 	scripts/test-release-body.sh
+	scripts/test-sbom.sh
+	scripts/test-check-image-pins.sh
+
+check-image-pins: ## Every Containerfile FROM has a @sha256 digest, pnpm installs are pinned
+	scripts/check-image-pins.sh
 
 # ── Secret scanning ────────────────────────────────────────────────────────────
 
@@ -197,7 +202,7 @@ diagrams: ## Render all Mermaid sources as light/dark SVG pairs in docs/assets/
 # node_modules/ and .vitepress/dist/ land with the correct ownership.
 WEBSITE_OPTS  = --rm --user 0 -v "$(CURDIR):/repo:z" -v jarvis_website_pnpmstore:/pnpm-store -w /repo/website
 WEBSITE_IMAGE = node:22-alpine
-WEBSITE_SETUP = apk add --no-cache git >/dev/null && git config --global --add safe.directory /repo && npm install -g pnpm --prefix /usr/local >/dev/null && pnpm config set store-dir /pnpm-store && pnpm install
+WEBSITE_SETUP = apk add --no-cache git >/dev/null && git config --global --add safe.directory /repo && npm install -g pnpm@11.9.0 --prefix /usr/local >/dev/null && pnpm config set store-dir /pnpm-store && pnpm install
 
 website: ## Build the docs website (output: website/.vitepress/dist)
 	podman run $(WEBSITE_OPTS) $(WEBSITE_IMAGE) sh -c "$(WEBSITE_SETUP) && pnpm run build"

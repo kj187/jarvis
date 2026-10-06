@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/hex"
 	"fmt"
+	"net"
 	"net/url"
 	"os"
 	"strconv"
@@ -27,6 +28,16 @@ type Config struct {
 	DBMaxOpenConns int
 	RunbookBaseURL string
 	AllowedOrigins []string
+	// AllowedHosts is the optional Host-header allow-list (lower-case, "host"
+	// or "host:port"); empty disables the check.
+	AllowedHosts []string
+	// WSMaxConnections caps simultaneous WebSocket clients per pod; 0 = unlimited.
+	WSMaxConnections int
+	// MetricsToken, when set, is the bearer token GET /metrics requires.
+	MetricsToken string
+	// TrustedProxies are the peers whose X-Forwarded-For is believed when
+	// deriving the client IP; empty means the TCP peer address is always used.
+	TrustedProxies []*net.IPNet
 	Clusters       []ClusterConfig
 
 	// PprofAddr enables the opt-in loopback-only pprof debug server
@@ -41,6 +52,7 @@ type Config struct {
 	AuthProvider     string // "none" | "internal" | "oidc"
 	AuthMode         string // "none" | "write_protect" | "full_protect"
 	SecretKey        []byte // HMAC key for JWTs; required when AuthProvider != "none"
+	CookieSecure     string // "auto" (Secure when the request is HTTPS) | "true" (always Secure)
 	SetupToken       string // optional; when set, POST /setup must carry it (internal auth only)
 	OIDCIssuer       string
 	OIDCClientID     string
@@ -240,6 +252,18 @@ func Load() (*Config, error) {
 		}
 	}
 
+	var allowedHosts []string
+	for _, h := range strings.Split(getEnv("JARVIS_ALLOWED_HOSTS", ""), ",") {
+		if trimmed := strings.ToLower(strings.TrimSpace(h)); trimmed != "" {
+			allowedHosts = append(allowedHosts, trimmed)
+		}
+	}
+
+	trustedProxies, err := parseTrustedProxies(getEnv("JARVIS_TRUSTED_PROXIES", ""))
+	if err != nil {
+		return nil, err
+	}
+
 	clusters, err := parseClusters()
 	if err != nil {
 		return nil, err
@@ -268,6 +292,11 @@ func Load() (*Config, error) {
 		}
 	}
 
+	cookieSecure := getEnv("JARVIS_COOKIE_SECURE", "auto")
+	if cookieSecure != "auto" && cookieSecure != "true" {
+		return nil, fmt.Errorf("invalid JARVIS_COOKIE_SECURE=%q: must be auto or true", cookieSecure)
+	}
+
 	oidcScopes := []string{"openid", "profile", "email"}
 	if raw := getEnv("JARVIS_AUTH_OIDC_SCOPES", ""); raw != "" {
 		oidcScopes = strings.Split(raw, ",")
@@ -281,6 +310,12 @@ func Load() (*Config, error) {
 	silenceDurations, err := ParseSilenceDurations("JARVIS_SILENCE_DURATIONS", getEnv("JARVIS_SILENCE_DURATIONS", ""))
 	if err != nil {
 		return nil, err
+	}
+
+	wsMaxConnectionsRaw := getEnv("JARVIS_WS_MAX_CONNECTIONS", "500")
+	wsMaxConnections, err := strconv.Atoi(wsMaxConnectionsRaw)
+	if err != nil || wsMaxConnections < 0 {
+		return nil, fmt.Errorf("invalid JARVIS_WS_MAX_CONNECTIONS: must be an integer >= 0 (0 = unlimited), got %q", wsMaxConnectionsRaw)
 	}
 
 	dbMaxOpenConnsRaw := getEnv("JARVIS_DB_MAX_OPEN_CONNS", "10")
@@ -302,11 +337,16 @@ func Load() (*Config, error) {
 		DBMaxOpenConns:    dbMaxOpenConns,
 		RunbookBaseURL:    getEnv("JARVIS_RUNBOOK_BASE_URL", ""),
 		AllowedOrigins:    allowedOrigins,
+		AllowedHosts:      allowedHosts,
+		WSMaxConnections:  wsMaxConnections,
+		MetricsToken:      getEnv("JARVIS_METRICS_TOKEN", ""),
+		TrustedProxies:    trustedProxies,
 		Clusters:          clusters,
 		PprofAddr:         getEnv("JARVIS_PPROF_ADDR", ""),
 		AuthProvider:      authProvider,
 		AuthMode:          authMode,
 		SecretKey:         secretKey,
+		CookieSecure:      cookieSecure,
 		SetupToken:        getEnv("JARVIS_SETUP_TOKEN", ""),
 		OIDCIssuer:        getEnv("JARVIS_AUTH_OIDC_ISSUER", ""),
 		OIDCClientID:      getEnv("JARVIS_AUTH_OIDC_CLIENT_ID", ""),
@@ -434,7 +474,7 @@ func parseClusters() ([]ClusterConfig, error) {
 			Name:                name,
 			AlertmanagerURL:     members[0].URL,
 			AlertmanagerLinkURL: members[0].LinkURL,
-			PrometheusURL:       os.Getenv(prefix + "PROMETHEUS_URL"),
+			PrometheusURL:       StripUserinfo(os.Getenv(prefix + "PROMETHEUS_URL")),
 			Auth:                auth,
 			Members:             members,
 		})
@@ -542,9 +582,13 @@ func parseClusterHeaders(prefix string) map[string]string {
 	return headers
 }
 
-// resolveAlertmanagerLinkURL returns the browser-visible Alertmanager URL.
-// When hostAlias is set its host/scheme replaces those of alertmanagerURL.
+// resolveAlertmanagerLinkURL returns the browser-visible Alertmanager URL,
+// without credentials. When hostAlias is set its host/scheme replaces those of alertmanagerURL.
 func resolveAlertmanagerLinkURL(alertmanagerURL, hostAlias string) string {
+	return StripUserinfo(applyHostAlias(alertmanagerURL, hostAlias))
+}
+
+func applyHostAlias(alertmanagerURL, hostAlias string) string {
 	if hostAlias == "" {
 		return alertmanagerURL
 	}
@@ -590,4 +634,51 @@ func getEnvBool(key string, fallback bool) bool {
 	default:
 		return fallback
 	}
+}
+
+// parseTrustedProxies reads a comma-separated list of CIDRs or plain IPs.
+func parseTrustedProxies(raw string) ([]*net.IPNet, error) {
+	var nets []*net.IPNet
+	for _, entry := range strings.Split(raw, ",") {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
+			continue
+		}
+		if !strings.Contains(entry, "/") {
+			ip := net.ParseIP(entry)
+			if ip == nil {
+				return nil, fmt.Errorf("invalid JARVIS_TRUSTED_PROXIES entry %q: not an IP address or CIDR", entry)
+			}
+			bits := 128
+			if ip.To4() != nil {
+				bits = 32
+			}
+			nets = append(nets, &net.IPNet{IP: ip, Mask: net.CIDRMask(bits, bits)})
+			continue
+		}
+		_, n, err := net.ParseCIDR(entry)
+		if err != nil {
+			return nil, fmt.Errorf("invalid JARVIS_TRUSTED_PROXIES entry %q: %w", entry, err)
+		}
+		nets = append(nets, n)
+	}
+	return nets, nil
+}
+
+// StripUserinfo removes "user:password@" from a URL. Every URL shown to a
+// browser goes through it; the URL Jarvis itself polls keeps its credentials.
+// An unparsable value is returned unchanged.
+func StripUserinfo(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil || u.User == nil {
+		return raw
+	}
+	u.User = nil
+	return u.String()
+}
+
+// HasUserinfo reports whether a URL carries "user:password@" credentials.
+func HasUserinfo(raw string) bool {
+	u, err := url.Parse(raw)
+	return err == nil && u.User != nil
 }

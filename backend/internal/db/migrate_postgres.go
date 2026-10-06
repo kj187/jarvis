@@ -111,6 +111,8 @@ func migratePostgres(database *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_alert_fingerprints_last_seen_at ON alert_fingerprints(last_seen_at)`,
 		// IdP groups of an SSO user as of the last login (JSON array, '[]' for none).
 		`ALTER TABLE users ADD COLUMN IF NOT EXISTS oidc_groups TEXT NOT NULL DEFAULT '[]'`,
+		// Session tokens carry this version; a logout bumps it and thereby revokes them.
+		`ALTER TABLE users ADD COLUMN IF NOT EXISTS token_version INTEGER NOT NULL DEFAULT 0`,
 		// Add user_id column to alert_comments (nullable, for ownership checks by ID).
 		`ALTER TABLE alert_comments ADD COLUMN IF NOT EXISTS user_id TEXT REFERENCES users(id)`,
 		// Store originating alert cluster for each comment (legacy rows default to '').

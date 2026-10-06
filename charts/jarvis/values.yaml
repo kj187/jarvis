@@ -13,6 +13,11 @@ image:
   pullPolicy: IfNotPresent
   # Overrides the image tag. Defaults to the chart appVersion.
   tag: ""
+  # Optional image digest, e.g. sha256:0123...cdef. When set, the pod pulls
+  # <repository>:<tag>@<digest>: the digest is authoritative (the tag is only
+  # a label), so a re-pushed tag cannot change what runs. Verify the digest
+  # first (docs/verify-release.md). Empty keeps a tag-only reference.
+  digest: ""
 
 imagePullSecrets: []
 nameOverride: ""
@@ -55,9 +60,18 @@ service:
   port: 80
 
 # Prometheus metrics. The /metrics endpoint itself is always exposed by the
-# app (public, like /health) — this section only controls how a Prometheus
-# instance discovers and scrapes it.
+# app (public, like /health, unless a token is set) — this section controls how
+# a Prometheus instance discovers and scrapes it.
 metrics:
+  # Optional bearer token for /metrics (JARVIS_METRICS_TOKEN). Empty keeps the
+  # endpoint open. When set, every scrape needs "Authorization: Bearer <token>";
+  # the ServiceMonitor below sends it automatically, annotation-based scraping
+  # (podAnnotations) and other scrapers must be configured with it. Use
+  # existingSecret in production to keep the token out of values.
+  token: ""
+  # Use an existing Kubernetes Secret holding the token under existingSecretKey.
+  existingSecret: ""
+  existingSecretKey: metrics-token
   serviceMonitor:
     # Requires the Prometheus Operator CRDs (monitoring.coreos.com/v1) in the cluster.
     enabled: false
@@ -78,6 +92,34 @@ metrics:
     honorLabels: false
   # Alternative to serviceMonitor for annotation-based scraping setups.
   podAnnotations: false
+
+# Optional NetworkPolicy for the Jarvis pods. Off by default so an existing
+# release renders unchanged. When on, it selects every pod of this release and
+# restricts BOTH directions, so it needs to know where Jarvis may connect:
+# egress allows DNS only (egress.allowDns) plus whatever you list in
+# egress.rules — Alertmanager, Prometheus, PostgreSQL, the OIDC issuer and, with
+# leaderElection.podLabel.enabled, the Kubernetes API. Without those rules the
+# pod can reach nothing. See docs/deploy-kubernetes.md for an example.
+networkPolicy:
+  enabled: false
+  ingress:
+    # NetworkPolicyPeer list allowed to reach the HTTP port (8080) — the ingress
+    # controller, plus Prometheus when it scrapes /metrics. Empty allows every
+    # source. Passed through verbatim.
+    from: []
+  egress:
+    # Allow DNS (port 53, UDP and TCP) to any destination.
+    allowDns: true
+    # NetworkPolicyEgressRule list appended after the DNS rule, passed through
+    # verbatim. Example:
+    #   - to:
+    #       - namespaceSelector:
+    #           matchLabels:
+    #             kubernetes.io/metadata.name: monitoring
+    #     ports:
+    #       - port: 9093
+    #         protocol: TCP
+    rules: []
 
 ingress:
   enabled: false
@@ -124,6 +166,20 @@ config:
   # (e.g. when accessed via an ingress). Example: "https://jarvis.example.com"
   # Leave empty for same-origin-only access.
   allowedOrigins: ""
+  # Optional Host-header allow-list, comma-separated "host" or "host:port"
+  # (a host without port matches any port). A request with another Host gets
+  # 421; /health*, /metrics are exempt so probes and scrapes by pod IP keep
+  # working. Empty disables the check. Example: "jarvis.example.com"
+  allowedHosts: ""
+  # Comma-separated CIDRs or IPs of the reverse proxies in front of Jarvis.
+  # Only their X-Forwarded-For is believed when logging the client IP
+  # (remote_ip); empty always logs the direct TCP peer, so the header cannot be
+  # forged. Example: "10.0.0.0/8"
+  trustedProxies: ""
+  # Cap on simultaneous WebSocket connections per pod
+  # (JARVIS_WS_MAX_CONNECTIONS). One over the cap gets 503; the browser retries
+  # on its own. Empty keeps the app default (500); 0 removes the cap.
+  wsMaxConnections: ""
   # Instance-wide default durations of the Fast-Silence and Extend-silence
   # menus — comma-separated, each a number plus m, h, d, w or y, at most 12,
   # each between 1m and 365d. Empty keeps the built-in defaults. Users can still
@@ -136,6 +192,11 @@ config:
   # docs/configuration.md). Must be identical on every replica, which the
   # shared ConfigMap guarantees. Example: "1h"
   resolvedBufferTTL: ""
+  # Session-cookie Secure flag. Empty or "auto" sets it when the request is
+  # HTTPS (directly or via X-Forwarded-Proto); "true" always sets it, for a
+  # TLS-terminating proxy that does not send X-Forwarded-Proto. Any other
+  # value makes the app refuse to start.
+  cookieSecure: ""
   # Data-retention sweep. Fully opt-in — everything here is unset by default,
   # which disables the sweep entirely and keeps history forever, matching the
   # backend's own default. See docs/configuration.md for the full semantics
@@ -183,7 +244,11 @@ clusters:
         tokenUrl: ""
         # Comma-separated, e.g. "openid,profile"
         scopes: ""
-      # Arbitrary headers sent with every request, e.g. {X-Scope-OrgID: tenant1}
+      # Arbitrary headers sent with every request, e.g. {X-Scope-OrgID: tenant1}.
+      # Values are stored in the chart-managed Secret (never the ConfigMap), so a
+      # header like Authorization stays out of the ConfigMap even though it is
+      # given here in plain text. Keep real credentials out of values files:
+      # use bearerToken/basicAuth/oauth2 with existingSecret instead.
       headers: {}
       # Use an existing Secret instead of storing bearerToken/basicAuth.password/
       # oauth2.clientSecret above in values. Missing keys are treated as unset,

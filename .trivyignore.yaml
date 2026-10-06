@@ -1,0 +1,12 @@
+# Every entry needs a reason; remove it as soon as the reason no longer holds.
+misconfigurations:
+  - id: AVD-DS-0002
+    paths:
+      - Containerfile.dev
+      - scripts/release-video/tts/Containerfile
+    statement: >-
+      Local-only images that are never published or deployed. The dev backend
+      container bind-mounts the working tree and writes caches as root, and the
+      release-video TTS container only runs on the maintainer's machine. The
+      shipped images (Containerfile, Containerfile.e2e) run as nonroot and are
+      not covered by this entry.

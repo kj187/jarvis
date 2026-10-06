@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/labstack/echo/v4"
 
@@ -36,7 +37,6 @@ func newAuthServer(t *testing.T) (*Server, *users.Store) {
 		t.Fatalf("migrate: %v", err)
 	}
 	t.Cleanup(func() { _ = database.Close() })
-	auth.SetSecretKey(testSecretKey)
 
 	userStore := users.NewStore(database, dialect)
 	provider := auth.NewInternalProvider(userStore)
@@ -129,17 +129,13 @@ func TestPostLogin_WrongPassword(t *testing.T) {
 }
 
 func TestPostLogout(t *testing.T) {
-	srv, _ := newAuthServer(t)
-	u := &auth.User{ID: "u-logout", Username: "logout-user", Role: "user", Provider: "internal"}
-	tok, err := auth.CreateToken(testSecretKey, u)
-	if err != nil {
-		t.Fatalf("create token: %v", err)
-	}
+	srv, store := newAuthServer(t)
+	u := createTestUser(t, store, "logout-user", "pw-long-enough-1", "user")
 
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/auth/logout", nil)
-	req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: tok})
 	rec := httptest.NewRecorder()
 	c := echo.New().NewContext(req, rec)
+	c.Set(auth.ContextKey, &auth.User{ID: u.ID, Username: u.Username, Role: u.Role, Provider: u.Provider})
 	_ = srv.postLogout(c)
 
 	if rec.Code != http.StatusOK {
@@ -155,8 +151,12 @@ func TestPostLogout(t *testing.T) {
 	if !cleared {
 		t.Fatal("expected session cookie to be cleared")
 	}
-	if _, err := auth.ValidateToken(testSecretKey, tok); err == nil {
-		t.Fatal("expected logout to revoke token")
+	got, err := store.GetByID(context.Background(), u.ID)
+	if err != nil || got == nil {
+		t.Fatalf("get user: %v %v", got, err)
+	}
+	if got.TokenVersion != 1 {
+		t.Fatalf("TokenVersion = %d, want 1 (logout must revoke the session)", got.TokenVersion)
 	}
 }
 
@@ -166,7 +166,7 @@ func TestGetAuthMe_Authenticated(t *testing.T) {
 	tok, _ := auth.CreateToken(testSecretKey, u)
 
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/auth/me", nil)
-	req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: tok})
+	req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: tok}) // #nosec G124 -- request cookie, Secure/HttpOnly/SameSite only matter on Set-Cookie
 	rec := httptest.NewRecorder()
 	c := echo.New().NewContext(req, rec)
 	c.Set(auth.ContextKey, u)
@@ -194,7 +194,7 @@ func newOIDCAuthServer(t *testing.T, groupsClaim string, groups []string) (*Serv
 	if err := userStore.UpdateLastLogin(context.Background(), stored.ID); err != nil {
 		t.Fatalf("last login: %v", err)
 	}
-	// Exactly what ValidateToken yields: the session JWT carries no e-mail.
+	// getAuthMe reads e-mail and groups from the store, so the caller needs no e-mail.
 	return srv, &auth.User{ID: stored.ID, Username: stored.Username, Role: stored.Role, Provider: "oidc"}
 }
 
@@ -340,5 +340,71 @@ func TestGetAuthMe_NoCookie_Returns401(t *testing.T) {
 	_ = srv.getAuthMe(c)
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("status = %d, want 401", rec.Code)
+	}
+}
+
+func postLoginAs(t *testing.T, srv *Server, username, password string) *httptest.ResponseRecorder {
+	t.Helper()
+	body, _ := json.Marshal(map[string]string{"username": username, "password": password})
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/auth/login", bytes.NewReader(body))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	_ = srv.postLogin(echo.New().NewContext(req, rec))
+	return rec
+}
+
+func TestPostLogin_RepeatedFailuresThrottleOnlyThatUser(t *testing.T) {
+	srv, store := newAuthServer(t)
+	createTestUser(t, store, "alice", "correctpassword123!", "user")
+	createTestUser(t, store, "bob", "correctpassword123!", "user")
+
+	for i := 0; i < 10; i++ {
+		postLoginAs(t, srv, "alice", "wrong-password-1!")
+	}
+
+	locked := postLoginAs(t, srv, "alice", "correctpassword123!")
+	if locked.Code != http.StatusTooManyRequests {
+		t.Fatalf("alice with the right password while throttled: status = %d, want 429", locked.Code)
+	}
+	if locked.Header().Get("Retry-After") == "" {
+		t.Error("429 without Retry-After")
+	}
+	if ok := postLoginAs(t, srv, "bob", "correctpassword123!"); ok.Code != http.StatusOK {
+		t.Fatalf("bob status = %d, want 200 (a throttled alice must not affect bob)", ok.Code)
+	}
+}
+
+func TestPostLogin_ThrottleDoesNotRevealWhetherTheAccountExists(t *testing.T) {
+	srv, store := newAuthServer(t)
+	createTestUser(t, store, "alice", "correctpassword123!", "user")
+
+	for i := 0; i < 10; i++ {
+		postLoginAs(t, srv, "alice", "wrong-password-1!")
+		postLoginAs(t, srv, "ghost", "wrong-password-1!")
+	}
+	existing := postLoginAs(t, srv, "alice", "wrong-password-1!")
+	missing := postLoginAs(t, srv, "ghost", "wrong-password-1!")
+
+	if existing.Code != missing.Code || existing.Body.String() != missing.Body.String() {
+		t.Fatalf("responses differ: existing = %d %q, missing = %d %q",
+			existing.Code, existing.Body.String(), missing.Code, missing.Body.String())
+	}
+}
+
+func TestPostLogin_LoginWorksAgainAfterTheWait(t *testing.T) {
+	srv, store := newAuthServer(t)
+	createTestUser(t, store, "alice", "correctpassword123!", "user")
+	now := time.Now()
+	srv.loginThrottle.SetClock(func() time.Time { return now })
+
+	for i := 0; i < 10; i++ {
+		postLoginAs(t, srv, "alice", "wrong-password-1!")
+	}
+	if rec := postLoginAs(t, srv, "alice", "correctpassword123!"); rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("status = %d, want 429 while throttled", rec.Code)
+	}
+	now = now.Add(time.Hour)
+	if rec := postLoginAs(t, srv, "alice", "correctpassword123!"); rec.Code != http.StatusOK {
+		t.Fatalf("status after the wait = %d, want 200", rec.Code)
 	}
 }

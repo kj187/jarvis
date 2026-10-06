@@ -44,6 +44,15 @@ func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: logLevel}))
 	slog.SetDefault(logger)
 
+	for _, cl := range cfg.Clusters {
+		for _, m := range cl.Members {
+			if config.HasUserinfo(m.URL) {
+				logger.Warn("Alertmanager URL contains credentials; they are stripped from browser-facing output, but prefer the cluster auth settings (basic auth, bearer token)",
+					"cluster", cl.Name, "member", m.Name)
+			}
+		}
+	}
+
 	// ── Debug/pprof Server ────────────────────────────────────────────────────
 	// Opt-in only (JARVIS_PPROF_ADDR empty by default = no port opened at
 	// all). Validated eagerly, same as every other config-derived startup

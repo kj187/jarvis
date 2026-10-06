@@ -236,7 +236,12 @@ Record the decision; it drives two later steps (step 10a and step 13).
     ```bash
     gh release view vX.Y.Z --json url,assets
     helm show chart oci://ghcr.io/kj187/charts/jarvis --version <chart version>
+    scripts/verify-release-smoke.sh vX.Y.Z
     ```
+    The smoke script verifies image, SBOM and chart signatures and the SBOM
+    attestation with the exact workflow identities, checks that the SBOM is
+    complete and that other identities are rejected; a failure means the
+    release is not done.
     Final report must include: release URL, image ref
     `ghcr.io/kj187/jarvis:X.Y.Z`, chart version (flag it if it is a new
     major with breaking changes), and whether `sbom.spdx.json` and
@@ -450,7 +455,9 @@ Release, no app CHANGELOG, no release-notes file; `appVersion` stays.
    `appVersion` exists, so it publishes and signs the chart. Watch it
    (`gh run list --workflow=chart-release.yml --limit 1`, `gh run watch`),
    then verify with `helm show chart oci://ghcr.io/kj187/charts/jarvis
-   --version <version>` and report.
+   --version <version>` and report. A chart-only release is signed on `main`
+   (`chart-release.yml@refs/heads/main`), which the documented chart identity
+   pattern accepts.
 
 ---
 
@@ -474,9 +481,9 @@ artifacts and settings untouched.
 
 Background reference, not needed to run the flow — read
 `.agents/skills/release/references/github-actions.md` when debugging a
-failed release workflow run (step 18/19): the three jobs in
-`release.yml` (`build-and-push` → `chart` → `release`: build, sign, SBOM,
-GitHub Release) and the Helm chart workflow's existence/image guards.
+failed release workflow run (step 18/19): the four jobs in
+`release.yml` (`ci-gate` → `build-and-push` → `chart` → `release`: CI check,
+build, sign, SBOM, GitHub Release) and the Helm chart workflow's existence/image guards.
 
 ---
 

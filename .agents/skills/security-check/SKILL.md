@@ -79,4 +79,6 @@ Because a missing `Origin` passes, the origin check alone does not gate
 non-browser clients. In `full_protect` mode `/ws` is therefore also wrapped in
 `auth.RequireAuth` (`internal/api/router.go`) — it streams the full alert
 snapshot plus claim and comment events. The session cookie rides on the upgrade
-request, so no WS-specific auth exists.
+request, so no WS-specific auth exists. A connection opened with a session carries
+its identity (`ws.Identity`); logout, user deletion and the hub's per-ping session
+check close it when the session is revoked.

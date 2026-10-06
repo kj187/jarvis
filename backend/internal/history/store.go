@@ -44,6 +44,11 @@ func NewStore(database *sql.DB, dialect idb.Dialect) *Store {
 	return &Store{db: database, dialect: dialect, gracePeriod: defaultGracePeriod}
 }
 
+// Ping reports whether the database answers; used by the readiness probe.
+func (s *Store) Ping(ctx context.Context) error {
+	return s.db.PingContext(ctx)
+}
+
 // SetGracePeriod overrides the grace period (Critical Invariant #1) used by
 // RecordStatusChange. Must be called before the recorder starts polling —
 // see the field's own doc comment. Callers should keep this at least
@@ -1174,7 +1179,7 @@ func (s *Store) ReleaseClaimsForResolved(fingerprints []string) error {
 		placeholders += "?"
 		args = append(args, fp)
 	}
-	_, err := s.exec(context.Background(), // #nosec G202 -- placeholders are ? params, not user input
+	_, err := s.exec(context.Background(),
 		`UPDATE alert_claims SET released_at = ?, released_by = ?, release_reason = ?
 		 WHERE released_at IS NULL AND fingerprint IN (`+placeholders+`)`,
 		args...,

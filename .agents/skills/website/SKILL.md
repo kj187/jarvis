@@ -24,6 +24,7 @@ The only authored page is `website/index.md` (home).
 make website        # build to website/.vitepress/dist (fails on dead internal links)
 make website-dev    # hot-reload preview on http://localhost:5174/jarvis/
 cd website && pnpm test   # helper tests (media wiring, PAGES completeness)
+cd website && pnpm audit --audit-level=high   # also a blocking step in docs.yml
 ```
 
 Both `make` targets run containerized (`node:22-alpine`); the container flags

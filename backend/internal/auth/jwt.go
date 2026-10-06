@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -18,12 +17,9 @@ type jarvisClaims struct {
 	Name     string `json:"name"`
 	Role     string `json:"role"`
 	Provider string `json:"provider"`
+	// TV is the user's token_version at issue time; 0 for tokens that predate it.
+	TV int `json:"tv"`
 }
-
-var (
-	revokedMu     sync.Mutex
-	revokedTokens = make(map[string]time.Time)
-)
 
 // CreateToken signs a JWT for the given user.
 func CreateToken(secretKey []byte, user *User) (string, error) {
@@ -42,13 +38,16 @@ func CreateToken(secretKey []byte, user *User) (string, error) {
 		Name:     user.Username,
 		Role:     user.Role,
 		Provider: user.Provider,
+		TV:       user.TokenVersion,
 	}
 	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, c)
 	return tok.SignedString(secretKey)
 }
 
-// ValidateToken parses and validates a JWT, returning the embedded User.
-func ValidateToken(secretKey []byte, tokenString string) (*User, error) {
+// ParseToken verifies signature and expiry and returns the claims as a User.
+// It does not consult the database: whether the session is still valid (user
+// exists, token version current) is SessionVerifier's job.
+func ParseToken(secretKey []byte, tokenString string) (*User, error) {
 	var c jarvisClaims
 	tok, err := jwt.ParseWithClaims(tokenString, &c, func(t *jwt.Token) (interface{}, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
@@ -62,61 +61,13 @@ func ValidateToken(secretKey []byte, tokenString string) (*User, error) {
 	if !tok.Valid {
 		return nil, errors.New("invalid token")
 	}
-	if isTokenRevoked(c.ID) {
-		return nil, errors.New("token revoked")
-	}
 	return &User{
-		ID:       c.Subject,
-		Username: c.Name,
-		Role:     c.Role,
-		Provider: c.Provider,
+		ID:           c.Subject,
+		Username:     c.Name,
+		Role:         c.Role,
+		Provider:     c.Provider,
+		TokenVersion: c.TV,
 	}, nil
-}
-
-// RevokeToken marks a signed JWT as revoked until its expiry time.
-func RevokeToken(secretKey []byte, tokenString string) error {
-	var c jarvisClaims
-	tok, err := jwt.ParseWithClaims(tokenString, &c, func(t *jwt.Token) (interface{}, error) {
-		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
-		}
-		return secretKey, nil
-	})
-	if err != nil {
-		return err
-	}
-	if !tok.Valid {
-		return errors.New("invalid token")
-	}
-	if c.ID == "" || c.ExpiresAt == nil {
-		return errors.New("token missing id or expiry")
-	}
-
-	revokedMu.Lock()
-	defer revokedMu.Unlock()
-	cleanupExpiredRevocationsLocked(time.Now())
-	revokedTokens[c.ID] = c.ExpiresAt.Time
-	return nil
-}
-
-func isTokenRevoked(tokenID string) bool {
-	if tokenID == "" {
-		return false
-	}
-	revokedMu.Lock()
-	defer revokedMu.Unlock()
-	now := time.Now()
-	cleanupExpiredRevocationsLocked(now)
-	expiresAt, ok := revokedTokens[tokenID]
-	return ok && now.Before(expiresAt)
-}
-
-func cleanupExpiredRevocationsLocked(now time.Time) {
-	for tokenID, expiresAt := range revokedTokens {
-		if !now.Before(expiresAt) {
-			delete(revokedTokens, tokenID)
-		}
-	}
 }
 
 func newTokenID() (string, error) {

@@ -3,6 +3,8 @@ package api
 import (
 	"context"
 	"net/http"
+	"strconv"
+	"time"
 
 	"github.com/labstack/echo/v4"
 
@@ -31,6 +33,13 @@ type clusterFreshnessSource interface {
 	ClusterFreshness() map[string]history.ClusterFreshness
 }
 
+// clusterUpStateSource is implemented by the recorder. A follower never polls
+// Alertmanager itself, so it reports member health from the leader's last
+// consumed snapshot instead of the registry's (empty) poll state.
+type clusterUpStateSource interface {
+	ClusterUpStates() map[string]map[string]bool
+}
+
 // Server holds shared dependencies for all API handlers.
 type Server struct {
 	alertStore          *history.AlertStore
@@ -45,6 +54,9 @@ type Server struct {
 	settingsStore       *settings.Store
 	globalSettingsStore *globalsettings.Store
 	fanout              fanout.Fanout
+	dbHealth            dbHealth
+	pollGate            pollGate
+	loginThrottle       *auth.LoginThrottle
 }
 
 // NewServer creates a new Server with the given dependencies.
@@ -75,6 +87,7 @@ func NewServer(
 		settingsStore:       settingsStore,
 		globalSettingsStore: globalSettingsStore,
 		fanout:              f,
+		loginThrottle:       auth.NewLoginThrottle(),
 	}
 }
 
@@ -100,8 +113,14 @@ func (s *Server) broadcastAndFanout(ctx context.Context, eventType string, paylo
 	s.fanout.Publish(ctx, data, ref)
 }
 
-// POST /api/v1/poll — triggers an immediate Alertmanager poll.
+// POST /api/v1/poll — triggers an immediate Alertmanager poll. Polls closer
+// together than manualPollMinInterval are refused with 429; the recorder's own
+// interval keeps the data fresh in the meantime.
 func (s *Server) triggerPoll(c echo.Context) error {
+	if wait, ok := s.pollGate.allow(time.Now(), manualPollMinInterval); !ok {
+		c.Response().Header().Set(echo.HeaderRetryAfter, strconv.Itoa(retryAfterSeconds(wait)))
+		return echo.NewHTTPError(http.StatusTooManyRequests, "poll requested too recently")
+	}
 	if s.pollTrigger != nil {
 		s.pollTrigger.Trigger()
 	}

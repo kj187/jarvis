@@ -15,11 +15,23 @@ data:
   {{- if .Values.config.allowedOrigins }}
   JARVIS_ALLOWED_ORIGINS: {{ .Values.config.allowedOrigins | quote }}
   {{- end }}
+  {{- if .Values.config.allowedHosts }}
+  JARVIS_ALLOWED_HOSTS: {{ .Values.config.allowedHosts | quote }}
+  {{- end }}
+  {{- if .Values.config.trustedProxies }}
+  JARVIS_TRUSTED_PROXIES: {{ .Values.config.trustedProxies | quote }}
+  {{- end }}
+  {{- if ne (toString .Values.config.wsMaxConnections) "" }}
+  JARVIS_WS_MAX_CONNECTIONS: {{ .Values.config.wsMaxConnections | toString | quote }}
+  {{- end }}
   {{- if .Values.config.silenceDurations }}
   JARVIS_SILENCE_DURATIONS: {{ .Values.config.silenceDurations | quote }}
   {{- end }}
   {{- if .Values.config.resolvedBufferTTL }}
   JARVIS_RESOLVED_BUFFER_TTL: {{ .Values.config.resolvedBufferTTL | quote }}
+  {{- end }}
+  {{- if .Values.config.cookieSecure }}
+  JARVIS_COOKIE_SECURE: {{ .Values.config.cookieSecure | quote }}
   {{- end }}
   {{- if .Values.config.retention.days }}
   JARVIS_RETENTION_DAYS: {{ .Values.config.retention.days | quote }}
@@ -77,8 +89,5 @@ data:
   {{- if $oauth2.scopes }}
   JARVIS_CLUSTER_{{ $n }}_OAUTH2_SCOPES: {{ $oauth2.scopes | quote }}
   {{- end }}
-  {{- end }}
-  {{- range $key, $value := ($auth.headers | default dict) }}
-  JARVIS_CLUSTER_{{ $n }}_HEADER_{{ $key }}: {{ $value | quote }}
   {{- end }}
   {{- end }}

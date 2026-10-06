@@ -242,7 +242,6 @@ func TestGetSettings_RealHTTPRoundTrip(t *testing.T) {
 		t.Fatalf("migrate: %v", err)
 	}
 	t.Cleanup(func() { _ = database.Close() })
-	auth.SetSecretKey(testSecretKey)
 
 	userStore := users.NewStore(database, dialect)
 	settingsStore := settings.NewStore(database, dialect)

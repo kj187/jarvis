@@ -19,6 +19,25 @@ updates:
           - patch
     open-pull-requests-limit: 5
 
+  - package-ecosystem: npm
+    directory: /website
+    schedule:
+      interval: daily
+    groups:
+      minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: daily
+    open-pull-requests-limit: 5
+
   - package-ecosystem: github-actions
     directory: /
     schedule:

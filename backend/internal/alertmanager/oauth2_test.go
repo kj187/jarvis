@@ -30,7 +30,7 @@ func newTokenServer(t *testing.T, token string, expiresIn int, statusCode int) (
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(tokenResponse{ //nolint:errcheck
+		json.NewEncoder(w).Encode(tokenResponse{ //nolint:errcheck,gosec // G117: fake token endpoint, the token is a test value
 			AccessToken: token,
 			ExpiresIn:   expiresIn,
 			TokenType:   "Bearer",
@@ -139,6 +139,18 @@ func TestOAuth2TokenSource_EndpointError(t *testing.T) {
 	}
 }
 
+func TestOAuth2TokenSource_OversizedResponse(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"access_token":"` + strings.Repeat("a", maxTokenResponseBytes) + `"}`))
+	}))
+	defer srv.Close()
+
+	src := newOAuth2TokenSource(OAuth2ClientConfig{ClientID: "cid", ClientSecret: "csec", TokenURL: srv.URL})
+	if _, err := src.Token(context.Background()); err == nil {
+		t.Error("expected error for oversized token response, got nil")
+	}
+}
+
 func TestOAuth2TokenSource_FallbackTTL(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -171,7 +183,7 @@ func TestOAuth2TokenSource_ScopesInRequest(t *testing.T) {
 		vals, _ := url.ParseQuery(string(body[:n]))
 		capturedScope = vals.Get("scope")
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(tokenResponse{AccessToken: "tok", ExpiresIn: 300}) //nolint:errcheck
+		json.NewEncoder(w).Encode(tokenResponse{AccessToken: "tok", ExpiresIn: 300}) //nolint:errcheck,gosec // G117: fake token endpoint, the token is a test value
 	}))
 	defer srv.Close()
 
@@ -222,7 +234,7 @@ func TestOAuth2RoundTripper_RetriesOn401(t *testing.T) {
 			tok = "fresh-tok"
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(tokenResponse{AccessToken: tok, ExpiresIn: 300}) //nolint:errcheck
+		json.NewEncoder(w).Encode(tokenResponse{AccessToken: tok, ExpiresIn: 300}) //nolint:errcheck,gosec // G117: fake token endpoint, the token is a test value
 	}))
 	defer tokenSrv.Close()
 

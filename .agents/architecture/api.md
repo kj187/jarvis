@@ -17,17 +17,26 @@ apply and writes are anonymous; startup logs a WARN (`config.Warnings()`).
 the same fingerprint can exist in multiple clusters, so history, stats, comments,
 and claims are isolated per cluster. Frontend hooks pass `clusterName` accordingly.
 
-Global middleware (all responses): `Secure` headers (X-XSS-Protection, nosniff,
-X-Frame-Options SAMEORIGIN, HSTS, CSP `default-src 'self'; …`), body limit 1 MB,
-CORS from `JARVIS_ALLOWED_ORIGINS` (credentials allowed).
+Global middleware (all responses): `Secure` headers (nosniff, X-Frame-Options
+DENY, Referrer-Policy same-origin, HSTS, CSP `default-src 'self'; … frame-ancestors 'none'`),
+`Permissions-Policy`, optional `hostGuard` (`internal/api/hostguard.go`, `JARVIS_ALLOWED_HOSTS`,
+421; health/metrics paths exempt), body limit 1 MB, CORS from `JARVIS_ALLOWED_ORIGINS`
+(credentials allowed), then `originGuard` (`internal/api/origin.go`): `POST`/`PUT`/
+`PATCH`/`DELETE` need an own-host or allow-listed `Origin`, else 403; no `Origin` passes
+unless `Sec-Fetch-Site: cross-site`. Session cookie `Secure` follows
+`JARVIS_COOKIE_SECURE` (`auto`|`true`). Client IP: `e.IPExtractor` is the TCP peer unless
+`JARVIS_TRUSTED_PROXIES` lists the peer (then `X-Forwarded-For`, Echo's implicit
+private-range trust off); login rate limiting stays one global bucket.
 
 ```
 # ── Health / Metrics / Auth / Setup ──────────────────────────────────────────
-GET    /health                                   None        → { status: "ok" }
-GET    /metrics                                  None        → Prometheus exposition format (see internal/metrics below)
+GET    /health                                   None        → { status: "ok" }  (legacy, process only)
+GET    /health/live                              None        → { status: "ok" }  (process only, never touches the DB)
+GET    /health/ready                             None        → 200 { status: "ok" } | 503 { status: "unavailable" }  (DB ping, 2 s timeout, result cached 5 s; Alertmanager state is deliberately not part of it)
+GET    /metrics                                  None        → Prometheus exposition format (see internal/metrics below); with JARVIS_METRICS_TOKEN: Bearer token required (api/metrics_auth.go), else 401
 GET    /auth/info                                None        → { mode, loginUrl, setupRequired, setupTokenRequired, runbookBaseUrl }
 POST   /auth/login                               None  (RL)  Body: { username, password } → user + Set-Cookie  (global 30/min rate limit)
-POST   /auth/logout                              None        → clears session cookie
+POST   /auth/logout                              Auth        → bumps users.token_version (revokes all the account's sessions), closes its /ws connections, clears the cookie; 401 without a session
 GET    /auth/me                                  Auth        → User { id, username, role, provider }; SSO adds email? (from the DB), and with JARVIS_OIDC_GROUPS_CLAIM set groupsClaim, groups[] (as of the last login), lastLoginAt
 GET    /auth/oidc/start                          None        → 302 redirect to OIDC issuer (PKCE). Optional ?popup=1 (login in a
 #                                                              popup: callback lands on /?login=popup-done, the SPA notifies the opener
@@ -41,10 +50,12 @@ POST   /setup                                    None        Body: { username, p
 # ── WebSocket ────────────────────────────────────────────────────────────────
 WS     /ws                                       full_protect?  (origin checked against JARVIS_ALLOWED_ORIGINS;
 #        in full_protect mode the upgrade request additionally requires a valid
-#        session cookie via RequireAuth — /ws streams the full alert snapshot)
+#        session cookie via RequireAuth — /ws streams the full alert snapshot;
+#        capped at JARVIS_WS_MAX_CONNECTIONS per pod: one over → 503 + Retry-After before the upgrade,
+#        counted in jarvis_ws_rejected_total; Hub.reserveSlot claims the slot ahead of the upgrade)
 
 # ── Status / Version ─────────────────────────────────────────────────────────
-GET    /api/v1/status                            full_protect?  → { status, clusters, alerts, ws_clients, leader, poll_interval_seconds, resolved_buffer_ttl_seconds }
+GET    /api/v1/status                            full_protect?  → { status ("ok"|"degraded" when the DB ping fails), database, clusters, alerts, ws_clients, leader, poll_interval_seconds, resolved_buffer_ttl_seconds }
 #        leader: this pod's current leader-election state (internal/leader) — always true on SQLite
 GET    /api/v1/info                              full_protect?  → { version }
 
@@ -152,8 +163,8 @@ PUT    /api/v1/silence-templates/:id             Auth  (write)  Body: { name, ma
 DELETE /api/v1/silence-templates/:id             Auth  (write)
 
 # ── Poll / Clusters ──────────────────────────────────────────────────────────
-POST   /api/v1/poll                              None        → triggers an immediate Alertmanager poll
-GET    /api/v1/clusters                          full_protect?  → []ClusterInfo
+POST   /api/v1/poll                              Auth  (write)  → triggers an immediate Alertmanager poll; 429 + Retry-After within 5 s of the last accepted one (global per pod; e2e build: 0)
+GET    /api/v1/clusters                          full_protect?  → []ClusterInfo (URLs always without userinfo: config.StripUserinfo)
 #        health from the cached per-member up-state of the last poll (Cluster.MemberUpStates) —
 #        never live-pings AM; members without poll state yet count as healthy (writeOrder optimism).
 #        lastSuccessfulPollAt / stale come from Recorder.ClusterFreshness() (cached, optional
@@ -234,7 +245,7 @@ consumed snapshot.
 
 - **Middleware**: `RequireAuth` (valid JWT cookie/header) on write routes + `/auth/me`; `RequireAdmin` on `/api/v1/admin/*`; `firstRunRedirect` → `/setup` when internal mode has no users.
 - **`OptionalAuth`**: like `RequireAuth` (resolves the cookie and sets `auth.ContextKey`) but never rejects the request — for routes that must answer both anonymous and authenticated callers differently without requiring login (`GET /api/v1/settings` is the only user so far). A route with neither `RequireAuth` nor `OptionalAuth` never gets `auth.ContextKey` set, so `auth.UserFromContext(c)` is always nil there even with a valid cookie present — this bit a first draft of the settings endpoint (PUT wrote correctly, but the unauthenticated-by-design GET always read back `user: null`, silently "losing" every write) before `OptionalAuth` was added; `internal/api/settings_handler_test.go`'s `TestGetSettings_RealHTTPRoundTrip` guards against a regression by driving a real cookie through a real `httptest.Server` + router instead of `c.Set(auth.ContextKey, ...)`, which would mask this class of bug.
-- **JWT**: HMAC-SHA256 signed with `JARVIS_SECRET_KEY`; claims `sub, name (username), role, provider, exp, iat, jti` (no e-mail, no groups); delivered as secure HttpOnly cookie.
+- **JWT**: HMAC-SHA256 signed with `JARVIS_SECRET_KEY`; claims `sub, name (username), role, provider, tv (users.token_version), exp, iat, jti` (no e-mail, no groups); delivered as secure HttpOnly cookie. The signature is only the first check: `auth.SessionVerifier` (`internal/auth/session.go`) then loads the user (30 s per-pod cache, `sessionCacheTTL`), rejects a deleted user or a `tv` mismatch (401) and takes role/name/e-mail from the DB, not from the token; a DB error without a cached answer is 503. Logout, role change and user deletion call `auth.InvalidateUser`; other pods catch up within the cache TTL, and `ws.Hub` re-checks identified connections on each ping tick (`SetSessionCheck`, fails open).
 - **OIDC**: `/auth/oidc/start` (PKCE + state cookie) → issuer → `/auth/oidc/callback` (state CSRF check, ID-token verify, `UpsertOIDCUser` by `sub`). The ID-token claim named by `JARVIS_OIDC_GROUPS_CLAIM` supplies the user's groups (stored in `users.oidc_groups` at every login); the admin role is granted when it contains any group of the comma-separated `JARVIS_OIDC_ADMIN_VALUE`. The frontend runs it in a popup (`lib/ssoLogin.ts` `startSsoLogin`, `?popup=1`) so page state survives; popup-blocked and the full-page `LoginPage` use `?return_to=`.
 - **Login never navigates (frontend)**: anything needing a session calls `authStore.requestLogin()` → the single `LoginPrompt`. `api/client.ts` `request()` also replays a write once after a 401 → login (session expired mid-task); a 401 on a GET only calls `expireSession()` (no dialog from background polls). The backend forces the actor (createdBy/claimedBy/authorName/by) to the session user in every auth mode ≠ none, so an action queued before login and run after it is safe with a stale client-side user.
 - **Rate limit**: one global bucket for `POST /auth/login` (0.5 req/s = 30/min, burst 10, per-process).

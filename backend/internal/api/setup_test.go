@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -140,7 +141,7 @@ func TestPostSetup_ConcurrentRequests_CreateExactlyOneAdmin(t *testing.T) {
 		go func(i int) {
 			defer wg.Done()
 			<-start
-			codes[i] = postSetupReq(t, srv, "admin"+string(rune('a'+i)), "supersecretpassword!").Code
+			codes[i] = postSetupReq(t, srv, "admin"+strconv.Itoa(i), "supersecretpassword!").Code
 		}(i)
 	}
 	close(start)
