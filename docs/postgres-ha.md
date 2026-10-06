@@ -99,9 +99,13 @@ interval. Losing the connection (pod killed, network
 partition, crash) releases the lock automatically — there is no TTL or
 lease-renewal bookkeeping, PostgreSQL's own session cleanup is the failure
 detector. The elector's connection uses aggressive TCP keepalives (idle 5s /
-interval 3s / count 3) so even a hard node failure — no graceful FIN — is
-detected and the lock released within single-digit seconds, not the
-OS-default keepalive timeout (which can take minutes).
+interval 3s / count 3), and every round-trip on it (connect, heartbeat,
+try-lock, close) has a deadline of one interval (5s). TCP keepalive alone is
+not enough: probes only fire on an *idle* connection, and a blackholed path
+leaves the leader's own heartbeat unacknowledged, which the kernel retransmits
+for minutes. With the deadline, a leader cut off from PostgreSQL steps down
+after at most one heartbeat interval plus one timeout (about 10s) and stops
+all history writes and polling (see [Failover](#failover)).
 
 SQLite deployments skip all of this: single replica by design, this pod is
 always leader.
@@ -245,8 +249,30 @@ detection on a hard failure), a follower acquires it, and immediately:
 3. Begins persisting/notifying snapshots for the followers now behind it.
 
 Typical takeover is well under 10 seconds (5s heartbeat + 5s retry
-interval); a hard node failure is bounded by the elector connection's TCP
-keepalive (worst case ~15-20s). The existing grace-period guarantee (a
+interval). After a hard failure two clocks run, and the follower can only
+acquire the lock once the **second** has expired:
+
+- **Old leader (client side):** steps down within about 10s of losing the
+  path to PostgreSQL (heartbeat interval + 5s timeout). Covered by
+  `TestPGElector_BlackholedLeaderStepsDownAndFollowerTakesOver`: a TCP proxy
+  blackholes the leader's connection, the leader steps down within the bound,
+  the follower takes over only after the server released the session, and the
+  two are never leader at the same time. The test runs at a 300 ms interval
+  (about 0.7 s measured); the 5s production values scale the bound, they were
+  not measured separately.
+- **PostgreSQL server (releases the lock):** the session lock is freed only
+  when the server notices its client is gone. On a graceful shutdown or a
+  closed socket that is instant; after a hard node failure it depends on the
+  server's own keepalives. The PostgreSQL default (`tcp_keepalives_idle = 0`,
+  i.e. the OS default, usually 2 hours) can hold the lock for hours, so
+  **set them on the server** (managed services: the parameter group), for
+  example `tcp_keepalives_idle = 10`, `tcp_keepalives_interval = 3`,
+  `tcp_keepalives_count = 3`, which detects a dead client in about 20s. The
+  takeover time after a hard node failure is that detection time plus up to
+  5s for the follower's next try. Jarvis cannot shorten it from the client
+  side.
+
+The existing grace-period guarantee (a
 resolve immediately followed by a re-fire within the poll-scaled grace
 window reopens the same episode rather than starting a new one) holds
 across a leadership change exactly as it does on a single replica — the

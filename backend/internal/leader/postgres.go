@@ -33,6 +33,14 @@ const (
 	keepAliveIdle     = 5 * time.Second
 	keepAliveInterval = 3 * time.Second
 	keepAliveCount    = 3
+
+	// Keepalive probes only fire on an idle connection. A blackholed path
+	// (partition, dropped node) leaves our own heartbeat unacknowledged, and
+	// then the kernel retransmits for minutes before giving up. So every
+	// round-trip on the elector connection — dial, heartbeat, try-lock, close —
+	// carries its own deadline of one retry interval (opTimeout). Worst case
+	// until a cut-off leader steps down: one heartbeat interval + one timeout
+	// = 10s.
 )
 
 // PGElector is the PostgreSQL-dialect Elector (D2): a dedicated connection
@@ -146,6 +154,11 @@ func (e *PGElector) dial(ctx context.Context) (*pgx.Conn, error) {
 	if err != nil {
 		return nil, fmt.Errorf("parse dsn: %w", err)
 	}
+	// The DSN may carry its own connect_timeout; otherwise a blackholed
+	// handshake would block the Run loop until the kernel gives up.
+	if cfg.ConnectTimeout == 0 {
+		cfg.ConnectTimeout = e.retryInterval
+	}
 	dialer := &net.Dialer{
 		KeepAliveConfig: net.KeepAliveConfig{
 			Enable:   true,
@@ -169,8 +182,12 @@ func (e *PGElector) dial(ctx context.Context) (*pgx.Conn, error) {
 // is lost or ctx is cancelled — the caller's Run loop then redials.
 func (e *PGElector) holdLock(ctx context.Context, conn *pgx.Conn) {
 	defer func() {
-		_ = conn.Close(context.Background())
+		// Step down first: closing a blackholed connection can itself wait for
+		// the deadline below, and leadership must not outlive the heartbeat.
 		e.setLeader(false)
+		closeCtx, cancel := context.WithTimeout(context.Background(), e.retryInterval)
+		defer cancel()
+		_ = conn.Close(closeCtx)
 	}()
 
 	ticker := time.NewTicker(e.retryInterval)
@@ -185,7 +202,10 @@ func (e *PGElector) holdLock(ctx context.Context, conn *pgx.Conn) {
 		}
 
 		if e.IsLeader() {
-			if err := conn.Ping(ctx); err != nil {
+			opCtx, cancel := context.WithTimeout(ctx, e.retryInterval)
+			err := conn.Ping(opCtx)
+			cancel()
+			if err != nil {
 				e.logger.Warn("leader election: heartbeat failed, stepping down", "err", err)
 				return
 			}
