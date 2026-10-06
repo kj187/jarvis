@@ -132,8 +132,10 @@ The panel is only accessible to users with the `admin` role. Open it from the us
 
 Jarvis uses the **Authorization Code Flow with PKCE**. No client-side secrets are exposed to the browser. Each login also
 carries a one-time `nonce` that the ID token must echo back, so a token issued for another login cannot be replayed into
-this one, and an ID token whose `email_verified` claim is present but not `true` (`false`, `"false"`, anything else) is
-refused (a provider that does not send the claim is not affected). Neither the ID token nor its claim values are written to the log.
+this one, and an ID token whose `email_verified` claim is present but not `true` (`false`, `"false"`, anything else) does
+not block the login: the e-mail is discarded (not stored, never used as the username, which falls back to
+`preferred_username`, then `sub`), and the identity hangs on `sub`. This keeps providers such as Keycloak working
+when "Trust Email" is off. The token exchange with the provider times out after 10 seconds. Neither the ID token nor its claim values are written to the log.
 
 The login modal shows a single **Login with SSO** button:
 

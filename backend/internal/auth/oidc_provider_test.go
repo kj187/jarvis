@@ -142,33 +142,75 @@ func TestOIDC_Exchange_Nonce(t *testing.T) {
 	}
 }
 
+// An e-mail the IdP does not vouch for (Keycloak without "Trust Email") must
+// not block the login; it is dropped and never becomes the username. The
+// identity hangs on `sub`.
 func TestOIDC_Exchange_EmailVerified(t *testing.T) {
 	cases := []struct {
-		name    string
-		value   any // nil = claim absent
-		wantErr bool
+		name      string
+		value     any // nil = claim absent
+		wantEmail string
 	}{
-		{"absent (IdP does not send it)", nil, false},
-		{"true", true, false},
-		{`"true" as string (Cognito)`, "true", false},
-		{"false", false, true},
-		{`"false" as string (Cognito)`, "false", true},
-		{`"False" capitalised`, "False", true},
-		{`" false" with a space`, " false", true},
-		{`"no"`, "no", true},
-		{"number 0", 0, true},
-		{"number 1 is not an assertion of true", 1, true},
+		{"absent (IdP does not send it)", nil, "dana@example.com"},
+		{"true", true, "dana@example.com"},
+		{`"true" as string (Cognito)`, "true", "dana@example.com"},
+		{"false", false, ""},
+		{`"false" as string (Cognito)`, "false", ""},
+		{`"False" capitalised`, "False", ""},
+		{"number 0", 0, ""},
+		{"number 1 is not an assertion of true", 1, ""},
+		{"non-bool object", map[string]any{"x": 1}, ""},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			idp := newMockIdP(t)
 			idp.claims = map[string]any{"nonce": "n-1", "email_verified": tc.value}
 			p := newOIDC(t, idp)
-			_, err := p.Exchange(context.Background(), "code", "verifier", "n-1")
-			if (err != nil) != tc.wantErr {
-				t.Errorf("err = %v, wantErr %v", err, tc.wantErr)
+			u, err := p.Exchange(context.Background(), "code", "verifier", "n-1")
+			if err != nil {
+				t.Fatalf("login must not be refused: %v", err)
+			}
+			if u.Email != tc.wantEmail {
+				t.Errorf("email = %q, want %q", u.Email, tc.wantEmail)
 			}
 		})
+	}
+}
+
+// Without preferred_username an unverified e-mail must not become the
+// username; the fallback is sub. A verified one still may.
+func TestOIDC_Exchange_UnverifiedEmailIsNotTheUsername(t *testing.T) {
+	cases := []struct {
+		name     string
+		verified any
+		want     string
+	}{
+		{"unverified", false, "sub-1"},
+		{"verified", true, "dana@example.com"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			idp := newMockIdP(t)
+			idp.claims = map[string]any{"nonce": "n-1", "email_verified": tc.verified, "preferred_username": nil}
+			p := newOIDC(t, idp)
+			u, err := p.Exchange(context.Background(), "code", "verifier", "n-1")
+			if err != nil {
+				t.Fatalf("exchange: %v", err)
+			}
+			if u.Username != tc.want {
+				t.Errorf("username = %q, want %q", u.Username, tc.want)
+			}
+		})
+	}
+}
+
+// An empty expected nonce must never validate, even for a token without one.
+func TestOIDC_Exchange_EmptyExpectedNonceIsRefused(t *testing.T) {
+	idp := newMockIdP(t)
+	idp.claims = map[string]any{"nonce": nil}
+	p := newOIDC(t, idp)
+	if _, err := p.Exchange(context.Background(), "code", "verifier", ""); err == nil {
+		t.Fatal("empty expected nonce with a nonce-less token was accepted")
 	}
 }
 
