@@ -86,7 +86,7 @@ Helm chart's `clusters[].auth` values, is in
 | Variable | Default | Description |
 |---|---|---|
 | <a id="jarvis_db_dsn"></a>`JARVIS_DB_DSN` | `/data/jarvis.db` | Selects the backend *and* the connection: a file path means SQLite, a `postgres://` URL means PostgreSQL. Never logged in full — the password is redacted |
-| <a id="jarvis_db_max_open_conns"></a>`JARVIS_DB_MAX_OPEN_CONNS` | `10` | PostgreSQL connection pool cap. Ignored on SQLite, which is deliberately limited to a single writer |
+| <a id="jarvis_db_max_open_conns"></a>`JARVIS_DB_MAX_OPEN_CONNS` | `10` | PostgreSQL connection pool cap, at least `2` (a configured `1` is raised to `2` with a warning in the log). Ignored on SQLite, which is deliberately limited to a single writer |
 
 ```env
 JARVIS_DB_DSN=/data/jarvis.db

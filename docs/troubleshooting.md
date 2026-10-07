@@ -83,7 +83,7 @@ message names the variable:
 | `JARVIS_SECRET_KEY must be at least 32 bytes when JARVIS_AUTH_PROVIDER=…` | `openssl rand -hex 32` |
 | `invalid JARVIS_AUTH_MODE=…: must be write_protect or full_protect` | Typo in the mode |
 | `invalid JARVIS_POLL_INTERVAL` | Needs a Go duration: `15s`, `1m` |
-| `invalid JARVIS_DB_MAX_OPEN_CONNS` | Integer ≥ 1 |
+| `invalid JARVIS_DB_MAX_OPEN_CONNS` | Needs an integer ≥ 1. With a PostgreSQL DSN a `1` is raised to `2` (warning in the log) |
 
 At least one cluster is always required; Jarvis does not start without one.
 Every variable is listed in [Configuration](configuration.md).

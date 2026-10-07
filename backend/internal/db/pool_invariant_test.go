@@ -138,12 +138,12 @@ func openPostgres(d D, cfg C) { d.SetMaxOpenConns(cfg.n); d.SetMaxIdleConns(cfg.
 	}
 }
 
-// A zero or negative configured cap must not turn into an unbounded pool.
+// A zero, negative or single-connection cap must not reach the PostgreSQL pool.
 func TestPoolInvariant_NonPositiveCapKeepsDefault(t *testing.T) {
 	if defaultMaxOpenConns < 2 {
 		t.Fatalf("default PostgreSQL cap = %d, want a bounded pool larger than 1", defaultMaxOpenConns)
 	}
-	for _, n := range []int{0, -1, -100} {
+	for _, n := range []int{1, 0, -1, -100} {
 		cfg := defaultPoolConfig()
 		WithMaxOpenConns(n)(&cfg)
 		if cfg.maxOpenConns != defaultMaxOpenConns {
