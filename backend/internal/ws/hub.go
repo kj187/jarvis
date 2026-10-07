@@ -11,6 +11,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/kj187/jarvis/backend/internal/metrics"
 	"github.com/kj187/jarvis/backend/internal/models"
+	"github.com/kj187/jarvis/backend/internal/originpolicy"
 )
 
 var heartbeatMessage = []byte(`{"type":"heartbeat","payload":null}`)
@@ -83,11 +84,6 @@ func NewHub(allowedOrigins []string, logger *slog.Logger, m *metrics.Metrics) *H
 	if logger == nil {
 		logger = slog.New(slog.DiscardHandler)
 	}
-	originSet := make(map[string]struct{}, len(allowedOrigins))
-	for _, o := range allowedOrigins {
-		originSet[o] = struct{}{}
-	}
-
 	h := &Hub{
 		clients:    make(map[*Client]struct{}),
 		broadcast:  make(chan outbound, globalBroadcastBuffer),
@@ -105,12 +101,9 @@ func NewHub(allowedOrigins []string, logger *slog.Logger, m *metrics.Metrics) *H
 				// No Origin header — non-browser clients cannot trigger CSRF.
 				return true
 			}
-			if len(allowedOrigins) == 0 {
-				// Same-origin only.
-				return origin == "http://"+r.Host || origin == "https://"+r.Host
-			}
-			_, ok := originSet[origin]
-			return ok
+			// Same rule as the HTTP write routes: allow-listed, or the
+			// request's own host (the only match with an empty allow-list).
+			return originpolicy.Allowed(origin, r.Host, allowedOrigins)
 		},
 	}
 	return h

@@ -72,8 +72,9 @@ Kubernetes Service, Ingress or container port for it — access is
 The `Origin` header is validated for both HTTP CORS and the WebSocket upgrade
 against `cfg.AllowedOrigins` (Critical Invariant #11). Never use an
 unconditional `return true` in `upgrader.CheckOrigin` (`internal/ws/hub.go`):
-today a missing `Origin` (non-browser client) is allowed, an empty allow-list
-means same-origin only, otherwise the allow-list decides.
+today a missing `Origin` (non-browser client) is allowed, otherwise the shared
+`originpolicy.Allowed` decides (allow-list or own host, as for HTTP writes; an
+empty allow-list means same-origin only).
 
 Because a missing `Origin` passes, the origin check alone does not gate
 non-browser clients. In `full_protect` mode `/ws` is therefore also wrapped in
