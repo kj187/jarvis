@@ -1,4 +1,5 @@
 import { fetchAuthMe } from '@/api/client'
+import { ssoCheckOutcome } from '@/lib/authMe'
 import { useAuthStore } from '@/store/authStore'
 import type { AuthUser } from '@/types'
 
@@ -58,10 +59,8 @@ export function startSsoLogin(loginUrl: string, onSettled: () => void): void {
     if (settled || checking) return
     checking = true
     try {
-      const user = await fetchAuthMe()
-      if (user !== null || popup.closed) finish(user)
-    } catch {
-      // auth/me unavailable: unknown state, keep waiting for the next check
+      const outcome = await ssoCheckOutcome(fetchAuthMe, () => popup.closed)
+      if (outcome.settled) finish(outcome.user)
     } finally {
       checking = false
     }

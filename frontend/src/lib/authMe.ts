@@ -24,3 +24,26 @@ export async function readAuthMe<T>(fetchFn: FetchLike): Promise<T | null> {
   if (res.status >= 500) throw new AuthUnavailableError(`auth/me: ${res.status}`)
   return null
 }
+
+export type SsoCheckOutcome<T> = { settled: false } | { settled: true; user: T | null }
+
+/**
+ * One check of the SSO popup flow: finished with the user once a session
+ * exists, finished signed out once the popup is gone without one, otherwise
+ * keep waiting. An unknown state (auth/me unavailable) counts as "no session
+ * yet", so a closed popup still ends the flow instead of leaving the watchdog
+ * running.
+ */
+export async function ssoCheckOutcome<T>(
+  fetchMe: () => Promise<T | null>,
+  popupClosed: () => boolean,
+): Promise<SsoCheckOutcome<T>> {
+  let user: T | null = null
+  try {
+    user = await fetchMe()
+  } catch (e) {
+    if (!(e instanceof AuthUnavailableError)) throw e
+  }
+  if (user !== null || popupClosed()) return { settled: true, user }
+  return { settled: false }
+}

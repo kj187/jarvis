@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { AuthUnavailableError, readAuthMe } from './authMe'
+import { AuthUnavailableError, readAuthMe, ssoCheckOutcome } from './authMe'
 
 const user = { id: 'u1', username: 'alice', role: 'user' }
 
@@ -27,5 +27,30 @@ describe('readAuthMe', () => {
       throw new TypeError('Failed to fetch')
     }
     await expect(readAuthMe(failing)).rejects.toBeInstanceOf(AuthUnavailableError)
+  })
+})
+
+describe('ssoCheckOutcome', () => {
+  it('keeps waiting while the popup is open and the state is unknown', async () => {
+    const fail = async () => {
+      throw new AuthUnavailableError()
+    }
+    await expect(ssoCheckOutcome(fail, () => false)).resolves.toEqual({ settled: false })
+  })
+
+  it('ends the flow signed out when the popup is closed and the state is unknown', async () => {
+    const fail = async () => {
+      throw new AuthUnavailableError()
+    }
+    await expect(ssoCheckOutcome(fail, () => true)).resolves.toEqual({ settled: true, user: null })
+  })
+
+  it('finishes with the user as soon as a session exists', async () => {
+    await expect(ssoCheckOutcome(async () => user, () => false)).resolves.toEqual({ settled: true, user })
+  })
+
+  it('keeps waiting when signed out and the popup is still open, ends when it closes', async () => {
+    await expect(ssoCheckOutcome(async () => null, () => false)).resolves.toEqual({ settled: false })
+    await expect(ssoCheckOutcome(async () => null, () => true)).resolves.toEqual({ settled: true, user: null })
   })
 })
