@@ -1,6 +1,6 @@
 FROM golang:1.26-alpine@sha256:8ac98ca534ac3f51e1f420a1dd2c15e74c75cfa0f23f3ad27eb5d7236c349a0c
 RUN apk add --no-cache git
-RUN go install github.com/air-verse/air@latest
+RUN go install github.com/air-verse/air@v1.67.4
 WORKDIR /app
 # Sources are volume-mounted at runtime.
 # GOFLAGS=-mod=mod allows Go to update go.sum automatically.
