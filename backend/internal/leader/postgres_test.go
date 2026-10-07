@@ -6,9 +6,12 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // postgresTestDSN returns the PostgreSQL test DSN from JARVIS_TEST_POSTGRES_DSN,
@@ -169,7 +172,11 @@ func TestPGElector_BlackholedLeaderStepsDownAndFollowerTakesOver(t *testing.T) {
 	proxy, proxiedDSN := newBlackholeProxy(t, dsn)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	var wg sync.WaitGroup
+	t.Cleanup(func() {
+		cancel()
+		wg.Wait()
+	})
 
 	// Same lock for both: the leader reaches PostgreSQL through the proxy, the
 	// follower directly.
@@ -181,15 +188,24 @@ func TestPGElector_BlackholedLeaderStepsDownAndFollowerTakesOver(t *testing.T) {
 		e.SetLockID(classID, id)
 	}
 
-	go leader.Run(ctx)
+	wg.Add(1)
+	go func() { defer wg.Done(); leader.Run(ctx) }()
 	waitFor(t, 20*time.Second, leader.IsLeader)
-	go follower.Run(ctx)
+	wg.Add(1)
+	go func() { defer wg.Done(); follower.Run(ctx) }()
 
-	// Sample for a double leader for the whole rest of the test.
+	// Sample for a double leader for the whole rest of the test. The sampler
+	// is stopped via Cleanup too, so a t.Fatalf above cannot leak it.
 	var doubleLeader sync.Once
 	var sawDouble bool
 	stopSampling := make(chan struct{})
 	samplerDone := make(chan struct{})
+	var stopOnce sync.Once
+	stopSampler := func() {
+		stopOnce.Do(func() { close(stopSampling) })
+		<-samplerDone
+	}
+	t.Cleanup(stopSampler)
 	go func() {
 		defer close(samplerDone)
 		for {
@@ -222,9 +238,96 @@ func TestPGElector_BlackholedLeaderStepsDownAndFollowerTakesOver(t *testing.T) {
 	proxy.DropUpstream()
 	waitFor(t, 20*time.Second, follower.IsLeader)
 
-	close(stopSampling)
-	<-samplerDone
+	stopSampler()
 	if sawDouble {
 		t.Fatal("observed two leaders at the same time")
+	}
+}
+
+// TestPGElector_BlackholedFollowerReconnects covers the follower path: a
+// follower whose pg_try_advisory_lock round-trip hangs on a blackholed
+// connection must give up after one retry interval and redial, instead of
+// waiting for the kernel's TCP retransmission give-up (minutes).
+func TestPGElector_BlackholedFollowerReconnects(t *testing.T) {
+	dsn := postgresTestDSN(t)
+	proxy, proxiedDSN := newBlackholeProxy(t, dsn)
+	// Tag the proxied session so it can be found in pg_stat_activity.
+	const appName = "jarvis-test-blackholed-follower"
+	sep := "?"
+	if strings.Contains(proxiedDSN, "?") {
+		sep = "&"
+	}
+	proxiedDSN += sep + "application_name=" + appName
+
+	ctx, cancel := context.WithCancel(context.Background())
+	var wg sync.WaitGroup
+	t.Cleanup(func() {
+		cancel()
+		wg.Wait()
+	})
+
+	holder := NewPGElector(dsn, testLogger())
+	follower := NewPGElector(proxiedDSN, testLogger())
+	classID, id := testLockID(t)
+	for _, e := range []*PGElector{holder, follower} {
+		e.SetRetryInterval(300 * time.Millisecond)
+		e.SetLockID(classID, id)
+	}
+
+	wg.Add(1)
+	go func() { defer wg.Done(); holder.Run(ctx) }()
+	waitFor(t, 20*time.Second, holder.IsLeader)
+
+	wg.Add(1)
+	go func() { defer wg.Done(); follower.Run(ctx) }()
+	waitFor(t, 20*time.Second, func() bool { return proxy.Accepted() >= 1 })
+
+	// Blackhole only after a try-lock round-trip completed on the proxied
+	// session (visible server-side as an idle session whose last statement is
+	// the try-lock). Otherwise a handshake or CancelRequest dial could also
+	// raise Accepted() and the test would not prove the query deadline.
+	admin, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	t.Cleanup(func() { _ = admin.Close(context.Background()) })
+	waitFor(t, 20*time.Second, func() bool {
+		var n int
+		err := admin.QueryRow(ctx, `SELECT count(*) FROM pg_stat_activity
+			WHERE application_name = $1 AND state = 'idle' AND query LIKE 'SELECT pg_try_advisory_lock%'`, appName).Scan(&n)
+		return err == nil && n > 0
+	})
+
+	before := proxy.Accepted()
+	proxy.Blackhole()
+
+	// One retry interval until the hung try-lock times out, then a redial.
+	// The ceiling follows the waitFor convention (CI load), not the expected time.
+	waitFor(t, 20*time.Second, func() bool { return proxy.Accepted() > before })
+	if follower.IsLeader() {
+		t.Fatal("follower became leader while the holder still owns the lock")
+	}
+}
+
+// TestPGElector_DialAppliesConnectTimeout pins the connect deadline: without
+// it a blackholed handshake blocks the Run loop until the kernel gives up.
+func TestPGElector_DialAppliesConnectTimeout(t *testing.T) {
+	e := NewPGElector("postgres://u:p@127.0.0.1:1/db?sslmode=disable", testLogger())
+	e.SetRetryInterval(250 * time.Millisecond)
+	cfg, err := e.connConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.ConnectTimeout != 250*time.Millisecond {
+		t.Fatalf("connect timeout = %v, want retry interval", cfg.ConnectTimeout)
+	}
+	e2 := NewPGElector("postgres://u:p@127.0.0.1:1/db?sslmode=disable&connect_timeout=7", testLogger())
+	e2.SetRetryInterval(250 * time.Millisecond)
+	cfg2, err := e2.connConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg2.ConnectTimeout != 7*time.Second {
+		t.Fatalf("connect timeout = %v, want DSN value 7s", cfg2.ConnectTimeout)
 	}
 }

@@ -28,7 +28,8 @@ func (p *InternalProvider) Exchange(_ context.Context, _, _, _ string) (*User, e
 }
 
 // Authenticate validates username + password.
-// It always runs bcrypt to prevent timing oracles on user existence.
+// Wrong credentials return ErrInvalidCredentials; any other error is a
+// lookup failure. It always runs bcrypt to prevent timing oracles on user existence.
 func (p *InternalProvider) Authenticate(ctx context.Context, username, password string) (*User, error) {
 	u, err := p.users.GetByUsername(ctx, username)
 	if err != nil {
@@ -43,12 +44,12 @@ func (p *InternalProvider) Authenticate(ctx context.Context, username, password 
 		hashToCompare = u.PasswordHash
 	}
 	if bcrypt.CompareHashAndPassword([]byte(hashToCompare), []byte(password)) != nil {
-		return nil, errors.New("invalid credentials")
+		return nil, ErrInvalidCredentials
 	}
 	if u == nil {
 		// Should never reach here in practice (bcrypt will fail for dummy hash),
 		// but guard defensively.
-		return nil, errors.New("invalid credentials")
+		return nil, ErrInvalidCredentials
 	}
 
 	_ = p.users.UpdateLastLogin(ctx, u.ID)

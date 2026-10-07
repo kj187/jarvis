@@ -564,6 +564,35 @@ func TestLoad_DBMaxOpenConns_Invalid(t *testing.T) {
 	}
 }
 
+// Invariant #8: a PostgreSQL pool is never 1. A configured 1 is raised to 2
+// (and logged) instead of failing the start; SQLite ignores the value.
+func TestLoad_DBMaxOpenConns_PostgresRaisesOneToTwo(t *testing.T) {
+	for _, dsn := range []string{"postgres://u:p@db:5432/jarvis", "postgresql://u:p@db:5432/jarvis"} {
+		t.Setenv("JARVIS_DB_DSN", dsn)
+		t.Setenv("JARVIS_DB_MAX_OPEN_CONNS", "1")
+		cfg, err := Load()
+		if err != nil {
+			t.Fatalf("Load() with %s and JARVIS_DB_MAX_OPEN_CONNS=1: %v", dsn, err)
+		}
+		if cfg.DBMaxOpenConns != 2 {
+			t.Errorf("DBMaxOpenConns with %s and 1 configured = %d, want 2", dsn, cfg.DBMaxOpenConns)
+		}
+	}
+	t.Setenv("JARVIS_DB_MAX_OPEN_CONNS", "2")
+	cfg, err := Load()
+	if err != nil || cfg.DBMaxOpenConns != 2 {
+		t.Errorf("Load() with 2 connections = %v, %v; want 2, nil", cfg, err)
+	}
+}
+
+func TestLoad_DBMaxOpenConns_SQLiteAcceptsOne(t *testing.T) {
+	t.Setenv("JARVIS_DB_DSN", "/data/jarvis.db")
+	t.Setenv("JARVIS_DB_MAX_OPEN_CONNS", "1")
+	if _, err := Load(); err != nil {
+		t.Errorf("Load() with SQLite and JARVIS_DB_MAX_OPEN_CONNS=1: %v", err)
+	}
+}
+
 // Ensure test cleanup resets env properly via t.Setenv.
 var _ = os.Setenv
 

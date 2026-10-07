@@ -12,8 +12,13 @@ describe('loginErrorMessage', () => {
     expect(loginErrorMessage(new LoginError(401))).toBe('Invalid username or password.')
   })
 
+  it('reports a temporary outage on a 5xx instead of blaming the credentials', () => {
+    const msg = 'Login temporarily unavailable. Please try again in a moment.'
+    expect(loginErrorMessage(new LoginError(500))).toBe(msg)
+    expect(loginErrorMessage(new LoginError(503))).toBe(msg)
+  })
+
   it('reports invalid credentials for any other failure', () => {
-    expect(loginErrorMessage(new LoginError(500))).toBe('Invalid username or password.')
     expect(loginErrorMessage(new TypeError('Failed to fetch'))).toBe('Invalid username or password.')
     expect(loginErrorMessage(undefined)).toBe('Invalid username or password.')
   })

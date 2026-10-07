@@ -17,7 +17,6 @@ import (
 func dialWithOrigin(t *testing.T, allowed []string, origin string, sameOriginHost bool) int {
 	t.Helper()
 	hub := NewHub(allowed, nil, metrics.New("ws-origin-test"))
-	go hub.Run()
 	srv := httptest.NewServer(hub.upgraderHandler())
 	t.Cleanup(srv.Close)
 
@@ -56,7 +55,7 @@ func TestHub_CheckOrigin(t *testing.T) {
 	}{
 		{"allowlist: listed origin is accepted", allowlist, "https://jarvis.example.com", false, http.StatusSwitchingProtocols},
 		{"allowlist: unlisted origin is rejected", allowlist, "https://evil.example", false, http.StatusForbidden},
-		{"allowlist: the request's own host is rejected unless listed", allowlist, "", true, http.StatusForbidden},
+		{"allowlist: the request's own host is accepted, as on the HTTP write routes", allowlist, "", true, http.StatusSwitchingProtocols},
 		{"allowlist: no Origin header (non-browser client) is accepted", allowlist, "", false, http.StatusSwitchingProtocols},
 		{"no allowlist: same origin is accepted", nil, "", true, http.StatusSwitchingProtocols},
 		{"no allowlist: foreign origin is rejected", nil, "https://evil.example", false, http.StatusForbidden},

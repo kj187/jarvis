@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"errors"
 	"strings"
 	"sync"
 	"time"
@@ -34,11 +35,17 @@ type throttleEntry struct {
 type LoginThrottle struct {
 	mu      sync.Mutex
 	entries map[string]*throttleEntry
-	now     func() time.Time
+	// inflight holds the names whose attempt is being checked right now. It
+	// only ever holds as many names as there are concurrent requests.
+	// Each reservation carries a generation, so a stale holder (a deferred
+	// Release after Fail, or after a panic) never frees a later request's.
+	inflight map[string]uint64
+	gen      uint64
+	now      func() time.Time
 }
 
 func NewLoginThrottle() *LoginThrottle {
-	return &LoginThrottle{entries: make(map[string]*throttleEntry), now: time.Now}
+	return &LoginThrottle{entries: make(map[string]*throttleEntry), inflight: make(map[string]uint64), now: time.Now}
 }
 
 // SetClock replaces the time source; for tests.
@@ -74,6 +81,97 @@ func (t *LoginThrottle) Wait(username string) time.Duration {
 	return 0
 }
 
+// loginInflightWait is the Retry-After for an attempt rejected because another
+// attempt for the same name is still being checked.
+const loginInflightWait = time.Second
+
+var (
+	// ErrLoginLocked means the name is within its wait.
+	ErrLoginLocked = errors.New("login wait active")
+	// ErrLoginInProgress means another attempt for the name is being checked.
+	ErrLoginInProgress = errors.New("login in progress")
+)
+
+// LoginAttempt is one reservation of a username, returned by TryAcquire. Its
+// methods only act while the reservation is still the current one, so
+// `defer attempt.Release()` is safe after Fail or Succeed and covers panics.
+// The nil value is a no-op.
+type LoginAttempt struct {
+	t   *LoginThrottle
+	key string
+	gen uint64
+}
+
+// TryAcquire atomically checks the wait and reserves the name for one attempt.
+// On success it returns the attempt, which must end with Fail, Succeed or
+// Release. Otherwise the attempt is nil, err is ErrLoginLocked or
+// ErrLoginInProgress, and wait says how long to tell the client to hold off.
+// Serializing attempts per name keeps parallel requests from all slipping
+// through a check-then-act gap when a wait has just expired. With a nil
+// throttle it returns a nil attempt and no error.
+func (t *LoginThrottle) TryAcquire(username string) (attempt *LoginAttempt, wait time.Duration, err error) {
+	if t == nil {
+		return nil, 0, nil
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	key := throttleKey(username)
+	now := t.now()
+	if e, found := t.entries[key]; found {
+		if now.Before(e.lockedUntil) {
+			return nil, e.lockedUntil.Sub(now), ErrLoginLocked
+		}
+		if now.Sub(e.lastFailure) > loginDecayAfter {
+			delete(t.entries, key)
+		}
+	}
+	if _, busy := t.inflight[key]; busy {
+		return nil, loginInflightWait, ErrLoginInProgress
+	}
+	t.gen++
+	t.inflight[key] = t.gen
+	return &LoginAttempt{t: t, key: key, gen: t.gen}, 0, nil
+}
+
+// releaseLocked drops the reservation if it is still this attempt's.
+func (a *LoginAttempt) releaseLocked() {
+	if a.t.inflight[a.key] == a.gen {
+		delete(a.t.inflight, a.key)
+	}
+}
+
+// Release gives the name back without counting a failure.
+func (a *LoginAttempt) Release() {
+	if a == nil {
+		return
+	}
+	a.t.mu.Lock()
+	defer a.t.mu.Unlock()
+	a.releaseLocked()
+}
+
+// Fail records a failed login and releases the name.
+func (a *LoginAttempt) Fail() {
+	if a == nil {
+		return
+	}
+	a.t.mu.Lock()
+	defer a.t.mu.Unlock()
+	a.releaseLocked()
+	a.t.failLocked(a.key)
+}
+
+// Succeed forgets the failures of the username and releases the name.
+func (a *LoginAttempt) Succeed() {
+	if a == nil {
+		return
+	}
+	a.t.mu.Lock()
+	defer a.t.mu.Unlock()
+	a.releaseLocked()
+	delete(a.t.entries, a.key)
+}
+
 // Fail records a failed login. Callers only call it for attempts that were
 // actually checked, so attempts rejected during a wait do not extend it.
 func (t *LoginThrottle) Fail(username string) {
@@ -82,7 +180,10 @@ func (t *LoginThrottle) Fail(username string) {
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	key := throttleKey(username)
+	t.failLocked(throttleKey(username))
+}
+
+func (t *LoginThrottle) failLocked(key string) {
 	now := t.now()
 	e, ok := t.entries[key]
 	if ok && now.Sub(e.lastFailure) > loginDecayAfter && !now.Before(e.lockedUntil) {

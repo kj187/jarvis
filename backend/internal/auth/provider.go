@@ -1,6 +1,19 @@
 package auth
 
-import "context"
+import (
+	"context"
+	"errors"
+)
+
+// ErrInvalidCredentials is returned by Authenticate when the username/password
+// pair is wrong. Any other error is an infrastructure failure (e.g. the
+// database) and must not be counted as a failed login attempt.
+var ErrInvalidCredentials = errors.New("invalid credentials")
+
+// ErrLoginUnsupported is returned by Authenticate when the provider has no
+// password login at all (none and oidc modes). It is neither a failed attempt
+// nor a server fault.
+var ErrLoginUnsupported = errors.New("password login not supported")
 
 // Provider defines the authentication interface.
 type Provider interface {

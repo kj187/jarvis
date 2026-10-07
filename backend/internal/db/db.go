@@ -69,11 +69,12 @@ func defaultPoolConfig() poolConfig {
 type Option func(*poolConfig)
 
 // WithMaxOpenConns caps the PostgreSQL connection pool (per process; idle
-// connections are kept up to the same cap). Values < 1 are ignored. SQLite
-// is unaffected — it is always single-connection.
+// connections are kept up to the same cap). Values < 2 are ignored — a
+// PostgreSQL pool is never 1 (Critical Invariant #8). SQLite is unaffected —
+// it is always single-connection.
 func WithMaxOpenConns(n int) Option {
 	return func(c *poolConfig) {
-		if n >= 1 {
+		if n >= 2 {
 			c.maxOpenConns = n
 		}
 	}

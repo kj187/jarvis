@@ -237,11 +237,16 @@ func TestDeleteSilence_RejectsInvalidID(t *testing.T) {
 }
 
 func TestGet_RejectsOversizedResponse(t *testing.T) {
+	// Lower the cap so the test streams ~2 MiB instead of ~129 MiB.
+	old := maxResponseBytes
+	maxResponseBytes = 1 << 20
+	t.Cleanup(func() { maxResponseBytes = old })
+
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte("["))
 		chunk := []byte(strings.Repeat(" ", 1<<20))
-		for i := 0; i <= maxResponseBytes>>20; i++ {
+		for i := 0; i <= int(maxResponseBytes>>20)+1; i++ {
 			if _, err := w.Write(chunk); err != nil {
 				return
 			}

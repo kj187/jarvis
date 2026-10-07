@@ -14,6 +14,7 @@ Entries up to and including 1.7.6 were reconstructed from the git history when t
 
 ### Changed
 
+- `database.maxOpenConns: 1` with a PostgreSQL DSN is now raised to `2` by the app, with a warning in the log, instead of running a single-connection pool, which the app never supported. The default (`10`) and every value from `2` up are unchanged; SQLite ignores the value. Nothing has to change in existing values — not breaking.
 - Custom cluster headers (`clusters[].auth.headers`) are now stored in the chart's Secret (`cluster-<n>-header-<name>`) and read by the Deployment through `secretKeyRef`, instead of being rendered into the ConfigMap, so a header such as `Authorization` no longer sits in a readable ConfigMap. The environment the app sees is identical (`JARVIS_CLUSTER_<n>_HEADER_<name>`), and the chart Secret is rendered whenever a header is set, also when `database.existingSecret` is used. Values stay as they were; nothing has to change in existing values — not breaking.
 - The liveness probe now calls `/health/live` (process only) and the readiness probe `/health/ready` (database ping), instead of both calling `/health`. A database outage now takes the pod out of the Service endpoints, while an Alertmanager outage does not. The new paths exist from the app version that ships with this chart, so an `image.tag` override pointing at an older Jarvis release fails its probes — not breaking for a release that keeps the chart's default tag.
 

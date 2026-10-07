@@ -145,7 +145,7 @@ func (p *OIDCProvider) Exchange(ctx context.Context, code, codeVerifier, nonce s
 }
 
 func (p *OIDCProvider) Authenticate(_ context.Context, _, _ string) (*User, error) {
-	return nil, errors.New("authenticate not supported in oidc mode")
+	return nil, ErrLoginUnsupported
 }
 
 func (p *OIDCProvider) Info() ProviderInfo {

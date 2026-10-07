@@ -31,7 +31,8 @@ right when you reach Jarvis directly, and always wrong behind a proxy, because
 the browser sends `https://jarvis.example.com` while the backend sees its own
 internal host.
 
-Set, the comparison is an **exact string match** against the list. Three
+Set, an `Origin` must match the list (case-insensitively); the server's own host
+is always accepted in addition, for the WebSocket and for writes alike. Three
 consequences worth knowing before debugging for an hour:
 
 - **Scheme, host and port must all match.** `https://jarvis.example.com` does
