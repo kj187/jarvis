@@ -140,7 +140,7 @@ Jarvis still work?". It runs every gate CI runs, plus the two a local
 
 It also checks that the local Go toolchain is at least the version `ci.yml`
 pins — an older one makes `govulncheck` report standard-library CVEs the
-released image never has (the Containerfile tracks `golang:1.26-alpine`).
+released image never has (the Containerfile tracks `golang:1.27-alpine`).
 
 **A step that cannot run is SKIPPED, never PASSED.** Silent skips are exactly
 what makes a green run misleading, so skipped steps are listed separately and

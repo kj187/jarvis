@@ -131,7 +131,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # ratchet:actions/setup-go@v7.0.0
         with:
-          go-version: '1.26.8'
+          go-version: '1.27.1'
           cache-dependency-path: backend/go.sum
 
       - name: Download dependencies
@@ -199,7 +199,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # ratchet:actions/setup-go@v7.0.0
         with:
-          go-version: '1.26.8'
+          go-version: '1.27.1'
           cache-dependency-path: backend/go.sum
 
       - name: Run govulncheck
@@ -229,7 +229,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # ratchet:actions/setup-go@v7.0.0
         with:
-          go-version: '1.26.8'
+          go-version: '1.27.1'
           cache-dependency-path: backend/go.sum
 
       - name: Run fuzz targets (short)
@@ -294,7 +294,7 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # ratchet:actions/setup-node@v7.0.0
         with:
-          node-version: '22'
+          node-version: '26'
 
       - name: Install dependencies
         run: pnpm install --ignore-scripts
@@ -441,7 +441,7 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # ratchet:actions/setup-node@v7.0.0
         with:
-          node-version: '22'
+          node-version: '26'
 
       - name: Build and check SBOM
         run: |

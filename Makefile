@@ -203,7 +203,7 @@ diagrams: ## Render all Mermaid sources as light/dark SVG pairs in docs/assets/
 # --user 0: rootless podman maps container root to the host user, so
 # node_modules/ and .vitepress/dist/ land with the correct ownership.
 WEBSITE_OPTS  = --rm --user 0 -v "$(CURDIR):/repo:z" -v jarvis_website_pnpmstore:/pnpm-store -w /repo/website
-WEBSITE_IMAGE = node:22-alpine
+WEBSITE_IMAGE = node:26-alpine
 WEBSITE_SETUP = apk add --no-cache git >/dev/null && git config --global --add safe.directory /repo && npm install -g pnpm@11.9.0 --prefix /usr/local >/dev/null && pnpm config set store-dir /pnpm-store && pnpm install
 
 website: ## Build the docs website (output: website/.vitepress/dist)
