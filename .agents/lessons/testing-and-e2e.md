@@ -60,12 +60,20 @@ runs `-parallel 2`.
 deadline exceeded` kept recurring with `-parallel 2`, at full speed (~53k
 execs/s, nothing stalled) and exactly at the `-fuzztime 20s` expiry. It is a
 Go toolchain race between the coordinator's `-fuzztime` deadline and error
-suppression, golang/go#75804 (open for 1.26.8, fix in CL 804900 for 1.27).
+suppression, golang/go#75804 (reported for Go 1.25/1.26; fix CL 804900 is on the
+1.27 branch, whether the pinned patch version contains it is not verified).
 `internal/fuzz` creates the deadline context only for a duration
-(`opts.Timeout > 0`), so the CI step and `make fuzz-backend` use an execution
-count (`-fuzztime 150000x`), bounded against real hangs by `-timeout 3m` and
-the job's `timeout-minutes`. Never answer it with `continue-on-error` or a
-retry loop; once on Go 1.27 a duration is safe again.
+(`opts.Timeout > 0`), so the CI step and `make fuzz-backend` use per-target
+execution counts (db 150000x, history 100000x, config 1000000x, api 300000x
+each), roughly the former 20s depth. The total count is split across workers
+(`fuzz.go` Limit/Parallel). `go test -timeout` does not bound the fuzzing
+phase (seed phase only), so a real hang is stopped by the job's
+`timeout-minutes: 15` alone. Measured locally with `FUZZTIME=1000000x`
+(final-interval rate, whole run): db 10.8k/s (17.6s), history 6.6k/s (16.3s),
+config 68k/s (9.4s), FuzzValidateSilenceMatchers 66k/s (24.5s),
+FuzzSanitizeAMMessage 12.1k/s (21.9s); CI runners were slower (db ~7k/s,
+history ~4k/s, config ~53k/s). Never answer it with `continue-on-error` or a
+retry loop; go back to a duration only with a Go release-changelog entry for the fix.
 
 ---
 

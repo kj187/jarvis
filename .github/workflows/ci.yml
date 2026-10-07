@@ -236,18 +236,22 @@ jobs:
         # -fuzztime is an execution count (Nx), not a duration: with a time
         # budget Go's coordinator races its own deadline against the worker RPC
         # and can fail a clean run with "context deadline exceeded" exactly at
-        # expiry (golang/go#75804, open for Go 1.26.8; fix in CL 804900 is
-        # scheduled for 1.27). internal/fuzz only creates that deadline context
-        # when a duration is set, so a count has nothing to race. -timeout and
-        # the job timeout still bound a real hang. -parallel=2 caps the worker
-        # processes per target so a shared runner is not oversubscribed. The
-        # targets run one after another on purpose (never in parallel).
+        # expiry (golang/go#75804; reported for Go 1.25/1.26, fix CL 804900 is
+        # on the 1.27 branch; whether the pinned patch version has it is not
+        # verified, hence the count). internal/fuzz only creates that deadline
+        # context when a duration is set, so a count has nothing to race. Counts
+        # are per target to keep roughly the former 20s depth. A real hang is
+        # bounded only by the job's timeout-minutes: go test -timeout covers the
+        # seed phase, not the fuzzing phase, so it is not set. -parallel=2 caps
+        # the worker processes per target so a shared runner is not
+        # oversubscribed. The targets run one after another on purpose (never in
+        # parallel).
         run: |
-          go test ./internal/db -run '^$' -fuzz '^FuzzRedactDSN$' -fuzztime 150000x -parallel 2 -timeout 3m
-          go test ./internal/history -run '^$' -fuzz '^FuzzParseNullableTimeString$' -fuzztime 150000x -parallel 2 -timeout 3m
-          go test ./internal/config -run '^$' -fuzz '^FuzzParseSecretKey$' -fuzztime 150000x -parallel 2 -timeout 3m
-          go test ./internal/api -run '^$' -fuzz '^FuzzValidateSilenceMatchers$' -fuzztime 150000x -parallel 2 -timeout 3m
-          go test ./internal/api -run '^$' -fuzz '^FuzzSanitizeAMMessage$' -fuzztime 150000x -parallel 2 -timeout 3m
+          go test ./internal/db -run '^$' -fuzz '^FuzzRedactDSN$' -fuzztime 150000x -parallel 2
+          go test ./internal/history -run '^$' -fuzz '^FuzzParseNullableTimeString$' -fuzztime 100000x -parallel 2
+          go test ./internal/config -run '^$' -fuzz '^FuzzParseSecretKey$' -fuzztime 1000000x -parallel 2
+          go test ./internal/api -run '^$' -fuzz '^FuzzValidateSilenceMatchers$' -fuzztime 300000x -parallel 2
+          go test ./internal/api -run '^$' -fuzz '^FuzzSanitizeAMMessage$' -fuzztime 300000x -parallel 2
 
   # Aggregator: keeps the required check name "Backend". `if: always()` makes it
   # run (and fail) when a part failed or was cancelled; a skipped or missing

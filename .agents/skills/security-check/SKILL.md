@@ -19,7 +19,7 @@ govulncheck ./...       # dependencies against the Go Vulnerability DB (CI only 
 golangci-lint run       # linter suite incl. gosec, errcheck, bodyclose, noctx (.golangci.yml)
 go mod verify           # module checksums against go.sum
 go test -race ./...     # data races
-make fuzz-backend       # native fuzzing, FUZZTIME=30s per target; crash inputs land in
+make fuzz-backend       # native fuzzing, per-target execution counts, FUZZTIME= overrides; crash inputs land in
                         # internal/<pkg>/testdata/fuzz/ and run as seeds in every `go test`
 cd ../frontend && pnpm audit
 

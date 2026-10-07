@@ -110,16 +110,16 @@ test-all: test-backend test-frontend-unit test-frontend helm-lint helm-test ## R
 test-backend: ## Backend: go test -race ./...
 	cd backend && go test -v -race ./...
 
-# Execution count (Nx), not a duration: a time budget can fail a clean run with
-# "context deadline exceeded" (golang/go#75804). A duration still works: FUZZTIME=5m.
-FUZZTIME ?= 150000x
+# Execution counts (Nx) per target, not a duration: a time budget can fail a clean
+# run with "context deadline exceeded" (golang/go#75804). Same counts as CI.
+# FUZZTIME=<count|duration> overrides all targets (e.g. FUZZTIME=2000000x or 5m).
 
-fuzz-backend: ## Backend: run all Go native fuzz targets (FUZZTIME=150000x per target)
-	cd backend && go test ./internal/db -run '^$$' -fuzz '^FuzzRedactDSN$$' -fuzztime $(FUZZTIME)
-	cd backend && go test ./internal/history -run '^$$' -fuzz '^FuzzParseNullableTimeString$$' -fuzztime $(FUZZTIME)
-	cd backend && go test ./internal/config -run '^$$' -fuzz '^FuzzParseSecretKey$$' -fuzztime $(FUZZTIME)
-	cd backend && go test ./internal/api -run '^$$' -fuzz '^FuzzValidateSilenceMatchers$$' -fuzztime $(FUZZTIME)
-	cd backend && go test ./internal/api -run '^$$' -fuzz '^FuzzSanitizeAMMessage$$' -fuzztime $(FUZZTIME)
+fuzz-backend: ## Backend: run all Go native fuzz targets (per-target execution counts; FUZZTIME= overrides)
+	cd backend && go test ./internal/db -run '^$$' -fuzz '^FuzzRedactDSN$$' -fuzztime $(or $(FUZZTIME),150000x)
+	cd backend && go test ./internal/history -run '^$$' -fuzz '^FuzzParseNullableTimeString$$' -fuzztime $(or $(FUZZTIME),100000x)
+	cd backend && go test ./internal/config -run '^$$' -fuzz '^FuzzParseSecretKey$$' -fuzztime $(or $(FUZZTIME),1000000x)
+	cd backend && go test ./internal/api -run '^$$' -fuzz '^FuzzValidateSilenceMatchers$$' -fuzztime $(or $(FUZZTIME),300000x)
+	cd backend && go test ./internal/api -run '^$$' -fuzz '^FuzzSanitizeAMMessage$$' -fuzztime $(or $(FUZZTIME),300000x)
 
 test-frontend: ## Frontend: functional E2E tests across all auth modes
 	$(E2E_RUN) test none
