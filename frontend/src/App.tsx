@@ -48,9 +48,12 @@ export default function App() {
     return <SetupPage />
   }
 
-  // The auth state could not be read (backend unreachable or 5xx): say so and
-  // offer Retry instead of showing a login screen to someone who may be signed in.
-  if (authError && !isAuthenticated) {
+  // The auth state could not be read (backend unreachable or 5xx). Never show a
+  // login screen to someone who may be signed in: block the page with an error and
+  // Retry only when nothing is readable without a login (full_protect, or the mode
+  // is not even known yet); otherwise the app renders and a banner explains.
+  const authUnknown = authError && !isAuthenticated
+  if (authUnknown && (providerInfo === null || providerInfo.authMode === 'full_protect')) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div role="alert" data-testid="auth-error" className="w-full max-w-sm rounded-surface border border-border bg-card p-8 space-y-4 text-center">
@@ -76,6 +79,18 @@ export default function App() {
   return (
     <div className="min-h-screen bg-background">
       {providerInfo?.mode === 'none' && <NoAuthNotice />}
+      {authUnknown && (
+        <div
+          role="status"
+          data-testid="auth-unavailable-banner"
+          className="mx-4 mt-2 flex items-center gap-3 rounded-control border border-warning-edge bg-warning-soft px-3 py-1.5 text-xs text-warning-fg"
+        >
+          <span>Sign-in state could not be loaded; you may appear signed out. Alerts stay readable.</span>
+          <Button size="sm" variant="outline" onClick={() => void hydrate()} disabled={isLoading}>
+            Retry
+          </Button>
+        </div>
+      )}
       {!isFullscreen && <Header />}
       <main className={isFullscreen ? '' : 'py-4'}>
         {activePage === 'silences' ? <SilencesPage /> : <AlertsPage />}
