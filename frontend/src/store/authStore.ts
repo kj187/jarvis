@@ -28,6 +28,9 @@ interface AuthState {
   expireSession: () => void
 }
 
+let hydrateInFlight: Promise<void> | null = null
+let rehydrateTimer: ReturnType<typeof setTimeout> | null = null
+
 let pendingLogin: { promise: Promise<boolean>; resolve: (ok: boolean) => void } | null = null
 
 function settleLogin(ok: boolean): void {
@@ -45,28 +48,48 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   sessionExpired: false,
   loginPromptOpen: false,
 
-  hydrate: async () => {
+  hydrate: () => {
+    // One retry chain at a time: a manual Retry while a chain runs joins it, and a
+    // pending scheduled re-hydrate is replaced by the new run.
+    if (hydrateInFlight) return hydrateInFlight
+    if (rehydrateTimer !== null) {
+      clearTimeout(rehydrateTimer)
+      rehydrateTimer = null
+    }
     set({ isLoading: true })
     const attempt = async (retries: number): Promise<void> => {
       try {
-        const [providerInfo, user] = await Promise.all([fetchAuthInfo(), fetchAuthMe()])
+        // Settled separately: the provider info (and so the auth mode) is still
+        // known when only /auth/me is unavailable.
+        const [infoResult, meResult] = await Promise.allSettled([fetchAuthInfo(), fetchAuthMe()])
+        if (infoResult.status === 'rejected') throw infoResult.reason
+        const providerInfo = infoResult.value
+        set({ providerInfo })
         if (providerInfo.mode === 'internal' && providerInfo.setupRequired) {
-          set({ providerInfo, setupRequired: true, isLoading: false, authError: false })
+          set({ setupRequired: true, isLoading: false, authError: false })
           return
         }
-        set({ providerInfo, user, isAuthenticated: user !== null, isLoading: false, authError: false })
+        if (meResult.status === 'rejected') throw meResult.reason
+        const user = meResult.value
+        set({ user, isAuthenticated: user !== null, isLoading: false, authError: false })
       } catch {
         if (retries > 0) {
           await new Promise((r) => setTimeout(r, 2000))
           return attempt(retries - 1)
         }
         set({ isLoading: false, authError: true })
-        // Backend unreachable after all retries — schedule one final attempt so the
-        // login button appears without a manual reload once the backend comes up.
-        setTimeout(() => get().hydrate(), 5000)
+        // Backend unreachable after all retries: one more attempt later, so the
+        // page recovers without a manual reload once the backend comes up.
+        rehydrateTimer = setTimeout(() => {
+          rehydrateTimer = null
+          void get().hydrate()
+        }, 5000)
       }
     }
-    await attempt(5)
+    hydrateInFlight = attempt(5).finally(() => {
+      hydrateInFlight = null
+    })
+    return hydrateInFlight
   },
 
   setUser: (user) => {
