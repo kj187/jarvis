@@ -38,7 +38,8 @@ const (
 	// (partition, dropped node) leaves our own heartbeat unacknowledged, and
 	// then the kernel retransmits for minutes before giving up. So every
 	// round-trip on the elector connection — dial, heartbeat, try-lock, close —
-	// carries its own deadline of one retry interval (opTimeout). Worst case
+	// carries its own deadline of one retry interval (dial: ConnectTimeout;
+	// heartbeat and try-lock: a context.WithTimeout per call). Worst case
 	// until a cut-off leader steps down: one heartbeat interval + one timeout
 	// = 10s.
 )
@@ -150,6 +151,16 @@ func (e *PGElector) Run(ctx context.Context) {
 // keepalives, so a hard node failure is detected within a bounded time
 // instead of the OS-default keepalive timeout (D2).
 func (e *PGElector) dial(ctx context.Context) (*pgx.Conn, error) {
+	cfg, err := e.connConfig()
+	if err != nil {
+		return nil, err
+	}
+	return pgx.ConnectConfig(ctx, cfg)
+}
+
+// connConfig builds the elector's connection config: connect deadline and
+// aggressive keepalives on top of the DSN.
+func (e *PGElector) connConfig() (*pgx.ConnConfig, error) {
 	cfg, err := pgx.ParseConfig(e.dsn)
 	if err != nil {
 		return nil, fmt.Errorf("parse dsn: %w", err)
@@ -168,7 +179,7 @@ func (e *PGElector) dial(ctx context.Context) (*pgx.Conn, error) {
 		},
 	}
 	cfg.DialFunc = dialer.DialContext
-	return pgx.ConnectConfig(ctx, cfg)
+	return cfg, nil
 }
 
 // holdLock owns conn for its lifetime: while follower, it retries
@@ -211,7 +222,10 @@ func (e *PGElector) holdLock(ctx context.Context, conn *pgx.Conn) {
 			}
 		} else {
 			var acquired bool
-			if err := conn.QueryRow(ctx, `SELECT pg_try_advisory_lock($1, $2)`, e.lockClassID, e.lockID).Scan(&acquired); err != nil {
+			opCtx, cancel := context.WithTimeout(ctx, e.retryInterval)
+			err := conn.QueryRow(opCtx, `SELECT pg_try_advisory_lock($1, $2)`, e.lockClassID, e.lockID).Scan(&acquired)
+			cancel()
+			if err != nil {
 				e.logger.Warn("leader election: try-lock query failed, reconnecting", "err", err)
 				return
 			}

@@ -75,8 +75,8 @@ make helm-lint                     # helm lint only
 make helm-test                     # helm unittest only
 
 # ── Docs website (VitePress, website/) ───────────────────────
-cd website && pnpm audit --audit-level=high   # known-vulnerability gate (blocks the deploy in docs.yml)
-cd website && pnpm test             # Media wiring/assets, release-version consistency, every docs/*.md in PAGES (runs in docs.yml after merge to main)
+cd website && pnpm audit --audit-level=high   # known-vulnerability gate (blocks the build in docs.yml, on PRs and on main)
+cd website && pnpm test             # Media wiring/assets, release-version consistency, every docs/*.md in PAGES (runs in docs.yml on PRs touching docs/website and after merge to main)
 make website                       # build to website/.vitepress/dist — fails on dead internal links
 make website-dev                   # hot-reload preview on http://localhost:5174/jarvis/
                                    # .agents/skills/website/SKILL.md

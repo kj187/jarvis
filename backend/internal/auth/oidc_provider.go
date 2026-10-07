@@ -102,11 +102,6 @@ func (p *OIDCProvider) Exchange(ctx context.Context, code, codeVerifier, nonce s
 	// data. The claim names are enough to debug a missing groups claim.
 	slog.Debug("oidc id_token received", "claim_names", sortedKeys(rawClaims))
 
-	// An unverified e-mail is attacker-chosen; it can become the username.
-	if v, present := rawClaims["email_verified"]; present && !emailVerified(v) {
-		return nil, errors.New("id_token email is not verified")
-	}
-
 	var claims struct {
 		Sub               string `json:"sub"`
 		PreferredUsername string `json:"preferred_username"`
@@ -115,6 +110,12 @@ func (p *OIDCProvider) Exchange(ctx context.Context, code, codeVerifier, nonce s
 	}
 	if err := idToken.Claims(&claims); err != nil {
 		return nil, fmt.Errorf("claims parse: %w", err)
+	}
+
+	// An unverified e-mail is attacker-chosen: it is dropped, so it can neither
+	// become the username nor be stored. The login itself stands on `sub`.
+	if v, present := rawClaims["email_verified"]; present && !emailVerified(v) {
+		claims.Email = ""
 	}
 
 	username := claims.PreferredUsername
@@ -144,7 +145,7 @@ func (p *OIDCProvider) Exchange(ctx context.Context, code, codeVerifier, nonce s
 }
 
 func (p *OIDCProvider) Authenticate(_ context.Context, _, _ string) (*User, error) {
-	return nil, errors.New("authenticate not supported in oidc mode")
+	return nil, ErrLoginUnsupported
 }
 
 func (p *OIDCProvider) Info() ProviderInfo {
@@ -154,7 +155,7 @@ func (p *OIDCProvider) Info() ProviderInfo {
 // emailVerified reports whether a present email_verified claim asserts a
 // verified address. Providers send a bool, Cognito sends the strings
 // "true"/"false"; anything else is treated as not verified. (An absent claim is
-// the caller's case: the IdP simply does not assert it.)
+// the caller's case: the IdP simply does not assert it, the e-mail is kept.)
 func emailVerified(v any) bool {
 	switch x := v.(type) {
 	case bool:

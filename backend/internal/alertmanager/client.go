@@ -12,10 +12,12 @@ import (
 	"time"
 )
 
+// maxResponseBytes caps a successful Alertmanager response; far above any
+// realistic alert list, but bounded so a misbehaving upstream cannot OOM Jarvis.
+// A variable only so tests can lower it; never reassigned in production code.
+var maxResponseBytes int64 = 128 << 20
+
 const (
-	// maxResponseBytes caps a successful Alertmanager response; far above any
-	// realistic alert list, but bounded so a misbehaving upstream cannot OOM Jarvis.
-	maxResponseBytes = 128 << 20
 	// maxErrorBodyBytes caps the upstream error body kept in an AMError.
 	maxErrorBodyBytes = 64 << 10
 )

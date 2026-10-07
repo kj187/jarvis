@@ -80,6 +80,14 @@ func (p *blackholeProxy) pipe(dst, src net.Conn) {
 	}
 }
 
+// Accepted returns how many client connections the proxy has accepted so far
+// (a redial by the elector shows up as an increment).
+func (p *blackholeProxy) Accepted() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return len(p.upstreams)
+}
+
 func (p *blackholeProxy) isBlackholed() bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()

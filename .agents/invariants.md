@@ -88,8 +88,9 @@ time. Never write `$1` literals directly in query strings.
 
 **CORS/WS Origin**: No wildcard `*`. `JARVIS_ALLOWED_ORIGINS` is used as
 allow-list for HTTP CORS, the WebSocket upgrade and the `originGuard` on
-state-changing methods (`internal/api/origin.go`, which also accepts the
-server's own host).
+state-changing methods. Upgrade and guard share one predicate,
+`originpolicy.Allowed` (`internal/originpolicy`): listed, or the request's own
+host (http/https only, http-vs-https not compared); never keep a second copy that can drift.
 
 ### 12.
 
