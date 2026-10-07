@@ -100,7 +100,7 @@ cross-origin request rejected`. See [Running behind a proxy](reverse-proxy.md) â
 the fix is the same as for dead WebSockets: set the browser's URL in
 `JARVIS_ALLOWED_ORIGINS`.
 
-**The `jarvis_snapshot_stale` metric fires on leader health too.** This metric
+**The `jarvis_snapshot_stale` metric now also fires on the leader.** This metric
 (and the `JarvisSnapshotStale` alert) now indicates staleness when any
 configured Alertmanager cluster is unreachable â€” not only on followers. If you
 have an alert rule for this, expect it to fire during upstream outages (by
