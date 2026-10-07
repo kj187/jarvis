@@ -31,7 +31,7 @@ Every command below works with Docker too; replace `podman` with `docker`.
 
 ## Tech Stack
 
-- **Backend**: Go 1.26 · Echo v4 · SQLite / PostgreSQL (`pgx/v5`, CGO-free) · gorilla/websocket
+- **Backend**: Go 1.27 · Echo v4 · SQLite / PostgreSQL (`pgx/v5`, CGO-free) · gorilla/websocket
 - **Frontend**: React 19 · TypeScript 6 · Vite 8 · Tailwind CSS v4 · Zustand v5 · TanStack Query v5
 - **Infrastructure**: Podman multi-stage build · distroless/static-debian12
 

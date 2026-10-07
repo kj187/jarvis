@@ -27,7 +27,7 @@ cd website && pnpm test   # helper tests (media wiring, PAGES completeness)
 cd website && pnpm audit --audit-level=high   # also a blocking step in docs.yml (PRs and main)
 ```
 
-Both `make` targets run containerized (`node:22-alpine`); the container flags
+Both `make` targets run containerized (`node:26-alpine`); the container flags
 and why they are needed are commented in the `Makefile`. Adding a page or
 changing `pages.mjs`/`config.mts` needs a `make website-dev` restart.
 

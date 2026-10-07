@@ -116,7 +116,7 @@ section "Backend"
 
 # A local toolchain older than the one CI pins makes govulncheck report
 # standard-library CVEs that the released image never has (the Containerfile
-# tracks golang:1.26-alpine). Checking it explicitly turns a confusing
+# tracks golang:1.27-alpine). Checking it explicitly turns a confusing
 # govulncheck failure into an obvious "your Go is behind".
 toolchain_matches_ci() {
   local want have_v
