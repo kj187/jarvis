@@ -60,6 +60,8 @@ export function startSsoLogin(loginUrl: string, onSettled: () => void): void {
     try {
       const user = await fetchAuthMe()
       if (user !== null || popup.closed) finish(user)
+    } catch {
+      // auth/me unavailable: unknown state, keep waiting for the next check
     } finally {
       checking = false
     }

@@ -23,6 +23,7 @@ import type {
   ResolvedAlertsPage,
   LabelMatcher,
 } from '@/types'
+import { readAuthMe } from '@/lib/authMe'
 import { LoginError } from '@/lib/loginError'
 
 const BASE = '/api/v1'
@@ -288,10 +289,9 @@ export function fetchAuthInfo(): Promise<ProviderInfo> {
     })
 }
 
+/** null: signed out. Throws AuthUnavailableError when the server cannot tell (5xx, network). */
 export function fetchAuthMe(): Promise<AuthUser | null> {
-  return fetch('/auth/me', { headers: { Accept: 'application/json' } })
-    .then((r) => (r.ok ? (r.json() as Promise<AuthUser>) : null))
-    .catch(() => null)
+  return readAuthMe<AuthUser>((input, init) => fetch(input, init))
 }
 
 export function postLogin(username: string, password: string): Promise<{ user: AuthUser }> {

@@ -3,6 +3,7 @@ import { Header } from '@/components/layout/Header'
 import { AlertsPage } from '@/components/alerts/AlertsPage'
 import { SilencesPage } from '@/components/silences/SilencesPage'
 import { SetupPage } from '@/components/auth/SetupPage'
+import { Button } from '@/components/ui/button'
 import { LoginPage } from '@/components/auth/LoginPage'
 import { LoginPrompt } from '@/components/auth/LoginPrompt'
 import { NoAuthNotice } from '@/components/auth/NoAuthNotice'
@@ -28,6 +29,8 @@ export default function App() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
   const isLoading = useAuthStore((s) => s.isLoading)
   const sessionExpired = useAuthStore((s) => s.sessionExpired)
+  const authError = useAuthStore((s) => s.authError)
+  const hydrate = useAuthStore((s) => s.hydrate)
 
   useLayoutEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
@@ -43,6 +46,24 @@ export default function App() {
   // First-run setup page: backend redirects to /setup in prod; setupRequired flag handles dev mode.
   if (setupRequired || window.location.pathname === '/setup') {
     return <SetupPage />
+  }
+
+  // The auth state could not be read (backend unreachable or 5xx): say so and
+  // offer Retry instead of showing a login screen to someone who may be signed in.
+  if (authError && !isAuthenticated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div role="alert" data-testid="auth-error" className="w-full max-w-sm rounded-surface border border-border bg-card p-8 space-y-4 text-center">
+          <h1 className="text-xl font-bold tracking-tight">Jarvis</h1>
+          <p className="text-sm text-muted-foreground">
+            The sign-in state could not be loaded. The server may be temporarily unavailable.
+          </p>
+          <Button onClick={() => void hydrate()} disabled={isLoading}>
+            {isLoading ? 'Retrying…' : 'Retry'}
+          </Button>
+        </div>
+      </div>
+    )
   }
 
   // full_protect: block all content until authenticated. A session that expired

@@ -7,6 +7,8 @@ interface AuthState {
   providerInfo: ProviderInfo | null
   isAuthenticated: boolean
   isLoading: boolean
+  /** The auth state could not be determined (backend unreachable or 5xx) — show Retry, not the login screen. */
+  authError: boolean
   setupRequired: boolean
   /** True once a session that was valid in this tab has since expired server-side. */
   sessionExpired: boolean
@@ -38,6 +40,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   providerInfo: null,
   isAuthenticated: false,
   isLoading: true,
+  authError: false,
   setupRequired: false,
   sessionExpired: false,
   loginPromptOpen: false,
@@ -48,16 +51,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       try {
         const [providerInfo, user] = await Promise.all([fetchAuthInfo(), fetchAuthMe()])
         if (providerInfo.mode === 'internal' && providerInfo.setupRequired) {
-          set({ providerInfo, setupRequired: true, isLoading: false })
+          set({ providerInfo, setupRequired: true, isLoading: false, authError: false })
           return
         }
-        set({ providerInfo, user, isAuthenticated: user !== null, isLoading: false })
+        set({ providerInfo, user, isAuthenticated: user !== null, isLoading: false, authError: false })
       } catch {
         if (retries > 0) {
           await new Promise((r) => setTimeout(r, 2000))
           return attempt(retries - 1)
         }
-        set({ isLoading: false })
+        set({ isLoading: false, authError: true })
         // Backend unreachable after all retries — schedule one final attempt so the
         // login button appears without a manual reload once the backend comes up.
         setTimeout(() => get().hydrate(), 5000)
