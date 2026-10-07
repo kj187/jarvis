@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { fetchSilences, fetchSilenceEvents, upsertSilence, deleteSilence, triggerPoll, type UpsertSilenceBody } from '@/api/client'
+import { fetchSilences, fetchSilenceEvents, upsertSilence, deleteSilence, type UpsertSilenceBody } from '@/api/client'
 import { buildAckSilenceBody, buildExtendSilenceBody, buildGroupAckSilenceBody } from '@/lib/alertUtils'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { useAuthStore } from '@/store/authStore'
@@ -44,7 +44,6 @@ export function useUpsertSilence() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['silences'] })
       qc.invalidateQueries({ queryKey: ['silence-events'] })
-      triggerPoll().catch(() => {})
     },
   })
 }
@@ -52,7 +51,7 @@ export function useUpsertSilence() {
 /**
  * One-click Fast-Silence: creates a short-lived exact-match silence for a
  * single alert for the caller-supplied `durationMinutes`. Thin wrapper over
- * `useUpsertSilence` — reuses its cache invalidation + poll trigger.
+ * `useUpsertSilence` — reuses its cache invalidation.
  */
 export function useAckAlert() {
   const upsert = useUpsertSilence()
@@ -102,7 +101,7 @@ export function useGroupAckAlert() {
  * `extraMinutes` (see `buildExtendSilenceBody`). Several silences (a group of
  * covering silences) are updated together; like `useGroupAckAlert` it wraps the
  * fan-out in its OWN mutation so `isPending` means "any still in flight".
- * Reuses `useUpsertSilence`'s cache invalidation + poll trigger per write.
+ * Reuses `useUpsertSilence`'s cache invalidation per write.
  */
 export function useExtendSilences() {
   const upsert = useUpsertSilence()
@@ -136,7 +135,6 @@ export function useDeleteSilence() {
     onSuccess: (_, { fingerprint }) => {
       qc.invalidateQueries({ queryKey: ['silences'] })
       if (fingerprint) qc.invalidateQueries({ queryKey: ['silence-events', fingerprint] })
-      triggerPoll().catch(() => {})
     },
   })
 }

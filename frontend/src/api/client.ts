@@ -273,12 +273,6 @@ export function deleteSilence(id: string, cluster: string, params?: { fingerprin
   return request<void>(`/silences/${id}?${q.toString()}`, { method: 'DELETE' })
 }
 
-// ── Poll trigger ─────────────────────────────────────────────────────────────
-
-export function triggerPoll(): Promise<void> {
-  return request<void>('/poll', { method: 'POST' })
-}
-
 // ── Auth ─────────────────────────────────────────────────────────────────────
 
 export function fetchAuthInfo(): Promise<ProviderInfo> {
