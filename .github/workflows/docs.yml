@@ -2,11 +2,26 @@ name: Docs Website
 
 # Builds the VitePress site in website/ (content is synced from the repo's
 # own markdown at build time) and deploys it to GitHub Pages.
+# Pull requests run the same audit, test and build (no Pages configure, upload
+# or deploy), so docs/website changes and Dependabot bumps get a CI result.
 # Requires "Settings → Pages → Source: GitHub Actions" to be enabled once.
 
 on:
   push:
     branches: [main]
+    paths:
+      - 'docs/**'
+      - 'website/**'
+      - 'README.md'
+      - 'CHANGELOG.md'
+      - 'CONTRIBUTING.md'
+      - 'SECURITY.md'
+      - 'MAINTAINERS.md'
+      - 'CODE_OF_CONDUCT.md'
+      - 'charts/jarvis/README.md'
+      - 'charts/jarvis/CHANGELOG.md'
+      - '.github/workflows/docs.yml'
+  pull_request:
     paths:
       - 'docs/**'
       - 'website/**'
@@ -25,8 +40,9 @@ permissions:
   contents: read
 
 concurrency:
-  group: pages
-  cancel-in-progress: false
+  # PR runs get their own group so they never queue behind or cancel a deploy.
+  group: ${{ github.event_name == 'pull_request' && format('docs-pr-{0}', github.ref) || 'pages' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:
@@ -67,9 +83,11 @@ jobs:
         run: pnpm build
 
       - name: Configure Pages
+        if: github.event_name != 'pull_request'
         uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # ratchet:actions/configure-pages@v6.0.0
 
       - name: Upload artifact
+        if: github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # ratchet:actions/upload-pages-artifact@v5.0.0
         with:
           path: website/.vitepress/dist
@@ -77,6 +95,7 @@ jobs:
   deploy:
     name: Deploy
     needs: build
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       pages: write
