@@ -253,26 +253,35 @@ func TestFreshness_FreshLeaderInheritsLastSuccessFromSnapshot(t *testing.T) {
 	}
 }
 
-// Promotion to leader must derive jarvis_snapshot_stale from the real
-// freshness state: a cluster that is already stale keeps the gauge at 1.
-func TestOnLeadershipChange_PromotionKeepsStaleGauge(t *testing.T) {
+// Promotion must leave jarvis_snapshot_stale untouched: the elector already
+// reports leader at callback time, so ClusterFreshness would read the (still
+// empty) leader-side lastSuccess and misreport a long-running follower as
+// stale. The follower value came from real snapshots; the first leader poll
+// recomputes it.
+func TestOnLeadershipChange_PromotionLeavesFreshGaugeUntouched(t *testing.T) {
 	am := newFakeAM(t, nil)
 	rec, clock := newFreshnessRecorder(t, 10*time.Second, am)
-	clock.advance(10 * time.Minute) // cluster "a" never answered since start
-
-	rec.onLeadershipChange(true)
-	if v := testutil.ToFloat64(rec.metrics.SnapshotStale); v != 1 {
-		t.Errorf("jarvis_snapshot_stale = %v after promotion with a stale cluster, want 1", v)
+	rec.followerSnapshots = map[string]followerSnapshotEntry{
+		"a": {takenAt: clock.t.Add(10 * time.Minute), lastSuccessAt: clock.t.Add(10 * time.Minute)},
 	}
-}
-
-func TestOnLeadershipChange_PromotionClearsGaugeWhenFresh(t *testing.T) {
-	am := newFakeAM(t, nil)
-	rec, _ := newFreshnessRecorder(t, 10*time.Second, am)
-	rec.metrics.SnapshotStale.Set(1) // left over from follower time
+	clock.advance(10 * time.Minute) // follower runs far longer than the stale threshold
+	rec.metrics.SnapshotStale.Set(0)
+	rec.elector = &fakeElector{leader: true} // already leader when the callback fires
 
 	rec.onLeadershipChange(true)
 	if v := testutil.ToFloat64(rec.metrics.SnapshotStale); v != 0 {
-		t.Errorf("jarvis_snapshot_stale = %v after promotion with fresh clusters, want 0", v)
+		t.Errorf("jarvis_snapshot_stale = %v after promotion of a follower with fresh snapshots, want 0", v)
+	}
+}
+
+func TestOnLeadershipChange_PromotionLeavesStaleGaugeUntouched(t *testing.T) {
+	am := newFakeAM(t, nil)
+	rec, _ := newFreshnessRecorder(t, 10*time.Second, am)
+	rec.metrics.SnapshotStale.Set(1) // left over from follower time
+	rec.elector = &fakeElector{leader: true}
+
+	rec.onLeadershipChange(true)
+	if v := testutil.ToFloat64(rec.metrics.SnapshotStale); v != 1 {
+		t.Errorf("jarvis_snapshot_stale = %v after promotion, want it unchanged at 1 until the first leader poll", v)
 	}
 }
