@@ -24,7 +24,7 @@ The only authored page is `website/index.md` (home).
 make website        # build to website/.vitepress/dist (fails on dead internal links)
 make website-dev    # hot-reload preview on http://localhost:5174/jarvis/
 cd website && pnpm test   # helper tests (media wiring, PAGES completeness)
-cd website && pnpm audit --audit-level=high   # also a blocking step in docs.yml
+cd website && pnpm audit --audit-level=high   # also a blocking step in docs.yml (PRs and main)
 ```
 
 Both `make` targets run containerized (`node:22-alpine`); the container flags
@@ -54,7 +54,7 @@ changing `pages.mjs`/`config.mts` needs a `make website-dev` restart.
 4. `make website` — dead internal links fail the build.
 
 `website/scripts/pages.test.mjs` fails (in `pnpm test`, run by the Docs Website
-workflow) for a `docs/*.md` file missing from `PAGES`.
+workflow, also on PRs) for a `docs/*.md` file missing from `PAGES`.
 
 ## Redirecting an old route
 

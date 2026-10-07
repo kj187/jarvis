@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
@@ -198,6 +199,10 @@ func (s *Server) getOIDCStart(c echo.Context) error {
 	return c.Redirect(http.StatusFound, s.authProvider.AuthURL(state, nonce, codeChallenge))
 }
 
+// oidcExchangeTimeout bounds the token exchange and ID-token verification, which
+// call out to the IdP (Workflow Rule 5). A var so tests can shorten it.
+var oidcExchangeTimeout = 10 * time.Second
+
 // GET /auth/oidc/callback — handles the OIDC redirect callback.
 func (s *Server) getOIDCCallback(c echo.Context) error {
 	code := c.QueryParam("code")
@@ -223,7 +228,9 @@ func (s *Server) getOIDCCallback(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "state mismatch")
 	}
 
-	u, err := s.authProvider.Exchange(c.Request().Context(), code, codeVerifier, nonce)
+	ctx, cancel := context.WithTimeout(c.Request().Context(), oidcExchangeTimeout)
+	defer cancel()
+	u, err := s.authProvider.Exchange(ctx, code, codeVerifier, nonce)
 	if err != nil {
 		slog.Error("oidc callback exchange failed", "err", err)
 		return echo.NewHTTPError(http.StatusUnauthorized, "authentication failed")

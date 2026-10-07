@@ -4,10 +4,12 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"testing"
+	"time"
 
 	"github.com/labstack/echo/v4"
 
@@ -118,5 +120,54 @@ func TestOIDCLogin_NonceIsFreshPerLogin(t *testing.T) {
 			t.Fatalf("nonce %q was issued twice", idp.authNonce)
 		}
 		seen[idp.authNonce] = true
+	}
+}
+
+// hangingOIDCProvider blocks in Exchange until its context ends, like an IdP
+// token endpoint that never answers.
+type hangingOIDCProvider struct{ recordingOIDCProvider }
+
+func (p *hangingOIDCProvider) Exchange(ctx context.Context, _, _, _ string) (*auth.User, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+// A hanging IdP must not hold the callback open: Exchange runs under a timeout
+// and the browser gets a 401 (Workflow Rule 5).
+func TestOIDCCallback_HangingIdPTimesOutWith401(t *testing.T) {
+	prev := oidcExchangeTimeout
+	oidcExchangeTimeout = 100 * time.Millisecond
+	t.Cleanup(func() { oidcExchangeTimeout = prev })
+
+	srv, _ := newAuthServer(t)
+	srv.authProvider = &hangingOIDCProvider{}
+	e := echo.New()
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/auth/oidc/start", nil)
+	if err := srv.getOIDCStart(e.NewContext(req, rec)); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	var stateCookie *http.Cookie
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == auth.OIDCStateCookieName {
+			stateCookie = c
+		}
+	}
+	state, _, _, _, _ := decodeOIDCState(stateCookie.Value)
+
+	cbReq := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/auth/oidc/callback?code=c&state="+url.QueryEscape(state), nil)
+	cbReq.AddCookie(stateCookie)
+	done := make(chan error, 1)
+	go func() { done <- srv.getOIDCCallback(e.NewContext(cbReq, httptest.NewRecorder())) }()
+
+	select {
+	case err := <-done:
+		var he *echo.HTTPError
+		if !errors.As(err, &he) || he.Code != http.StatusUnauthorized {
+			t.Fatalf("err = %v, want HTTP 401", err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("callback did not return: Exchange has no timeout")
 	}
 }

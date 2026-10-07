@@ -35,7 +35,7 @@ not override CSP.
 
 CORS is configured with a strict origin allowlist (`JARVIS_ALLOWED_ORIGINS`).
 No wildcard `*` is used. WebSocket upgrades validate the `Origin` header
-against the same allowlist. Setting it correctly behind a proxy is described
+by the same rule as state-changing requests (allowlist or this server's own host). Setting it correctly behind a proxy is described
 in [Running behind a proxy](reverse-proxy.md).
 
 **State-changing requests are origin-checked.** `POST`, `PUT`, `PATCH` and
@@ -68,7 +68,7 @@ from the database). Logout bumps `token_version`, which revokes all of the accou
 survives restarts; deleting a user or changing a role takes effect immediately on the pod that handled it and
 within the 30-second per-pod cache on the others. Open WebSocket connections of a revoked session are closed.
 The token is accepted only with `HS256`, a mandatory expiry, and issuer and audience `jarvis`; the OIDC login binds
-the ID token to the login with a `nonce` and refuses an unverified e-mail. See
+the ID token to the login with a `nonce` and does not adopt an unverified e-mail (never used as the username; an address stored earlier is left untouched). See
 [Sessions](authentication-user.md#sessions).
 
 Upgrading to the release that introduced the issuer and audience check signs everyone out once: sessions issued before
