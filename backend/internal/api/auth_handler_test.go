@@ -4,9 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -349,7 +352,11 @@ func postLoginAs(t *testing.T, srv *Server, username, password string) *httptest
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/auth/login", bytes.NewReader(body))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
-	_ = srv.postLogin(echo.New().NewContext(req, rec))
+	e := echo.New()
+	c := e.NewContext(req, rec)
+	if err := srv.postLogin(c); err != nil {
+		e.HTTPErrorHandler(err, c)
+	}
 	return rec
 }
 
@@ -406,5 +413,208 @@ func TestPostLogin_LoginWorksAgainAfterTheWait(t *testing.T) {
 	now = now.Add(time.Hour)
 	if rec := postLoginAs(t, srv, "alice", "correctpassword123!"); rec.Code != http.StatusOK {
 		t.Fatalf("status after the wait = %d, want 200", rec.Code)
+	}
+}
+
+// fakeAuthProvider overrides Authenticate; every other Provider method is the
+// embedded (nil) interface and must not be reached by the login handler.
+type fakeAuthProvider struct {
+	auth.Provider
+	fn func(ctx context.Context, username, password string) (*auth.User, error)
+}
+
+func (f *fakeAuthProvider) Authenticate(ctx context.Context, username, password string) (*auth.User, error) {
+	return f.fn(ctx, username, password)
+}
+
+func TestPostLogin_ConcurrentAttemptsForOneNameAreSerialized(t *testing.T) {
+	srv, _ := newAuthServer(t)
+	started := make(chan struct{})
+	release := make(chan struct{})
+	var mu sync.Mutex
+	calls := 0
+	srv.authProvider = &fakeAuthProvider{fn: func(context.Context, string, string) (*auth.User, error) {
+		mu.Lock()
+		calls++
+		first := calls == 1
+		mu.Unlock()
+		if first {
+			close(started)
+			<-release
+		}
+		return nil, auth.ErrInvalidCredentials
+	}}
+
+	done := make(chan *httptest.ResponseRecorder, 1)
+	go func() { done <- postLoginAs(t, srv, "alice", "wrong-password-1!") }()
+	<-started
+
+	// A second attempt for the same name while the first is still being
+	// checked must not reach the provider.
+	rec := postLoginAs(t, srv, "Alice", "wrong-password-2!")
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("parallel attempt: status = %d, want 429", rec.Code)
+	}
+	if rec.Header().Get("Retry-After") == "" {
+		t.Error("429 without Retry-After")
+	}
+	if strings.Contains(rec.Body.String(), "failed attempts") || !strings.Contains(rec.Body.String(), "already in progress") {
+		t.Errorf("in-flight 429 body = %s, want a message about a login in progress", rec.Body.String())
+	}
+	// Another name is not held up.
+	if other := postLoginAs(t, srv, "bob", "wrong-password-3!"); other.Code != http.StatusUnauthorized {
+		t.Fatalf("other name: status = %d, want 401", other.Code)
+	}
+	close(release)
+	if first := <-done; first.Code != http.StatusUnauthorized {
+		t.Fatalf("first attempt: status = %d, want 401", first.Code)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if calls != 2 { // alice once, bob once
+		t.Fatalf("provider calls = %d, want 2", calls)
+	}
+}
+
+func TestPostLogin_ManyParallelAttemptsAfterTheWaitCheckOnlyOne(t *testing.T) {
+	srv, _ := newAuthServer(t)
+	now := time.Now()
+	var clockMu sync.Mutex
+	srv.loginThrottle.SetClock(func() time.Time { clockMu.Lock(); defer clockMu.Unlock(); return now })
+
+	var mu sync.Mutex
+	calls := 0
+	gate := make(chan struct{})
+	srv.authProvider = &fakeAuthProvider{fn: func(context.Context, string, string) (*auth.User, error) {
+		mu.Lock()
+		calls++
+		mu.Unlock()
+		<-gate
+		return nil, auth.ErrInvalidCredentials
+	}}
+	// Run the counter up so a lock is active, then let it expire.
+	for i := 0; i < 6; i++ {
+		srv.loginThrottle.Fail("alice")
+	}
+	clockMu.Lock()
+	now = now.Add(time.Hour)
+	clockMu.Unlock()
+
+	const n = 20
+	var wg sync.WaitGroup
+	codes := make(chan int, n)
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func() { defer wg.Done(); codes <- postLoginAs(t, srv, "alice", "wrong-password-1!").Code }()
+	}
+	// All but the one holding the in-flight slot answer 429 right away.
+	for i := 0; i < n-1; i++ {
+		if c := <-codes; c != http.StatusTooManyRequests {
+			t.Fatalf("parallel attempt: status = %d, want 429", c)
+		}
+	}
+	close(gate)
+	wg.Wait()
+	mu.Lock()
+	defer mu.Unlock()
+	if calls != 1 {
+		t.Fatalf("provider calls = %d, want 1", calls)
+	}
+}
+
+func TestPostLogin_DatabaseErrorIsNotAFailedAttempt(t *testing.T) {
+	srv, _ := newAuthServer(t)
+	srv.authProvider = &fakeAuthProvider{fn: func(context.Context, string, string) (*auth.User, error) {
+		return nil, errors.New("pq: connection refused to db-host-7:5432")
+	}}
+
+	for i := 0; i < 10; i++ {
+		rec := postLoginAs(t, srv, "alice", "correctpassword123!")
+		if rec.Code == http.StatusTooManyRequests {
+			t.Fatalf("attempt %d: throttled by database errors", i+1)
+		}
+		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("attempt %d: status = %d, want 500", i+1, rec.Code)
+		}
+		if strings.Contains(rec.Body.String(), "db-host-7") || strings.Contains(rec.Body.String(), "pq:") {
+			t.Fatalf("response leaks the error detail: %s", rec.Body.String())
+		}
+	}
+	if w := srv.loginThrottle.Wait("alice"); w != 0 {
+		t.Fatalf("wait after database errors = %v, want 0", w)
+	}
+}
+
+func TestPostLogin_ThrottledResponseDoesNotExtendTheWait(t *testing.T) {
+	srv, store := newAuthServer(t)
+	createTestUser(t, store, "alice", "correctpassword123!", "user")
+	now := time.Now()
+	srv.loginThrottle.SetClock(func() time.Time { return now })
+
+	for i := 0; i < 6; i++ {
+		postLoginAs(t, srv, "alice", "wrong-password-1!")
+	}
+	before := srv.loginThrottle.Wait("alice")
+	if before <= 0 {
+		t.Fatal("expected an active wait after 6 failures")
+	}
+	for i := 0; i < 5; i++ {
+		if rec := postLoginAs(t, srv, "alice", "wrong-password-1!"); rec.Code != http.StatusTooManyRequests {
+			t.Fatalf("status = %d, want 429", rec.Code)
+		}
+	}
+	if after := srv.loginThrottle.Wait("alice"); after != before {
+		t.Fatalf("wait after 429 responses = %v, want unchanged %v", after, before)
+	}
+}
+
+func TestPostLogin_ProvidersWithoutPasswordLoginAnswer401WithoutErrorLogOrCounting(t *testing.T) {
+	providers := map[string]auth.Provider{
+		"none": auth.NoneProvider{},
+		"oidc": &auth.OIDCProvider{},
+	}
+	for name, p := range providers {
+		t.Run(name, func(t *testing.T) {
+			srv, _ := newAuthServer(t)
+			srv.authProvider = p
+			var buf bytes.Buffer
+			prev := slog.Default()
+			slog.SetDefault(slog.New(slog.NewTextHandler(&buf, nil)))
+			t.Cleanup(func() { slog.SetDefault(prev) })
+
+			for i := 0; i < 10; i++ {
+				rec := postLoginAs(t, srv, "alice", "whatever-password-1!")
+				if rec.Code != http.StatusUnauthorized {
+					t.Fatalf("attempt %d: status = %d, want 401", i+1, rec.Code)
+				}
+				if !strings.Contains(rec.Body.String(), "invalid credentials") {
+					t.Fatalf("body = %s, want the generic message", rec.Body.String())
+				}
+			}
+			if buf.Len() != 0 {
+				t.Errorf("anonymous login attempt was logged: %s", buf.String())
+			}
+			if w := srv.loginThrottle.Wait("alice"); w != 0 {
+				t.Errorf("wait = %v, want 0 (not a failed attempt)", w)
+			}
+		})
+	}
+}
+
+func TestPostLogin_PanicInAuthenticateDoesNotLeaveTheNameReserved(t *testing.T) {
+	srv, _ := newAuthServer(t)
+	srv.authProvider = &fakeAuthProvider{fn: func(context.Context, string, string) (*auth.User, error) {
+		panic("boom")
+	}}
+	func() {
+		defer func() { _ = recover() }()
+		postLoginAs(t, srv, "alice", "pw-long-enough-1")
+	}()
+
+	srv.authProvider = &fakeAuthProvider{fn: func(context.Context, string, string) (*auth.User, error) {
+		return nil, auth.ErrInvalidCredentials
+	}}
+	if rec := postLoginAs(t, srv, "alice", "pw-long-enough-1"); rec.Code != http.StatusUnauthorized {
+		t.Fatalf("after a panic: status = %d, want 401 (name must be usable again)", rec.Code)
 	}
 }
