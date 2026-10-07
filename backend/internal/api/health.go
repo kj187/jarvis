@@ -29,7 +29,9 @@ func (h *dbHealth) check(ctx context.Context, ping func(context.Context) error) 
 	if !h.checkedAt.IsZero() && time.Since(h.checkedAt) < dbHealthTTL {
 		return h.ok
 	}
-	ctx, cancel := context.WithTimeout(ctx, dbPingTimeout)
+	// Detached from the request: a client that hangs up mid-probe must not
+	// cache a failure for dbHealthTTL. The ping stays bounded by dbPingTimeout.
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), dbPingTimeout)
 	defer cancel()
 	h.ok = ping(ctx) == nil
 	h.checkedAt = time.Now()

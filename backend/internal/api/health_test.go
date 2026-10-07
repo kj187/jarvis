@@ -120,3 +120,19 @@ func TestGetClusters_FollowerUsesSnapshotUpStates(t *testing.T) {
 		t.Errorf("healthy = %v, want dead=false alive=true", got)
 	}
 }
+
+// A client that hangs up mid-probe must not poison the cached result: the ping
+// runs detached from the request context, so the next probe still sees "ok".
+func TestDBHealth_CancelledRequestDoesNotCacheFailure(t *testing.T) {
+	var h dbHealth
+	ping := func(ctx context.Context) error { return ctx.Err() }
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if !h.check(ctx, ping) {
+		t.Fatal("check = false for a cancelled request context, want true (ping must not inherit the cancellation)")
+	}
+	if !h.check(context.Background(), ping) {
+		t.Fatal("cached result = false, want true")
+	}
+}
