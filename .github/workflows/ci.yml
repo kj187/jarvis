@@ -216,6 +216,7 @@ jobs:
   backend-fuzz:
     name: Backend Fuzz
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
     defaults:
@@ -232,17 +233,21 @@ jobs:
           cache-dependency-path: backend/go.sum
 
       - name: Run fuzz targets (short)
-        # -parallel=2 caps the fuzzing worker processes per target: the default
-        # (GOMAXPROCS) oversubscribes a shared CI runner enough that the
-        # coordinator<->worker RPC misses its internal deadline and the run
-        # fails with "context deadline exceeded" — not a real finding.
-        # The targets run one after another on purpose (never in parallel).
+        # -fuzztime is an execution count (Nx), not a duration: with a time
+        # budget Go's coordinator races its own deadline against the worker RPC
+        # and can fail a clean run with "context deadline exceeded" exactly at
+        # expiry (golang/go#75804, open for Go 1.26.8; fix in CL 804900 is
+        # scheduled for 1.27). internal/fuzz only creates that deadline context
+        # when a duration is set, so a count has nothing to race. -timeout and
+        # the job timeout still bound a real hang. -parallel=2 caps the worker
+        # processes per target so a shared runner is not oversubscribed. The
+        # targets run one after another on purpose (never in parallel).
         run: |
-          go test ./internal/db -run '^$' -fuzz '^FuzzRedactDSN$' -fuzztime 20s -parallel 2
-          go test ./internal/history -run '^$' -fuzz '^FuzzParseNullableTimeString$' -fuzztime 20s -parallel 2
-          go test ./internal/config -run '^$' -fuzz '^FuzzParseSecretKey$' -fuzztime 20s -parallel 2
-          go test ./internal/api -run '^$' -fuzz '^FuzzValidateSilenceMatchers$' -fuzztime 20s -parallel 2
-          go test ./internal/api -run '^$' -fuzz '^FuzzSanitizeAMMessage$' -fuzztime 20s -parallel 2
+          go test ./internal/db -run '^$' -fuzz '^FuzzRedactDSN$' -fuzztime 150000x -parallel 2 -timeout 3m
+          go test ./internal/history -run '^$' -fuzz '^FuzzParseNullableTimeString$' -fuzztime 150000x -parallel 2 -timeout 3m
+          go test ./internal/config -run '^$' -fuzz '^FuzzParseSecretKey$' -fuzztime 150000x -parallel 2 -timeout 3m
+          go test ./internal/api -run '^$' -fuzz '^FuzzValidateSilenceMatchers$' -fuzztime 150000x -parallel 2 -timeout 3m
+          go test ./internal/api -run '^$' -fuzz '^FuzzSanitizeAMMessage$' -fuzztime 150000x -parallel 2 -timeout 3m
 
   # Aggregator: keeps the required check name "Backend". `if: always()` makes it
   # run (and fail) when a part failed or was cancelled; a skipped or missing

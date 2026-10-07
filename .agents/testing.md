@@ -29,8 +29,8 @@ go test ./internal/history/... ./internal/api/... ./internal/ws/... -run '^$' \
 
 # Fuzzing (Go native — fuzz funcs live in *_fuzz_test.go; seed corpus +
 # saved crash inputs under internal/<pkg>/testdata/fuzz/ run in normal go test)
-make fuzz-backend                  # All fuzz targets, FUZZTIME=30s each (override: FUZZTIME=5m)
-go test ./internal/db -run '^$' -fuzz '^FuzzRedactDSN$' -fuzztime 30s  # Single target
+make fuzz-backend                  # All fuzz targets, FUZZTIME=150000x executions each (override: FUZZTIME=1000000x or a duration like 5m)
+go test ./internal/db -run '^$' -fuzz '^FuzzRedactDSN$' -fuzztime 150000x  # Single target
 
 # ── Frontend ─────────────────────────────────────────────────
 cd frontend
@@ -68,7 +68,7 @@ make test-scripts                  # test scripts/release-body.sh, scripts/sbom.
 scripts/verify-release-smoke.sh vX.Y.Z  # after a release: exact cosign identities accepted, other workflows rejected, SBOM complete + attested (network, cosign, crane, jq, gh; --skip-sbom up to v2.0.0)
 make check-image-pins              # every Containerfile FROM has a @sha256 digest, pnpm installs are pinned
 make test-backend                  # go test -race ./...
-make fuzz-backend                  # Go native fuzz targets (FUZZTIME=30s per target)
+make fuzz-backend                  # Go native fuzz targets (FUZZTIME=150000x per target)
 make test-frontend                 # functional E2E (none + internal + oidc)
 make test-frontend-unit            # Vitest (lib/alertUtils.ts only, needs jarvis_frontend_1 running)
 make helm-lint                     # helm lint only
@@ -225,10 +225,11 @@ backend-lint:        # "Backend Lint and Vulnerabilities"
                         # exception is a `// #nosec Gxxx -- reason` (or `//nolint:gosec // reason`)
                         # on the finding, never a global rule
 backend-fuzz:        # "Backend Fuzz" (no PostgreSQL service)
-  - fuzz targets, 20s each, `-parallel 2` (FuzzRedactDSN, FuzzParseNullableTimeString,
-    FuzzParseSecretKey, FuzzValidateSilenceMatchers, FuzzSanitizeAMMessage), run one after another —
-    the worker cap stops a loaded runner from failing the run with "context deadline exceeded" (not
-    a finding). Never add a job that runs them in parallel with each other or with the tests.
+  - fuzz targets, `-fuzztime 150000x -parallel 2 -timeout 3m` each (FuzzRedactDSN,
+    FuzzParseNullableTimeString, FuzzParseSecretKey, FuzzValidateSilenceMatchers,
+    FuzzSanitizeAMMessage), run one after another, job `timeout-minutes: 15` — an execution count
+    instead of a duration, because a time budget races Go's own deadline and fails clean runs with
+    "context deadline exceeded" (golang/go#75804, not a finding). Never add a job that runs them in parallel with each other or with the tests.
 backend:             # "Backend" — aggregator, needs the three jobs above, `if: always()`, fails on
                      # any result but success. The name is a required status check of the
                      # `protect-main` ruleset, so it must stay (as must the E2E aggregator below)

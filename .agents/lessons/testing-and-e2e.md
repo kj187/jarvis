@@ -42,9 +42,10 @@ step failing `FuzzParseSecretKey … context deadline exceeded`.
 and `internal/history` as separate binaries **concurrently** against the one
 shared test database, so only one package's electors could ever hold
 leadership — the other package's tests waited out their 5s ceiling under a
-loaded runner. The fuzz failure was pure worker oversubscription (each of 5
-targets spawned GOMAXPROCS workers), not a finding — `parseSecretKey` is a
-single `hex.DecodeString`.
+loaded runner. The fuzz failure was not a finding — `parseSecretKey` is a
+single `hex.DecodeString`. Worker oversubscription (each of 5 targets spawned
+GOMAXPROCS workers) was only a first guess: `-parallel 2` did not remove it
+(see the follow-up below).
 **Rule**: `PGElector.SetLockID(classID, id)` (test-only, alongside
 `SetRetryInterval`) pins each test to its own advisory-lock namespace —
 class ID = test PID, lock ID = hash of `t.Name()` (helpers named `testLockID`
@@ -55,6 +56,16 @@ full `retryInterval` (also a real cold-start win: a fresh pod with no
 incumbent is promoted in one round-trip, not after 5s). `waitFor` ceilings
 raised to 20–30s (a passing check still returns immediately). CI fuzz step
 runs `-parallel 2`.
+**Follow-up (fuzz flake, real cause)**: `FuzzParseSecretKey (20.02s) context
+deadline exceeded` kept recurring with `-parallel 2`, at full speed (~53k
+execs/s, nothing stalled) and exactly at the `-fuzztime 20s` expiry. It is a
+Go toolchain race between the coordinator's `-fuzztime` deadline and error
+suppression, golang/go#75804 (open for 1.26.8, fix in CL 804900 for 1.27).
+`internal/fuzz` creates the deadline context only for a duration
+(`opts.Timeout > 0`), so the CI step and `make fuzz-backend` use an execution
+count (`-fuzztime 150000x`), bounded against real hangs by `-timeout 3m` and
+the job's `timeout-minutes`. Never answer it with `continue-on-error` or a
+retry loop; once on Go 1.27 a duration is safe again.
 
 ---
 
