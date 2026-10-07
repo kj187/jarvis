@@ -237,9 +237,10 @@ func (r *Recorder) onLeadershipChange(isLeader bool) {
 	if r.metrics != nil {
 		if isLeader {
 			r.metrics.Leader.Set(1)
-			// A promoted pod is no longer a follower — its stale-snapshot
-			// state (if any) no longer applies.
-			r.metrics.SnapshotStale.Set(0)
+			// A promoted pod reports its own polls now, so the gauge is
+			// recomputed from the real freshness state — a cluster that is
+			// already stale keeps it at 1.
+			r.updateStaleGauge()
 		} else {
 			r.metrics.Leader.Set(0)
 		}

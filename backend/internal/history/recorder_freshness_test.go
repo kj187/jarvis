@@ -252,3 +252,27 @@ func TestFreshness_FreshLeaderInheritsLastSuccessFromSnapshot(t *testing.T) {
 		t.Fatalf("freshness = %+v, want stale with LastSuccessAt=%v from the snapshot", f, lastOK)
 	}
 }
+
+// Promotion to leader must derive jarvis_snapshot_stale from the real
+// freshness state: a cluster that is already stale keeps the gauge at 1.
+func TestOnLeadershipChange_PromotionKeepsStaleGauge(t *testing.T) {
+	am := newFakeAM(t, nil)
+	rec, clock := newFreshnessRecorder(t, 10*time.Second, am)
+	clock.advance(10 * time.Minute) // cluster "a" never answered since start
+
+	rec.onLeadershipChange(true)
+	if v := testutil.ToFloat64(rec.metrics.SnapshotStale); v != 1 {
+		t.Errorf("jarvis_snapshot_stale = %v after promotion with a stale cluster, want 1", v)
+	}
+}
+
+func TestOnLeadershipChange_PromotionClearsGaugeWhenFresh(t *testing.T) {
+	am := newFakeAM(t, nil)
+	rec, _ := newFreshnessRecorder(t, 10*time.Second, am)
+	rec.metrics.SnapshotStale.Set(1) // left over from follower time
+
+	rec.onLeadershipChange(true)
+	if v := testutil.ToFloat64(rec.metrics.SnapshotStale); v != 0 {
+		t.Errorf("jarvis_snapshot_stale = %v after promotion with fresh clusters, want 0", v)
+	}
+}
