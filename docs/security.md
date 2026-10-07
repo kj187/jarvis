@@ -86,8 +86,9 @@ Jarvis' internal-tool deployment model has the following security implications:
 **Rate limiting**: The only rate limit is on `POST /auth/login` — a single global bucket
 (30 req/min, burst 10) shared across all clients. On PostgreSQL HA, each pod has its own bucket.
 An attacker with network access to the login endpoint can exhaust this bucket and block logins
-for all users. However, read access remains available in `write_protect` mode. All other endpoints
-(`/poll`, `/setup`, write routes, admin endpoints) have no rate limits.
+for all users. However, read access remains available in `write_protect` mode. `POST /api/v1/poll`
+(manual trigger) is rate-limited to one per 5 seconds per pod; other endpoints (`/setup`, write
+routes, admin endpoints) have no rate limits.
 
 **Failed-login wait (per username)**: with `JARVIS_AUTH_PROVIDER=internal`, on top of that bucket, repeated failed logins for the same
 username slow down that username only. The first 5 failures are free; each further failure doubles the
