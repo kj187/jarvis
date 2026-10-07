@@ -667,6 +667,7 @@ func TestWarnings_AdminGroupWithoutClaim(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			tc.cfg.AllowedOrigins = []string{"https://jarvis.example.com"} // not under test here
 			if got := tc.cfg.Warnings(); len(got) != tc.want {
 				t.Fatalf("Warnings() = %v, want %d entries", got, tc.want)
 			}
@@ -686,6 +687,7 @@ func TestWarnings_AuthProviderNone(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			tc.cfg.AllowedOrigins = []string{"https://jarvis.example.com"} // not under test here
 			got := tc.cfg.Warnings()
 			if len(got) != tc.want {
 				t.Fatalf("Warnings() = %v, want %d entries", got, tc.want)
@@ -787,6 +789,7 @@ func TestWarnings_SetupTokenWithoutInternalAuth(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			tc.cfg.AllowedOrigins = []string{"https://jarvis.example.com"} // not under test here
 			if got := tc.cfg.Warnings(); len(got) != tc.want {
 				t.Fatalf("Warnings() = %v, want %d entries", got, tc.want)
 			}
@@ -983,5 +986,29 @@ func TestLoad_WSMaxConnections_Invalid(t *testing.T) {
 		if _, err := Load(); err == nil {
 			t.Errorf("Load() with JARVIS_WS_MAX_CONNECTIONS=%q: expected error, got nil", raw)
 		}
+	}
+}
+
+func TestWarnings_AllowedOriginsEmptyWithAuth(t *testing.T) {
+	cases := []struct {
+		name string
+		cfg  Config
+		want int
+	}{
+		{"internal without origins", Config{AuthProvider: "internal"}, 1},
+		{"oidc without origins", Config{AuthProvider: "oidc", OIDCGroupsClaim: "groups"}, 1},
+		{"internal with origins", Config{AuthProvider: "internal", AllowedOrigins: []string{"https://jarvis.example.com"}}, 0},
+		{"none without origins", Config{AuthProvider: "none"}, 1}, // only the none warning
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := tc.cfg.Warnings()
+			if len(got) != tc.want {
+				t.Fatalf("Warnings() = %v, want %d entries", got, tc.want)
+			}
+			if tc.cfg.AuthProvider != "none" && tc.want == 1 && !strings.Contains(got[0], "JARVIS_ALLOWED_ORIGINS") {
+				t.Errorf("warning %q does not mention JARVIS_ALLOWED_ORIGINS", got[0])
+			}
+		})
 	}
 }

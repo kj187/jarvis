@@ -87,6 +87,9 @@ func (c *Config) Warnings() []string {
 	if c.AuthProvider == "none" {
 		w = append(w, "JARVIS_AUTH_PROVIDER=none: anyone who can reach Jarvis can read alerts and create claims, comments and silences without logging in; set JARVIS_AUTH_PROVIDER=internal or oidc (and JARVIS_AUTH_MODE=full_protect to also protect reads) unless a VPN or an authenticating proxy restricts access")
 	}
+	if (c.AuthProvider == "internal" || c.AuthProvider == "oidc") && len(c.AllowedOrigins) == 0 {
+		w = append(w, "JARVIS_ALLOWED_ORIGINS is empty: only requests whose Origin matches the Host Jarvis sees are accepted, so behind a reverse proxy that rewrites Host, login and every write fail with 403; set it to the URL the browser uses (see docs/reverse-proxy.md)")
+	}
 	if c.AuthProvider == "oidc" && len(c.OIDCAdminGroups) > 0 && c.OIDCGroupsClaim == "" {
 		w = append(w, "JARVIS_OIDC_ADMIN_VALUE is set but JARVIS_OIDC_GROUPS_CLAIM is not: no group is read from the token, so nobody becomes admin")
 	}
