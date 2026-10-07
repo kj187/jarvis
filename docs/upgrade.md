@@ -75,7 +75,9 @@ rolling deploy with mixed old and new pods.
 **Logout now signs out everywhere.** When a user logs out, their token version
 is bumped, which invalidates all other sessions they hold — on this pod and
 every replica. If you share accounts (wallboards, dedicated login), all
-devices see the logout immediately.
+devices are signed out: on the pod that handled the logout immediately, on
+other replicas within about 30 seconds, and open live connections within about
+90 seconds.
 
 **No more iframe embedding.** The security headers now include `frame-ancestors
 'none'` (along with `X-Frame-Options: DENY`), which prevents any embedding in
@@ -84,8 +86,8 @@ works by design.
 
 **WebSocket connections are capped per pod.** By default, 500 concurrent
 connections per pod; going over the limit returns `503`. Set
-`JARVIS_WS_MAX_CONNECTIONS` if you need a different limit. Dropped connections
-reconnect on their own.
+`JARVIS_WS_MAX_CONNECTIONS` if you need a different limit. Connections over the limit
+are refused and succeed once a slot is free.
 
 **Manual polls are rate-limited.** `POST /api/v1/poll` (manual trigger) returns
 `429` if called more than once every 5 seconds on the same pod. This protects
@@ -96,7 +98,7 @@ interval is global per pod, not per client.
 `DELETE`) on routes like `/api/v1/silences` now check the `Origin` header like
 the WebSocket upgrade does. If you have a reverse proxy that rewrites the `Host`
 header without setting `JARVIS_ALLOWED_ORIGINS`, writes fail with `403
-cross-origin request rejected`. See [Running behind a proxy](reverse-proxy.md) —
+cross-origin request rejected`, and so do login, logout and the setup wizard. See [Running behind a proxy](reverse-proxy.md) —
 the fix is the same as for dead WebSockets: set the browser's URL in
 `JARVIS_ALLOWED_ORIGINS`.
 
