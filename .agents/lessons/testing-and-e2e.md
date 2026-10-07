@@ -42,9 +42,10 @@ step failing `FuzzParseSecretKey … context deadline exceeded`.
 and `internal/history` as separate binaries **concurrently** against the one
 shared test database, so only one package's electors could ever hold
 leadership — the other package's tests waited out their 5s ceiling under a
-loaded runner. The fuzz failure was pure worker oversubscription (each of 5
-targets spawned GOMAXPROCS workers), not a finding — `parseSecretKey` is a
-single `hex.DecodeString`.
+loaded runner. The fuzz failure was not a finding — `parseSecretKey` is a
+single `hex.DecodeString`. Worker oversubscription (each of 5 targets spawned
+GOMAXPROCS workers) was only a first guess: `-parallel 2` did not remove it
+(see the follow-up below).
 **Rule**: `PGElector.SetLockID(classID, id)` (test-only, alongside
 `SetRetryInterval`) pins each test to its own advisory-lock namespace —
 class ID = test PID, lock ID = hash of `t.Name()` (helpers named `testLockID`
@@ -55,6 +56,24 @@ full `retryInterval` (also a real cold-start win: a fresh pod with no
 incumbent is promoted in one round-trip, not after 5s). `waitFor` ceilings
 raised to 20–30s (a passing check still returns immediately). CI fuzz step
 runs `-parallel 2`.
+**Follow-up (fuzz flake, real cause)**: `FuzzParseSecretKey (20.02s) context
+deadline exceeded` kept recurring with `-parallel 2`, at full speed (~53k
+execs/s, nothing stalled) and exactly at the `-fuzztime 20s` expiry. It is a
+Go toolchain race between the coordinator's `-fuzztime` deadline and error
+suppression, golang/go#75804 (reported for Go 1.25/1.26; fix CL 804900 is on the
+1.27 branch, whether the pinned patch version contains it is not verified).
+`internal/fuzz` creates the deadline context only for a duration
+(`opts.Timeout > 0`), so the CI step and `make fuzz-backend` use per-target
+execution counts (db 150000x, history 100000x, config 1000000x, api 300000x
+each), roughly the former 20s depth. The total count is split across workers
+(`fuzz.go` Limit/Parallel). `go test -timeout` does not bound the fuzzing
+phase (seed phase only), so a real hang is stopped by the job's
+`timeout-minutes: 15` alone. Measured locally with `FUZZTIME=1000000x`
+(final-interval rate, whole run): db 10.8k/s (17.6s), history 6.6k/s (16.3s),
+config 68k/s (9.4s), FuzzValidateSilenceMatchers 66k/s (24.5s),
+FuzzSanitizeAMMessage 12.1k/s (21.9s); CI runners were slower (db ~7k/s,
+history ~4k/s, config ~53k/s). Never answer it with `continue-on-error` or a
+retry loop; go back to a duration only with a Go release-changelog entry for the fix.
 
 ---
 
