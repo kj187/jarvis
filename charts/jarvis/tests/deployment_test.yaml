@@ -25,6 +25,13 @@ tests:
           path: spec.template.spec.containers[0].readinessProbe.httpGet.path
           value: /health/ready
 
+  - it: gives the readiness probe more time than the database ping (2s)
+    template: templates/deployment.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].readinessProbe.timeoutSeconds
+          value: 3
+
   - it: uses chart appVersion as image tag by default
     template: templates/deployment.yaml
     chart:

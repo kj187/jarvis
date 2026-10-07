@@ -237,9 +237,11 @@ func (r *Recorder) onLeadershipChange(isLeader bool) {
 	if r.metrics != nil {
 		if isLeader {
 			r.metrics.Leader.Set(1)
-			// A promoted pod is no longer a follower — its stale-snapshot
-			// state (if any) no longer applies.
-			r.metrics.SnapshotStale.Set(0)
+			// jarvis_snapshot_stale is deliberately left untouched here: the
+			// elector already reports leader, so ClusterFreshness would read
+			// the still-empty leader-side lastSuccess and misreport a
+			// long-running follower as stale. The follower value came from
+			// real snapshots; the first leader poll recomputes it.
 		} else {
 			r.metrics.Leader.Set(0)
 		}

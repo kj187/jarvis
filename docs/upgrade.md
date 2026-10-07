@@ -60,6 +60,59 @@ from Alertmanager on the first poll after the restart. Alerts that resolve
 Because those records are retained **forever** by default, also review
 [Data retention](retention.md) when upgrading a long-running installation.
 
+---
+
+## Upgrading from 2.0.0
+
+The following changes affect your configuration and monitoring.
+
+**Sessions are invalidated.** Every session token (cookie) expires and users
+must log in again. This happens because the session JWT now includes the
+issuer (`iss`) and audience (`aud`) claims; tokens issued before this version
+are rejected on the next request. Expect a brief wave of 401 errors during a
+rolling deploy with mixed old and new pods.
+
+**Logout now signs out everywhere.** When a user logs out, their token version
+is bumped, which invalidates all other sessions they hold — on this pod and
+every replica. If you share accounts (wallboards, dedicated login), all
+devices are signed out: on the pod that handled the logout immediately, on
+other replicas within about 30 seconds, and open live connections within about
+90 seconds.
+
+**No more iframe embedding.** The security headers now include `frame-ancestors
+'none'` (along with `X-Frame-Options: DENY`), which prevents any embedding in
+an `<iframe>`. If you embedded Jarvis in another application, this no longer
+works by design.
+
+**WebSocket connections are capped per pod.** By default, 500 concurrent
+connections per pod; going over the limit returns `503`. Set
+`JARVIS_WS_MAX_CONNECTIONS` if you need a different limit. Connections over the limit
+are refused and succeed once a slot is free.
+
+**Manual polls are rate-limited.** `POST /api/v1/poll` (manual trigger) returns
+`429` if called more than once every 5 seconds on the same pod. This protects
+the recorder's loop and Alertmanager from being pounded by scripts. The
+interval is global per pod, not per client.
+
+**Origin checks apply to writes.** Mutating requests (`POST`, `PUT`, `PATCH`,
+`DELETE`) on routes like `/api/v1/silences` now check the `Origin` header like
+the WebSocket upgrade does. If you have a reverse proxy that rewrites the `Host`
+header without setting `JARVIS_ALLOWED_ORIGINS`, writes fail with `403
+cross-origin request rejected`, and so do login, logout and the setup wizard. See [Running behind a proxy](reverse-proxy.md) —
+the fix is the same as for dead WebSockets: set the browser's URL in
+`JARVIS_ALLOWED_ORIGINS`.
+
+**The `jarvis_snapshot_stale` metric now also fires on the leader.** This metric
+(and the `JarvisSnapshotStale` alert) now indicates staleness when any
+configured Alertmanager cluster is unreachable — not only on followers. If you
+have an alert rule for this, expect it to fire during upstream outages (by
+design) and not just after Jarvis itself fails.
+
+**Helm chart: probes now use `/health/live` and `/health/ready`.** If you
+override the app image tag to an older version in the chart values, the probes
+fail because those endpoints did not exist. Do not mix old app versions with
+new chart versions without testing the probes first.
+
 ## Rolling back an upgrade
 
 A rollback means restoring both the old application version and the database

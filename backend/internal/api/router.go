@@ -42,7 +42,7 @@ var sessionCacheTTL = 30 * time.Second
 //
 // Trade-off: an attacker who can reach the login endpoint can use up the
 // bucket and block logins for as long as the attack lasts. Reading stays
-// possible in write_protect mode. Nothing else is rate limited.
+// possible in write_protect mode. Only the manual poll trigger has its own gate.
 func loginRateLimiter() echo.MiddlewareFunc {
 	return middleware.RateLimiterWithConfig(middleware.RateLimiterConfig{
 		Store: middleware.NewRateLimiterMemoryStoreWithConfig(

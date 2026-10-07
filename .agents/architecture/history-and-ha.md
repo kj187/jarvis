@@ -158,7 +158,7 @@ Code: `internal/history/recorder.go`, `recorder_snapshot.go`.
   `Recorder.ClusterFreshness()` marks a cluster stale beyond
   `max(3 × interval, 60 s)` (never-succeeded: counted from `startedAt`); it
   feeds `GET /api/v1/clusters`, `jarvis_snapshot_stale` (any cluster stale,
-  updated at the end of `poll` and in `rebuildFollowerAlertStore`) and
+  updated at the end of `poll` and in `rebuildFollowerAlertStore`; unchanged on promotion, the first leader poll recomputes it) and
   `jarvis_cluster_last_success_timestamp_seconds`.
 - `Recorder.Trigger()`: leader → `triggerLocal`; follower → `Store.NotifyTrigger`
   (`pg_notify`, `jarvis_trigger`), which the leader's `runPollLoop` listener
