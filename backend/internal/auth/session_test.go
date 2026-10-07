@@ -213,3 +213,52 @@ func TestSessionVerifier_StillValid(t *testing.T) {
 		t.Fatal("a lookup error must fail open for established streams")
 	}
 }
+
+// gatedLookup blocks inside GetByID after it has read the user, so a test can
+// interleave an Invalidate between the database read and the cache write.
+type gatedLookup struct {
+	read    chan struct{} // closed-by-send once the (stale) row has been read
+	release chan struct{} // test lets GetByID return
+	stale   *users.User
+	fresh   *users.User
+	mu      sync.Mutex
+	first   bool
+}
+
+func (g *gatedLookup) GetByID(_ context.Context, _ string) (*users.User, error) {
+	g.mu.Lock()
+	isFirst := !g.first
+	g.first = true
+	g.mu.Unlock()
+	if isFirst {
+		u := g.stale
+		g.read <- struct{}{}
+		<-g.release
+		return u, nil
+	}
+	return g.fresh, nil
+}
+
+func TestSessionVerifier_InvalidateDuringLookupDoesNotCacheStaleUser(t *testing.T) {
+	stale := &users.User{ID: "u1", Username: "alice", Role: "admin", Provider: "local", TokenVersion: 1}
+	fresh := &users.User{ID: "u1", Username: "alice", Role: "admin", Provider: "local", TokenVersion: 2}
+	g := &gatedLookup{read: make(chan struct{}), release: make(chan struct{}), stale: stale, fresh: fresh}
+	v := auth.NewSessionVerifier(testKey, g, time.Minute)
+	oldToken := tokenFor(t, stale)
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := v.Verify(context.Background(), oldToken)
+		done <- err
+	}()
+	<-g.read // Verify has read the pre-logout row from the database
+	v.Invalidate("u1")
+	g.release <- struct{}{}
+	if err := <-done; err != nil {
+		t.Fatalf("in-flight verify: %v", err)
+	}
+
+	if _, err := v.Verify(context.Background(), oldToken); !errors.Is(err, auth.ErrInvalidSession) {
+		t.Fatalf("old token after logout bump: err = %v, want ErrInvalidSession", err)
+	}
+}
