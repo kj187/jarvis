@@ -21,7 +21,9 @@ index.css             → self-hosted Inter (`public/fonts/inter-variable-latin.
 │   ├── authStore.ts          → user, providerInfo, hydrate() (retries on slow backend), login/logout;
 │   │                            `requestLogin()` (promise: true after login, false when dismissed — one
 │   │                            shared prompt for concurrent callers) + `loginPromptOpen`, `sessionExpired`,
-│   │                            `expireSession()`; registers the 401 handler of api/client.ts
+│   │                            `expireSession()`, `authError` (auth state unreadable: 5xx/network → error page in full_protect, banner
+│   │                            otherwise; hydrate runs one retry chain at a time; `lib/authMe.ts` splits 401/403 = signed out
+│   │                            from 5xx = unavailable); registers the 401 handler of api/client.ts
 │   └── useSettingsStore.ts   → Zustand+persist('jarvis-user-settings', v3): resolved user preferences
 │                                + sparse overrides — local (anon) or server (account) storage,
 │                                see "Settings Store" in `frontend-state.md`; types/logic live in lib/settingsUtils.ts

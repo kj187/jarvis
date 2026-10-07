@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"embed"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"regexp"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 
+	"github.com/kj187/jarvis/backend/internal/alertmanager"
 	"github.com/kj187/jarvis/backend/internal/auth"
 	"github.com/kj187/jarvis/backend/internal/cluster"
 	"github.com/kj187/jarvis/backend/internal/config"
@@ -22,6 +24,7 @@ import (
 	"github.com/kj187/jarvis/backend/internal/globalsettings"
 	"github.com/kj187/jarvis/backend/internal/history"
 	"github.com/kj187/jarvis/backend/internal/metrics"
+	"github.com/kj187/jarvis/backend/internal/models"
 	"github.com/kj187/jarvis/backend/internal/settings"
 	"github.com/kj187/jarvis/backend/internal/users"
 	"github.com/kj187/jarvis/backend/internal/ws"
@@ -109,11 +112,36 @@ func TestRouter_ReadEndpointsNeverCallAlertmanager(t *testing.T) {
 		{Name: "staging", AlertmanagerURL: am.URL},
 	})
 	trigger := &fakeTriggerer{}
-	e, session := newRouterWithRegistryAndTrigger(t, registry, trigger, am.URL)
+	e, session, _ := newRouterWithRegistryAndTrigger(t, registry, trigger, am.URL)
 
-	checked := 0
-	registered := map[string]bool{}
-	var unreached []string
+	checked, registered, unreached, violation := walkReadRoutes(e, session, &hits, trigger)
+	if violation != "" {
+		t.Fatal(violation)
+	}
+	for _, route := range unreached {
+		if _, known := unreachableReadRoutes[route]; !known {
+			t.Errorf("GET %s never reached its handler (400/404/401/403 on every request) — fix the request or list it in unreachableReadRoutes with a reason", route)
+		}
+	}
+	for route, why := range unreachableReadRoutes {
+		if !registered[route] {
+			t.Errorf("unreachableReadRoutes lists %s (%s), but no such GET route is registered — remove the stale exception", route, why)
+		}
+		if !slices.Contains(unreached, route) {
+			t.Errorf("unreachableReadRoutes lists %s (%s), but it answers now — remove the stale exception", route, why)
+		}
+	}
+	if checked < 10 {
+		t.Fatalf("only %d GET routes reached their handler — the route walk is not seeing the router (unreached: %v)", checked, unreached)
+	}
+}
+
+// walkReadRoutes requests every registered GET route (plain and with a cluster
+// filter) and reports the first Invariant #13 violation as a message: an
+// upstream hit or a poll trigger. It also returns how many routes reached
+// their handler, the registered paths and the routes that never did.
+func walkReadRoutes(e *echo.Echo, session *http.Cookie, hits *atomic.Int64, trigger *fakeTriggerer) (checked int, registered map[string]bool, unreached []string, violation string) {
+	registered = map[string]bool{}
 	for _, r := range e.Routes() {
 		if r.Method != http.MethodGet {
 			continue
@@ -135,10 +163,10 @@ func TestRouter_ReadEndpointsNeverCallAlertmanager(t *testing.T) {
 			rec := httptest.NewRecorder()
 			e.ServeHTTP(rec, req)
 			if n := hits.Load(); n != 0 {
-				t.Fatalf("GET %s called Alertmanager %d time(s); read endpoints must serve snapshots only (Invariant #13)", target, n)
+				return checked, registered, unreached, fmt.Sprintf("GET %s called Alertmanager %d time(s); read endpoints must serve snapshots only (Invariant #13)", target, n)
 			}
 			if n := trigger.calls; n != 0 {
-				t.Fatalf("GET %s triggered a poll %d time(s); read endpoints must not drive the recorder (Invariant #13)", target, n)
+				return checked, registered, unreached, fmt.Sprintf("GET %s triggered a poll %d time(s); read endpoints must not drive the recorder (Invariant #13)", target, n)
 			}
 			// A 400/404 means the request was rejected before the handler
 			// did its work, so it proves nothing about upstream calls.
@@ -152,22 +180,7 @@ func TestRouter_ReadEndpointsNeverCallAlertmanager(t *testing.T) {
 			unreached = append(unreached, r.Path)
 		}
 	}
-	for _, route := range unreached {
-		if _, known := unreachableReadRoutes[route]; !known {
-			t.Errorf("GET %s never reached its handler (400/404/401/403 on every request) — fix the request or list it in unreachableReadRoutes with a reason", route)
-		}
-	}
-	for route, why := range unreachableReadRoutes {
-		if !registered[route] {
-			t.Errorf("unreachableReadRoutes lists %s (%s), but no such GET route is registered — remove the stale exception", route, why)
-		}
-		if !slices.Contains(unreached, route) {
-			t.Errorf("unreachableReadRoutes lists %s (%s), but it answers now — remove the stale exception", route, why)
-		}
-	}
-	if checked < 10 {
-		t.Fatalf("only %d GET routes reached their handler — the route walk is not seeing the router (unreached: %v)", checked, unreached)
-	}
+	return checked, registered, unreached, ""
 }
 
 // newRouterWithRegistryAndTrigger builds the full router (internal auth,
@@ -176,7 +189,7 @@ func TestRouter_ReadEndpointsNeverCallAlertmanager(t *testing.T) {
 // event (fingerprint 0123456789abcdef, cluster prod) and returns the session
 // cookie of an admin user, so admin-only and per-alert read routes are
 // reachable.
-func newRouterWithRegistryAndTrigger(t *testing.T, registry *cluster.Registry, trigger *fakeTriggerer, amURL string) (*echo.Echo, *http.Cookie) {
+func newRouterWithRegistryAndTrigger(t *testing.T, registry *cluster.Registry, trigger *fakeTriggerer, amURL string) (*echo.Echo, *http.Cookie, *history.AlertStore) {
 	t.Helper()
 	database, dialect, err := idb.Open(":memory:")
 	if err != nil {
@@ -213,5 +226,78 @@ func newRouterWithRegistryAndTrigger(t *testing.T, registry *cluster.Registry, t
 	hub := ws.NewHub(nil, nil, metrics.New("test"))
 	go hub.Run()
 	cfg := &config.Config{AuthProvider: "internal", AuthMode: "write_protect", SecretKey: testSecretKey}
-	return NewRouter(&history.AlertStore{}, history.NewSilenceStore(), historyStore, hub, registry, cfg, embed.FS{}, trigger, auth.NewInternalProvider(userStore), userStore, settings.NewStore(database, dialect), globalsettings.NewStore(database, dialect), metrics.New("test"), fanout.NoopFanout{}), session
+	// Seed what the read handlers only act on when present (an active alert,
+	// a silence), so a handler that goes upstream only then is still caught.
+	alertStore := history.NewAlertStore(history.DefaultResolvedBufferTTL)
+	alertStore.Set([]models.EnrichedAlert{{
+		Fingerprint: "0123456789abcdef",
+		Status:      models.AlertStatus{State: "active"},
+		Labels:      map[string]string{"alertname": "TestAlert"},
+		StartsAt:    time.Now().Add(-time.Hour),
+		ClusterName: "prod",
+	}})
+	silenceStore := history.NewSilenceStore()
+	silenceStore.Set("prod", []alertmanager.GettableSilence{{
+		ID:       "123e4567-e89b-12d3-a456-426614174000",
+		Matchers: []alertmanager.AMSilenceMatcher{{IsEqual: true, Name: "alertname", Value: "TestAlert"}},
+		StartsAt: time.Now().Add(-time.Minute),
+		EndsAt:   time.Now().Add(time.Hour),
+		Status:   alertmanager.AMSilenceStatus{State: "active"},
+	}})
+	e := NewRouter(alertStore, silenceStore, historyStore, hub, registry, cfg, embed.FS{}, trigger, auth.NewInternalProvider(userStore), userStore, settings.NewStore(database, dialect), globalsettings.NewStore(database, dialect), metrics.New("test"), fanout.NoopFanout{})
+	return e, session, alertStore
+}
+
+// Negative fixtures: the guard must turn red for a read handler that goes
+// upstream. One calls Alertmanager unconditionally, one only when the alert
+// store holds an alert (the seeded fixture must make that reachable), one
+// fires a poll.
+func TestReadEndpointsGuard_DetectsUpstreamCalls(t *testing.T) {
+	var hits atomic.Int64
+	am := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		hits.Add(1)
+		_, _ = w.Write([]byte("[]"))
+	}))
+	t.Cleanup(am.Close)
+	callUpstream := func() {
+		req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, am.URL+"/api/v2/alerts", nil)
+		if err != nil {
+			return
+		}
+		if resp, err := http.DefaultClient.Do(req); err == nil { // #nosec G704 -- loopback test server
+			_ = resp.Body.Close()
+		}
+	}
+
+	cases := []struct {
+		name  string
+		route func(store *history.AlertStore, trigger *fakeTriggerer) echo.HandlerFunc
+	}{
+		{"unconditional upstream call", func(_ *history.AlertStore, _ *fakeTriggerer) echo.HandlerFunc {
+			return func(c echo.Context) error { callUpstream(); return c.NoContent(http.StatusOK) }
+		}},
+		{"upstream call only when an alert exists", func(store *history.AlertStore, _ *fakeTriggerer) echo.HandlerFunc {
+			return func(c echo.Context) error {
+				if len(store.Get()) > 0 {
+					callUpstream()
+				}
+				return c.NoContent(http.StatusOK)
+			}
+		}},
+		{"poll trigger", func(_ *history.AlertStore, trigger *fakeTriggerer) echo.HandlerFunc {
+			return func(c echo.Context) error { trigger.Trigger(); return c.NoContent(http.StatusOK) }
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			hits.Store(0)
+			registry := cluster.NewRegistry([]config.ClusterConfig{{Name: "prod", AlertmanagerURL: am.URL}})
+			trigger := &fakeTriggerer{}
+			e, session, store := newRouterWithRegistryAndTrigger(t, registry, trigger, am.URL)
+			e.GET("/api/v1/fake-read", tc.route(store, trigger))
+			if _, _, _, violation := walkReadRoutes(e, session, &hits, trigger); violation == "" {
+				t.Fatal("guard stayed green for a read handler that goes upstream")
+			}
+		})
+	}
 }

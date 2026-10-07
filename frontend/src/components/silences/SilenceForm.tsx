@@ -15,7 +15,7 @@ import { useAlerts } from '@/hooks/useAlerts'
 import { useSilences } from '@/hooks/useSilences'
 import { useSilenceTemplates } from '@/hooks/useSilenceTemplates'
 import { silenceWouldMatchAlert, hasUnevaluableRegexMatcher, pickIdentifierLabel, tzAbbr, computeGroupLabelValues, escapeRegexValue, unescapeRegex, looksLikeRegexPattern, isRoundTrippableTagList } from '@/lib/alertUtils'
-import { upsertSilence, triggerPoll } from '@/api/client'
+import { upsertSilence } from '@/api/client'
 import { useSettingsStore } from '@/store/useSettingsStore'
 import { useAuthStore } from '@/store/authStore'
 import { useLoginGuard } from '@/hooks/useLoginGuard'
@@ -822,7 +822,6 @@ export function SilenceForm({
     setResults(initial)
     setStep('results')
 
-    let hadSuccess = false
     await Promise.all(
       selectedClusters.map(async (cluster) => {
         try {
@@ -844,7 +843,6 @@ export function SilenceForm({
             performedBy: effectiveCreatedBy.trim(),
           })
           setResults((prev) => new Map(prev).set(cluster, { status: 'success', id: r.id }))
-          hadSuccess = true
           qc.invalidateQueries({ queryKey: ['silences'] })
           const fp = fingerprint ?? prefillAlerts?.[0]?.fingerprint
           if (fp) qc.invalidateQueries({ queryKey: ['silence-events', fp] })
@@ -854,7 +852,6 @@ export function SilenceForm({
         }
       }),
     )
-    if (hadSuccess) triggerPoll().catch(() => {})
   }
 
   const timeError = endsAt && startsAt

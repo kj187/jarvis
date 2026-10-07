@@ -3,6 +3,7 @@ import { Header } from '@/components/layout/Header'
 import { AlertsPage } from '@/components/alerts/AlertsPage'
 import { SilencesPage } from '@/components/silences/SilencesPage'
 import { SetupPage } from '@/components/auth/SetupPage'
+import { Button } from '@/components/ui/button'
 import { LoginPage } from '@/components/auth/LoginPage'
 import { LoginPrompt } from '@/components/auth/LoginPrompt'
 import { NoAuthNotice } from '@/components/auth/NoAuthNotice'
@@ -28,6 +29,8 @@ export default function App() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
   const isLoading = useAuthStore((s) => s.isLoading)
   const sessionExpired = useAuthStore((s) => s.sessionExpired)
+  const authError = useAuthStore((s) => s.authError)
+  const hydrate = useAuthStore((s) => s.hydrate)
 
   useLayoutEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
@@ -45,6 +48,27 @@ export default function App() {
     return <SetupPage />
   }
 
+  // The auth state could not be read (backend unreachable or 5xx). Never show a
+  // login screen to someone who may be signed in: block the page with an error and
+  // Retry only when nothing is readable without a login (full_protect, or the mode
+  // is not even known yet); otherwise the app renders and a banner explains.
+  const authUnknown = authError && !isAuthenticated
+  if (authUnknown && (providerInfo === null || providerInfo.authMode === 'full_protect')) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div role="alert" data-testid="auth-error" className="w-full max-w-sm rounded-surface border border-border bg-card p-8 space-y-4 text-center">
+          <h1 className="text-xl font-bold tracking-tight">Jarvis</h1>
+          <p className="text-sm text-muted-foreground">
+            The sign-in state could not be loaded. The server may be temporarily unavailable.
+          </p>
+          <Button onClick={() => void hydrate()} disabled={isLoading}>
+            {isLoading ? 'Retrying…' : 'Retry'}
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
   // full_protect: block all content until authenticated. A session that expired
   // while the app was open keeps the page mounted instead (LoginPrompt covers it),
   // so open dialogs and half-filled forms survive the re-login.
@@ -55,6 +79,18 @@ export default function App() {
   return (
     <div className="min-h-screen bg-background">
       {providerInfo?.mode === 'none' && <NoAuthNotice />}
+      {authUnknown && (
+        <div
+          role="status"
+          data-testid="auth-unavailable-banner"
+          className="mx-4 mt-2 flex items-center gap-3 rounded-control border border-warning-edge bg-warning-soft px-3 py-1.5 text-xs text-warning-fg"
+        >
+          <span>Sign-in state could not be loaded; you may appear signed out. Alerts stay readable.</span>
+          <Button size="sm" variant="outline" onClick={() => void hydrate()} disabled={isLoading}>
+            Retry
+          </Button>
+        </div>
+      )}
       {!isFullscreen && <Header />}
       <main className={isFullscreen ? '' : 'py-4'}>
         {activePage === 'silences' ? <SilencesPage /> : <AlertsPage />}

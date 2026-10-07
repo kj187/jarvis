@@ -43,6 +43,9 @@ type SessionVerifier struct {
 
 	mu    sync.Mutex
 	cache map[string]sessionEntry
+	// gen counts Invalidate calls. A lookup that started before an Invalidate
+	// may hold a pre-invalidation row, so it must not be written to the cache.
+	gen uint64
 }
 
 func NewSessionVerifier(key []byte, lookup UserLookup, ttl time.Duration) *SessionVerifier {
@@ -86,6 +89,7 @@ func (v *SessionVerifier) StillValid(ctx context.Context, userID string, tokenVe
 func (v *SessionVerifier) Invalidate(userID string) {
 	v.mu.Lock()
 	delete(v.cache, userID)
+	v.gen++
 	v.mu.Unlock()
 }
 
@@ -93,6 +97,7 @@ func (v *SessionVerifier) userFor(ctx context.Context, id string) (*users.User, 
 	now := time.Now()
 	v.mu.Lock()
 	e, cached := v.cache[id]
+	gen := v.gen
 	v.mu.Unlock()
 	if cached && now.Sub(e.fetched) < v.ttl {
 		return e.user, nil
@@ -114,7 +119,7 @@ func (v *SessionVerifier) userFor(ctx context.Context, id string) (*users.User, 
 			}
 		}
 	}
-	if len(v.cache) < sessionCacheMax {
+	if v.gen == gen && len(v.cache) < sessionCacheMax {
 		v.cache[id] = sessionEntry{user: u, fetched: now}
 	}
 	v.mu.Unlock()
