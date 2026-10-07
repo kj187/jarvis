@@ -23,7 +23,7 @@ function sourceFiles(dir: string): string[] {
 describe('browser poll trigger', () => {
   it('is never called from the frontend source', () => {
     const offenders = sourceFiles(SRC)
-      .filter((f) => /triggerPoll|['"`]\/poll['"`]/.test(readFileSync(f, 'utf8')))
+      .filter((f) => /triggerPoll|\/poll\b/.test(readFileSync(f, 'utf8')))
       .map((f) => relative(SRC, f))
     expect(offenders).toEqual([])
   })
