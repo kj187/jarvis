@@ -115,7 +115,7 @@ mutations (silence create/delete) go upstream — otherwise AM load scales
 with open browser tabs (live proxying in `getSilences`/`getClusters`
 roughly doubled AM CPU in a real deployment; `.agents/lessons/history-and-ha.md`).
 
-*Enforced by:* `TestRouter_ReadEndpointsNeverCallAlertmanager` (`internal/api/read_endpoints_upstream_test.go`): every registered GET route is requested against a counting mock Alertmanager; any upstream hit fails.
+*Enforced by:* `TestRouter_ReadEndpointsNeverCallAlertmanager` (`internal/api/read_endpoints_upstream_test.go`): every registered GET route is requested against a counting mock Alertmanager; any upstream hit fails. The stores are seeded with an alert and a silence, and `TestReadEndpointsGuard_DetectsUpstreamCalls` proves the guard turns red for fake read handlers that call upstream (also only when an alert exists) or fire a poll.
 
 ### 14.
 
