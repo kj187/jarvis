@@ -4,12 +4,18 @@ updates:
     directory: /backend
     schedule:
       interval: daily
+    # A release must be at least 7 days old before a PR is opened (supply-chain
+    # delay; security updates are exempt). Enforced by scripts/check-dependabot-cooldown.sh.
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
 
   - package-ecosystem: npm
     directory: /frontend
     schedule:
       interval: daily
+    cooldown:
+      default-days: 7
     groups:
       minor-patch:
         patterns:
@@ -23,6 +29,8 @@ updates:
     directory: /website
     schedule:
       interval: daily
+    cooldown:
+      default-days: 7
     groups:
       minor-patch:
         patterns:
@@ -36,12 +44,16 @@ updates:
     directory: /
     schedule:
       interval: daily
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: daily
+    cooldown:
+      default-days: 7
     groups:
       codeql-action:
         patterns:
