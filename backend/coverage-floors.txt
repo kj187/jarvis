@@ -1,0 +1,7 @@
+# Minimum statement coverage per backend package (percent), checked in CI by
+# scripts/check-go-coverage.sh against backend/coverage.out. A ratchet against
+# regressions in packages that carry security behaviour: raise a floor when
+# coverage has grown, never lower one to make CI pass.
+#
+# <package under backend/internal/>  <min percent>
+auth 70
