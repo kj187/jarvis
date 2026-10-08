@@ -152,7 +152,7 @@ jobs:
 
       # Per-package floors (backend/coverage-floors.txt) — a ratchet for security-relevant packages.
       - name: Coverage floors
-        run: scripts/check-go-coverage.sh backend/coverage.out backend/coverage-floors.txt
+        run: ../scripts/check-go-coverage.sh coverage.out coverage-floors.txt
 
       - name: Coverage summary
         if: always()
