@@ -226,6 +226,13 @@ smoke_test() {
     || { echo "embedded frontend not served on /"; return 1; }
   curl -sf "http://localhost:${SMOKE_PORT}/api/v1/alerts" | head -c 1 | grep -q '\[' \
     || { echo "/api/v1/alerts did not return a JSON array"; return 1; }
+  # The third-party license notices must ship in the image (Go modules and npm packages).
+  local licenses
+  licenses="$($CONTAINER_CMD cp "$SMOKE_CONTAINER:/THIRD_PARTY_LICENSES" - 2>/dev/null | tar -xO 2>/dev/null)"
+  printf '%s' "$licenses" | grep -q 'github.com/labstack/echo' \
+    || { echo "/THIRD_PARTY_LICENSES missing from the image or without the Go modules"; return 1; }
+  printf '%s' "$licenses" | grep -q '^react ' \
+    || { echo "/THIRD_PARTY_LICENSES has no npm packages"; return 1; }
 }
 
 if [ "${FAST:-0}" = "1" ]; then
