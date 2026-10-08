@@ -119,10 +119,14 @@ reconnects on its own.
 ## Input Validation
 
 - Fingerprint path params: validated against `[a-f0-9]{16}` regex
-- Pagination: `limit` accepts 10, 25, 50, or 100; `offset` ≥ 0
-- Silence fields: `comment` is required; length limits enforced; a silence `id` must be a UUID, so it can never alter the upstream request path
+- Request bodies are capped at 1 MiB
+- Pagination: the Resolved page accepts `limit` 10, 25, 50 or 100 and an `offset` ≥ 0, anything else is `400`. The per-alert
+  history lists fall back to 20 entries when `limit` is missing or above 100
+- Silence fields: `comment` is required (at most 2,000 characters), `createdBy` at most 100; a silence `id` must be a UUID, so it
+  can never alter the upstream request path
+- Claim and comment authors are limited to 100 characters, a comment body to 10,000
+- Unknown JSON fields are not rejected, they are ignored
 - Outbound HTTP (Alertmanager client): 10s timeout on all requests
-- JSON decoding uses `DisallowUnknownFields` where appropriate
 
 ---
 
@@ -183,6 +187,12 @@ security_opt:
 cap_drop:
   - ALL
 ```
+
+## Static analysis and dependencies
+
+CI runs `gosec` (through `golangci-lint`), `govulncheck`, `pnpm audit --audit-level=high` for the frontend and the docs
+website, and `gitleaks` for secrets; a finding fails the build. Dependabot opens update pull requests daily for Go modules,
+npm packages, GitHub Actions and base images, and waits 7 days after a release before it does (security updates are exempt).
 
 ## Reporting a Vulnerability
 

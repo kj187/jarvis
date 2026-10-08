@@ -73,7 +73,7 @@ When `JARVIS_AUTH_PROVIDER` is `internal` or `oidc`, `JARVIS_AUTH_MODE` determin
 **Choosing a mode:**
 
 - Use `write_protect` for internal teams where read access to alerts is acceptable without login (e.g. NOC screens, ops dashboards).
-- Use `full_protect` for public-facing deployments or any environment where alert data must not be visible to unauthenticated users.
+- Use `full_protect` when alert data must not be visible to anyone who can reach Jarvis without logging in. Jarvis is an internal tool and still belongs behind a VPN or an authenticating proxy, see [Security model](security.md).
 
 ---
 
@@ -264,7 +264,7 @@ to the browser's own settings without touching the account's.
 
 | Role | Capabilities |
 |------|-------------|
-| `user` | Read alerts, create/delete own claims and comments, create silences |
+| `user` | Read alerts, create and release claims, create and delete comments (own comments only), create, extend, edit and expire silences, manage silence templates |
 | `admin` | All `user` capabilities + manage users under **Administration** |
 
 ---
