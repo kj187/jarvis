@@ -114,4 +114,4 @@ Contributions are welcome! Please read our [Contributing Guide](https://kj187.gi
 
 ## License
 
-Apache 2.0 — see [LICENSE](LICENSE)
+Apache 2.0 — see [LICENSE](LICENSE). The container image ships the license texts of its Go and npm dependencies as `/THIRD_PARTY_LICENSES`.

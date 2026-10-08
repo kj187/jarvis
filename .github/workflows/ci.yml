@@ -88,6 +88,9 @@ jobs:
         run: |
           scripts/test-check-image-pins.sh
           scripts/check-image-pins.sh
+      # The third-party license generators are tested against fixture module and package directories.
+      - name: Test third-party license scripts
+        run: scripts/test-third-party-licenses.sh
       # The per-package Go coverage floor check is itself tested against fixture profiles.
       - name: Test coverage floor script
         run: scripts/test-check-go-coverage.sh
@@ -372,6 +375,15 @@ jobs:
 
       - name: Build image
         run: docker build -f Containerfile -t jarvis:scan .
+
+      # The license notices of Go modules and npm packages ship in the image.
+      - name: Check third-party licenses in the image
+        run: |
+          cid="$(docker create jarvis:scan)"
+          docker cp "$cid:/THIRD_PARTY_LICENSES" licenses.txt
+          docker rm "$cid" >/dev/null
+          grep -q 'github.com/labstack/echo' licenses.txt
+          grep -q '^react ' licenses.txt
 
       - name: Scan image (HIGH and CRITICAL with a fix)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # ratchet:aquasecurity/trivy-action@v0.36.0

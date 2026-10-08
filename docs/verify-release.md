@@ -72,6 +72,11 @@ package metadata declares them. It is also attested to the image digest, so you
 can check it against the exact image you run. The image manifest additionally
 embeds BuildKit's own SBOM (`docker buildx imagetools inspect`).
 
+The license texts of the Go modules and production npm packages themselves are
+in the image as `/THIRD_PARTY_LICENSES`, generated at build time. The build
+fails when a dependency ships no license file. Read it with
+`docker cp "$(docker create ghcr.io/kj187/jarvis:<tag>)":/THIRD_PARTY_LICENSES - | tar -xO`.
+
 ```bash
 cosign verify-blob sbom.spdx.json \
   --bundle sbom.spdx.json.sigstore.json \
