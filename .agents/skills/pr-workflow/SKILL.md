@@ -48,9 +48,10 @@ docs) has three interactive gates — **ask, don't assume**:
    works). On yes: `gh pr merge --squash --delete-branch`. Never merge on
    the user's behalf without an explicit request. **Exception — Dependabot
    PRs** (`AGENTS.md` → Workflow Rules #9): with green CI, merge without
-   asking only if the update is not a major version bump and the release notes
-   or changelog it links show no breaking changes; a major update or any
-   breaking change goes through this gate.
+   asking only if the release is at least 7 days old, the update is not a
+   major version bump, the release notes or changelog it links show no
+   breaking changes, and it touches no workflow, Action or base image; anything
+   else goes through this gate.
 6. **Cleanup after merge.** Once the PR is merged: `git switch main`,
    `git pull --ff-only`, and delete the now-merged local branch
    (`git branch -d <branch>`). This leaves the user back on an up-to-date

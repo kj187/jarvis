@@ -139,7 +139,7 @@ See [SECURITY.md](SECURITY.md) to report vulnerabilities.
 Backend changes are checked with `gosec`, `govulncheck`, and
 `golangci-lint`; frontend changes use TypeScript strict mode, ESLint, and
 `pnpm audit`. CI also verifies Go module checksums and scans the repository for
-secrets. Dependabot opens regular dependency-update pull requests.
+secrets. Dependabot opens regular dependency-update pull requests, each for a release that is at least 7 days old (cooldown; security updates are exempt).
 
 Run the complete project security suite with:
 

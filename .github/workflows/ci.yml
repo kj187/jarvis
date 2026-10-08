@@ -88,6 +88,9 @@ jobs:
         run: |
           scripts/test-check-image-pins.sh
           scripts/check-image-pins.sh
+      # Dependabot must keep its 7-day cooldown on every ecosystem — see scripts/check-dependabot-cooldown.sh.
+      - name: Test Dependabot cooldown check
+        run: scripts/test-check-dependabot-cooldown.sh
       # The third-party license generators are tested against fixture module and package directories.
       - name: Test third-party license scripts
         run: scripts/test-third-party-licenses.sh

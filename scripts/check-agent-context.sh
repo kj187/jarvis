@@ -11,6 +11,8 @@
 #   5. The backend and frontend resolved-filter conformance fixtures are
 #      byte-identical (Critical Invariant #4).
 #   6. Every cited `Invariant #<n>` is a number that AGENTS.md lists.
+#   7. Dependabot keeps its cooldown (scripts/check-dependabot-cooldown.sh) and
+#      Workflow Rule 9 states the matching merge conditions.
 
 set -euo pipefail
 
@@ -85,6 +87,17 @@ while IFS=: read -r file line ref; do
          || fail "$file:$line cites Invariant #$n, but AGENTS.md lists only $inv_max" ;;
   esac
 done <<< "$(git grep --untracked -noiE 'invariant #[0-9A-Za-z]+' -- AGENTS.md CONTRIBUTING.md .agents docs backend frontend/src frontend/e2e frontend/eslint.config.js 2>/dev/null || true)"
+
+# ── 7. Dependabot cooldown and the Rule 9 it backs ────────────────────────────
+scripts/check-dependabot-cooldown.sh >/dev/null 2>&1 \
+  || fail ".github/dependabot.yml: every update entry needs a cooldown of at least 7 days (scripts/check-dependabot-cooldown.sh)"
+rule9="$(sed -n '/^9\. \*\*Dependabot/,/^10\. /p' AGENTS.md | tr '\n' ' ' | tr -s ' ')"
+for needle in "at least 7 days old" "no major update" "no breaking changes" "no workflow, Action or base image"; do
+  case "$rule9" in
+    *"$needle"*) ;;
+    *) fail "AGENTS.md Workflow Rule 9 must state: $needle" ;;
+  esac
+done
 
 if [ "$errors" -gt 0 ]; then
   exit 1
