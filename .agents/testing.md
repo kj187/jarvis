@@ -173,7 +173,7 @@ main checkout — the container cannot follow a git worktree's `.git` file).
 | Staged paths | Checks |
 |---|---|
 | `backend/**` | `go test ./... -count=1 -timeout 60s` + golangci-lint (incl. gosec and the gofmt formatter; govulncheck runs in CI only) |
-| `frontend/**` | `pnpm audit --audit-level=high` + `pnpm lint` (eslint) + `pnpm test:unit:coverage` (Vitest + 100% coverage gate, `lib/alertUtils.ts`) + `pnpm duplication` (jscpd) — executed **inside the running dev container** (`jarvis_frontend_1`); hook fails if the container is not running |
+| `frontend/**` | `pnpm audit --audit-level=high` + `pnpm lint` (eslint) + `pnpm test:unit:coverage` (Vitest + coverage gate: floor over `src/lib`, 100% on `lib/alertUtils.ts`) + `pnpm duplication` (jscpd) — executed **inside the running dev container** (`jarvis_frontend_1`); hook fails if the container is not running |
 | `charts/**` | `helm lint` + `helm unittest` |
 | `scripts/release-body.sh`, `scripts/test-release-body.sh`, `.github/workflows/release*.yml` | `scripts/test-release-body.sh` — tests the release body script, including the exact cosign identities it prints |
 | `scripts/sbom.sh`, `scripts/test-sbom.sh`, `.github/workflows/release.yml` | `scripts/test-sbom.sh` — tests the SBOM merge (frontend packages added, root pseudo-packages dropped, no duplicates) and the completeness check (required packages, licenses); jq fixtures, no network or syft needed |
@@ -211,10 +211,12 @@ backend-test:        # "Backend Tests"
     test step so every PostgreSQL-gated test (internal/history) runs on every PR, not just locally
   - go test -v -race -coverprofile=coverage.out ./... | go-junit-report → report.xml
   - Coverage summary → GITHUB_STEP_SUMMARY (go tool cover -func)
+  - scripts/check-go-coverage.sh: per-package floors from backend/coverage-floors.txt (auth ≥ 70%);
+    a floor is a ratchet, raise it when coverage grows, never lower it to make CI pass
   - dorny/test-reporter uploads report.xml as "Backend Test Results"
   - upload-artifact: coverage.out + report.xml; coverage upload to Codecov (flag `backend`;
-    backend-only by design — frontend vitest coverage measures only lib/alertUtils.ts and would
-    misrepresent frontend coverage. Status checks configured in codecov.yml: project auto ±1%,
+    backend-only by design — frontend vitest coverage measures only `src/lib` (E2E covers the
+    components) and would misrepresent frontend coverage. Status checks configured in codecov.yml: project auto ±1%,
     patch 70% ±5% — thresholds absorb goroutine-timing coverage noise from -race runs)
 backend-lint:        # "Backend Lint and Vulnerabilities"
   - govulncheck ./...
@@ -239,7 +241,7 @@ backend:             # "Backend" — aggregator, needs the three jobs above, `if
 frontend:
   - pnpm audit --audit-level=high
   - pnpm lint         # eslint (flat config)
-  - pnpm test:unit:coverage  # Vitest + 100% coverage gate (lib/alertUtils.ts only)
+  - pnpm test:unit:coverage  # Vitest + coverage gate (floor over src/lib, 100% on lib/alertUtils.ts)
   - pnpm build
   - pnpm duplication  # jscpd code duplication check
 

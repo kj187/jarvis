@@ -2,9 +2,8 @@
 #
 # Only backend coverage is uploaded (flag `backend` in ci.yml). Frontend
 # coverage is deliberately NOT uploaded: vitest coverage is scoped to
-# `src/lib/alertUtils.ts` only (E2E-only test strategy, see
-# frontend/vitest.config.ts) — uploading a single 100%-covered file would
-# misrepresent frontend coverage.
+# `src/lib` only (E2E-only test strategy, see frontend/vitest.config.ts) —
+# uploading the library alone would misrepresent frontend coverage.
 #
 # Thresholds exist because Go coverage of concurrent code (recorder, poller,
 # WS) is slightly nondeterministic under -race: goroutine timing decides which

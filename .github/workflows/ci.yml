@@ -88,6 +88,9 @@ jobs:
         run: |
           scripts/test-check-image-pins.sh
           scripts/check-image-pins.sh
+      # The per-package Go coverage floor check is itself tested against fixture profiles.
+      - name: Test coverage floor script
+        run: scripts/test-check-go-coverage.sh
       # Generated colour tokens (app, docs site, video) must match design/tokens.json.
       - name: Check design tokens
         run: node scripts/design-tokens.mjs --check
@@ -146,6 +149,10 @@ jobs:
         run: |
           set -o pipefail
           go test -v -race -coverprofile=coverage.out ./... 2>&1 | go-junit-report -set-exit-code > report.xml
+
+      # Per-package floors (backend/coverage-floors.txt) — a ratchet for security-relevant packages.
+      - name: Coverage floors
+        run: ../scripts/check-go-coverage.sh coverage.out coverage-floors.txt
 
       - name: Coverage summary
         if: always()

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import fc from 'fast-check'
 import { DEFAULT_SETTINGS } from './settingsUtils'
 import { parseSilenceDuration } from './silenceDurations'
@@ -886,6 +886,56 @@ describe('getEffectiveAlertState (multi-silence — S-05)', () => {
   it('stays suppressed when the covering silence id is unknown', () => {
     const alert = makeAlert({ status: { inhibitedBy: [], silencedBy: ['missing'], state: 'suppressed' } })
     expect(getEffectiveAlertState(alert, [])).toBe('suppressed')
+  })
+})
+
+// Invariant #3 draws its line at 15 minutes remaining: ≤ 15:00 flips the alert
+// to active, anything longer keeps it suppressed. The edge is pinned with a
+// frozen clock so an off-by-one (`<` instead of `<=`, 15 vs 16 min) shows up.
+describe('getEffectiveAlertState (15-minute edge — Invariant #3)', () => {
+  const NOW = new Date('2026-01-01T12:00:00.000Z').getTime()
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(NOW)
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  const remaining = (ms: number) => {
+    const silence = makeSilence({ id: 's1', endsAt: new Date(NOW + ms).toISOString() })
+    const alert = makeAlert({ status: { inhibitedBy: [], silencedBy: ['s1'], state: 'suppressed' } })
+    return getEffectiveAlertState(alert, [silence])
+  }
+
+  it('14:59 remaining is active', () => {
+    expect(remaining(14 * 60_000 + 59_000)).toBe('active')
+  })
+
+  it('exactly 15:00 remaining is active (the limit is inclusive)', () => {
+    expect(remaining(15 * 60_000)).toBe('active')
+  })
+
+  it('15:00.001 remaining stays suppressed', () => {
+    expect(remaining(15 * 60_000 + 1)).toBe('suppressed')
+  })
+
+  it('15:01 remaining stays suppressed', () => {
+    expect(remaining(15 * 60_000 + 1_000)).toBe('suppressed')
+  })
+
+  it('an already ended silence that is still listed as active counts as expiring now', () => {
+    expect(remaining(-30_000)).toBe('active')
+  })
+
+  it('with two silences the longer one decides at the edge', () => {
+    const inside = makeSilence({ id: 's1', endsAt: new Date(NOW + 15 * 60_000).toISOString() })
+    const outside = makeSilence({ id: 's2', endsAt: new Date(NOW + 15 * 60_000 + 1_000).toISOString() })
+    const both = makeAlert({ status: { inhibitedBy: [], silencedBy: ['s1', 's2'], state: 'suppressed' } })
+    const onlyInside = makeAlert({ status: { inhibitedBy: [], silencedBy: ['s1'], state: 'suppressed' } })
+    expect(getEffectiveAlertState(both, [inside, outside])).toBe('suppressed')
+    expect(getEffectiveAlertState(onlyInside, [inside, outside])).toBe('active')
   })
 })
 

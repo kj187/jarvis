@@ -158,6 +158,7 @@ test-scripts: ## Test the release body, SBOM and image-pin scripts; no network n
 	scripts/test-release-body.sh
 	scripts/test-sbom.sh
 	scripts/test-check-image-pins.sh
+	scripts/test-check-go-coverage.sh
 
 check-image-pins: ## Every Containerfile FROM has a @sha256 digest, pnpm installs are pinned
 	scripts/check-image-pins.sh

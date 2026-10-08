@@ -63,7 +63,10 @@ to `src/lib/**` only:
 - **100% coverage gate on `alertUtils.ts`** (statements/lines/functions;
   branches at 99% — the one excluded branch is `tzAbbr`'s `Intl`-dependent
   fallback, not practically testable without mocking `Date`/`Intl` for a
-  cosmetic display value). Enforced by `pnpm test:unit:coverage` /
+  cosmetic display value). The rest of `src/lib` is held to a floor
+  (statements/lines 85%, functions 88%, branches 85%; measured 87.6/87.9/91.6/88.8 when set),
+  a ratchet: raise it when coverage grows, never lower it to make CI pass.
+  Enforced by `pnpm test:unit:coverage` /
   `make test-frontend-unit`, in pre-commit and CI — a new function or branch
   added to this file needs a test in the same commit or the build fails.
 - `frontend/src/lib/settingsUtils.test.ts` — same `src/lib/**` inclusion, same
@@ -96,8 +99,9 @@ to `src/lib/**` only:
   blob, a v2 state with the legacy key in `overrides`/`anonOverrides`/
   `userMirror.overrides`/flat top-level, a v2 state with no legacy key
   (unchanged), and `null`/non-object input (no throw). **Not** under the 100%
-  coverage gate — that stays scoped to `alertUtils.ts` only (`vitest.config.ts`
-  `coverage.include`).
+  gate (that is `alertUtils.ts` only), but counted in the `src/lib` floor
+  (`vitest.config.ts` `coverage.thresholds`).
+- `getEffectiveAlertState` edge (`alertUtils.test.ts`, frozen clock): 14:59, exactly 15:00 (inclusive limit) and 15:00.001 / 15:01 remaining, an already ended but still `active` silence, and two silences where the longer one decides at the edge (Invariant #3).
 - `frontend/src/lib/savedFilters.test.ts` — list/comparison helpers for saved
   filters (`toSavedFilterMatchers`, `matcherListsEqual`, `findActiveSavedFilter`,
   `findDefaultSavedFilter`, `validateSavedFilterName`, the `addSavedFilter`/
