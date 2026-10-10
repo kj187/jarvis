@@ -12,6 +12,15 @@ watch them either here or alongside the full technical changelog.
 
 ## Release videos
 
+### v2.1.0
+
+Recently resolved alerts in the Active list, comment counts, honest data-status
+notices and a hardening round for sessions and requests.
+
+<a class="video-cover" href="https://www.youtube.com/watch?v=0P4hwo_-sRM" target="_blank" rel="noreferrer"><img class="no-lightbox" src="https://img.youtube.com/vi/0P4hwo_-sRM/maxresdefault.jpg" alt="Play Jarvis v2.1.0 release highlights on YouTube"></a>
+
+[Watch the v2.1.0 release video on YouTube](https://www.youtube.com/watch?v=0P4hwo_-sRM) · [Read the v2.1.0 release notes](https://github.com/kj187/jarvis/releases/tag/v2.1.0)
+
 ### v2.0.0
 
 Paged Resolved history, far less memory, the silence regex switch and one-click

@@ -7,10 +7,10 @@ type: application
 # CHANGELOG.md; the version is bumped at app release time (see
 # .agents/skills/release/SKILL.md), and a push to main publishes it
 # (chart-release.yml).
-version: 2.1.0
+version: 2.2.0
 # App version — the image tag deployed by default. Bumped as part of the app
 # release process (see .agents/skills/release/SKILL.md).
-appVersion: "2.0.0"
+appVersion: "2.1.0"
 keywords:
   - alertmanager
   - prometheus

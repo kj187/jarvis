@@ -1,3 +1,87 @@
+<a name="v2.1.0"></a>
+## [v2.1.0](https://github.com/kj187/jarvis/compare/v2.0.0...v2.1.0) (2026-10-10)
+
+### Breaking Changes
+
+No breaking changes. The hardening in this release does change behavior for existing installations: every session expires once, Jarvis can no longer be embedded in an `<iframe>`, and writes (including login) are rejected with `403` behind a reverse proxy that rewrites the `Host` header unless `JARVIS_ALLOWED_ORIGINS` is set. See [Upgrading from 2.0.0](docs/upgrade.md#upgrading-from-200).
+
+### Bug Fixes
+
+* **api:** add optional Host allow-list and trusted-proxy client IP ([#295](https://github.com/kj187/jarvis/issues/295))
+* **api:** reject cross-origin writes, harden response headers and add JARVIS_COOKIE_SECURE ([#294](https://github.com/kj187/jarvis/issues/294))
+* **api:** create the first admin atomically and add optional setup token ([#288](https://github.com/kj187/jarvis/issues/288))
+* **api:** make the login throttle atomic and ignore lookup errors ([#324](https://github.com/kj187/jarvis/issues/324))
+* **api:** bind sessions to the database and make logout revocation persistent ([#292](https://github.com/kj187/jarvis/issues/292))
+* **api:** split liveness and readiness probes and report follower cluster health ([#293](https://github.com/kj187/jarvis/issues/293))
+* **api:** time-box the OIDC exchange and no longer refuse unverified e-mails ([#323](https://github.com/kj187/jarvis/issues/323))
+* **api:** slow down repeated failed logins per username ([#313](https://github.com/kj187/jarvis/issues/313))
+* **api:** validate silence IDs, cap upstream reads and check composed runbook URLs ([#312](https://github.com/kj187/jarvis/issues/312))
+* **api:** close the session cache race and keep the UI readable when auth/me is unavailable ([#336](https://github.com/kj187/jarvis/issues/336))
+* **api:** harden the readiness probe and document the 2.0.0 upgrade notes ([#334](https://github.com/kj187/jarvis/issues/334))
+* **api:** strip credentials from cluster URLs and add optional metrics token ([#296](https://github.com/kj187/jarvis/issues/296))
+* **api:** harden session JWT and OIDC login ([#322](https://github.com/kj187/jarvis/issues/322))
+* **api:** limit manual polls and WebSocket connections ([#297](https://github.com/kj187/jarvis/issues/297))
+* **config:** raise a PostgreSQL pool of one connection to two ([#331](https://github.com/kj187/jarvis/issues/331))
+* **config:** warn at startup when authentication is disabled ([#284](https://github.com/kj187/jarvis/issues/284))
+* **config:** enable gitleaks default rules and add scan canary ([#283](https://github.com/kj187/jarvis/issues/283))
+* **db:** step down a blackholed PostgreSQL leader within one heartbeat timeout ([#318](https://github.com/kj187/jarvis/issues/318))
+* **db:** bound the follower try-lock with a deadline and document leader overlap limits ([#326](https://github.com/kj187/jarvis/issues/326))
+* **db:** keep snapshot alerts when a fresh leader cannot reach Alertmanager ([#285](https://github.com/kj187/jarvis/issues/285))
+* **docker:** track the Air config so make up works on a fresh clone ([#321](https://github.com/kj187/jarvis/issues/321))
+* **docker:** verify release signatures with the exact workflow identity ([#305](https://github.com/kj187/jarvis/issues/305))
+* **ws:** accept the request's own host on the WebSocket upgrade like on HTTP writes ([#325](https://github.com/kj187/jarvis/issues/325))
+
+### Chores
+
+* **config:** stop shipping agent permissions and treat outside text as data ([#317](https://github.com/kj187/jarvis/issues/317))
+* **config:** drop the global gosec exclusions and annotate findings at the source ([#311](https://github.com/kj187/jarvis/issues/311))
+* **config:** add a 7-day Dependabot cooldown and tighten the auto-merge rule ([#339](https://github.com/kj187/jarvis/issues/339))
+* **deps:** bump the minor-patch group across 1 directory with 10 updates ([#314](https://github.com/kj187/jarvis/issues/314))
+* **deps:** bump dorny/test-reporter from 3.0.0 to 3.2.0 ([#316](https://github.com/kj187/jarvis/issues/316))
+* **deps:** bump node from 22-alpine to 26-alpine ([#299](https://github.com/kj187/jarvis/issues/299))
+* **deps:** bump modernc.org/sqlite from 1.59.0 to 1.60.1 in /backend ([#290](https://github.com/kj187/jarvis/issues/290))
+* **deps:** bump anchore/sbom-action/download-syft from 0.24.2 to 0.24.3 ([#301](https://github.com/kj187/jarvis/issues/301))
+* **deps:** bump lucide-react from 1.51.0 to 1.52.0 in /frontend in the minor-patch group across 1 directory ([#335](https://github.com/kj187/jarvis/issues/335))
+* **deps:** bump vue from 3.5.42 to 3.5.43 in /website in the minor-patch group ([#315](https://github.com/kj187/jarvis/issues/315))
+* **deps:** bump golang from 1.26-alpine to 1.27-alpine ([#300](https://github.com/kj187/jarvis/issues/300))
+* **deps:** override brace-expansion to a patched release ([#273](https://github.com/kj187/jarvis/issues/273))
+* **deps:** bump the codeql-action group across 1 directory with 4 updates ([#254](https://github.com/kj187/jarvis/issues/254))
+* **deps:** bump github.com/labstack/echo/v4 from 4.15.4 to 4.16.0 in /backend ([#279](https://github.com/kj187/jarvis/issues/279))
+* **deps:** bump the minor-patch group across 1 directory with 9 updates ([#270](https://github.com/kj187/jarvis/issues/270))
+* **docker:** pin base images by digest and pnpm by version ([#298](https://github.com/kj187/jarvis/issues/298))
+* **docker:** add opt-in fast local e2e run ([#275](https://github.com/kj187/jarvis/issues/275))
+* **docker:** ship third-party license notices in the image ([#338](https://github.com/kj187/jarvis/issues/338))
+
+### Documentation
+
+* auto-merge Dependabot PRs only without major or breaking changes ([#281](https://github.com/kj187/jarvis/issues/281))
+* trim AGENTS.md to restore headroom under the byte budget ([#280](https://github.com/kj187/jarvis/issues/280))
+* **config:** align security and feature docs with the code ([#340](https://github.com/kj187/jarvis/issues/340))
+* **config:** except Rule 9 from Rule 14 and name what counts as secret access ([#330](https://github.com/kj187/jarvis/issues/330))
+* **db:** require session-mode poolers and state that Jarvis is never the only alert path ([#310](https://github.com/kj187/jarvis/issues/310))
+* **frontend:** add AI and engineering page ([#289](https://github.com/kj187/jarvis/issues/289))
+* **frontend:** refresh the detail panel details-tab screenshot ([#278](https://github.com/kj187/jarvis/issues/278))
+
+### Features
+
+* **alerts:** show alert metadata with fingerprint in the detail sheet ([#276](https://github.com/kj187/jarvis/issues/276))
+* **alerts:** show recently resolved alerts in the active list ([#274](https://github.com/kj187/jarvis/issues/274))
+* **api:** report and export the age of each cluster's data ([#286](https://github.com/kj187/jarvis/issues/286))
+* **comments:** show comment count in card and list view ([#282](https://github.com/kj187/jarvis/issues/282))
+* **config:** add optional NetworkPolicy, image digest and Secret-backed headers to the Helm chart ([#307](https://github.com/kj187/jarvis/issues/307))
+* **config:** support multiple OIDC admin groups ([#277](https://github.com/kj187/jarvis/issues/277))
+* **frontend:** show failed loads, stale clusters and lost live connection ([#287](https://github.com/kj187/jarvis/issues/287))
+
+### Tests
+
+* **api:** add coverage floors and pin the 15-minute silence edge ([#337](https://github.com/kj187/jarvis/issues/337))
+* **api:** make the mechanical invariant guards harder to bypass ([#327](https://github.com/kj187/jarvis/issues/327))
+* **api:** lower the upstream response cap in the oversize test ([#328](https://github.com/kj187/jarvis/issues/328))
+* **api:** enforce invariants 8, 10, 13 and 19 mechanically ([#320](https://github.com/kj187/jarvis/issues/320))
+* **api:** cover WebSocket origin, cookie flags and auth on write routes ([#319](https://github.com/kj187/jarvis/issues/319))
+* **ws:** wait for client registration in dialIdentified ([#303](https://github.com/kj187/jarvis/issues/303))
+
+
 <a name="v2.0.0"></a>
 ## [v2.0.0](https://github.com/kj187/jarvis/compare/v1.12.0...v2.0.0) (2026-09-28)
 
