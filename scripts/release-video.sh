@@ -40,7 +40,7 @@ VIDEO_FORMATS="${VIDEO_FORMATS:-landscape square}"
 VIDEO_AUTH_MODE="${VIDEO_AUTH_MODE:-none}"
 case "$VIDEO_AUTH_MODE" in none|internal|oidc) ;; *) echo "ERROR: VIDEO_AUTH_MODE must be none|internal|oidc" >&2; exit 1 ;; esac
 TTS_IMAGE="localhost/jarvis-release-video-tts:latest"
-FFMPEG_IMAGE="docker.io/mwader/static-ffmpeg:7.1@sha256:84e4edba9212b950f26fb591365ea4f89baf3d8202310b43bcf0128db9fb0992"
+FFMPEG_IMAGE="docker.io/mwader/static-ffmpeg:7.1@sha256:a8090df5f5608daef387e1b2e93b98aaacb4d92153ad904e7d715c725724fca4"
 NODE_IMAGE="mcr.microsoft.com/playwright:v1.63.0-noble"
 
 case "$VIDEO_OUT" in
