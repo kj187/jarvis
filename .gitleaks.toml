@@ -5,6 +5,9 @@ useDefault = true
 
 [allowlist]
 description = "Generated, vendored and ignored paths; paths are anchored so testdata/ is never skipped"
+# The go.sum regex below needs the "h1:" prefix, which is not part of the matched
+# secret, so it has to be checked against the whole line.
+regexTarget = "line"
 regexes = [
   # Go module checksums (go.sum h1: hashes) are false positives
   '''h1:[A-Za-z0-9+/=]{44}''',
