@@ -8,12 +8,15 @@ Entries up to and including 1.7.6 were reconstructed from the git history when t
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-10-10
+
 ### Breaking Changes
 
 - No breaking changes.
 
 ### Changed
 
+- `appVersion` bumped to `2.1.0`.
 - The readiness probe now sets `timeoutSeconds: 3` (the Kubernetes default of 1 s is shorter than the app's 2 s database ping, so a slow ping could fail the probe and pull the pod out of the Service endpoints). Together with the app no longer caching a failed ping when a client aborts the request, a healthy pod stays ready. Values are unchanged — not breaking.
 - `database.maxOpenConns: 1` with a PostgreSQL DSN is now raised to `2` by the app, with a warning in the log, instead of running a single-connection pool, which the app never supported. The default (`10`) and every value from `2` up are unchanged; SQLite ignores the value. Nothing has to change in existing values — not breaking.
 - Custom cluster headers (`clusters[].auth.headers`) are now stored in the chart's Secret (`cluster-<n>-header-<name>`) and read by the Deployment through `secretKeyRef`, instead of being rendered into the ConfigMap, so a header such as `Authorization` no longer sits in a readable ConfigMap. The environment the app sees is identical (`JARVIS_CLUSTER_<n>_HEADER_<name>`), and the chart Secret is rendered whenever a header is set, also when `database.existingSecret` is used. Values stay as they were; nothing has to change in existing values — not breaking.
@@ -264,7 +267,8 @@ No breaking changes (first published chart version).
 
 Chart versions 1.0.3–1.0.5 only bumped `appVersion` to the matching app release.
 
-[Unreleased]: https://github.com/kj187/jarvis/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/kj187/jarvis/compare/v2.1.0...HEAD
+[2.2.0]: https://github.com/kj187/jarvis/compare/v2.0.0...v2.1.0
 [2.1.0]: https://github.com/kj187/jarvis/compare/v1.12.0...v2.0.0
 [2.0.0]: https://github.com/kj187/jarvis/compare/v1.11.0...v1.12.0
 [1.7.6]: https://github.com/kj187/jarvis/compare/v1.10.1...v1.11.0

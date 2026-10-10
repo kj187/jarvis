@@ -12,7 +12,7 @@ RUN pnpm licenses list --prod --json > /tmp/npm-licenses.json \
     && node /tmp/third-party-licenses-npm.mjs < /tmp/npm-licenses.json > /app/THIRD_PARTY_LICENSES.npm
 
 # Stage 2: Backend Build (cross-compile Go for target platform without QEMU)
-FROM --platform=$BUILDPLATFORM golang:1.27-alpine@sha256:8a5910f31396cd4d89662f56c68b3ae31d374308270a1c3bd96672ee5ed43414 AS backend
+FROM --platform=$BUILDPLATFORM golang:1.27-alpine@sha256:f92b6ef800e499660581efdabdf25d9d817a9d124eaf900924f0504e7e27e12d AS backend
 ARG VERSION=dev
 ARG TARGETOS
 ARG TARGETARCH

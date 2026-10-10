@@ -37,7 +37,7 @@ services:
     restart: unless-stopped
 
   demo-jarvis:
-    image: ghcr.io/kj187/jarvis:2.0.0
+    image: ghcr.io/kj187/jarvis:2.1.0
     container_name: jarvis_demo
     depends_on:
       - demo-alertmanager
