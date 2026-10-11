@@ -312,7 +312,10 @@ separate implementation (`website/.vitepress/theme/`).
   stay single. Regenerate with `make e2e-screenshots` after any visual change.
 - **Videos** use the logo palette: product blue with coral as the counterweight
   (`frontend/e2e/video/theme.ts`, built on the generated palette). No video
-  files live in the repository.
+  files live in the repository, with one exception: the short homepage
+  teaser `docs/assets/jarvis-teaser.mp4` and its poster
+  (`jarvis-teaser-poster.jpg`), which the docs site serves itself. Keep it a
+  few megabytes at most; release and intro videos stay on YouTube.
 - **Social and Open Graph images** are generated from the tokens, the bundled
   Inter and the logo by a screenshot spec, so they cannot drift:
 

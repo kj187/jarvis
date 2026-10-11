@@ -16,7 +16,7 @@ test('every Mermaid source has light and dark documentation assets', () => {
 })
 
 test('YouTube videos use linked covers instead of failure-prone iframes', () => {
-  for (const file of ['docs/demo.md', 'docs/videos.md', 'website/.vitepress/theme/components/HomeVideo.vue']) {
+  for (const file of ['docs/demo.md', 'docs/videos.md']) {
     const markup = read(file)
 
     assert.match(markup, /youtube\.com\/watch\?v=/, file)
@@ -25,12 +25,35 @@ test('YouTube videos use linked covers instead of failure-prone iframes', () => 
   }
 })
 
+test('the homepage teaser is a self-hosted, user-started video that still links the full intro', () => {
+  const video = read('website/.vitepress/theme/components/HomeVideo.vue')
+  const sync = read('website/scripts/sync-content.mjs')
+
+  for (const asset of ['jarvis-teaser.mp4', 'jarvis-teaser-poster.jpg']) {
+    assert.ok(fs.existsSync(path.join(ROOT, 'docs/assets', asset)), asset)
+    assert.ok(video.includes(`content/assets/${asset}`), `${asset} import`)
+  }
+  assert.match(video, /<video[\s\S]*\bcontrols\b[\s\S]*<\/video>/)
+  assert.match(video, /:poster=/)
+  assert.match(video, /aria-label=/)
+  assert.doesNotMatch(video, /\bautoplay\b/)
+  // The whole poster is one real play button: clickable, focusable, and back again when playback stops.
+  assert.match(video, /<button[\s\S]*class="video-play"[\s\S]*aria-label="Play the Jarvis teaser"/)
+  assert.match(video, /\.play\(\)/)
+  assert.match(video, /@pause=/)
+  assert.match(video, /@ended=/)
+  assert.doesNotMatch(video, /<iframe/)
+  assert.match(video, /youtube\.com\/watch\?v=/)
+  assert.match(sync, /VIDEO_EXT = new Set\(\['\.mp4'\]\)/)
+})
+
 test('homepage product scenes auto-rotate, remain controllable, and precede the explainer', () => {
   const layout = read('website/.vitepress/theme/Layout.vue')
   const screenshot = read('website/.vitepress/theme/components/HomeScreenshot.vue')
 
-  assert.match(layout, /#home-hero-after[\s\S]*<HomeScreenshot\s*\/>/)
-  assert.match(layout, /#home-features-after[\s\S]*<HomeVideo\s*\/>/)
+  // The teaser leads, directly under the hero; the product scenes follow the feature grid.
+  assert.match(layout, /#home-hero-after>\s*<HomeVideo\s*\/>/)
+  assert.match(layout, /#home-features-after>\s*<HomeScreenshot\s*\/>/)
   assert.match(screenshot, /setInterval/)
   assert.match(screenshot, /prefers-reduced-motion/)
   assert.match(screenshot, /'Pause product tour'/)

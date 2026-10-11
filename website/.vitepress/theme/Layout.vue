@@ -18,14 +18,14 @@ const { frontmatter } = useData()
         </div>
       </div>
     </template>
-    <!-- Product scenes belong directly after the hero and before the feature
-         grid; the explanatory copy lives below the product instead of making
-         the text-heavy hero even longer. -->
+    <!-- The teaser leads, directly after the hero; the product scenes and their
+         explanatory copy follow the feature grid, so the first viewport is not
+         a video and a full screenshot back to back. -->
     <template #home-hero-after>
-      <HomeScreenshot />
+      <HomeVideo />
     </template>
     <template #home-features-after>
-      <HomeVideo />
+      <HomeScreenshot />
     </template>
   </DefaultTheme.Layout>
   <ImageLightbox />

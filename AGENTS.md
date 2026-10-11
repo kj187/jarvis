@@ -37,7 +37,7 @@ may be read directly; an index names the topic file(s) to open. Adapters:
 | Tests, test matrix, CI pipeline · E2E / screenshot stack | `.agents/testing.md` (index → `.agents/testing/`) · `docs/testing-e2e.md` |
 | Env vars, metrics, PostgreSQL / multi-replica HA, Kubernetes, migration | `docs/configuration.md`, `docs/metrics.md`, `docs/postgres-ha.md`, `docs/deploy-kubernetes.md`, `docs/migrate-postgres.md`, `docs/sqlite-limits.md` |
 | Release — **only when the user explicitly asks** | `.agents/skills/release/SKILL.md` |
-| Release demo video — **only on request** | `.agents/skills/release-video/SKILL.md` |
+| Release demo / homepage teaser video — **only on request** | `.agents/skills/release-video/SKILL.md` · `.agents/skills/teaser-video/SKILL.md` |
 | Debugging surprising behavior — search first | `.agents/lessons.md` (→ `.agents/lessons/`) |
 
 ## Critical Invariants — NEVER break
