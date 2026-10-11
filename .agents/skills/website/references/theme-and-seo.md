@@ -64,8 +64,8 @@ keyboard focus ring. Do not restyle VitePress wholesale; the landing page carrie
   `max-width`/`margin: 0 auto` onto the `img`s inside it, reproducing the
   same two-step centering — never collapse them back onto one element.
 - **`theme/components/HomeScreenshot.vue`** renders an automatic five-scene
-  product tour via the `home-hero-after` slot in `Layout.vue`, so it appears
-  between the hero and the feature grid. Every scene imports a dark/light PNG
+  product tour via the `home-features-after` slot in `Layout.vue`, so it appears
+  below the feature grid. Every scene imports a dark/light PNG
   pair directly from `../../../content/assets/...`; the site's current theme
   selects the matching image. The last scene (`split: true`, "Dark & light")
   is the exception: it stacks both themes of one screenshot behind a
@@ -79,10 +79,14 @@ keyboard focus ring. Do not restyle VitePress wholesale; the landing page carrie
   explainer follows the scene frame without an inset or rule — not in the hero
   and not duplicated in `index.md`. `content/assets` exists once `pnpm run
   sync` has run (both `dev` and `build` do this first).
-- **`theme/components/HomeVideo.vue`** owns the linked product-intro cover and
-  renders through `Layout.vue`'s `home-features-after` slot. Keep it after the
-  feature grid: placing a full screenshot and a full video back-to-back above
-  the feature explanation makes the first viewport visually top-heavy.
+- **`theme/components/HomeVideo.vue`** owns the self-hosted homepage teaser
+  (`docs/assets/jarvis-teaser.mp4` plus poster, copied by `sync` via
+  `VIDEO_EXT`; a `<video>` that never autoplays, started by a play button that
+  covers the poster and returns on pause) with a text link to
+  the YouTube intro, and renders through `Layout.vue`'s `home-hero-after` slot,
+  directly under the hero. Keep the product tour below the feature grid:
+  placing a full video and a full screenshot back-to-back above the feature
+  explanation makes the first viewport visually top-heavy.
 - The feature grid's first two entries in `index.md`'s `features:` list are
   rendered larger and spanning two of four grid columns each — the remaining
   four stay compact, one column each — via `.VPHomeFeatures .items` overrides
@@ -110,11 +114,11 @@ keyboard focus ring. Do not restyle VitePress wholesale; the landing page carrie
   delegated click handler for images inside `main`; linked images keep their
   link behavior, and `.no-lightbox` is the explicit opt-out. The homepage
   screenshots use the same viewer.
-- **Videos use a linked 16:9 YouTube cover**, not an iframe: YouTube rejects
+- **YouTube videos use a linked 16:9 cover**, not an iframe: YouTube rejects
   embeds without an accepted HTTP Referer (player error 153), which makes
-  local previews and privacy-hardened browsers unreliable. The homepage intro
-  lives in `HomeScreenshot.vue`; reusable documentation covers use
-  `.video-cover`.
+  local previews and privacy-hardened browsers unreliable. The homepage shows
+  the self-hosted teaser in `HomeVideo.vue` instead; reusable documentation
+  covers use `.video-cover`.
   `docs/videos.md` is the permanent index for the product intro and release
   videos, while each release video also stays in its GitHub release notes.
 - **Mermaid diagrams are rendered as light/dark pairs** by `make diagrams`

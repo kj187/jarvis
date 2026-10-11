@@ -163,12 +163,10 @@ html.dark .light-only {
   display: none;
 }
 
-/* Rendered via the home-hero-after slot (Layout.vue) so it lands between the
-   hero and the feature grid — VPHome always renders the page's own Content
-   (the showcase below) after the feature grid, so this is the only place a
-   screenshot can appear "before the feature grid" (W11g). Shares the image
-   framing that the showcase further down used before its screenshot moved
-   here.
+/* Rendered via the home-features-after slot (Layout.vue), below the feature
+   grid; the teaser video (.home-intro-video-wrap) takes the home-hero-after
+   slot above it. Shares the image framing that the showcase further down used
+   before its screenshot moved here.
    The padding/max-width split mirrors VPHero.vue on purpose: VPHero puts its
    horizontal padding on the full-bleed outer `.VPHero` element and centers a
    `max-width: 1152px` `.container` *inside* that already-padded area, so on
@@ -176,20 +174,20 @@ html.dark .light-only {
    extra inset on top of the padding. Putting the padding and the max-width
    on the same element here (as it used to be) skips that extra inset, so
    the screenshot's left edge sits further right than the hero text/buttons
-   above it at wide viewports. Padding on the wrapper + max-width/margin on
+   at wide viewports. Padding on the wrapper + max-width/margin on
    the inner shell reproduces the same two-step centering so both edges line up. */
 .home-hero-screenshot {
   position: relative;
-  padding: 0 24px 64px;
+  padding: 72px 24px 0;
 }
 @media (min-width: 640px) {
   .home-hero-screenshot {
-    padding: 0 48px 64px;
+    padding: 72px 48px 0;
   }
 }
 @media (min-width: 960px) {
   .home-hero-screenshot {
-    padding: 0 64px 80px;
+    padding: 72px 64px 0;
   }
 }
 .home-scene-shell {
@@ -397,20 +395,19 @@ html.dark .light-only {
   }
 }
 
+/* Directly under the hero (home-hero-after), so no top padding of its own. */
 .home-intro-video-wrap {
   position: relative;
-  padding: 72px 24px 0;
+  padding: 0 24px 64px;
 }
 @media (min-width: 640px) {
   .home-intro-video-wrap {
-    padding-right: 48px;
-    padding-left: 48px;
+    padding: 0 48px 64px;
   }
 }
 @media (min-width: 960px) {
   .home-intro-video-wrap {
-    padding-right: 64px;
-    padding-left: 64px;
+    padding: 0 64px 80px;
   }
 }
 .home-intro-video {
@@ -444,6 +441,7 @@ html.dark .light-only {
   box-shadow: 0 24px 64px -28px rgb(0 0 0 / 55%);
 }
 .video-cover img,
+.video-cover video,
 .home-intro-video .video-cover img {
   display: block;
   width: 100%;
@@ -453,6 +451,46 @@ html.dark .light-only {
 }
 .home-intro-video .video-cover {
   margin: 0;
+}
+/* The teaser's play button covers the poster, so the whole picture starts the
+   video. Once playback has begun it leaves the native control bar free. */
+.video-play {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.video-play-paused {
+  bottom: 64px;
+}
+.video-play svg {
+  width: clamp(64px, 11%, 112px);
+  height: auto;
+  transition: transform 0.2s ease;
+}
+.video-play circle {
+  fill: rgb(13 15 20 / 55%);
+  stroke: rgb(255 255 255 / 92%);
+  stroke-width: 3;
+}
+.video-play path {
+  fill: rgb(255 255 255 / 95%);
+}
+.video-play:hover svg {
+  transform: scale(1.06);
+}
+.video-play:focus-visible {
+  outline: 2px solid var(--vp-c-brand-1);
+  outline-offset: -4px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .video-play svg {
+    transition: none;
+  }
 }
 .vp-doc img:not(.no-lightbox),
 .home-scene-stage img:not(.no-lightbox) {

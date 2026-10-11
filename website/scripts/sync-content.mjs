@@ -36,6 +36,8 @@ const ASSETS_DIR = path.join(CONTENT_DIR, 'assets')
 const GITHUB_BLOB = 'https://github.com/kj187/jarvis/blob/main'
 
 const IMAGE_EXT = new Set(['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp'])
+// The homepage teaser (HomeVideo.vue) is the only video kept in docs/assets.
+const VIDEO_EXT = new Set(['.mp4'])
 
 function readSource(relPath) {
   const abs = path.join(REPO_ROOT, relPath)
@@ -204,7 +206,7 @@ function main({ clean = true } = {}) {
   if (fs.existsSync(assetsSrc)) {
     for (const file of fs.readdirSync(assetsSrc)) {
       const ext = path.extname(file).toLowerCase()
-      if (IMAGE_EXT.has(ext)) {
+      if (IMAGE_EXT.has(ext) || VIDEO_EXT.has(ext)) {
         copyIfChanged(path.join(assetsSrc, file), path.join(PUBLIC_ASSETS_DIR, file))
         copyIfChanged(path.join(assetsSrc, file), path.join(ASSETS_DIR, file))
       }
