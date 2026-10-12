@@ -92,6 +92,23 @@ func TestRecorder_MissingFingerprintRowHealsOnNextPoll(t *testing.T) {
 	}
 }
 
+// A poll whose fingerprint write fails skips that alert and carries on; the
+// alert is written on a later poll.
+func TestRecorder_FailedFingerprintWriteSkipsAlertWithoutMark(t *testing.T) {
+	rec, _ := newTestRecorder(t)
+	if err := rec.store.db.Close(); err != nil {
+		t.Fatalf("close db: %v", err)
+	}
+
+	rec.processAlerts(context.Background(), []models.EnrichedAlert{makeEnrichedAlert("fp1", "active", "homelab")})
+
+	rec.store.touchMu.Lock()
+	defer rec.store.touchMu.Unlock()
+	if len(rec.store.touched) != 0 {
+		t.Fatalf("a failed fingerprint write left a mark: %v", rec.store.touched)
+	}
+}
+
 func TestTouchFingerprint_FailedWriteLeavesNoMark(t *testing.T) {
 	rec, _ := newTestRecorder(t)
 	store := rec.store
