@@ -771,6 +771,9 @@ func (r *Recorder) applyPollResults(
 			if _, created, err := r.store.RecordStatusChange(a.Fingerprint, a.ClusterName, a.AlertmanagerURL,
 				eventStatus, a.StartsAt, a.Annotations); err != nil {
 				r.logger.Error("record status change", "fp", a.Fingerprint, "err", err)
+				// The insert references the fingerprint row. If that row is
+				// missing, the next poll must write it again right away.
+				r.store.ForgetFingerprintTouch(a.Fingerprint)
 			} else if created && r.metrics != nil {
 				// Count exactly the events the store persisted — the store owns the
 				// idempotency and grace-period decisions, so the metric can't drift.

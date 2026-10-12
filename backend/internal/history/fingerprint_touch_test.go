@@ -42,8 +42,11 @@ func TestRecorder_ActiveAlertDoesNotRewriteFingerprintEveryPoll(t *testing.T) {
 		t.Fatal("first poll wrote no fingerprint row")
 	}
 
+	if !first.Equal(clock) {
+		t.Fatalf("last_seen_at = %v, want the recorder clock %v", first, clock)
+	}
+
 	clock = clock.Add(time.Minute)
-	time.Sleep(2 * time.Millisecond)
 	rec.processAlerts(ctx, alerts)
 	second, _ := fingerprintLastSeen(t, rec.store, "fp1")
 	if !second.Equal(first) {
@@ -51,11 +54,123 @@ func TestRecorder_ActiveAlertDoesNotRewriteFingerprintEveryPoll(t *testing.T) {
 	}
 
 	clock = clock.Add(fingerprintTouchInterval)
-	time.Sleep(2 * time.Millisecond)
 	rec.processAlerts(ctx, alerts)
 	third, _ := fingerprintLastSeen(t, rec.store, "fp1")
-	if !third.After(first) {
-		t.Fatalf("last_seen_at not refreshed after the touch interval: %v -> %v", first, third)
+	if !third.Equal(clock) {
+		t.Fatalf("last_seen_at after the touch interval = %v, want %v", third, clock)
+	}
+}
+
+// A fingerprint row can go missing behind the Store's back (manual SQL, a
+// restore while running). The event insert then fails on the foreign key;
+// the very next poll must write the row again instead of waiting an hour.
+func TestRecorder_MissingFingerprintRowHealsOnNextPoll(t *testing.T) {
+	rec, _ := newTestRecorder(t)
+	clock := time.Date(2026, 10, 12, 10, 0, 0, 0, time.UTC)
+	rec.now = func() time.Time { return clock }
+	ctx := context.Background()
+	alerts := []models.EnrichedAlert{makeEnrichedAlert("fp1", "active", "homelab")}
+
+	rec.processAlerts(ctx, alerts)
+	for _, table := range []string{"alert_events", "alert_fingerprints"} {
+		if _, err := rec.store.exec(ctx, "DELETE FROM "+table); err != nil {
+			t.Fatalf("delete %s: %v", table, err)
+		}
+	}
+
+	clock = clock.Add(time.Minute)
+	rec.processAlerts(ctx, alerts) // event insert fails: no fingerprint row
+	clock = clock.Add(time.Minute)
+	rec.processAlerts(ctx, alerts)
+
+	if _, ok := fingerprintLastSeen(t, rec.store, "fp1"); !ok {
+		t.Fatal("fingerprint row still missing two polls after it was deleted")
+	}
+	events, _, err := rec.store.GetHistory("fp1", 10, 0)
+	if err != nil || len(events) != 1 {
+		t.Fatalf("GetHistory = %d events, %v; want the firing event recorded again", len(events), err)
+	}
+}
+
+func TestTouchFingerprint_FailedWriteLeavesNoMark(t *testing.T) {
+	rec, _ := newTestRecorder(t)
+	store := rec.store
+	if err := store.db.Close(); err != nil {
+		t.Fatalf("close db: %v", err)
+	}
+	now := time.Date(2026, 10, 12, 10, 0, 0, 0, time.UTC)
+	if err := store.TouchFingerprint("fp1", "TestAlert", "homelab", nil, now); err == nil {
+		t.Fatal("TouchFingerprint on a closed database returned no error")
+	}
+	store.touchMu.Lock()
+	defer store.touchMu.Unlock()
+	if len(store.touched) != 0 {
+		t.Fatalf("a failed write left a mark: %v", store.touched)
+	}
+}
+
+func TestTouchFingerprint_ClockGoingBackwardsWritesAgain(t *testing.T) {
+	rec, _ := newTestRecorder(t)
+	store := rec.store
+	now := time.Date(2026, 10, 12, 10, 0, 0, 0, time.UTC)
+	if err := store.TouchFingerprint("fp1", "TestAlert", "homelab", nil, now); err != nil {
+		t.Fatalf("TouchFingerprint: %v", err)
+	}
+	earlier := now.Add(-time.Minute)
+	if err := store.TouchFingerprint("fp1", "TestAlert", "homelab", nil, earlier); err != nil {
+		t.Fatalf("TouchFingerprint: %v", err)
+	}
+	if got, _ := fingerprintLastSeen(t, store, "fp1"); !got.Equal(earlier) {
+		t.Fatalf("last_seen_at = %v, want the row rewritten at %v", got, earlier)
+	}
+}
+
+// Deleting fingerprint rows and writing them race in the e2e reset: the row
+// is written, the delete removes it and drops the marks, and only then does
+// the writer record its mark. That late mark must not stick.
+func TestTouchFingerprint_MarkFromBeforeADeleteIsDiscarded(t *testing.T) {
+	rec, _ := newTestRecorder(t)
+	store := rec.store
+	now := time.Date(2026, 10, 12, 10, 0, 0, 0, time.UTC)
+
+	gen, due := store.fingerprintTouchDue("fp1", now)
+	if !due {
+		t.Fatal("an unknown fingerprint is not due")
+	}
+	if err := store.upsertFingerprintAt("fp1", "TestAlert", "homelab", nil, now); err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+	if _, err := store.exec(context.Background(), `DELETE FROM alert_fingerprints`); err != nil {
+		t.Fatalf("delete fingerprints: %v", err)
+	}
+	store.forgetTouchedFingerprints()
+	store.markFingerprintTouched("fp1", now, gen)
+
+	if _, due := store.fingerprintTouchDue("fp1", now.Add(time.Minute)); !due {
+		t.Fatal("fingerprint is marked as written although its row was deleted")
+	}
+}
+
+func TestTouchFingerprint_Postgres(t *testing.T) {
+	store := newTestPostgresStores(t, 1)[0]
+	now := time.Date(2026, 10, 12, 10, 0, 0, 0, time.UTC)
+	labels := map[string]string{"alertname": "TestAlert"}
+
+	if err := store.TouchFingerprint("fp1", "TestAlert", "homelab", labels, now); err != nil {
+		t.Fatalf("TouchFingerprint: %v", err)
+	}
+	if err := store.TouchFingerprint("fp1", "TestAlert", "homelab", labels, now.Add(time.Minute)); err != nil {
+		t.Fatalf("TouchFingerprint within the interval: %v", err)
+	}
+	if got, _ := fingerprintLastSeen(t, store, "fp1"); !got.Equal(now) {
+		t.Fatalf("last_seen_at = %v, want %v untouched within the interval", got, now)
+	}
+	later := now.Add(fingerprintTouchInterval)
+	if err := store.TouchFingerprint("fp1", "TestAlert", "homelab", labels, later); err != nil {
+		t.Fatalf("TouchFingerprint after the interval: %v", err)
+	}
+	if got, _ := fingerprintLastSeen(t, store, "fp1"); !got.Equal(later) {
+		t.Fatalf("last_seen_at = %v, want %v", got, later)
 	}
 }
 

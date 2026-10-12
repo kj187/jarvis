@@ -22,12 +22,13 @@ func (s *Store) ResetForTesting() error {
 		"alert_fingerprints",
 		"users",
 	}
+	// Also on a partial failure: the fingerprint rows may already be gone.
+	defer s.forgetTouchedFingerprints()
 	for _, t := range tables {
 		if _, err := s.exec(context.Background(), "DELETE FROM "+t); err != nil {
 			return err
 		}
 	}
-	s.forgetTouchedFingerprints()
 	return nil
 }
 
