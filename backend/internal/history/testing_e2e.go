@@ -27,6 +27,7 @@ func (s *Store) ResetForTesting() error {
 			return err
 		}
 	}
+	s.forgetTouchedFingerprints()
 	return nil
 }
 

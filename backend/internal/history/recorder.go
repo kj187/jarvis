@@ -734,7 +734,7 @@ func (r *Recorder) applyPollResults(
 		}
 	}
 
-	// Persisting events (UpsertFingerprint + RecordStatusChange +
+	// Persisting events (TouchFingerprint + RecordStatusChange +
 	// RecordResolvedForCluster) is leader-only (D3 step 4) — a follower still
 	// computed the diff above for its own in-memory AlertStore, but must not
 	// write history.
@@ -749,8 +749,8 @@ func (r *Recorder) applyPollResults(
 				continue
 			}
 			alertKey := recorderAlertKey(a.Fingerprint, a.ClusterName)
-			if err := r.store.UpsertFingerprint(a.Fingerprint, a.Labels["alertname"], a.ClusterName, a.Labels); err != nil {
-				r.logger.Error("upsert fingerprint", "fp", a.Fingerprint, "err", err)
+			if err := r.store.TouchFingerprint(a.Fingerprint, a.Labels["alertname"], a.ClusterName, a.Labels, now); err != nil {
+				r.logger.Error("touch fingerprint", "fp", a.Fingerprint, "err", err)
 				continue
 			}
 
