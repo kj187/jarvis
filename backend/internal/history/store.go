@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	idb "github.com/kj187/jarvis/backend/internal/db"
@@ -21,6 +22,18 @@ var (
 	// ErrNotClaimOwner indicates the requester is not the owner of the active claim.
 	ErrNotClaimOwner = errors.New("not claim owner")
 )
+
+// fingerprintTouchInterval is how long TouchFingerprint leaves an
+// alert_fingerprints row alone after writing it. last_seen_at is read by the
+// retention sweep and as a fallback for "last fired"; neither needs it
+// fresher than this.
+//
+// It must stay far below the shortest retention cutoff (one day): a mark
+// means "written less than an interval ago", and the sweep only deletes rows
+// whose last_seen_at is older than its cutoff. That gap, not the mark reset
+// in DeleteOrphanFingerprintsBefore, is what keeps a sweep on another replica
+// from deleting a row this replica still believes in.
+const fingerprintTouchInterval = time.Hour
 
 // defaultGracePeriod is the grace period used until SetGracePeriod overrides
 // it. 60s is the invariant's historical baseline value.
@@ -37,6 +50,15 @@ type Store struct {
 	// the recorder starts polling — RecordStatusChange only reads it
 	// afterward, so no lock is needed.
 	gracePeriod time.Duration
+
+	// touched records when this Store last wrote each alert_fingerprints row
+	// (TouchFingerprint). touchGen changes whenever the marks are dropped, so
+	// a write that raced a delete never leaves a mark behind for a row that
+	// is gone.
+	touchMu     sync.Mutex
+	touched     map[string]time.Time
+	touchGen    uint64
+	touchPruned time.Time
 }
 
 // NewStore creates a new Store with the given database connection and dialect.
@@ -218,11 +240,14 @@ func (s *Store) insertReturningIDOn(q queryer, ctx context.Context, query string
 
 // UpsertFingerprint inserts or updates an alert fingerprint record.
 func (s *Store) UpsertFingerprint(fingerprint, alertname, clusterName string, labels map[string]string) error {
+	return s.upsertFingerprintAt(fingerprint, alertname, clusterName, labels, time.Now().UTC())
+}
+
+func (s *Store) upsertFingerprintAt(fingerprint, alertname, clusterName string, labels map[string]string, now time.Time) error {
 	labelsJSON, err := json.Marshal(labels)
 	if err != nil {
 		return fmt.Errorf("marshal labels: %w", err)
 	}
-	now := time.Now().UTC()
 	_, err = s.exec(context.Background(), `
 		INSERT INTO alert_fingerprints (fingerprint, alertname, cluster_name, labels, first_seen_at, last_seen_at, occurrence_count)
 		VALUES (?, ?, ?, ?, ?, ?, 1)
@@ -230,6 +255,80 @@ func (s *Store) UpsertFingerprint(fingerprint, alertname, clusterName string, la
 			last_seen_at = excluded.last_seen_at
 	`, fingerprint, alertname, clusterName, string(labelsJSON), now, now)
 	return err
+}
+
+// TouchFingerprint makes sure the alert_fingerprints row exists and keeps
+// last_seen_at current to within fingerprintTouchInterval. The recorder sees
+// every active alert on every poll; writing the row each time costs a new row
+// version, an index entry and a WAL record per alert per poll.
+func (s *Store) TouchFingerprint(fingerprint, alertname, clusterName string, labels map[string]string, now time.Time) error {
+	now = now.UTC()
+	gen, due := s.fingerprintTouchDue(fingerprint, now)
+	if !due {
+		return nil
+	}
+	if err := s.upsertFingerprintAt(fingerprint, alertname, clusterName, labels, now); err != nil {
+		return err
+	}
+	s.markFingerprintTouched(fingerprint, now, gen)
+	return nil
+}
+
+// fingerprintTouchDue reports whether the row has to be written at now, and
+// the mark generation that write starts from.
+func (s *Store) fingerprintTouchDue(fingerprint string, now time.Time) (uint64, bool) {
+	s.touchMu.Lock()
+	defer s.touchMu.Unlock()
+	last, seen := s.touched[fingerprint]
+	// A clock that went backwards makes the mark meaningless: write again.
+	fresh := seen && !now.Before(last) && now.Sub(last) < fingerprintTouchInterval
+	return s.touchGen, !fresh
+}
+
+// markFingerprintTouched records a write that started at generation gen. If
+// marks were dropped since, a delete may have removed the row again: it
+// stays unmarked and the next poll rewrites it.
+func (s *Store) markFingerprintTouched(fingerprint string, now time.Time, gen uint64) {
+	s.touchMu.Lock()
+	defer s.touchMu.Unlock()
+	if s.touchGen != gen {
+		return
+	}
+	if s.touched == nil {
+		s.touched = make(map[string]time.Time)
+	}
+	// Entries past the interval no longer suppress a write; dropping them
+	// once per interval keeps the map at the alerts seen recently.
+	if now.Sub(s.touchPruned) >= fingerprintTouchInterval {
+		for fp, at := range s.touched {
+			if now.Sub(at) >= fingerprintTouchInterval {
+				delete(s.touched, fp)
+			}
+		}
+		s.touchPruned = now
+	}
+	s.touched[fingerprint] = now
+}
+
+// ForgetFingerprintTouch makes the next TouchFingerprint of this fingerprint
+// write its row again. The recorder calls it when an event insert fails, so
+// a row that went missing behind the Store's back heals on the next poll
+// instead of after the interval.
+func (s *Store) ForgetFingerprintTouch(fingerprint string) {
+	s.touchMu.Lock()
+	defer s.touchMu.Unlock()
+	delete(s.touched, fingerprint)
+	s.touchGen++
+}
+
+// forgetTouchedFingerprints makes the next TouchFingerprint of every
+// fingerprint write its row again. Every path that deletes fingerprint rows
+// calls it.
+func (s *Store) forgetTouchedFingerprints() {
+	s.touchMu.Lock()
+	defer s.touchMu.Unlock()
+	s.touched = nil
+	s.touchGen++
 }
 
 // ── Events ────────────────────────────────────────────────────────────────────

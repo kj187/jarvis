@@ -734,7 +734,7 @@ func (r *Recorder) applyPollResults(
 		}
 	}
 
-	// Persisting events (UpsertFingerprint + RecordStatusChange +
+	// Persisting events (TouchFingerprint + RecordStatusChange +
 	// RecordResolvedForCluster) is leader-only (D3 step 4) — a follower still
 	// computed the diff above for its own in-memory AlertStore, but must not
 	// write history.
@@ -749,8 +749,8 @@ func (r *Recorder) applyPollResults(
 				continue
 			}
 			alertKey := recorderAlertKey(a.Fingerprint, a.ClusterName)
-			if err := r.store.UpsertFingerprint(a.Fingerprint, a.Labels["alertname"], a.ClusterName, a.Labels); err != nil {
-				r.logger.Error("upsert fingerprint", "fp", a.Fingerprint, "err", err)
+			if err := r.store.TouchFingerprint(a.Fingerprint, a.Labels["alertname"], a.ClusterName, a.Labels, now); err != nil {
+				r.logger.Error("touch fingerprint", "fp", a.Fingerprint, "err", err)
 				continue
 			}
 
@@ -771,6 +771,9 @@ func (r *Recorder) applyPollResults(
 			if _, created, err := r.store.RecordStatusChange(a.Fingerprint, a.ClusterName, a.AlertmanagerURL,
 				eventStatus, a.StartsAt, a.Annotations); err != nil {
 				r.logger.Error("record status change", "fp", a.Fingerprint, "err", err)
+				// The insert references the fingerprint row. If that row is
+				// missing, the next poll must write it again right away.
+				r.store.ForgetFingerprintTouch(a.Fingerprint)
 			} else if created && r.metrics != nil {
 				// Count exactly the events the store persisted — the store owns the
 				// idempotency and grace-period decisions, so the metric can't drift.

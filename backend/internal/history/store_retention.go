@@ -187,5 +187,9 @@ func (s *Store) DeleteOrphanFingerprintsBefore(ctx context.Context, cutoff time.
 			LIMIT ?
 		)
 	`
-	return s.batchDeleteLoop(ctx, query, batch, cutoff.UTC())
+	deleted, err := s.batchDeleteLoop(ctx, query, batch, cutoff.UTC())
+	if deleted > 0 {
+		s.forgetTouchedFingerprints()
+	}
+	return deleted, err
 }

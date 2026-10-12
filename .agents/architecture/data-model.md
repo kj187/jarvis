@@ -56,7 +56,7 @@ CREATE TABLE IF NOT EXISTS alert_fingerprints (
     cluster_name     TEXT NOT NULL,
     labels           TEXT NOT NULL,     -- JSON
     first_seen_at    DATETIME NOT NULL,
-    last_seen_at     DATETIME NOT NULL,
+    last_seen_at     DATETIME NOT NULL,  -- refreshed at most once per hour per fingerprint (Store.TouchFingerprint), not on every poll
     occurrence_count INTEGER DEFAULT 1
 );
 
