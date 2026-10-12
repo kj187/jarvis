@@ -133,6 +133,8 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE INDEX IF NOT EXISTS idx_alert_events_fingerprint          ON alert_events(fingerprint);
 CREATE INDEX IF NOT EXISTS idx_alert_events_starts_at            ON alert_events(starts_at DESC);
 CREATE INDEX IF NOT EXISTS idx_alert_events_fingerprint_recorded ON alert_events(fingerprint, recorded_at DESC);
+CREATE INDEX IF NOT EXISTS idx_alert_events_episode              ON alert_events(fingerprint, cluster_name, id, status);
+CREATE INDEX IF NOT EXISTS idx_alert_events_resolved_recorded    ON alert_events(recorded_at DESC, id DESC) WHERE status = 'resolved';
 CREATE INDEX IF NOT EXISTS idx_alert_comments_fingerprint        ON alert_comments(fingerprint);
 CREATE INDEX IF NOT EXISTS idx_alert_comments_created_at         ON alert_comments(created_at);
 CREATE INDEX IF NOT EXISTS idx_alert_claims_fingerprint          ON alert_claims(fingerprint);
@@ -185,18 +187,25 @@ back the retention sweeps in `store_retention.go`
 `DeleteOrphanFingerprintsBefore`): each of those filtered a column with no
 index, or one whose leading column didn't match the filter, forcing a full
 table scan per sweep — confirmed via `EXPLAIN (ANALYZE, BUFFERS)` against a
-seeded local PostgreSQL instance (bitmap/plain index scan afterwards). A
-composite `(fingerprint, cluster_name, id)` index was also evaluated for the
-"latest event per (fingerprint, cluster_name)" CTE in
-`GetAllResolved`/`VisitResolved` (`internal/history/store.go`,
-`store_resolved.go`) but deliberately **not** added: that CTE aggregates over
-the unfiltered whole `alert_events` table, and PostgreSQL never chose an
-index for it even at 660k rows (a full-table `MAX(id) GROUP BY` has to touch
-every row regardless, and a seq scan + hash aggregate is cheaper there than a
-b-tree of the same size) — the index would be pure write overhead. The
-actual fix is pushing `fingerprint`/`cluster_name`/the `After` lower bound
-into that CTE (the `Through` upper bound must stay outer, or it breaks the
-"excludes re-fired alerts" guarantee, Critical Invariant #2/#17) — a query-
-semantics change against a tested invariant, left for a separate PR.
+seeded local PostgreSQL instance (bitmap/plain index scan afterwards).
+
+The two `idx_alert_events_episode` / `idx_alert_events_resolved_recorded`
+indices carry every "newest event of an episode is resolved" read in
+`internal/history/store_resolved.go` (`VisitResolved`, `GetResolvedPage`),
+all built on one condition, `latestResolvedCondition`: a resolved event whose
+id equals a correlated `MAX(id)` of its episode — one probe into the episode
+index. The row query walks the partial index in page order and stops after
+`LIMIT` rows; the total applies the same condition to every resolved event.
+A correlated subquery cannot be turned into a hash join, so neither read
+writes temp files, whatever `work_mem` and the visibility map look like. The
+earlier form — a `MAX(id) GROUP BY` CTE over all of `alert_events`, joined
+back — spilled on every poll of the Resolved page. A single `GROUP BY` pass
+for the total is faster while the table is freshly vacuumed and was rejected
+for what happens when it is not: sequential scan, hash aggregate, 32 MB of
+temp files at 660k events. Guards: `TestResolvedReads_PostgresWriteNoTempFiles`,
+`TestResolvedPage_SQLiteReadsThroughEpisodeIndexes`,
+`TestGetResolvedPage_RowsMatchTotalOnMixedEpisodes`. The unpaged reads (a
+search or matcher filter, the legacy `state=resolved` stream, the buffer
+seed) still sort what they return.
 
 **SQLite settings** (on open): `SetMaxOpenConns(1)`, `PRAGMA journal_mode=WAL`, `PRAGMA foreign_keys=ON`, `PRAGMA busy_timeout=5000`. PostgreSQL uses a capped pool: `JARVIS_DB_MAX_OPEN_CONNS` (default 10) sets MaxOpen **and** MaxIdle (so bursts reuse connections instead of churning them), plus `ConnMaxLifetime=30m` / `ConnMaxIdleTime=5m` — never unbounded, never `SetMaxOpenConns(1)` (Critical Invariant #8).

@@ -82,6 +82,12 @@ func migratePostgres(database *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_alert_events_fingerprint ON alert_events(fingerprint)`,
 		`CREATE INDEX IF NOT EXISTS idx_alert_events_starts_at   ON alert_events(starts_at DESC)`,
 		`CREATE INDEX IF NOT EXISTS idx_alert_events_fingerprint_recorded ON alert_events(fingerprint, recorded_at DESC)`,
+		// The Resolved page (history/store_resolved.go): the newest event of an
+		// episode is one probe into the first index, and the second hands out
+		// resolved events already in page order — without them every page
+		// load aggregates and sorts the whole table.
+		`CREATE INDEX IF NOT EXISTS idx_alert_events_episode ON alert_events(fingerprint, cluster_name, id, status)`,
+		`CREATE INDEX IF NOT EXISTS idx_alert_events_resolved_recorded ON alert_events(recorded_at DESC, id DESC) WHERE status = 'resolved'`,
 		`CREATE INDEX IF NOT EXISTS idx_alert_comments_fingerprint ON alert_comments(fingerprint)`,
 		// DeleteCommentsBefore filters solely by created_at (store_retention.go).
 		`CREATE INDEX IF NOT EXISTS idx_alert_comments_created_at ON alert_comments(created_at)`,

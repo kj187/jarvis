@@ -183,11 +183,7 @@ func BenchmarkMemoryResolvedCount(b *testing.B) {
 	for _, rows := range []int{2_000, 10_000, 30_000, 100_000} {
 		b.Run(fmt.Sprintf("rows=%d", rows), func(b *testing.B) {
 			store := seedMemoryResolvedFixture(b, rows, false)
-			base, args := resolvedPageBase(ResolvedPageQuery{})
-			query := base + `
-				SELECT COUNT(*) FROM alert_events e
-				JOIN latest ON e.id = latest.max_id
-				WHERE e.status = 'resolved'`
+			query, args := resolvedCountSQL(ResolvedPageQuery{})
 			b.ReportAllocs()
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
