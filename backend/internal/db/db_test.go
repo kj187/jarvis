@@ -166,19 +166,12 @@ func TestMigrate_TablesExist(t *testing.T) {
 // a realistic retention-sweep shape (most rows recent, a small aged tail):
 // each went from a full sequential scan to a bitmap/plain index scan.
 //
-// The "latest event per (fingerprint, cluster_name)" CTE in
-// GetAllResolved/visitResolved was also reviewed as a candidate, but ruled
-// out: that CTE aggregates over the unfiltered whole alert_events table
-// (MAX(id) GROUP BY fingerprint, cluster_name, no WHERE), and EXPLAIN ANALYZE
-// at up to 660k rows showed PostgreSQL never chooses an index for it — a
-// full-table aggregate has to touch every row either way, and a seq scan +
-// hash aggregate reads that cheaper than a b-tree of the same size. Adding
-// one there would be pure write overhead on every alert_events insert with
-// no read benefit. The actual fix is pushing the fingerprint/cluster/After
-// predicates into the CTE itself (safe; the Through upper bound must stay
-// outer or it breaks the "excludes re-fired alerts" guarantee) — a query-
-// semantics change against a tested critical invariant, not an index, and
-// deliberately left for a separate, carefully tested change.
+// idx_alert_events_episode and idx_alert_events_resolved_recorded carry the
+// Resolved page (history/store_resolved.go). An index was once ruled out
+// here because PostgreSQL never used one for the old full-table
+// MAX(id) GROUP BY CTE; the read no longer aggregates the table, it probes
+// the episode index once per candidate row
+// (TestResolvedReads_PostgresWriteNoTempFiles guards that).
 func TestMigrate_SQLite_IndexesExist(t *testing.T) {
 	database, _, err := Open(":memory:")
 	if err != nil {
@@ -195,6 +188,8 @@ func TestMigrate_SQLite_IndexesExist(t *testing.T) {
 		"idx_alert_claims_released_at",
 		"idx_silence_events_recorded_at",
 		"idx_alert_fingerprints_last_seen_at",
+		"idx_alert_events_episode",
+		"idx_alert_events_resolved_recorded",
 	} {
 		var count int
 		err := database.QueryRowContext(
@@ -234,6 +229,8 @@ func TestMigrate_Postgres_IndexesExist(t *testing.T) {
 		"idx_alert_claims_released_at",
 		"idx_silence_events_recorded_at",
 		"idx_alert_fingerprints_last_seen_at",
+		"idx_alert_events_episode",
+		"idx_alert_events_resolved_recorded",
 	} {
 		var count int
 		err := database.QueryRowContext(
