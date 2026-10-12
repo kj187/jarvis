@@ -4,6 +4,35 @@ Alert episodes, resolves, occurrence counts, claims across replicas, leader/foll
 
 ---
 
+## One browser tab on the Resolved page kept a small PostgreSQL instance writing temp files — and an RDS burst-balance alert pointed at the wrong disk
+
+**Symptom**: `EBSByteBalance%` of a `db.t4g.micro` RDS instance drained
+steadily (alert `RdsLowEbsByteBalance`) with one Jarvis user online and both
+pods idle. `pg_stat_database` showed 48k temp files / 318 GB `temp_bytes`
+against a 190 MB database, `pg_stat_user_tables` ~97k sequential scans on
+`alert_events`.
+**Cause**: Two separate things. The Resolved page (polled every 60s per open
+tab, refetched on every WebSocket reconnect) built "newest event per episode"
+as a `MAX(id) GROUP BY` CTE over the whole `alert_events` table and joined it
+back: four sequential scans, a hash aggregate and a sort per page load, all
+spilling at the default 4 MB `work_mem`. That was real, avoidable load — but
+not what drained the balance: the data volume moved ~1 MB/s. `EBSByteBalance%`
+counts every volume of the instance including the root volume, and the
+1 GiB instance was short of memory (`SwapUsage` ~100 MB, `FreeableMemory`
+40–70 MB) once both pods had filled their pools — swap I/O is the likely
+drain, inferred by exclusion, not measured. The drain paused exactly while
+no browser was connected and the pools had shrunk.
+**Rule**: A read behind a polled view must not aggregate or sort a history
+table — give it an index that yields rows in page order and a per-row probe
+(`latestResolvedCondition`, `.agents/architecture/data-model.md`), and assert
+the plan under a tiny `work_mem` rather than trusting a benchmark. When an
+RDS burst-balance alert fires, read `ReadThroughput`/`WriteThroughput` and
+`SwapUsage` before blaming queries: tables that fit the cache
+(`blks_read` ≈ 0) cannot be the reader, and connection count × backend memory
+is the first lever on a small instance (`JARVIS_DB_MAX_OPEN_CONNS`).
+
+---
+
 ## A peer holding the per-episode advisory lock indefinitely stalled the whole poll loop — history writes need a deadline
 
 **Symptom**: On PostgreSQL, a pod could stop polling entirely — no further

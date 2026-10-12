@@ -97,38 +97,8 @@ func scanResolvedAlert(scanner resolvedAlertScanner) (models.EnrichedAlert, erro
 // The callback must not issue another query through Store: SQLite deliberately
 // has a single database connection, which remains occupied until rows is closed.
 func (s *Store) VisitResolved(ctx context.Context, query ResolvedReadQuery, visit func(models.EnrichedAlert) error) error {
-	where := "WHERE e.status = 'resolved'"
-	args := make([]interface{}, 0, 4)
-	if query.Cluster != "" {
-		where += " AND e.cluster_name = ?"
-		args = append(args, query.Cluster)
-	}
-	if query.Fingerprint != "" {
-		where += " AND e.fingerprint = ?"
-		args = append(args, query.Fingerprint)
-	}
-	if !query.After.IsZero() {
-		where += " AND e.recorded_at > ?"
-		args = append(args, query.After.UTC())
-	}
-	if !query.Through.IsZero() {
-		where += " AND e.recorded_at <= ?"
-		args = append(args, query.Through.UTC())
-	}
-	rows, err := s.query(ctx, `
-		WITH latest AS (
-			SELECT fingerprint, cluster_name, MAX(id) AS max_id
-			FROM alert_events
-			GROUP BY fingerprint, cluster_name
-		)
-		SELECT e.fingerprint, e.cluster_name, e.alertmanager_url, e.starts_at,
-		       e.recorded_at, e.annotations, f.labels
-		FROM alert_events e
-		JOIN latest ON e.id = latest.max_id
-		JOIN alert_fingerprints f ON f.fingerprint = e.fingerprint
-		`+where+`
-		ORDER BY e.recorded_at DESC, e.id DESC
-	`, args...)
+	visitSQL, args := resolvedVisitSQL(query)
+	rows, err := s.query(ctx, visitSQL, args...)
 	if err != nil {
 		return err
 	}
@@ -163,28 +133,88 @@ func (s *Store) VisitRecentResolved(
 	}, visit)
 }
 
-func resolvedPageBase(query ResolvedPageQuery) (string, []interface{}) {
-	cteWhere := ""
+// latestResolvedCondition selects the alert_events rows (aliased "e") that are
+// the newest event of their (fingerprint, cluster_name) episode and resolved.
+// The correlated MAX(id) is one probe into idx_alert_events_episode per
+// candidate row and cannot be planned as a hash join, so no read built on it
+// spills to temp files. A page takes its candidates from
+// idx_alert_events_resolved_recorded already in page order and stops after
+// LIMIT rows. status must stay a literal: a bind parameter would hide the
+// partial index from the planner.
+const latestResolvedCondition = `e.status = 'resolved' AND e.id = (
+			SELECT MAX(n.id) FROM alert_events n
+			WHERE n.fingerprint = e.fingerprint AND n.cluster_name = e.cluster_name
+		)`
+
+// resolvedEpisodeFilter narrows a resolved read (rows aliased "e") to one
+// cluster and/or one fingerprint.
+func resolvedEpisodeFilter(query ResolvedPageQuery) (string, []interface{}) {
+	filter := ""
 	args := make([]interface{}, 0, 2)
 	if query.Cluster != "" {
-		cteWhere += " WHERE cluster_name = ?"
+		filter += " AND e.cluster_name = ?"
 		args = append(args, query.Cluster)
 	}
 	if query.Fingerprint != "" {
-		if cteWhere == "" {
-			cteWhere = " WHERE fingerprint = ?"
-		} else {
-			cteWhere += " AND fingerprint = ?"
-		}
+		filter += " AND e.fingerprint = ?"
 		args = append(args, query.Fingerprint)
 	}
+	return filter, args
+}
+
+// resolvedVisitSQL returns the ordered row query behind VisitResolved.
+func resolvedVisitSQL(query ResolvedReadQuery) (string, []interface{}) {
+	where := "WHERE " + latestResolvedCondition
+	args := make([]interface{}, 0, 4)
+	if query.Cluster != "" {
+		where += " AND e.cluster_name = ?"
+		args = append(args, query.Cluster)
+	}
+	if query.Fingerprint != "" {
+		where += " AND e.fingerprint = ?"
+		args = append(args, query.Fingerprint)
+	}
+	if !query.After.IsZero() {
+		where += " AND e.recorded_at > ?"
+		args = append(args, query.After.UTC())
+	}
+	if !query.Through.IsZero() {
+		where += " AND e.recorded_at <= ?"
+		args = append(args, query.Through.UTC())
+	}
 	return `
-		WITH latest AS (
-			SELECT fingerprint, cluster_name, MAX(id) AS max_id
-			FROM alert_events` + cteWhere + `
-			GROUP BY fingerprint, cluster_name
-		)
-`, args
+		SELECT e.fingerprint, e.cluster_name, e.alertmanager_url, e.starts_at,
+		       e.recorded_at, e.annotations, f.labels
+		FROM alert_events e
+		JOIN alert_fingerprints f ON f.fingerprint = e.fingerprint
+		` + where + `
+		ORDER BY e.recorded_at DESC, e.id DESC
+	`, args
+}
+
+// resolvedRowsSQL returns the ordered, unpaged row query of the Resolved page.
+func resolvedRowsSQL(query ResolvedPageQuery) (string, []interface{}) {
+	filter, args := resolvedEpisodeFilter(query)
+	return `
+		SELECT e.fingerprint, e.cluster_name, e.alertmanager_url, e.starts_at,
+		       e.recorded_at, e.annotations, f.labels
+		FROM alert_events e
+		JOIN alert_fingerprints f ON f.fingerprint = e.fingerprint
+		WHERE ` + latestResolvedCondition + filter + `
+		ORDER BY e.recorded_at DESC, e.id DESC`, args
+}
+
+// resolvedCountSQL counts the same rows resolvedRowsSQL returns, with the
+// same condition: one index probe per resolved event. A single GROUP BY pass
+// over idx_alert_events_episode is several times faster while the visibility
+// map is current, but PostgreSQL falls back to a sequential scan and a hash
+// aggregate that spills to temp files when it is not (measured at 660k
+// events: 32 MB of temp files) — the cost this query exists to avoid.
+func resolvedCountSQL(query ResolvedPageQuery) (string, []interface{}) {
+	filter, args := resolvedEpisodeFilter(query)
+	return `
+		SELECT COUNT(*) FROM alert_events e
+		WHERE ` + latestResolvedCondition + filter, args
 }
 
 func (s *Store) GetResolvedPage(ctx context.Context, query ResolvedPageQuery) (models.ResolvedAlertsPage, error) {
@@ -195,20 +225,12 @@ func (s *Store) GetResolvedPage(ctx context.Context, query ResolvedPageQuery) (m
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	base, args := resolvedPageBase(query)
-	selectRows := `
-		SELECT e.fingerprint, e.cluster_name, e.alertmanager_url, e.starts_at,
-		       e.recorded_at, e.annotations, f.labels
-		FROM alert_events e
-		JOIN latest ON e.id = latest.max_id
-		JOIN alert_fingerprints f ON f.fingerprint = e.fingerprint
-		WHERE e.status = 'resolved'
-		ORDER BY e.recorded_at DESC, e.id DESC`
+	selectRows, args := resolvedRowsSQL(query)
 
 	filtered := query.Search != "" || len(query.Matchers) > 0 || query.Severity != ""
 	if !filtered {
 		pageArgs := append(append([]interface{}{}, args...), query.Limit, query.Offset)
-		rows, err := s.queryOn(tx, ctx, base+selectRows+" LIMIT ? OFFSET ?", pageArgs...)
+		rows, err := s.queryOn(tx, ctx, selectRows+" LIMIT ? OFFSET ?", pageArgs...)
 		if err != nil {
 			return result, fmt.Errorf("query resolved page: %w", err)
 		}
@@ -227,10 +249,8 @@ func (s *Store) GetResolvedPage(ctx context.Context, query ResolvedPageQuery) (m
 		if err := rows.Close(); err != nil {
 			return result, err
 		}
-		if err := s.queryRowOn(tx, ctx, base+`
-			SELECT COUNT(*) FROM alert_events e
-			JOIN latest ON e.id = latest.max_id
-			WHERE e.status = 'resolved'`, args...).Scan(&result.Total); err != nil {
+		countSQL, countArgs := resolvedCountSQL(query)
+		if err := s.queryRowOn(tx, ctx, countSQL, countArgs...).Scan(&result.Total); err != nil {
 			return result, fmt.Errorf("count resolved page: %w", err)
 		}
 	} else {
@@ -240,7 +260,7 @@ func (s *Store) GetResolvedPage(ctx context.Context, query ResolvedPageQuery) (m
 		if now.IsZero() {
 			now = time.Now().UTC().Truncate(time.Millisecond)
 		}
-		rows, err := s.queryOn(tx, ctx, base+selectRows, args...)
+		rows, err := s.queryOn(tx, ctx, selectRows, args...)
 		if err != nil {
 			return result, fmt.Errorf("query filtered resolved page: %w", err)
 		}
