@@ -127,13 +127,17 @@ fi
 wait_for "${JARVIS_HOST_URL}/api/v1/status" "jarvis"
 
 # ── Run Playwright in the official container, on the e2e network ──────────────
-PW_SETUP='corepack enable && pnpm install --frozen-lockfile'
+# Playwright images from v1.64 ship a Node without corepack, so install a pinned
+# corepack first; it still enforces the packageManager pin in package.json.
+# --force: the image's global yarn shims would otherwise make the install fail.
+COREPACK_SETUP='npm install -g --force --no-fund --no-audit corepack@0.36.0 && corepack enable'
+PW_SETUP="${COREPACK_SETUP} && pnpm install --frozen-lockfile"
 PW_RUN=("${COMPOSE[@]}" run --rm)
 if [ "${E2E_FAST:-}" = "1" ]; then
   # The store lives outside the mounted frontend/ dir, so host node_modules and
   # the store never interact beyond what the install already does.
   PW_RUN+=(-v jarvis_e2e_pnpm_store:/pnpm-store:z -e npm_config_store_dir=/pnpm-store -e COREPACK_HOME=/pnpm-store/corepack)
-  PW_SETUP='corepack enable && pnpm install --frozen-lockfile --prefer-offline'
+  PW_SETUP="${COREPACK_SETUP} && pnpm install --frozen-lockfile --prefer-offline"
 fi
 
 case "$ACTION" in
