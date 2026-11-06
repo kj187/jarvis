@@ -178,6 +178,9 @@ package.json/lockfile, never the compose image.
 **Rule**: Whenever `@playwright/test` changes version, update the image tag in
 `compose.e2e.yml` to the same version in the same commit. Mass 2ms E2E
 failures = environment/browser mismatch, not test regressions.
+Since `v1.64` the image's Node ships without corepack (`sh: corepack: not
+found`, make exit 127); `scripts/e2e-run.sh` installs a pinned corepack
+before `corepack enable`.
 
 ---
 
