@@ -105,7 +105,7 @@ jobs:
           sbom: true
 
       - name: Install cosign
-        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # ratchet:sigstore/cosign-installer@v4.1.2
+        uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # ratchet:sigstore/cosign-installer@v4.1.3
 
       - name: Sign image with keyless signing (GitHub OIDC)
         run: |
@@ -198,7 +198,7 @@ jobs:
             sbom.spdx.json "${{ github.ref_name }}"
 
       - name: Install cosign
-        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # ratchet:sigstore/cosign-installer@v4.1.2
+        uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # ratchet:sigstore/cosign-installer@v4.1.3
 
       # Signed release asset: the sigstore bundle lets consumers verify the SBOM
       # with `cosign verify-blob`, and is what OpenSSF Scorecard's

@@ -118,7 +118,7 @@ jobs:
           echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
 
       - name: Install cosign
-        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # ratchet:sigstore/cosign-installer@v4.1.2
+        uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # ratchet:sigstore/cosign-installer@v4.1.3
 
       # Runs whenever the version exists in the registry (not only right after
       # a push) so a re-run or workflow_dispatch can heal a
