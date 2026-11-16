@@ -21,6 +21,7 @@ export const PAGES = [
   { src: 'docs/deploy-kubernetes.md', route: 'deploy/kubernetes' },
   { src: 'docs/reverse-proxy.md', route: 'deploy/reverse-proxy' },
   { src: 'docs/deploy-alertmanager.md', route: 'deploy/alertmanager' },
+  { src: 'docs/notifications.md', route: 'out-of-scope/notifications' },
   { src: 'docs/authentication-alertmanager.md', route: 'deploy/upstream-auth' },
   { src: 'docs/authentication-user.md', route: 'deploy/user-auth' },
 

@@ -60,3 +60,6 @@ If Alertmanager requires credentials, continue with
 [Connect a protected Alertmanager](authentication-alertmanager.md). If the
 browser uses a different public hostname, configure `HOST_ALIAS` as described
 above and review [Running behind a proxy](reverse-proxy.md).
+
+Jarvis does not send notifications. To have Alertmanager notify people when an
+alert fires, see [Notifications with Alertmanager](notifications.md).
