@@ -191,7 +191,8 @@ cap_drop:
 ## Static analysis and dependencies
 
 CI runs `gosec` (through `golangci-lint`), `govulncheck`, `pnpm audit --audit-level=high` for the frontend and the docs
-website, and `gitleaks` for secrets; a finding fails the build. Dependabot opens update pull requests daily for Go modules,
+website, and `gitleaks` for secrets; a finding fails the build. The one exception: a `govulncheck` advisory that has no usable
+fix and whose affected code Jarvis provably never runs may be listed with its reason in `backend/.govulncheck-ignore`. Dependabot opens update pull requests daily for Go modules,
 npm packages, GitHub Actions and base images, and waits 7 days after a release before it does (security updates are exempt).
 
 ## Reporting a Vulnerability

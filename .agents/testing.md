@@ -64,7 +64,7 @@ helm unittest charts/jarvis/       # Unit tests (deployment, configmap, secret, 
 make verify                        # full working-tree verification — see "make verify" below
 make verify FAST=1                 # same, without the production image build + smoke test
 make test-all                      # backend + frontend + helm lint + helm unittest
-make test-scripts                  # test scripts/release-body.sh, scripts/sbom.sh and scripts/check-image-pins.sh; no network needed
+make test-scripts                  # test scripts/release-body.sh, scripts/sbom.sh, scripts/check-image-pins.sh, scripts/check-govulncheck.sh, …; no network needed
 scripts/verify-release-smoke.sh vX.Y.Z  # after a release: exact cosign identities accepted, other workflows rejected, SBOM complete + attested (network, cosign, crane, jq, gh; --skip-sbom up to v2.0.0)
 make check-image-pins              # every Containerfile FROM has a @sha256 digest, pnpm installs are pinned
 make test-backend                  # go test -race ./...
@@ -221,7 +221,9 @@ backend-test:        # "Backend Tests"
     components) and would misrepresent frontend coverage. Status checks configured in codecov.yml: project auto ±1%,
     patch 70% ±5% — thresholds absorb goroutine-timing coverage noise from -race runs)
 backend-lint:        # "Backend Lint and Vulnerabilities"
-  - govulncheck ./...
+  - govulncheck -format json ./... | scripts/check-govulncheck.sh: reached findings fail, except the IDs in
+    backend/.govulncheck-ignore (each with a mandatory reason; a stale entry only warns — remove it);
+    an exception is for an advisory with no usable fix whose code path Jarvis provably never takes
   - golangci-lint run   # includes gosec and the gofmt formatter (both enabled in .golangci.yml) —
                         # golangci-lint is the only Go gate here, so formatting is unchecked
                         # anywhere else; that is how struct-alignment drift once accumulated
