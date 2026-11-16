@@ -106,6 +106,24 @@ CHANGELOG shows a history of "pin Go to 1.25.11 to fix stdlib CVEs". The
 
 ---
 
+## govulncheck fails on every echo call, and a dependency bump does not help
+
+**Symptom**: In November 2026 `govulncheck` failed on `main` and on every
+Dependabot PR with `GO-2026-6875` and `GO-2026-6872` in
+`github.com/labstack/echo/v4`, "Fixed in: N/A", with traces through plain
+`echo.New`, `Group.GET` and `fmt.Fprintf` — code that has nothing to do with
+the advisories (Proxy middleware, RateLimiter default key).
+**Cause**: The advisories list affected symbols only for `echo/v5` (fixed
+there). For `echo/v4` they carry no symbol list, so govulncheck treats the whole
+module as affected and every call as reaching it. No v4 release can fix that.
+**Rule**: Read the advisory (`https://vuln.go.dev/ID/<id>.json`, the
+`ecosystem_specific.imports` per module) before chasing a version. If no usable
+fix exists and Jarvis provably never takes the affected path, add a justified
+entry to `backend/.govulncheck-ignore` (`scripts/check-govulncheck.sh`) and
+remove it when the fix becomes usable; never drop govulncheck from CI.
+
+---
+
 ## Release workflow steps only run on tag push — test drift stays hidden
 
 **Symptom**: `release.yml` failed at "Create GitHub Release" during v1.6.0:

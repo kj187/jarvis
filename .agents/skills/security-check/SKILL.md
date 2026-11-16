@@ -15,7 +15,7 @@ reference and checklist for what no tool enforces.
 ```bash
 cd backend
 gosec ./...             # hardcoded credentials, SQL injection, path traversal, weak crypto
-govulncheck ./...       # dependencies against the Go Vulnerability DB (CI only in the hook flow)
+make govulncheck        # dependencies against the Go Vulnerability DB, same gate as CI (CI only in the hook flow)
 golangci-lint run       # linter suite incl. gosec, errcheck, bodyclose, noctx (.golangci.yml)
 go mod verify           # module checksums against go.sum
 go test -race ./...     # data races
@@ -30,6 +30,12 @@ make security-all       # gosec + govulncheck + pnpm audit
 Automation split: the pre-commit hook runs Go tests, golangci-lint, pnpm audit
 and gitleaks; **govulncheck runs only in CI** (its result depends on the
 vulnerability DB, not on staged changes). Never use `--no-verify`.
+
+A govulncheck exception goes into `backend/.govulncheck-ignore` as
+`<GO-ID> <reason>` — only when no usable fixed version exists and the reason
+shows the affected code path is never taken in Jarvis (name the function).
+`scripts/check-govulncheck.sh` rejects an entry without a reason and warns
+about one that no longer matches; remove it as soon as a fix is usable.
 
 ## Checklist for new code
 

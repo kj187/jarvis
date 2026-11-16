@@ -143,8 +143,9 @@ lint: ## golangci-lint
 gosec: ## gosec — hardcoded secrets + SQL injection in Go
 	cd backend && gosec ./...
 
-govulncheck: ## govulncheck — CVEs in Go dependencies
-	cd backend && govulncheck ./...
+govulncheck: ## govulncheck — reached CVEs in Go dependencies, minus backend/.govulncheck-ignore
+	mkdir -p tmp && cd backend && govulncheck -format json ./... > ../tmp/govulncheck.json
+	scripts/check-govulncheck.sh tmp/govulncheck.json
 
 audit: ## pnpm audit — CVEs in frontend dependencies (requires dev container running)
 	podman exec $(FRONTEND_CONTAINER) sh -c "cd /app && pnpm audit --audit-level=high"
@@ -154,12 +155,13 @@ security-all: gosec govulncheck audit ## Run all security tools (gosec + govulnc
 check-agent-context: ## Validate agent context: adapters, skills, AGENTS.md, paths, fixtures, invariants
 	scripts/check-agent-context.sh
 
-test-scripts: ## Test the release body, SBOM and image-pin scripts; no network needed
+test-scripts: ## Test the release body, SBOM, image-pin and govulncheck-gate scripts; no network needed
 	scripts/test-release-body.sh
 	scripts/test-sbom.sh
 	scripts/test-check-image-pins.sh
 	scripts/test-check-go-coverage.sh
 	scripts/test-check-dependabot-cooldown.sh
+	scripts/test-check-govulncheck.sh
 	scripts/test-third-party-licenses.sh
 
 check-image-pins: ## Every Containerfile FROM has a @sha256 digest, pnpm installs are pinned

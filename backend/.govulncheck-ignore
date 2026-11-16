@@ -1,0 +1,14 @@
+# govulncheck exceptions, read by scripts/check-govulncheck.sh (CI job
+# "Backend Lint and Vulnerabilities", `make govulncheck`).
+#
+# Format: <GO-ID> <reason>. The reason is mandatory and must say why Jarvis is
+# not affected. Add an entry only when no fixed version is usable and the
+# affected code path is provably not taken; remove it as soon as a fix lands
+# (the check warns about entries that no longer match).
+#
+# Echo v4 advisories: fixed only in echo/v5 and published without a symbol
+# list for v4, so govulncheck marks every echo call as reaching them. Retire
+# both with the move to echo/v5.
+
+GO-2026-6875  Proxy middleware forwards a client X-Real-IP upstream (GHSA-99jh-6h7p-pp36). Jarvis never uses middleware.Proxy, and its IPExtractor (internal/api/hostguard.go clientIPExtractor) never reads X-Real-IP.
+GO-2026-6872  RateLimiter keys on a spoofable X-Forwarded-For by default (GHSA-246p-cpwv-v3jq). Jarvis's only rate limiter (internal/api/router.go loginRateLimiter) uses the constant key "login", not the client IP.

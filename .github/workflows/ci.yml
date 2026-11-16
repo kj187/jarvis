@@ -91,6 +91,9 @@ jobs:
       # Dependabot must keep its 7-day cooldown on every ecosystem — see scripts/check-dependabot-cooldown.sh.
       - name: Test Dependabot cooldown check
         run: scripts/test-check-dependabot-cooldown.sh
+      # The govulncheck gate and its ignore-file parser are tested against fixture JSON.
+      - name: Test govulncheck gate
+        run: scripts/test-check-govulncheck.sh
       # The third-party license generators are tested against fixture module and package directories.
       - name: Test third-party license scripts
         run: scripts/test-third-party-licenses.sh
@@ -215,10 +218,13 @@ jobs:
           go-version: '1.27.3'
           cache-dependency-path: backend/go.sum
 
+      # Reached vulnerabilities fail the job, except the justified IDs in
+      # backend/.govulncheck-ignore — see scripts/check-govulncheck.sh.
       - name: Run govulncheck
         run: |
           go install golang.org/x/vuln/cmd/govulncheck@v1.3.0
-          govulncheck ./...
+          govulncheck -format json ./... > "$RUNNER_TEMP/govulncheck.json"
+          ../scripts/check-govulncheck.sh "$RUNNER_TEMP/govulncheck.json"
 
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # ratchet:golangci/golangci-lint-action@v9.3.0

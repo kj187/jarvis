@@ -145,8 +145,17 @@ else
   skip "golangci-lint (incl. gosec, gofmt)" "golangci-lint not installed"
 fi
 
-if have govulncheck; then
-  step "govulncheck" in_backend govulncheck ./...
+# Same gate as CI: reached findings fail, minus backend/.govulncheck-ignore.
+govulncheck_gate() {
+  local out; out="$(mktemp)"
+  in_backend govulncheck -format json ./... >"$out" && "$ROOT/scripts/check-govulncheck.sh" "$out"
+  local rc=$?; rm -f "$out"; return "$rc"
+}
+
+if have govulncheck && have jq; then
+  step "govulncheck" govulncheck_gate
+elif have govulncheck; then
+  skip "govulncheck" "jq not installed"
 else
   skip "govulncheck" "govulncheck not installed"
 fi
