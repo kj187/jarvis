@@ -12,7 +12,7 @@ require (
 	github.com/labstack/echo/v4 v4.16.3
 	github.com/prometheus/client_golang v1.25.0
 	golang.org/x/crypto v0.58.0
-	golang.org/x/oauth2 v0.37.0
+	golang.org/x/oauth2 v0.38.0
 	modernc.org/sqlite v1.62.0
 )
 
