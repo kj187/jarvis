@@ -143,7 +143,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # ratchet:actions/setup-go@v7.0.0
         with:
-          go-version: '1.27.3'
+          go-version: '1.27.4'
           cache-dependency-path: backend/go.sum
 
       - name: Download dependencies
@@ -215,7 +215,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # ratchet:actions/setup-go@v7.0.0
         with:
-          go-version: '1.27.3'
+          go-version: '1.27.4'
           cache-dependency-path: backend/go.sum
 
       # Reached vulnerabilities fail the job, except the justified IDs in
@@ -248,7 +248,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # ratchet:actions/setup-go@v7.0.0
         with:
-          go-version: '1.27.3'
+          go-version: '1.27.4'
           cache-dependency-path: backend/go.sum
 
       - name: Run fuzz targets (short)
