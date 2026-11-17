@@ -1,3 +1,48 @@
+<a name="v2.1.1"></a>
+## [v2.1.1](https://github.com/kj187/jarvis/compare/v2.1.0...v2.1.1) (2026-11-17)
+
+### Breaking Changes
+
+No breaking changes.
+
+### Bug Fixes
+
+* **api:** gate govulncheck on reached findings with justified exceptions ([#382](https://github.com/kj187/jarvis/issues/382))
+* **config:** clear the open vitest, minimatch and vite npm advisories ([#385](https://github.com/kj187/jarvis/issues/385))
+* **config:** clear the Go stdlib and npm advisories that turn CI red ([#361](https://github.com/kj187/jarvis/issues/361))
+* **db:** stop rewriting every active alert's fingerprint row on each poll ([#345](https://github.com/kj187/jarvis/issues/345))
+* **db:** read the Resolved page without scanning and sorting all events ([#344](https://github.com/kj187/jarvis/issues/344))
+
+### Chores
+
+* **deps:** bump the codeql-action group across 1 directory with 4 updates ([#365](https://github.com/kj187/jarvis/issues/365))
+* **deps:** bump pnpm/action-setup from 6.1.0 to 6.1.1 ([#376](https://github.com/kj187/jarvis/issues/376))
+* **deps:** bump sigstore/cosign-installer from 4.1.2 to 4.1.3 ([#378](https://github.com/kj187/jarvis/issues/378))
+* **deps:** bump docker/login-action from 4.6.0 to 4.8.0 ([#379](https://github.com/kj187/jarvis/issues/379))
+* **deps:** bump vue from 3.5.44 to 3.5.45 in /website in the minor-patch group across 1 directory ([#380](https://github.com/kj187/jarvis/issues/380))
+* **deps:** bump golang.org/x/oauth2 from 0.37.0 to 0.38.0 in /backend ([#383](https://github.com/kj187/jarvis/issues/383))
+* **deps:** bump the minor-patch group across 1 directory with 17 updates ([#381](https://github.com/kj187/jarvis/issues/381))
+* **deps:** bump github.com/labstack/echo/v4 from 4.16.1 to 4.16.3 in /backend ([#372](https://github.com/kj187/jarvis/issues/372))
+* **deps:** bump modernc.org/sqlite from 1.60.1 to 1.62.0 in /backend ([#373](https://github.com/kj187/jarvis/issues/373))
+* **deps:** bump github.com/jackc/pgx/v5 from 5.11.0 to 5.12.0 in /backend ([#374](https://github.com/kj187/jarvis/issues/374))
+* **deps:** bump github.com/go-jose/go-jose/v4 from 4.1.4 to 4.1.6 in /backend ([#369](https://github.com/kj187/jarvis/issues/369))
+* **deps:** bump vue from 3.5.43 to 3.5.44 in /website ([#362](https://github.com/kj187/jarvis/issues/362))
+* **deps:** bump github.com/prometheus/client_golang from 1.24.1 to 1.25.0 in /backend ([#349](https://github.com/kj187/jarvis/issues/349))
+* **deps:** bump ossf/scorecard-action from 2.4.4 to 2.5.0 ([#354](https://github.com/kj187/jarvis/issues/354))
+* **deps:** bump the codeql-action group across 1 directory with 4 updates ([#351](https://github.com/kj187/jarvis/issues/351))
+* **deps:** bump actions/upload-artifact from 7.0.1 to 7.0.2 ([#348](https://github.com/kj187/jarvis/issues/348))
+* **deps:** bump actions/setup-node from 7.0.0 to 7.1.0 ([#347](https://github.com/kj187/jarvis/issues/347))
+* **deps:** bump golang.org/x/crypto from 0.57.0 to 0.58.0 in /backend ([#353](https://github.com/kj187/jarvis/issues/353))
+* **video:** pin the ffmpeg image by its multi-arch index digest ([#342](https://github.com/kj187/jarvis/issues/342))
+
+### Documentation
+
+* **config:** add notifications page for Alertmanager receivers ([#384](https://github.com/kj187/jarvis/issues/384))
+
+### Features
+
+* **frontend:** add a self-hosted teaser video to the docs homepage ([#343](https://github.com/kj187/jarvis/issues/343))
+
 <a name="v2.1.0"></a>
 ## [v2.1.0](https://github.com/kj187/jarvis/compare/v2.0.0...v2.1.0) (2026-10-10)
 
