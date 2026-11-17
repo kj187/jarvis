@@ -163,6 +163,13 @@ html.dark .light-only {
   display: none;
 }
 
+/* Partner logo on the Notifications page: sits right-aligned in the text.
+   The source <picture> uses align="right", which the sync step drops. */
+.vp-doc img[alt="anynear"] {
+  float: right;
+  margin: 0 0 1rem 1.5rem;
+}
+
 /* Rendered via the home-features-after slot (Layout.vue), below the feature
    grid; the teaser video (.home-intro-video-wrap) takes the home-hero-after
    slot above it. Shares the image framing that the showcase further down used
