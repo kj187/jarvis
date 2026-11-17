@@ -138,8 +138,7 @@ export default defineConfig({
           { text: 'On Kubernetes', link: '/deploy/kubernetes' },
           { text: 'Behind a proxy / ingress', link: '/deploy/reverse-proxy' },
           { text: 'Connect Alertmanager', link: '/deploy/alertmanager' },
-          { text: 'Connect a protected Alertmanager', link: '/deploy/upstream-auth' },
-          { text: 'Set up user login', link: '/deploy/user-auth' },
+          { text: 'Connect a protected Alertmanager', link: '/deploy/upstream-auth' },          { text: 'Set up user login', link: '/deploy/user-auth' },
         ],
       },
       {
@@ -196,6 +195,10 @@ export default defineConfig({
           { text: 'Maintainers', link: '/project/maintainers' },
           { text: 'Code of Conduct', link: '/project/code-of-conduct' },
         ],
+      },
+      {
+        text: 'Out of scope',
+        items: [{ text: 'Notifications', link: '/out-of-scope/notifications' }],
       },
     ],
 
