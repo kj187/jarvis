@@ -116,7 +116,8 @@ to scrape them — see [Metrics](metrics.md) — but nothing requires you to.
 
 No, and it will not. Routing and delivering notifications is exactly what
 Alertmanager is for, and duplicating it would mean two systems disagreeing
-about who was paged. See [Project scope](scope.md).
+about who was paged. See [Project scope](scope.md). To set up a receiver next
+to Jarvis, see [Notifications with Alertmanager](notifications.md).
 
 ---
 
