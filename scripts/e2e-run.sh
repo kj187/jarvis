@@ -17,7 +17,7 @@
 # Optional: E2E_FAST=1 (local opt-in, `make e2e-fast`; CI never sets it) skips the
 # image rebuild when nothing the image is built from changed (content hash of
 # backend/, frontend/ without e2e/ specs, Containerfile.e2e, kept in
-# tmp/e2e-image.hash) and mounts a persistent pnpm store + corepack cache
+# tmp/e2e-image.hash) and mounts a persistent pnpm store
 # (volume jarvis_e2e_pnpm_store) into the Playwright container so `pnpm install`
 # does not re-download. The default path is unchanged.
 #
@@ -127,13 +127,18 @@ fi
 wait_for "${JARVIS_HOST_URL}/api/v1/status" "jarvis"
 
 # ── Run Playwright in the official container, on the e2e network ──────────────
-PW_SETUP='corepack enable && pnpm install --frozen-lockfile'
+# The Playwright image (Node 25+) ships no corepack: install the pnpm version
+# frontend/package.json pins in "packageManager", the same one the Containerfiles use.
+PNPM_VERSION="$(sed -n 's/.*"packageManager": *"pnpm@\([0-9][0-9.]*\).*/\1/p' "$ROOT/frontend/package.json")"
+[ -n "$PNPM_VERSION" ] || { echo "ERROR: no pnpm version in frontend/package.json packageManager" >&2; exit 1; }
+PW_PNPM="npm install -g --silent pnpm@${PNPM_VERSION}"
+PW_SETUP="${PW_PNPM} && pnpm install --frozen-lockfile"
 PW_RUN=("${COMPOSE[@]}" run --rm)
 if [ "${E2E_FAST:-}" = "1" ]; then
   # The store lives outside the mounted frontend/ dir, so host node_modules and
   # the store never interact beyond what the install already does.
-  PW_RUN+=(-v jarvis_e2e_pnpm_store:/pnpm-store:z -e npm_config_store_dir=/pnpm-store -e COREPACK_HOME=/pnpm-store/corepack)
-  PW_SETUP='corepack enable && pnpm install --frozen-lockfile --prefer-offline'
+  PW_RUN+=(-v jarvis_e2e_pnpm_store:/pnpm-store:z -e npm_config_store_dir=/pnpm-store)
+  PW_SETUP="${PW_PNPM} && pnpm install --frozen-lockfile --prefer-offline"
 fi
 
 case "$ACTION" in
